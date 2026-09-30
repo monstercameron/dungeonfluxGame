@@ -1,0 +1,9 @@
+{
+  "id": "contracts-g03-a1-coordinator-serial-build-resource-20260930",
+  "kind": "resolution",
+  "summary": "Reduced contract build concurrency to preserve measured review headroom.",
+  "details": "Postdispatch memory_pressure43% (~6.9GiB of16) compared with3.2system+2review+initial2worker estimate; constrained subsequent Cargo commands to explicitjobs1 withinmax2brief. Worker observed initialsmallcheck Cargo66MiB plus two rustc177/171MiB; estimate1.5GiB forserialbuild remainsestimate, not claimedpeak.",
+  "action": "Instructed serialnative/WASMjobs1 and actual childRSS/memorypressure sampling; no gate weakening, unrelatedprocess stops or cacheclears.",
+  "outcome": "Source/buildwork progressing withinboundedresourceplan; frontiercapacityretained.",
+  "evidence_ref": "development/evidence/contracts-g03/dispatch-resource-evidence.json"
+}

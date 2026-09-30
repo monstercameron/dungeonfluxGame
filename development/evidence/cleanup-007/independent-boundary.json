@@ -1,0 +1,265 @@
+{
+  "at": "2026-09-30T20:47:34.128424+00:00",
+  "report_sha256": "5e983aa55e23520bc242fb163ff9dcc3142c79a4cfea4eff720db2715164faeb",
+  "script_sha256": "016de305699481a6c96dd65644a1f1e2b05797ea63043d33d77a3742fb636592",
+  "method": "Independent lstat recursive scan only build/tmp; neither symlink targets nor special files opened. Flat leaves independently recomputed and every submitted directory sum verified.",
+  "submitted_totals_recomputed": {
+    "regular_files": 56292,
+    "regular_file_bytes": 10658919436,
+    "directories": 3582,
+    "symlinks_not_followed": 50,
+    "special_entries": 5
+  },
+  "current_totals": {
+    "regular_files": 56306,
+    "regular_file_bytes": 10659116949,
+    "directories": 3582,
+    "symlinks_not_followed": 50,
+    "special_entries": 5
+  },
+  "current_errors": [],
+  "directory_sum_errors": [],
+  "dynamic_changes": [
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1",
+      "submitted": {
+        "kind": "directory",
+        "bytes": 1618480
+      },
+      "current": {
+        "kind": "directory",
+        "bytes": 1815993
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/add-lock-checksums.py",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 541
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/capture.py",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 2895
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/cargo-version.txt",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 335
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/report.py",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 3167
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/run-negative.py",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 3730
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/rustc-version.txt",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 192
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/tree-all-native.txt",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 30198
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/tree-all-wasm.txt",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 19124
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/tree-dev-native.txt",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 103
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/tree-dev-wasm.txt",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 103
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/tree-native.txt",
+      "submitted": {
+        "kind": "regular_file",
+        "bytes": 226
+      },
+      "current": {
+        "kind": "regular_file",
+        "bytes": 70533
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/tree-protocol-build.txt",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 203
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/tree-protocol-native.txt",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 20776
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/tree-rpc-dev-native.txt",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 192
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/tree-wasm.txt",
+      "submitted": {
+        "kind": "regular_file",
+        "bytes": 226
+      },
+      "current": {
+        "kind": "regular_file",
+        "bytes": 45625
+      }
+    },
+    {
+      "path": "artifacts/tmp/AUDIT-G01-CLOSURE-001-a1/unsupported-edge.txt",
+      "submitted": null,
+      "current": {
+        "kind": "regular_file",
+        "bytes": 248
+      }
+    }
+  ],
+  "processes": {
+    "command": [
+      "ps",
+      "-p",
+      "18905,18907,25530,27721,80873",
+      "-o",
+      "pid,ppid,lstart,command"
+    ],
+    "exit_code": 0,
+    "stdout": "  PID  PPID STARTED                      COMMAND\n18905     1 Wed Sep 30 15:11:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/web\n18907     1 Wed Sep 30 15:11:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web 43181\n25530     1 Wed Sep 30 15:50:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/web 43182\n27721     1 Wed Sep 30 16:38:29 2026     /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python /Users/earlcameron/Desktop/dungeonflux/development/screenshot_journey.py run-loop\n80873     1 Wed Sep 30 13:46:12 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install/bin/postgres -D /Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/data -c listen_addresses= -c unix_socket_directories=/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/socket -c unix_socket_permissions=0700 -c port=55439 -c max_connections=16 -c fsync=on -c full_page_writes=on -c synchronous_commit=on\n",
+    "stderr": ""
+  },
+  "listeners": {
+    "command": [
+      "lsof",
+      "-nP",
+      "-iTCP:43180",
+      "-iTCP:43181",
+      "-iTCP:43182",
+      "-sTCP:LISTEN"
+    ],
+    "exit_code": 0,
+    "stdout": "COMMAND     PID        USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\ndf-transp 18905 earlcameron    9u  IPv4 0xe87a1a03193049be      0t0  TCP 127.0.0.1:43180 (LISTEN)\ndf-transp 18907 earlcameron    9u  IPv4 0x61c6184ad234bcc0      0t0  TCP 127.0.0.1:43181 (LISTEN)\ndf-transp 25530 earlcameron    9u  IPv4 0x9cc19e8a92f29046      0t0  TCP 127.0.0.1:43182 (LISTEN)\n",
+    "stderr": ""
+  },
+  "protected_binary_hashes": [
+    {
+      "name": "integrated_g02_build",
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/debug/df-transport-fixture",
+      "sha256": "ccf0bf4073eb0efca3ff57a3f369d135409e6d664cbf5f3b08889ff87b958984",
+      "matches_report": true
+    },
+    {
+      "name": "latest_verified_baseline",
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/debug/df-transport-fixture",
+      "sha256": "b2a3a7d058afdb9735672b90ec9623d55ccd2bc1f53f537e6c2c363ddd6913e1",
+      "matches_report": true
+    },
+    {
+      "name": "postgres_server_build",
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install/bin/postgres",
+      "sha256": "fdb263f367f30e248021c9f74441c9120c2091aceaed0957bdb7a13efca7f8d9",
+      "matches_report": true
+    },
+    {
+      "name": "retained_g02_review_build",
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture",
+      "sha256": "7840d2ea80898025a72887fc7de7b9ee23c6ebee747627ac4ee3138520cc86be",
+      "matches_report": true
+    }
+  ],
+  "current_claims": [
+    {
+      "id": "ACTIVE-CLEANUP-007-a1",
+      "task_id": "ACTIVE-CLEANUP-007",
+      "status": "submitted",
+      "phase": "review",
+      "worker": "/root/cleanup_004",
+      "evaluator_id": "/root/frontier_integrate",
+      "lease_expires_at": "2026-09-30T21:20:00+00:00"
+    },
+    {
+      "id": "AUDIT-G01-CLOSURE-001-a1",
+      "task_id": "AUDIT-G01-CLOSURE-001",
+      "status": "active",
+      "phase": "implementation",
+      "worker": "/root/audit_g01",
+      "evaluator_id": null,
+      "lease_expires_at": "2026-09-30T22:38:04.510028+00:00"
+    },
+    {
+      "id": "QUALIFY-G02-001-a1",
+      "task_id": "QUALIFY-G02-001",
+      "status": "integrated",
+      "phase": "terminal",
+      "worker": "/root/start_s00",
+      "evaluator_id": "/root/frontier_integrate",
+      "lease_expires_at": "2026-09-30T22:10:17.960554+00:00"
+    }
+  ],
+  "worker_devlog": [
+    {
+      "id": "active-cleanup-007-a1-current-inventory-20260930",
+      "agent_id": "/root/cleanup_004",
+      "kind": "discovery",
+      "summary": "Inventory retained all candidates and confirmed the currently active G01 audit and recorder processes.",
+      "outcome": "Report and script are retained with exact SHA-256 identities. No artifacts were deleted, and no source, queue, runtime or process state was changed; zero scan errors."
+    }
+  ],
+  "classification": {
+    "eligible_paths": [],
+    "deleted_paths": [],
+    "reclaimed_bytes": 0,
+    "all_retained": true
+  },
+  "observed_head": "822ffc4992b34ab548a47cf91efad845ca50c716"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "active-cleanup-007-operational-identity-correction-20260930",
+  "kind": "resolution",
+  "summary": "Corrected cleanup tested identity to the exact operational inventory SHA256; source HEAD retained separately.",
+  "details": "Review previously put822ffc4992b34ab548a47cf91efad845ca50c716 in tested_revision even though this is a non-code operational review. Actual tested report is sha256:5e983aa55e23520bc242fb163ff9dcc3142c79a4cfea4eff720db2715164faeb. Rehash still matches; acceptance evidence and approve verdict unchanged.",
+  "action": "Preserved prior review verbatim, set tested_revision to report SHA256 identity, retained822ffc as input_source_revision/current_head and added tested_operational_report reference.",
+  "outcome": "Operational review identity now names the actual tested inventory, with no fake implementation commit. No source/build/queue/process changes.",
+  "related_entry_id": "active-cleanup-007-independent-inventory-20260930",
+  "evidence_ref": "development/evidence/cleanup-007/review.json; development/evidence/cleanup-007/review-before-operational-identity-correction.json"
+}

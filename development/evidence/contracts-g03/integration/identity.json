@@ -1,0 +1,162 @@
+{
+  "at": "2026-09-30T21:52:42.306848+00:00",
+  "source": {
+    "Cargo.lock": {
+      "sha256": "9e16a6f4aa6e9808a1b7f75fbf5f3cc7dd0029fc0cfb82617fa7ec353dabaeb3",
+      "worker_sha256": "9e16a6f4aa6e9808a1b7f75fbf5f3cc7dd0029fc0cfb82617fa7ec353dabaeb3",
+      "git_blob_match": true
+    },
+    "Cargo.toml": {
+      "sha256": "fd965c9b0d70724e3f46fef34992549bb68ea45eec56165f41479bd47a29719c",
+      "worker_sha256": "fd965c9b0d70724e3f46fef34992549bb68ea45eec56165f41479bd47a29719c",
+      "git_blob_match": true
+    },
+    "crates/df-protocol/build.rs": {
+      "sha256": "7da848e7fcbd4a3caa834e785f7c509761f965319bf71e5c153c4ce7df127532",
+      "worker_sha256": "7da848e7fcbd4a3caa834e785f7c509761f965319bf71e5c153c4ce7df127532",
+      "git_blob_match": true
+    },
+    "crates/df-protocol/proto/common.proto": {
+      "sha256": "6cddc5db2102911b714ff707a7edc66ed137012e44dc58875e69756fc3ff27bc",
+      "worker_sha256": "6cddc5db2102911b714ff707a7edc66ed137012e44dc58875e69756fc3ff27bc",
+      "git_blob_match": true
+    },
+    "crates/df-protocol/proto/contract_fixture.proto": {
+      "sha256": "7c4a9af5ea200ac520468927a36def3c919f79bbc811f25e9499bad832fdac61",
+      "worker_sha256": "7c4a9af5ea200ac520468927a36def3c919f79bbc811f25e9499bad832fdac61",
+      "git_blob_match": true
+    },
+    "crates/df-protocol/proto/field-ledger.txt": {
+      "sha256": "ceb064777c63f90c3e19dcf0f7c530697769bce571735a5fca79e79d80c82c7b",
+      "worker_sha256": "ceb064777c63f90c3e19dcf0f7c530697769bce571735a5fca79e79d80c82c7b",
+      "git_blob_match": true
+    },
+    "crates/df-protocol/src/lib.rs": {
+      "sha256": "897c7096cfe1752f31d3425aa9fafd2f0c57a30c26b3e7c69f1069d2d36b5c22",
+      "worker_sha256": "897c7096cfe1752f31d3425aa9fafd2f0c57a30c26b3e7c69f1069d2d36b5c22",
+      "git_blob_match": true
+    },
+    "crates/df-tools/Cargo.toml": {
+      "sha256": "4f2938e294cca69afd9107d6aa6268e1379c97c9511cea44bb023f4fab089cda",
+      "worker_sha256": "4f2938e294cca69afd9107d6aa6268e1379c97c9511cea44bb023f4fab089cda",
+      "git_blob_match": true
+    },
+    "crates/df-tools/tests/schema_ledger.rs": {
+      "sha256": "bd916a9a97b499f4c8fddc7209138c4eaab41ca0dede114114c7e5864ef63640",
+      "worker_sha256": "bd916a9a97b499f4c8fddc7209138c4eaab41ca0dede114114c7e5864ef63640",
+      "git_blob_match": true
+    },
+    "crates/df-tools/tests/shared_contracts.rs": {
+      "sha256": "0f080afb60c0326fc11b4acc4744dcf7a0da0ad5247b32330c7c59b830c45fa8",
+      "worker_sha256": "0f080afb60c0326fc11b4acc4744dcf7a0da0ad5247b32330c7c59b830c45fa8",
+      "git_blob_match": true
+    },
+    "crates/df-types/Cargo.toml": {
+      "sha256": "adeea17f31b369f16b22ffe2029fa33e6f74379d0688da9359ae738a34402dad",
+      "worker_sha256": "adeea17f31b369f16b22ffe2029fa33e6f74379d0688da9359ae738a34402dad",
+      "git_blob_match": true
+    },
+    "crates/df-types/src/identity.rs": {
+      "sha256": "3eabdba5e02139c334c14767278e3ea89307bbe33d632c03f2dbe509f83f5cef",
+      "worker_sha256": "3eabdba5e02139c334c14767278e3ea89307bbe33d632c03f2dbe509f83f5cef",
+      "git_blob_match": true
+    },
+    "crates/df-types/src/lib.rs": {
+      "sha256": "3aa843f870a7536152ceaf4f14801e5c2a2f6cc2cb4553632aaee1e00c2815c4",
+      "worker_sha256": "3aa843f870a7536152ceaf4f14801e5c2a2f6cc2cb4553632aaee1e00c2815c4",
+      "git_blob_match": true
+    },
+    "crates/df-types/src/provenance.rs": {
+      "sha256": "c91492bfe232ac0933534575f164b27ca7dd7940505e8d5ce3c97e90a9bb5102",
+      "worker_sha256": "c91492bfe232ac0933534575f164b27ca7dd7940505e8d5ce3c97e90a9bb5102",
+      "git_blob_match": true
+    },
+    "crates/df-types/src/revision.rs": {
+      "sha256": "17d7ff394b33f231a9493d3026691934252989bf84a3bf756c3e2be5bc8ae71e",
+      "worker_sha256": "17d7ff394b33f231a9493d3026691934252989bf84a3bf756c3e2be5bc8ae71e",
+      "git_blob_match": true
+    },
+    "development/shared-contracts.md": {
+      "sha256": "e026c0dc924e133f0a864b2eb59b8db543f6ce6d41e042d4e50d52ce0870184c",
+      "worker_sha256": "e026c0dc924e133f0a864b2eb59b8db543f6ce6d41e042d4e50d52ce0870184c",
+      "git_blob_match": true
+    }
+  },
+  "protected_before": {
+    "artifacts/build/postgres-g05/install/bin/postgres": "fdb263f367f30e248021c9f74441c9120c2091aceaed0957bdb7a13efca7f8d9",
+    "artifacts/build/qualify-g02-integrated/debug/df-transport-fixture": "ccf0bf4073eb0efca3ff57a3f369d135409e6d664cbf5f3b08889ff87b958984",
+    "artifacts/build/qualify-g02/debug/df-transport-fixture": "7840d2ea80898025a72887fc7de7b9ee23c6ebee747627ac4ee3138520cc86be",
+    "artifacts/build/start-s00/debug/df-transport-fixture": "b2a3a7d058afdb9735672b90ec9623d55ccd2bc1f53f537e6c2c363ddd6913e1"
+  },
+  "candidate_after_review_before_integration": {
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/df-transport-fixture": "2ba367a30c588063dc4a344aa7215da93a756aeda97871739b3e7acde09eec67",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/df_tools.wasm": "1a776a2aaed6841cd794e63ece391f4df5e32e1c283b336ac852544d7d4498e8",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/shared_contracts-85fc7226712f19f5.wasm": "082f807e6f1bf6f30d938eaa2dd7fd821f2764e32f65f76fc982000e66bb60a3",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/schema_ledger-cbbc866e3ec1b7e4.wasm": "41e3b9bb4521a83c1c45dc634410eb2c4509a413418ffab4e4c01b6a5eed20b5",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/shared_contracts-0be3eba5daacf3c5": "2228445a2b73e8403437cc59ad18a7e12a78cb92bad131f6a0bc442ec3cada07",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/schema_ledger-56337483e9b61314": "4e6d5548499005f9344776fa6e0f0f59e552107bcaa847862318160863063927",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-37c24844737020b2/out/contracts.bin": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-5797462c41c050e0/out/contracts.bin": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-7a981dd87cf667dc/out/contracts.bin": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-ccaa6772dee1e2e1/out/contracts.bin": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560"
+  },
+  "new_artifacts": [
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review/debug/df-transport-fixture",
+      "sha256": "00980d649770f498c476888a0fe8eedfcb4a145bd21891829c0f768d869b6367",
+      "bytes": 19173384,
+      "embedded_source_revision": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review/wasm32-unknown-unknown/debug/df_tools.wasm",
+      "sha256": "97adf3cc551a644d1a478fc6f7c23db09bd917306d4219dbdfe1e2c48e2d36dc",
+      "bytes": 26690739,
+      "embedded_source_revision": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review/debug/deps/schema_ledger-56337483e9b61314",
+      "sha256": "56c706e8e584251ae7d38c809fb7a66017647eb5381b471be70a41f24b5dad0a",
+      "bytes": 2311648,
+      "embedded_source_revision": false
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review/debug/deps/shared_contracts-0be3eba5daacf3c5",
+      "sha256": "ddc59d0839f7cebbfd963bd4b3d401d35ca6bb18bfdd4da7ade3df55bb49b207",
+      "bytes": 1662784,
+      "embedded_source_revision": false
+    }
+  ],
+  "descriptors": [
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review/wasm32-unknown-unknown/debug/build/df-protocol-0a486ce23709dfdb/out/contracts.bin",
+      "sha256": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560"
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review/debug/build/df-protocol-ccaa6772dee1e2e1/out/contracts.bin",
+      "sha256": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560"
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review/debug/build/df-protocol-37c24844737020b2/out/contracts.bin",
+      "sha256": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560"
+    }
+  ],
+  "protected_after": {
+    "artifacts/build/postgres-g05/install/bin/postgres": "fdb263f367f30e248021c9f74441c9120c2091aceaed0957bdb7a13efca7f8d9",
+    "artifacts/build/qualify-g02-integrated/debug/df-transport-fixture": "ccf0bf4073eb0efca3ff57a3f369d135409e6d664cbf5f3b08889ff87b958984",
+    "artifacts/build/qualify-g02/debug/df-transport-fixture": "7840d2ea80898025a72887fc7de7b9ee23c6ebee747627ac4ee3138520cc86be",
+    "artifacts/build/start-s00/debug/df-transport-fixture": "b2a3a7d058afdb9735672b90ec9623d55ccd2bc1f53f537e6c2c363ddd6913e1"
+  },
+  "candidate_after_integration": {
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/df-transport-fixture": "2ba367a30c588063dc4a344aa7215da93a756aeda97871739b3e7acde09eec67",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/df_tools.wasm": "1a776a2aaed6841cd794e63ece391f4df5e32e1c283b336ac852544d7d4498e8",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/shared_contracts-85fc7226712f19f5.wasm": "082f807e6f1bf6f30d938eaa2dd7fd821f2764e32f65f76fc982000e66bb60a3",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/schema_ledger-cbbc866e3ec1b7e4.wasm": "41e3b9bb4521a83c1c45dc634410eb2c4509a413418ffab4e4c01b6a5eed20b5",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/shared_contracts-0be3eba5daacf3c5": "2228445a2b73e8403437cc59ad18a7e12a78cb92bad131f6a0bc442ec3cada07",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/schema_ledger-56337483e9b61314": "4e6d5548499005f9344776fa6e0f0f59e552107bcaa847862318160863063927",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-37c24844737020b2/out/contracts.bin": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-5797462c41c050e0/out/contracts.bin": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-7a981dd87cf667dc/out/contracts.bin": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-ccaa6772dee1e2e1/out/contracts.bin": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560"
+  },
+  "application_clean_after": true
+}

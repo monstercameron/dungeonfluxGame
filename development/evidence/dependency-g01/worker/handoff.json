@@ -1,0 +1,85 @@
+{
+  "attempt_id": "AUDIT-G01-CLOSURE-001-a1",
+  "cargo_evidence": {
+    "extra_path_package": "vendored h2 0.4.19",
+    "invocation_record": "commands/invocations.json",
+    "native_metadata_packages": 140,
+    "native_target": "aarch64-apple-darwin",
+    "toolchain": "Cargo/rustc 1.98.1 on aarch64-apple-darwin; wasm32-unknown-unknown target is pinned",
+    "union_package_identities": 150,
+    "wasm_metadata_packages": 141,
+    "wasm_target": "wasm32-unknown-unknown",
+    "workspace_crates": [
+      "df-protocol",
+      "df-rpc-bridge",
+      "df-observe",
+      "df-tools"
+    ]
+  },
+  "changed_paths": [
+    "development/dependency-audit.py",
+    "development/dependency-audit.md",
+    "development/dependency-audit/metadata/native.json",
+    "development/dependency-audit/metadata/wasm.json",
+    "development/dependency-audit/packages.json",
+    "development/dependency-audit/report.json"
+  ],
+  "delivered_behavior": "Adds source-hash-bound, locked/offline native and wasm Cargo metadata and graph evidence, descriptive per-package license/provenance records, and a bounded fixed-input verifier that checks the pinned report, input hashes, and complete target package identity sets. Scope is partial descriptive G01 evidence only.",
+  "descriptive_license_evidence": {
+    "missing_declared_license_expression": 0,
+    "package_records": 150,
+    "path_packages_without_cargo_lock_archive_checksum": 5,
+    "records_without_detected_top_level_license_notice_file": 18,
+    "vendored_h2_license": "MIT declared; vendored LICENSE file SHA-256 b21623012e6c453d944b0342c515b631cfcbf30704c2621b291526b69c10724d"
+  },
+  "devlog_ids": [
+    "audit-g01-a1-cargo-tree-edge-flag",
+    "audit-g01-a1-devlog-database-location"
+  ],
+  "evidence_identities": {
+    "handoff_source_commit": "2743c4a65e2d6be1769211a9809836294af903ab",
+    "native_metadata_sha256": "08276121a5f63ef2f35f9f3267917d4676dd650e34f160e68999c4d503c15329",
+    "native_tree_sha256": "cb03a70510f80e8cd40d9301863155dd3259b6c92dea34636c57458ff59db6be",
+    "negative_results_sha256": "4b6c08529a77e12abca7f0a08043ed0fc25b4c3cf7a10ec1e20bff5384acfa84",
+    "package_records_sha256": "dfdf3d1d90d38f7788a31b6c71519c0974e159263a3d99552558dcdacbb56c65",
+    "report_sha256": "d569532d942bce4d22b7107f04b969e0a16addc9bc19fe4d59afd523d3fd478c",
+    "wasm_metadata_sha256": "e91bc29f430944f28a06712d6cd5453a9ab6c0bd84134e41822ca9c597bc0d0c",
+    "wasm_tree_sha256": "a6e2148b0c3a7e48fd0d25494894fd9743177659545de2d73b5d351e3787d226"
+  },
+  "evidence_root": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/dependency-g01/worker",
+  "independent_review": "required and pending; worker did not self-approve",
+  "input_revision": "822ffc4992b34ab548a47cf91efad845ca50c716",
+  "known_gaps": [
+    "Cargo metadata and cargo tree describe resolver/build graphs, not compiled or linked runtime behavior.",
+    "No native or WASM artifact was built for this audit; browser native-I/O exclusion still requires actual artifact and boundary evidence; native I/O remains unqualified.",
+    "Legal admission policy, completeness of license fulfillment, and commercial terms remain unresolved; no legal approval is claimed.",
+    "Extracted source-tree hashes and notice coverage for the 18 records without detected top-level license/notice files remain unresolved; Cargo.lock checksums were not independently checked against archive bytes.",
+    "Full G01 and downstream integration gates remain pending."
+  ],
+  "submitted_commit": "2743c4a65e2d6be1769211a9809836294af903ab",
+  "task_id": "AUDIT-G01-CLOSURE-001",
+  "verification": [
+    {
+      "command": "bundled python3 development/dependency-audit.py",
+      "result": "passed; {\"ok\":true,\"packages\":150,\"targets\":2}"
+    },
+    {
+      "command": "bundled python3 -c 'compile(Path(\"development/dependency-audit.py\").read_text(), ..., \"exec\")'",
+      "result": "passed using bundled Python 3.12.14"
+    },
+    {
+      "command": "owned negative-fixture runner (retained as negative-results.json)",
+      "result": "passed current success and refusal for edited report, stale source hash, omitted package identity, malformed metadata, missing input, and symlink/nonregular input"
+    },
+    {
+      "command": "git diff --check",
+      "result": "passed"
+    },
+    {
+      "command": "rustfmt, Clippy, native/WASM build",
+      "result": "not run; no Rust changes and no gratuitous rebuild; no current gate result claimed"
+    }
+  ],
+  "worktree": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/audit-g01",
+  "worktree_status": "Committed source paths are clean. Full porcelain also reports the untracked development/evidence/dependency-g01 directory retained in the worktree; it is not staged or included in the commit. The same evidence is durably copied under this handoff evidence root."
+}

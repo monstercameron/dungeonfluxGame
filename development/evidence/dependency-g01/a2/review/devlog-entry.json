@@ -1,0 +1,10 @@
+{
+  "id": "audit-g01-a2-independent-parent-symlink-resolved-20260930",
+  "kind": "resolution",
+  "summary": "Independent a2 checks confirm anchored reads reject prior parent-symlink escape and preserve descriptor ownership.",
+  "details": "Frozenf79 helper passes current foreign-cwdpositive and40bounded checks including originaloutsideparent, root/ancestor/leafsymlinks,FIFO,directory,oversize,missing/stale/malformed/report/package and missingcapabilities.20repeat successes/refusals leaveFD0/1/2unchanged. Currentreport/data/appinputs and380manifest/noticehashes match prior independentCargo/provenance evidence.",
+  "action": "Executed independentPython3.12.14 tests with2sdeadlines, inspectedownership/code/docs, checkedfrozenidentity/diff/sourceclean. No repair/source/build/queuechanges.",
+  "outcome": "APPROVE allfiveatomiccriteria. Originala1reject preserved and resolved only forcurrentf79candidate. Actualmergedboundary pending; fullG01/nativeI/O/legal/fulfillment/sourcearchive gates unchanged.",
+  "related_entry_id": "audit-g01-a1-evaluator-parent-symlink-20260930",
+  "evidence_ref": "development/evidence/dependency-g01/a2/review/review.json"
+}

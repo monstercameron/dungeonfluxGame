@@ -1,0 +1,74 @@
+{
+  "task_id": "CONTRACT-G03-001",
+  "attempt_id": "CONTRACT-G03-001-a1",
+  "evaluator": "/root/frontier_integrate",
+  "at": "2026-09-30T21:50:09.433664+00:00",
+  "tested_commit": "9898c70614a8555efa63d3cec47ba9adbc395bbb",
+  "tested_revision": "9898c70614a8555efa63d3cec47ba9adbc395bbb",
+  "scope": "Independent candidate first-wave contract review; separate actual MAIN integration review required",
+  "verdict": "APPROVE",
+  "criteria": [
+    {
+      "criterion": "Distinct pure validated first-wave identity/provenance/recovery-revision contracts have bounded values, checked arithmetic and documented non-authority semantics without forbidden runtime or credential dependencies.",
+      "result": "PASS",
+      "evidence_ref": "review/identity.json; review/tree-df-types-aarch64-apple-darwin.stdout; review/tree-df-types-wasm32-unknown-unknown.stdout; review/execute-independent-shared_contracts.stdout; development/shared-contracts.md",
+      "procedure_and_observation": "Five distinct private16byte nonzero identities, bounded private provenance labels, nonzeroepoch and checked sequence; exhaustive128ASCII labelchecks and128single-bitcases for eachID pass. df-types normal tree consists only itself on both targets; no credentials or runtime dependency."
+    },
+    {
+      "criterion": "Generated additive common protobuf messages have explicit presence and a durable field-number/name ledger; actual malformed/presence/unknown-required cases reject safely, optional additive cases remain compatible, and field reuse is rejected by a real schema boundary check.",
+      "result": "PASS",
+      "evidence_ref": "review/execute-independent-schema_ledger.stdout; review/execute-independent-shared_contracts.stdout; worker/schema/contracts.bin; crates/df-protocol/proto/field-ledger.txt",
+      "procedure_and_observation": "Actual generated descriptor matches durable ledger; malformed, duplicate/removed/renamed/type/presence/reallocated field cases refuse. Independent enum retiredname/number inclusive-end and addedservice/oneof relocation refuse. Unknown optional capability signed extremes skip; same required values refuse. Unknown-only payload fails; knownpayload plus unknown field remains explicitly additive."
+    },
+    {
+      "criterion": "Actual consuming encode/decode mapping fixtures preserve identity and lexicographic recovery revision ordering, including newer epoch with lower sequence, zero/missing epochs, max sequence overflow and old scalar ambiguity rejection.",
+      "result": "PASS",
+      "evidence_ref": "review/execute-independent-shared_contracts.stdout; review/shared_contracts-extra.rs; crates/df-tools/tests/shared_contracts.rs",
+      "procedure_and_observation": "Actual prost encode/decode composed with checked typed mappings; maxepoch/sequence boundary matrix and newer epoch lowersequence comparison pass. Missing/zeroepoch, missingsequence, malformed old scalar and buildpresence/bounds refuse."
+    },
+    {
+      "criterion": "Current source native/WASM format/lint/compile and focused contract tests pass; native/WASM artifact identities and real executed boundary results are retained with an independent frontier evaluator verdict for every criterion.",
+      "result": "PASS",
+      "evidence_ref": "review/command-results.json; review/identity.json; review/post-gates-artifacts.json; review/test-native.stdout; review/compile-consumer-wasm.stderr",
+      "procedure_and_observation": "Original frozen10tests executed and five independent additional Rust tests compiled against exact fingerprint-linked rlibs and executed. Repeated native19 ordinary+1compilefaildoctest pass; native/WASM deniedClippy, formatting and WASMconsumer no-run pass. Three native binaries rebuilt during reviewer Cargo rerun, details separately disclosed, currentsource clean and currenthashes retained. WASM tests were not executed."
+    },
+    {
+      "criterion": "Preserve experimental all-four-mode fixture and explain remaining fullG03 models/effects/audience/authorization/service and G02 physical/resource gates; no prototype claims production or entire project completion.",
+      "result": "PASS",
+      "evidence_ref": "review/protected-app-diff.stdout; review/test-native.stdout; review/historical-audit-stale.stdout; development/shared-contracts.md",
+      "procedure_and_observation": "Protected transport schema/browser/qualification/fixture/bridge/observe source diff empty. Seven bridge+two nativefixture regression tests pass. No new service in public/contract descriptors, experimentaltransport preserved. Historical fourcrate audit intentionally refuses changedCargo; fullG01 legal/nativeI/O, fullG02 physical/resource/recovery/audio/network and fullG03 models/effects/audience/auth/services unresolved."
+    }
+  ],
+  "capabilities": {
+    "native_execution": "actual Rust generated protobuf/typed consuming/schema descriptor boundaries executed",
+    "computer_use": "enabled; not required for nonvisual internal contract wave",
+    "vision": "enabled; not required; no current pixels claimed",
+    "audio": "not required/unperformed",
+    "wasm": "crosscompiled and linted; not executed",
+    "model_requested_by_coordinator": "gpt-6-astra",
+    "actual_serving_variant": "unexposed; not independently attested"
+  },
+  "artifact_preservation_deviation": {
+    "cause": "Reviewer reran current native Cargo tests in worker build root expecting warm artifacts; Cargo recompiled df-tools, replacing three native binaries. This violated requested byte preservation; source and behavior checks still pass. No hashes concealed or falsely marked preserved.",
+    "before_verified_and_executed": "identity.json original six verified; original two focused binaries actual executed before rerun",
+    "changed_artifacts": "post-gates-artifacts.json records exact before/after for nativefixture/shared_contracts/schema_ledger",
+    "unchanged": "threeWASM binaries and all generated descriptors match; livepreviews/source unchanged",
+    "script_failure": "run-independent.py final preservation assertion failed after all commands passed; this failure is operational evidence, not a contract test failure."
+  },
+  "known_gaps": [
+    "FullG03 models/effects/audiences/authorization/services and production consumers pending",
+    "FullG02 physical/device/network matrix, whole-process/pre-callback/heap8MiB bounds, suspend/recovery, audible audio/jitter/action-to-view pending",
+    "Retained-tab reload defect remains open",
+    "FullG01/nativeI/O/legal/license/notice fulfillment pending; historical four-crate audit unchanged and refuses this fifth-crate source",
+    "Required future unknown-oneof behavior must use explicit required capability/protocol incompatibility; old prost skips unknown data beside a known payload"
+  ],
+  "source_changes_by_evaluator": false,
+  "queue_changes_by_evaluator": false,
+  "independent_fixtures": "review/shared_contracts-extra.rs and review/schema_ledger-extra.rs; outputs under artifacts/tmp/CONTRACT-G03-001-review",
+  "evidence_ref": [
+    "review/command-results.json",
+    "review/identity.json",
+    "review/post-gates-artifacts.json"
+  ],
+  "integration_approval": false
+}

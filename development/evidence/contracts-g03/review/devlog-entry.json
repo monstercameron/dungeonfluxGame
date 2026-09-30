@@ -1,0 +1,9 @@
+{
+  "id": "contracts-g03-a1-independent-contract-boundaries-20260930",
+  "kind": "resolution",
+  "summary": "First-wave generated contracts and actual consuming/schema boundaries pass independent candidate review.",
+  "details": "Candidate9898 all5 exactcriteria pass; original10tests plus5independent tests actualexecuted; native19+compilefail1 and format/native-WASMlint/WASMcompile pass. Added cases cover128IDbits eachtype, ASCIIlabels, maxepoch/sequence, signedunknownrequiredcapabilities andenumretirement. Reviewer warmCargo rerun replaced3nativeartifacts; exactbefore/after identities retained and deviation explicit,3WASM+descriptors preserved.",
+  "action": "Reviewed puretypes anddependencyclosure, actualgenerateddescriptorledger, currentnativeboundaries; no source/queuechanges or browserclaims.",
+  "outcome": "APPROVE atomiccandidate9898 only; actualmergedMAIN reviewrequired; fullG01/G02/G03 gaps remainpending.",
+  "evidence_ref": "development/evidence/contracts-g03/review/review.json; development/evidence/contracts-g03/review/command-results.json; development/evidence/contracts-g03/review/post-gates-artifacts.json"
+}

@@ -1,0 +1,202 @@
+{
+  "environment": {
+    "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+    "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/audit-g01",
+    "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review",
+    "CARGO_NET_OFFLINE": "true"
+  },
+  "results": [
+    {
+      "name": "metadata-native",
+      "command": [
+        "./development/build-fixture.sh",
+        "cargo",
+        "metadata",
+        "--locked",
+        "--offline",
+        "--format-version",
+        "1",
+        "--filter-platform",
+        "aarch64-apple-darwin"
+      ],
+      "exit_code": 0,
+      "seconds": 0.4579762078355998,
+      "sha256": "08276121a5f63ef2f35f9f3267917d4676dd650e34f160e68999c4d503c15329",
+      "stderr": "",
+      "output": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/dependency-g01/review/metadata-native.json",
+      "matches_captured_bytes": true
+    },
+    {
+      "name": "metadata-wasm",
+      "command": [
+        "./development/build-fixture.sh",
+        "cargo",
+        "metadata",
+        "--locked",
+        "--offline",
+        "--format-version",
+        "1",
+        "--filter-platform",
+        "wasm32-unknown-unknown"
+      ],
+      "exit_code": 0,
+      "seconds": 0.2296942500397563,
+      "sha256": "e91bc29f430944f28a06712d6cd5453a9ab6c0bd84134e41822ca9c597bc0d0c",
+      "stderr": "",
+      "output": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/dependency-g01/review/metadata-wasm.json",
+      "matches_captured_bytes": true
+    },
+    {
+      "name": "tree-native",
+      "command": [
+        "./development/build-fixture.sh",
+        "cargo",
+        "tree",
+        "--locked",
+        "--offline",
+        "--target",
+        "aarch64-apple-darwin",
+        "--edges",
+        "normal,build,features",
+        "-p",
+        "df-tools"
+      ],
+      "exit_code": 0,
+      "seconds": 0.21815779199823737,
+      "sha256": "cb03a70510f80e8cd40d9301863155dd3259b6c92dea34636c57458ff59db6be",
+      "stderr": "",
+      "output": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/dependency-g01/review/tree-native.txt",
+      "matches_captured_bytes": true
+    },
+    {
+      "name": "tree-wasm",
+      "command": [
+        "./development/build-fixture.sh",
+        "cargo",
+        "tree",
+        "--locked",
+        "--offline",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--edges",
+        "normal,build,features",
+        "-p",
+        "df-tools"
+      ],
+      "exit_code": 0,
+      "seconds": 0.22374637494795024,
+      "sha256": "a6e2148b0c3a7e48fd0d25494894fd9743177659545de2d73b5d351e3787d226",
+      "stderr": "",
+      "output": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/dependency-g01/review/tree-wasm.txt",
+      "matches_captured_bytes": true
+    },
+    {
+      "name": "tree-all-native",
+      "command": [
+        "./development/build-fixture.sh",
+        "cargo",
+        "tree",
+        "--locked",
+        "--offline",
+        "--target",
+        "aarch64-apple-darwin",
+        "--edges",
+        "all",
+        "--prefix",
+        "depth",
+        "-p",
+        "df-tools"
+      ],
+      "exit_code": 0,
+      "seconds": 0.21936754207126796,
+      "sha256": "6d3dc2ce53eb976e8cf1f24bb260b16260c91c76d816d7b136a0ea967bd39a83",
+      "stderr": "",
+      "output": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/dependency-g01/review/tree-all-native.txt",
+      "matches_captured_bytes": true
+    },
+    {
+      "name": "tree-all-wasm",
+      "command": [
+        "./development/build-fixture.sh",
+        "cargo",
+        "tree",
+        "--locked",
+        "--offline",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--edges",
+        "all",
+        "--prefix",
+        "depth",
+        "-p",
+        "df-tools"
+      ],
+      "exit_code": 0,
+      "seconds": 0.22077087499201298,
+      "sha256": "9b526e59d5036f90107fc1b6bac940768a577460a10aeba9307cffa639eafa73",
+      "stderr": "",
+      "output": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/dependency-g01/review/tree-all-wasm.txt",
+      "matches_captured_bytes": true
+    },
+    {
+      "name": "tree-rpc-dev-native",
+      "command": [
+        "./development/build-fixture.sh",
+        "cargo",
+        "tree",
+        "--locked",
+        "--offline",
+        "--target",
+        "aarch64-apple-darwin",
+        "-e",
+        "dev",
+        "-p",
+        "df-rpc-bridge"
+      ],
+      "exit_code": 0,
+      "seconds": 0.20765104214660823,
+      "sha256": "815a8b3b3b786b3cd00f21ea1c3f10c027da9503e5fbdbfa22870d3e4f680f69",
+      "stderr": "",
+      "output": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/dependency-g01/review/tree-rpc-dev-native.txt",
+      "matches_captured_bytes": true
+    },
+    {
+      "name": "tree-protocol-build",
+      "command": [
+        "./development/build-fixture.sh",
+        "cargo",
+        "tree",
+        "--locked",
+        "--offline",
+        "--target",
+        "aarch64-apple-darwin",
+        "-e",
+        "build",
+        "-p",
+        "df-protocol"
+      ],
+      "exit_code": 0,
+      "seconds": 0.20129795907996595,
+      "sha256": "22f65ee02f7cd51648bd42ba6a06413351d516cf80993077f9615df6bd46871e",
+      "stderr": "",
+      "output": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/dependency-g01/review/tree-protocol-build.txt",
+      "matches_captured_bytes": true
+    },
+    {
+      "name": "cargo-version",
+      "command": [
+        "./development/build-fixture.sh",
+        "cargo",
+        "--version",
+        "--verbose"
+      ],
+      "exit_code": 0,
+      "seconds": 0.07378412503749132,
+      "sha256": "1c272edb385652db28e84f7bf1a4fb965e5c86439ba88b14303cb70c30e7b0c7",
+      "stderr": "",
+      "output": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/dependency-g01/review/cargo-version.txt",
+      "matches_captured_bytes": true
+    }
+  ],
+  "total_seconds": 2.059639875078574
+}

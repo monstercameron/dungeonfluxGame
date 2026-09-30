@@ -1,0 +1,28 @@
+syntax = "proto3";
+package dungeonflux.experimental.contract.v1;
+import "common.proto";
+// Test compatibility wrappers only; no production envelope, negotiation, or service.
+message Identities {
+  dungeonflux.public.v1.SessionId session = 1;
+  dungeonflux.public.v1.MemberId member = 2;
+  dungeonflux.public.v1.ClientBindingId client_binding = 3;
+  dungeonflux.public.v1.RunId run = 4;
+  dungeonflux.public.v1.OperationId operation = 5;
+}
+enum CapabilityKind {
+  CAPABILITY_KIND_UNSPECIFIED = 0;
+  COMPOSITE_RECOVERY = 1;
+}
+message Capability {
+  optional CapabilityKind kind = 1;
+  optional bool required = 2;
+}
+message CompatibilityFixture {
+  // Dimensionless revision; application boundary supports exactly 1.
+  optional uint32 protocol_revision = 1;
+  repeated Capability capabilities = 2;
+  oneof payload {
+    dungeonflux.public.v1.SessionRevision revision = 3;
+    dungeonflux.public.v1.BuildIdentity build = 4;
+  }
+}

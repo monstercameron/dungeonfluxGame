@@ -1,0 +1,20 @@
+The following is a diff from the previous accessibility tree for Window: "DungeonFlux S00 transport laboratory" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 10, 12
++				65 button (disabled) Forward
++				66 button Home
++				67 container
++					68 pop up button Turn Off the Lights
+Has access to this site
++					69 pop up button Automatic picture-in-picture (on)
+Has access to this site
++					70 pop up button ChatGPT
+Has access to this site
++					71 pop up button Extensions
++						72 button Close
++						73 button Close
++						74 button Close
++						75 button Close
++						76 button Close
++						77 button Close
++						78 button Close
+The focused UI element is 54 HTML content DungeonFlux S00 transport laboratory, URL: 127.0.0.1:43182/

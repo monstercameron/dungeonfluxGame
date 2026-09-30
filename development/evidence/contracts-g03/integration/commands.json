@@ -1,0 +1,331 @@
+[
+  {
+    "name": "main-head",
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+    "environment": {
+      "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+      "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review",
+      "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-integration-review",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "expected": 0,
+    "seconds": 0.025,
+    "passed": true,
+    "stdout_sha256": "f112484ebaf035dcfb3b5340c24fa1e5c3a34658be6ee133cec632564867e3bd",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "application-clean",
+    "argv": [
+      "git",
+      "status",
+      "--porcelain",
+      "--",
+      "Cargo.toml",
+      "Cargo.lock",
+      "rust-toolchain.toml",
+      ".cargo",
+      "crates",
+      "development/build-fixture.sh"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+    "environment": {
+      "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+      "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review",
+      "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-integration-review",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "expected": 0,
+    "seconds": 0.041,
+    "passed": true,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "main-fmt",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/development/build-fixture.sh",
+      "cargo",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+    "environment": {
+      "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+      "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review",
+      "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-integration-review",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "expected": 0,
+    "seconds": 0.368,
+    "passed": true,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "main-contract-tests",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/development/build-fixture.sh",
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "--jobs",
+      "1",
+      "-p",
+      "df-tools",
+      "--test",
+      "shared_contracts",
+      "--test",
+      "schema_ledger",
+      "--",
+      "--test-threads=1"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+    "environment": {
+      "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+      "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review",
+      "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-integration-review",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "expected": 0,
+    "seconds": 71.448,
+    "passed": true,
+    "stdout_sha256": "ed3197d66d1975135b4c3caf9e20aa2ebc05cce4ad1700ecdcc45e135d3761d7",
+    "stderr_sha256": "6ea31c1d930e6f972de8e1b5922662578c3a1624c09ef2ea7359977d6c9f7e61"
+  },
+  {
+    "name": "main-native-build",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/development/build-fixture.sh",
+      "cargo",
+      "build",
+      "--locked",
+      "--offline",
+      "--jobs",
+      "1",
+      "-p",
+      "df-tools",
+      "--bin",
+      "df-transport-fixture"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+    "environment": {
+      "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+      "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review",
+      "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-integration-review",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "expected": 0,
+    "seconds": 7.8,
+    "passed": true,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "096834487d6a0223711b53eb12cc9e9f6cdc65ad9a7e0bc8dd6f41befb2815d1"
+  },
+  {
+    "name": "main-wasm-build",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/development/build-fixture.sh",
+      "cargo",
+      "build",
+      "--locked",
+      "--offline",
+      "--jobs",
+      "1",
+      "-p",
+      "df-tools",
+      "--lib",
+      "--target",
+      "wasm32-unknown-unknown"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+    "environment": {
+      "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+      "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review",
+      "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-integration-review",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "expected": 0,
+    "seconds": 62.094,
+    "passed": true,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "30ea29bfbc71e41ff2c43b6e77330db1eaaf5907bad437ea8b6e3f002456d97c"
+  },
+  {
+    "name": "tree-df-types-aarch64-apple-darwin",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/development/build-fixture.sh",
+      "cargo",
+      "tree",
+      "--locked",
+      "--offline",
+      "--target",
+      "aarch64-apple-darwin",
+      "-p",
+      "df-types",
+      "--edges",
+      "normal"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+    "environment": {
+      "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+      "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review",
+      "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-integration-review",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "expected": 0,
+    "seconds": 0.204,
+    "passed": true,
+    "stdout_sha256": "52e0896ca13b81cf3521b9988aae55e688ce7a8acb15e33e09dbae6454531595",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "tree-df-protocol-aarch64-apple-darwin",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/development/build-fixture.sh",
+      "cargo",
+      "tree",
+      "--locked",
+      "--offline",
+      "--target",
+      "aarch64-apple-darwin",
+      "-p",
+      "df-protocol",
+      "--edges",
+      "normal"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+    "environment": {
+      "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+      "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review",
+      "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-integration-review",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "expected": 0,
+    "seconds": 0.144,
+    "passed": true,
+    "stdout_sha256": "43f5b6a84023748f4158b93cf3bfb9b664076f26f2bb6ea9727c853dea86fed5",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "tree-df-types-wasm32-unknown-unknown",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/development/build-fixture.sh",
+      "cargo",
+      "tree",
+      "--locked",
+      "--offline",
+      "--target",
+      "wasm32-unknown-unknown",
+      "-p",
+      "df-types",
+      "--edges",
+      "normal"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+    "environment": {
+      "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+      "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review",
+      "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-integration-review",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "expected": 0,
+    "seconds": 0.143,
+    "passed": true,
+    "stdout_sha256": "52e0896ca13b81cf3521b9988aae55e688ce7a8acb15e33e09dbae6454531595",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "tree-df-protocol-wasm32-unknown-unknown",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/development/build-fixture.sh",
+      "cargo",
+      "tree",
+      "--locked",
+      "--offline",
+      "--target",
+      "wasm32-unknown-unknown",
+      "-p",
+      "df-protocol",
+      "--edges",
+      "normal"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+    "environment": {
+      "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+      "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review",
+      "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-integration-review",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "expected": 0,
+    "seconds": 0.132,
+    "passed": true,
+    "stdout_sha256": "43f5b6a84023748f4158b93cf3bfb9b664076f26f2bb6ea9727c853dea86fed5",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "historical-audit-stale",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/development/dependency-audit.py"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+    "environment": {
+      "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+      "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review",
+      "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-integration-review",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "exit_code": 1,
+    "expected": 1,
+    "seconds": 0.046,
+    "passed": true,
+    "stdout_sha256": "21cf638416127a00981b8bd8e8d8e1b3a273a54a21b749de5e056d9fa5870e0a",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "application-clean-after",
+    "argv": [
+      "git",
+      "status",
+      "--porcelain",
+      "--",
+      "Cargo.toml",
+      "Cargo.lock",
+      "rust-toolchain.toml",
+      ".cargo",
+      "crates",
+      "development/build-fixture.sh"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+    "environment": {
+      "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+      "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03-integration-review",
+      "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-integration-review",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "expected": 0,
+    "seconds": 0.022,
+    "passed": true,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+]

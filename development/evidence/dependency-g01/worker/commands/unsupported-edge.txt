@@ -1,0 +1,6 @@
+error: invalid value 'proc-macro' for '--edges <KINDS>'
+  [possible values: all, normal, build, dev, features, public, no-normal, no-build, no-dev, no-proc-macro]
+
+  tip: a similar value exists: 'no-proc-macro'
+
+For more information, try '--help'.

@@ -1,0 +1,15 @@
+{
+  "task_id": "ACTIVE-CLEANUP-008",
+  "attempt_id": "ACTIVE-CLEANUP-008-a1",
+  "at": "2026-09-30T21:22:43.511634+00:00",
+  "tested_revision": "sha256:e59834f405a95f956e4d02603707e2e4e9c535900730204c6bce40e3ce868ac0",
+  "integrated_revision": "sha256:e59834f405a95f956e4d02603707e2e4e9c535900730204c6bce40e3ce868ac0",
+  "checks": [
+    {
+      "result": "pass",
+      "tested_revision": "sha256:e59834f405a95f956e4d02603707e2e4e9c535900730204c6bce40e3ce868ac0",
+      "evidence_ref": "development/evidence/cleanup-008/review.json",
+      "procedure": "Exact operational report hash and independent current lstat/process/binary retention boundary; expected active evaluator scratch differences disclosed; no deletions."
+    }
+  ]
+}

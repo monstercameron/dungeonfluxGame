@@ -1,0 +1,10 @@
+{
+  "id": "audit-g01-a2-independent-integrated-boundary-20260930",
+  "kind": "resolution",
+  "summary": "Actual merged main G01 verifier passes current positive, confinement refusals and descriptor ownership checks.",
+  "details": "MainHEADf79 matches reviewedcandidate; sixauditfiles Gitblobidentical. Appinputs unchanged822/ba0, so no appbuild asserted. BundledPython executes mainhelper fromforeigncwd successfully; ownmergedfixtures refuse metadata/report/sourceparent symlinks, source/reportFIFO, metadataleafsymlink.20success/refusal iterations leaveFD0/1/2unchanged.",
+  "action": "Executed9bounded actualmergedchecks; reused byteequivalent independentcandidateCargo/license evidence. No source/build/queue changes.",
+  "outcome": "APPROVE all5atomicintegratedcriteria atf79. FullG01/nativeI/O/legal/fulfillment/sourcearchive and projectgates remain pending.",
+  "related_entry_id": "audit-g01-a2-independent-parent-symlink-resolved-20260930",
+  "evidence_ref": "development/evidence/dependency-g01/a2/integration-review.json; development/evidence/dependency-g01/a2/integration/boundary-results.json"
+}

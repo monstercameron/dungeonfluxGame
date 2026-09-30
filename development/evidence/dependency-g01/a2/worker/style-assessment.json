@@ -1,0 +1,13 @@
+{
+  "scope": ["development/dependency-audit.py", "development/dependency-audit.md"],
+  "assessment": "The verifier uses a small fixed path set, explicit platform capability checks, anchored directory descriptors, no-follow component opens, nonblocking bounded leaf reads, and fstat validation. Every descriptor created by the verifier has a defined owner and closes on success or refusal. Documentation states runtime and legal scope limits.",
+  "verification": {
+    "python_syntax": "passed with bundled Python 3.12.14",
+    "current_verifier": "passed from the checkout and from a foreign current directory",
+    "controlled_filesystem_matrix": "all 22 cases passed within a 2-second per-case deadline",
+    "descriptor_cleanup": "before/after counts equal four for 12 repeated successes and 12 repeated symlink refusals",
+    "unchanged_evidence": "report, package data, native/WASM metadata, and Cargo/build inputs retain A1 hashes",
+    "git_diff_check": "passed",
+    "rustfmt_clippy_native_wasm_build": "not run; no Rust, Cargo, build, protobuf, or toolchain changes; no current result claimed"
+  }
+}

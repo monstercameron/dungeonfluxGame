@@ -1,0 +1,11 @@
+{
+  "flags": {
+    "O_CLOEXEC": 16777216,
+    "O_DIRECTORY": 1048576,
+    "O_NOFOLLOW": 256,
+    "O_NONBLOCK": 4
+  },
+  "open_supports_dir_fd": true,
+  "os_name": "posix",
+  "python": "3.12.14 (main, Aug 25 2026, 13:50:33) [Clang 22.1.3 ]"
+}

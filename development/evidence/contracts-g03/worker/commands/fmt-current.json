@@ -1,0 +1,24 @@
+{
+  "name": "fmt-current",
+  "argv": [
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/development/build-fixture.sh",
+    "cargo",
+    "fmt",
+    "--all",
+    "--",
+    "--check"
+  ],
+  "environment": {
+    "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+    "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03",
+    "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/CONTRACT-G03-001-a1",
+    "CARGO_NET_OFFLINE": "true"
+  },
+  "commit": "9898c70614a8555efa63d3cec47ba9adbc395bbb",
+  "exit_code": 0,
+  "timed_out": false,
+  "elapsed_seconds": 0.555,
+  "observed_peak_process_tree_rss_kib": 39168,
+  "rss_sample_count": 2,
+  "at": "2026-09-30T21:36:11.227879+00:00"
+}

@@ -1,0 +1,24 @@
+{
+  "wrapper": "development/build-fixture.sh cargo",
+  "environment": {
+    "DUNGEONFLUX_ARTIFACT_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts",
+    "DUNGEONFLUX_BUILD_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/audit-g01",
+    "DUNGEONFLUX_TMP_ROOT": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a1",
+    "cargo_network": "offline",
+    "lockfile": "locked"
+  },
+  "commands": [
+    {"args": ["metadata", "--locked", "--offline", "--format-version", "1", "--filter-platform", "aarch64-apple-darwin"], "exit_code": 0, "output": "../../../../dependency-audit/metadata/native.json"},
+    {"args": ["metadata", "--locked", "--offline", "--format-version", "1", "--filter-platform", "wasm32-unknown-unknown"], "exit_code": 0, "output": "../../../../dependency-audit/metadata/wasm.json"},
+    {"args": ["tree", "--locked", "--offline", "--target", "aarch64-apple-darwin", "--edges", "normal,build,features", "-p", "df-tools"], "exit_code": 0, "output": "tree-native.txt"},
+    {"args": ["tree", "--locked", "--offline", "--target", "wasm32-unknown-unknown", "--edges", "normal,build,features", "-p", "df-tools"], "exit_code": 0, "output": "tree-wasm.txt"},
+    {"args": ["tree", "--locked", "--offline", "--target", "aarch64-apple-darwin", "--edges", "all", "--prefix", "depth", "-p", "df-tools"], "exit_code": 0, "output": "tree-all-native.txt"},
+    {"args": ["tree", "--locked", "--offline", "--target", "wasm32-unknown-unknown", "--edges", "all", "--prefix", "depth", "-p", "df-tools"], "exit_code": 0, "output": "tree-all-wasm.txt"},
+    {"args": ["tree", "--locked", "--offline", "--target", "aarch64-apple-darwin", "-e", "dev", "-p", "df-rpc-bridge"], "exit_code": 0, "output": "tree-rpc-dev-native.txt"},
+    {"args": ["tree", "--locked", "--offline", "--target", "aarch64-apple-darwin", "-e", "build", "-p", "df-protocol"], "exit_code": 0, "output": "tree-protocol-build.txt"},
+    {"args": ["tree", "--locked", "--offline", "--target", "aarch64-apple-darwin", "-e", "normal,build,proc-macro", "-p", "df-tools"], "exit_code": 1, "output": "unsupported-edge.txt", "reason": "Cargo rejects proc-macro as an edge kind; corrected evidence uses supported --edges all and normal/build/features."}
+  ],
+  "command_timeout_seconds": 60,
+  "total_cargo_seconds_limit": 300,
+  "measured_cargo_seconds": 3
+}

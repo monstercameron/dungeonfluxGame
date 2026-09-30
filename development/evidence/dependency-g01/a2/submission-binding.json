@@ -1,0 +1,10 @@
+{
+  "at": "2026-09-30T21:11:17.840883+00:00",
+  "commit": "f79bebf6f88f72f80bfb62d71798ebc56f64ca96",
+  "handoff_sha256": "e57a2a8ec0c79ff8a9a7de6a01da2164c60b2f6a39592c0ec4aed1a11e48129a",
+  "evaluator": "/root/frontier_integrate",
+  "model": "gpt-6-astra",
+  "serving_variant": "unexposed",
+  "tracked_source_clean": true,
+  "prior_rejection_preserved": "development/evidence/dependency-g01/review/review.json"
+}

@@ -1,0 +1,17 @@
+{
+  "task_id": "AUDIT-G01-CLOSURE-001",
+  "attempt_id": "AUDIT-G01-CLOSURE-001-a2",
+  "at": "2026-09-30T21:18:31.318091+00:00",
+  "tested_revision": "f79bebf6f88f72f80bfb62d71798ebc56f64ca96",
+  "integrated_revision": "f79bebf6f88f72f80bfb62d71798ebc56f64ca96",
+  "review_sha256": "ad9eae18062d55f64100b5fe8b1654650f65f38e97d0ad9cd9405bb42b7ccd73",
+  "checks": [
+    {
+      "result": "pass",
+      "tested_revision": "f79bebf6f88f72f80bfb62d71798ebc56f64ca96",
+      "evidence_ref": "development/evidence/dependency-g01/a2/integration-review.json",
+      "procedure": "Independent actual main helper from foreign cwd and controlled original parent-symlink/other nonregular FD boundaries; exact candidate source blobs and unchanged Cargo/application inputs."
+    }
+  ],
+  "scope": "Partial fixed-four-crate descriptive dependency/license evidence only; fullG01/nativeI/O/legalpolicy/archive/noticefulfillment remain open."
+}

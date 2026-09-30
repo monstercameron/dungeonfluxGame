@@ -1,0 +1,9 @@
+{
+  "id": "active-cleanup-009-independent-inventory-20260930",
+  "kind": "resolution",
+  "summary": "Immutable cleanup009 inventory independently recomputes and preserves live processes/binaries.",
+  "details": "Exact reportSHA c4390a7684469729111865c0ae12684dd5bf9f989f3907346334373a06350681; 33roots68243files13574207562logicalbytes. Current delta confined to G03 candidate build/reviewer scratch and cleanupselfevidence. Old incremental entries and3candidate native binaries changed during separate evaluatorCargo rerun; report/worker not blamed and4liveprotectedbinaryhashes unchanged.",
+  "action": "Actual lstat-only nonfollowing inventory, exactsums/report/script hashes, current readonlyclaims/devlog andps/lsof verification. No cleanupdeletion/source/queuechanges.",
+  "outcome": "APPROVE both exact operational criteria; testedidentity is inventoryreport SHA, not Gitcommit.",
+  "evidence_ref": "development/evidence/cleanup-009/review.json; development/evidence/cleanup-009/independent-boundary.json; development/evidence/contracts-g03/review/post-gates-artifacts.json"
+}

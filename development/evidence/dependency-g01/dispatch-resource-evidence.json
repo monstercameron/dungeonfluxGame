@@ -1,0 +1,38 @@
+{
+  "observed_at": "2026-09-30T20:42:17.099636+00:00",
+  "worker_peak_estimate_gib": 0.3,
+  "system_headroom_gib": 3.2,
+  "frontier_review_reserve_gib": 2,
+  "commands": [
+    {
+      "argv": [
+        "sysctl",
+        "-n",
+        "hw.memsize"
+      ],
+      "exit": 0,
+      "stdout": "17179869184\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "memory_pressure"
+      ],
+      "exit": 0,
+      "stdout": "The system has 17179869184 (1048576 pages with a page size of 16384).\n\nStats: \nPages free: 3964 \nPages purgeable: 2 \nPages purged: 40110928 \n\nSwap I/O:\nSwapins: 4963365 \nSwapouts: 9374121 \n\nPage Q counts:\nPages active: 240875 \nPages inactive: 237502 \nPages speculative: 2050 \nPages throttled: 0 \nPages wired down: 155301 \n\nCompressor Stats:\nPages used by compressor: 354637 \nPages decompressed: 314880109 \nPages compressed: 394515502 \n\nFile I/O:\nPageins: 79189657 \nPageouts: 899544 \n\nSystem-wide memory free percentage: 48%\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "ps",
+        "-p",
+        "18905,18907,25530,80873,27721",
+        "-o",
+        "pid=,ppid=,stat=,command="
+      ],
+      "exit": 0,
+      "stdout": "18905     1 Ss   /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/web\n18907     1 Ss   /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web 43181\n25530     1 Ss   /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/web 43182\n27721     1 Ss   /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python /Users/earlcameron/Desktop/dungeonflux/development/screenshot_journey.py run-loop\n80873     1 Ss   /Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install/bin/postgres -D /Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/data -c listen_addresses= -c unix_socket_directories=/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/socket -c unix_socket_permissions=0700 -c port=55439 -c max_connections=16 -c fsync=on -c full_page_writes=on -c synchronous_commit=on\n",
+      "stderr": ""
+    }
+  ]
+}

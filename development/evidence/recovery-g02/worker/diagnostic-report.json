@@ -1,0 +1,231 @@
+{
+  "task_id": "DIAGNOSE-G02-RECOVERY-001",
+  "attempt_id": "DIAGNOSE-G02-RECOVERY-001-a1",
+  "worker": "/root/recovery_g02_sol",
+  "record_role": "operational",
+  "submitted_at": "2026-09-30T21:10:22.619249+00:00",
+  "result": "INCONCLUSIVE: bounded diagnosis retained; current native capability unavailable; root cause unverified",
+  "summary": "The retained native AX and screenshot evidence records a blank retained43182 tab after reload while a new same-build43182 tab reloads and passes ten transport semantics. Current read-only HTTP and process checks bind the live fixture to the same ba0 build and byte-equal main822ffc application inputs. A real native Chrome Beta CUA entry was attempted and returned Mac locked without AX or current pixels; no new browser diagnosis or recovery proof is claimed.",
+  "scope": {
+    "kind": "Read-only bounded operational diagnosis; no source submission",
+    "input_revision": "822ffc4992b34ab548a47cf91efad845ca50c716",
+    "tested_fixture_source": "ba0d3860fb27124be352b48766e99a955f746672",
+    "brief_ref": "development/evidence/recovery-g02/brief.json",
+    "context_ref": "development/evidence/recovery-g02/worker-context.json",
+    "command_timeout_seconds": 30,
+    "http_timeout_seconds": 4,
+    "investigation_bound_minutes": 20,
+    "paid_calls": 0,
+    "source_commit_submitted": null,
+    "independent_frontier_review_required": true
+  },
+  "governing": {
+    "sources_ref": "current-identity.json#governing_sources",
+    "all_nine_brief_source_hashes_match": true,
+    "sections": [
+      "planning/rpc-transport.md: Browser resource proof and feasibility result; page/WASM boot uses HTTP and game calls use native HTTP2 over WebSocket",
+      "planning/runtime-reliability.md: Thin-client recovery and presentation (owned cancellation/reconnect and browser lifecycle), Asynchronous work and timers",
+      "ADR/0001: Non-source operational inventory/result, coordinator-only queue authority",
+      "ADR/0002: Preserve active previews, processes and retained evidence; reserve review capacity",
+      "ADR/0003: Scoped append-only devlog; unknown cause and missing capability honest",
+      "ADR/0004: Build-specific checks and compact handoff",
+      "ADR/0005: Independent real CUA+vision review; missing checks cannot approve"
+    ],
+    "mandatory_style": "Read; no authored application/source changes, so fmt/Clippy/build tests neither needed nor authorized."
+  },
+  "identities": {
+    "fixture_url": "http://127.0.0.1:43182/",
+    "fixture_pid": 25530,
+    "fixture_process_start": "Wed Sep 30 15:50:07 2026 (ps local time)",
+    "ownership_ref": "development/evidence/qualify-g02/integration/ownership.json",
+    "build_ref": "development/evidence/qualify-g02/integration/build-identity.json",
+    "current_identity_ref": "current-identity.json",
+    "six_artifact_hashes_match": true,
+    "current_head": "822ffc4992b34ab548a47cf91efad845ca50c716",
+    "app_input_diff_vs_build": "Empty git diff ba0 -- crates Cargo.toml Cargo.lock rust-toolchain.toml rustfmt.toml development/build-fixture.sh",
+    "host": "macOS26.6.2 build25G83 arm64",
+    "browser_bundle": "com.google.Chrome.beta",
+    "browser_pid": 1222,
+    "browser_loaded_framework_version": "153.0.8010.12",
+    "installed_browser_version": "156.0.8078.4",
+    "browser_version_basis": "Current lsof -a -p1222 -d txt loaded framework path vs installed Info.plist; current UI version could not be queried",
+    "browser_version_causal_status": "Context only; neither version mismatch nor process longevity is established as the cause."
+  },
+  "capabilities_actual": {
+    "computer_use_tool_available": true,
+    "native_cua_attempted": true,
+    "current_native_access_succeeded": false,
+    "vision_used": "Direct inspection of retained reload-retained-final.png and reload-fresh-checks.png via view_image, not current native browser pixels",
+    "read_only_shell_and_http": true,
+    "audio": false,
+    "devtools_console_observed": false,
+    "devtools_network_observed": false
+  },
+  "procedures": [
+    {
+      "id": "P1",
+      "action": "Read frozen brief/context, all nine governing files and listed prior evidence; inspect retained native AX and direct screenshots.",
+      "observed": "Retained AX binds selected laboratory window/tab URL43182 and contains no HTML subtree; retained screenshot shows green blank content. Fresh screenshot visibly shows mounted laboratory, all ten PASS, COMPLETE10 and ba0 build footer.",
+      "basis": "Historical evidence re-inspection only, not fresh reproduction.",
+      "refs": [
+        "development/evidence/qualify-g02/integration/reload-retained-final-ax.txt",
+        "development/evidence/qualify-g02/integration/reload-retained-final.png",
+        "development/evidence/qualify-g02/integration/reload-fresh-checks.png",
+        "development/evidence/qualify-g02/integration/reload-fresh-reloaded-ax.txt",
+        "development/evidence/qualify-g02/integration/reload-fresh-checks-ax.txt"
+      ]
+    },
+    {
+      "id": "P2",
+      "action": "Actual native tool mcp__cua_repl.js code: let app = await cua.getApp(\"com.google.Chrome.beta\");",
+      "expected": "Fresh native AX and app binding for safe synthetic-tab identity.",
+      "observed": "Mac locked and automatic unlock could not unlock it; no native state/pixels. No click, key, reload, navigation or DevTools action followed.",
+      "result": "UNPERFORMED dependent native diagnosis",
+      "ref": "native-cua-observation.json"
+    },
+    {
+      "id": "P3",
+      "action": "Read-only Python subprocess calls with timeout30: git rev-parse HEAD; git diff ba0 -- scoped app inputs; ps named protected PIDs; lsof PID25530/43182 listener and PID1222 text mappings; sw_vers; uname -m; installed Info.plist; SHA256 six build files and nine governing docs.",
+      "observed": "All six deployed file hashes and nine governing hashes match; HEAD822ffc app inputs equal ba0; owner PID25530 remains listener; all protected PIDs present; Chrome loaded153/installed156 distinguished.",
+      "ref": "current-identity.json"
+    },
+    {
+      "id": "P4",
+      "action": "Python urllib.request GET with timeout4 to exact public synthetic endpoints /, /fixture-health, /fixture-resources, /pkg/df_tools.js, /pkg/df_tools_bg.wasm; retain HTTP headers, bytes/hash and relevant bodies. No /tunnel or /malicious route called.",
+      "observed": "All five200; HTML1650bytes hashb21d34b4d2235591af5cf2f9f2a43148f830ff9a37bd049c3c5f6fab1b28a9e0; JS26155bytes/WASM3401877bytes equal pinned hashes. active0/completed137/cancelled7/deadline_headers3; four retained native snapshots closed/pipeowners0 and current named buffers0.",
+      "limitation": "HTTP delivery and native diagnostic snapshots do not show whether the retained browser requested, received, parsed or rendered them. Counters unchanged from prior fresh run; no new semantic run.",
+      "ref": "current-http.json"
+    },
+    {
+      "id": "P5",
+      "action": "SHA256 all33files from prior reload-evidence-manifest.json; retain expected/actual hashes. Append scoped canonical devlog using coordinator context.",
+      "observed": "All33hashes match. devlog-native-blocker appended with queue_state_changed=false.",
+      "refs": [
+        "prior-evidence-integrity.json",
+        "devlog-native-blocker.json"
+      ]
+    }
+  ],
+  "retained_failure": {
+    "id": "G02-INTEGRATED-RETAINED-RELOAD-BLANK",
+    "procedure_at_prior_review": "Original dedicated seventh synthetic43182 tab showed completed pressure and semantics. Cmd+R showed no visible change; actual Reload removed HTML and left green blank content. Same URL navigation stayed blank after minutes; PID25530 remained healthy.",
+    "identification": "Ordinal is historical label in prior review only; no present-day ordinal selection was made. Retained AX binds selected URL43182; current exact selected tab/window cannot be established while locked.",
+    "actual_expected": "Visible READY and ten semantics on retained reload; prior actual blank no HTML subtree",
+    "reported_by": "/root/frontier_integrate, prior review2026-09-30T20:46:11.565999+00:00",
+    "current_worker_reproduced": false,
+    "cause": "Unknown",
+    "refs": [
+      "development/evidence/qualify-g02/integration/reload-review.json",
+      "development/evidence/qualify-g02/integration/reload-retained-final-ax.txt",
+      "development/evidence/qualify-g02/integration/reload-retained-final.png"
+    ]
+  },
+  "counterexamples": [
+    {
+      "id": "FRESH-SAME-BUILD-RELOAD",
+      "observation": "Prior eighth dedicated synthetic43182 tab mounted READY immediately, actual native Reload remounted READY and ten semantic checks passed; ba0 visible footer. Fresh success does not repair retained failure.",
+      "basis": "Prior evaluator CUA/vision plus this worker direct retained-image inspection and hash validation",
+      "refs": [
+        "development/evidence/qualify-g02/integration/reload-fresh-reloaded-ax.txt",
+        "development/evidence/qualify-g02/integration/reload-fresh-reloaded.png",
+        "development/evidence/qualify-g02/integration/reload-fresh-checks.png"
+      ]
+    },
+    {
+      "id": "CURRENT-HTTP-DELIVERY",
+      "observation": "Current native owner serves identical document/loader/WASM bytes200 with no active native stream owners. Broad current fixture outage or missing deployed bytes does not account for observations; an intermittent or per-tab browser delivery failure is not excluded.",
+      "ref": "current-http.json"
+    }
+  ],
+  "facts_vs_hypotheses": {
+    "facts": [
+      "Historical retained tab blank and fresh same-build success are direct AX/pixel evidence; not a current observation.",
+      "Current pinned server delivery200 and unchanged native counters are direct shell/HTTP observations.",
+      "Current native CUA returned lock error and no AX/pixels.",
+      "Running framework153 and installed156 differ; no browser restart/update performed."
+    ],
+    "supported_hypotheses": [
+      {
+        "hypothesis": "A retained-tab-specific document/navigation/rendering or loader lifecycle problem warrants diagnosis.",
+        "support": "Prior same-build fresh success and absent retained HTML tree/pixels; repeated earlier retained-tab anomaly in browser-resume-review.",
+        "limitation": "Cannot distinguish browser renderer failure, navigation/resource stall, WASM initialization, stale document, compositor/AX mismatch or application DOM/lifecycle failure without current console/network/document evidence."
+      }
+    ],
+    "unverified_causes": [
+      "Browser cache/discard/renderer behavior",
+      "Runtime/installed browser version mismatch",
+      "WASM loader or module initialization exception",
+      "Application recovery logic or transport ownership",
+      "Memory pressure or suspension effects"
+    ],
+    "root_cause_status": "UNVERIFIED; no fix selected or tested"
+  },
+  "acceptance_map": [
+    {
+      "criterion": 1,
+      "status": "PARTIAL",
+      "evidence": "Current process/source/build/browser framework/host identity independently pinned; retained failure/counterexample identities preserved. Current exact tab bindings unverified due lock."
+    },
+    {
+      "criterion": 2,
+      "status": "UNPERFORMED critical current native diagnosis",
+      "evidence": "Actual CUA attempted; lock returned. Retained vision and HTTP resource checks performed; actual current console/network/reload observations absent."
+    },
+    {
+      "criterion": 3,
+      "status": "REPORT RETAINED; independent review pending",
+      "evidence": "Whole immutable operational report, command/HTTP/CUA/prior identities, owned-resource accounting, gap-aware next procedure and scoped devlog. No repair or full-G02 approval."
+    }
+  ],
+  "unperformed_gaps": [
+    "Current AX URL/tab/window identity and browser screenshot; neither retained nor fresh tab selected or inspected currently.",
+    "Current retained reload reproduction and current fresh-tab counterexample; zero new synthetic tabs.",
+    "Built-in DevTools read-only Console and Network request evidence; no browser JS evaluation, debugger actions or settings changes.",
+    "Native selected-window dimensions measurement/restoration: no measurement possible; no dimension action sent. Prior evaluator reports restored1435x1235, treated as historical only.",
+    "Suspend/foreground/reconnect recovery and supported physical iOS/Android/desktop/network matrix. No OS sleep/lock/restart operation authorized or performed.",
+    "Full engine/process/pre-callback memory/8MiB bound, CPU, audio/playback jitter/action-to-view and production budgets; outside diagnosis and unqualified."
+  ],
+  "owned_resource_accounting": {
+    "created_tabs": [],
+    "created_tab_count": 0,
+    "closed_tabs": [],
+    "current_exact_tab_binding": null,
+    "existing_fixture_tabs": "Historical seventh blank/eighth complete preserved; no current selection or mutation.",
+    "window_actions": [],
+    "restoration": "No window mutations, so no worker restoration needed; current dimensions unavailable.",
+    "processes_started": [],
+    "processes_stopped": [],
+    "protected_live_pids": [
+      1222,
+      18905,
+      18907,
+      25530,
+      80873,
+      27721
+    ],
+    "source_build_browser_settings_mutations": [],
+    "queue_state_mutations": [],
+    "devlog_append_only": true,
+    "timers_started": 0,
+    "recursive_delegation": false
+  },
+  "safe_bounded_next_proposal": {
+    "prerequisite": "Manual Mac unlock and fresh native CUA access. Preserve fixed build/PID, current browser profile/settings and historical failure evidence.",
+    "scope": "A continuation or separately frozen operational attempt, at most20minutes, command30s, maximumone ownnewsynthetic43182tab; independent frontier review retained.",
+    "steps": [
+      "Use native com.google.Chrome.beta CUA fresh AX and screenshot to identify current43182 selected URL/title; identify owned retained/fresh fixture tabs from actual URL/AX evidence, never historical ordinals or unrelated page contents. Record original current window dimensions before changes; prefer no resize.",
+      "First retain current blank/loaded screenshot and AX before changing reproduction state. If accessible, open built-in DevTools solely to read visible Console errors and existing Network/document resource states; do not run JS, clear cache, toggle cache/network/debugger/options, change permissions or start debugging. Record if no historical requests are available.",
+      "Only after retained state evidence, perform one ordinary native Reload of verified retained43182tab; inspect resulting AX/pixels and permitted document/JS/WASM Network requests/status/error timing, plus visible Console errors. No hard-reload/cache-clear. Preserve original retained tab.",
+      "Compare verified existing fresh43182 tab before/after ordinary reload; if no verified fresh tab available, use at mostone own newsynthetic43182tab, record exact creation identity and close only it after evidence or markhandoff. A fresh pass is counterexample, not retained recovery repair.",
+      "Read fixture-health/resources and fixed artifact/process identities before/after. Restore any measured window changes; close only ownnewtab. If current observation localizes a loading or lifecycle boundary, propose a separate bounded source repair with exact failure evidence; do not edit in diagnosis.",
+      "Require independent frontier reviewer of report and any eventual repair plus full retained/suspend/foreground recovery acceptance before approval. Stop as inconclusive if native or diagnostic access remains unavailable."
+    ],
+    "no_repair_proposal_chosen": "The missing current evidence prevents choosing a justified code patch; obtain console/network/document state first."
+  },
+  "devlog_ids": [
+    "diagnose-g02-a1-native-locked-20260930",
+    "diagnose-g02-a1-report-submitted-20260930"
+  ],
+  "devlog_policy": "Canonical development/devlog.py with supplied worker context; append only, no authoritative queue changes.",
+  "qualification": "No repair/full G02/device/memory/audio qualification approved. Operational report is evidence for independent frontier review; native diagnosis acceptance remains incomplete."
+}

@@ -1,0 +1,430 @@
+{
+  "at": "2026-09-30T21:20:21.653676+00:00",
+  "report_sha256": "1362c2afbd987cb608fc5b0ae1f7dbf78878486339f0a3067b067bb261fbea91",
+  "build": [
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/debug/df-transport-fixture",
+      "bytes": 19172776,
+      "sha256": "ccf0bf4073eb0efca3ff57a3f369d135409e6d664cbf5f3b08889ff87b958984",
+      "current_sha256": "ccf0bf4073eb0efca3ff57a3f369d135409e6d664cbf5f3b08889ff87b958984",
+      "matches": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/web/df_tools.d.ts",
+      "bytes": 2643,
+      "sha256": "0c27b2a8acf16590835744c77cbd349979e39717bb9b73c8679759b890d1525c",
+      "current_sha256": "0c27b2a8acf16590835744c77cbd349979e39717bb9b73c8679759b890d1525c",
+      "matches": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/web/df_tools_bg.wasm.d.ts",
+      "bytes": 1626,
+      "sha256": "b90fafa416dfc4f21df6ddff77a8f3ce44c43f57e5a98db3b1b4adcbb0f4c9a2",
+      "current_sha256": "b90fafa416dfc4f21df6ddff77a8f3ce44c43f57e5a98db3b1b4adcbb0f4c9a2",
+      "matches": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/web/source-revision.txt",
+      "bytes": 41,
+      "sha256": "719b988be203b1334fa6d5bcb0ada1eeaed3c1371954a4ee8a47a70315ce3ddb",
+      "current_sha256": "719b988be203b1334fa6d5bcb0ada1eeaed3c1371954a4ee8a47a70315ce3ddb",
+      "matches": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/web/df_tools.js",
+      "bytes": 26155,
+      "sha256": "08bdbf4b57d2034666b6652916e694f03f1512a22eede60ef3cccc5dc5a40d16",
+      "current_sha256": "08bdbf4b57d2034666b6652916e694f03f1512a22eede60ef3cccc5dc5a40d16",
+      "matches": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/web/df_tools_bg.wasm",
+      "bytes": 3401877,
+      "sha256": "ca0cbedf6e4145996c8a3974a19cee405c270d191905c5ab49f3c4bbfbaab11f",
+      "current_sha256": "ca0cbedf6e4145996c8a3974a19cee405c270d191905c5ab49f3c4bbfbaab11f",
+      "matches": true
+    }
+  ],
+  "prior_integrity": [
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-devlog.json",
+      "current_sha256": "bbea06aa70372062d6e6142632b8294ba1593d689302a40767816fa84addcd39",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-before.png",
+      "current_sha256": "6f4acf3a6f0a730851a9b8975f01fd07d21c280001599629a3b62d3e6d975d80",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-fresh-checks-ax.txt",
+      "current_sha256": "cac630759dc678b8046be6213ae03db0fca63a8736f4e111debd94f4f91d8efa",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-after-button.png",
+      "current_sha256": "de074abdfaeedfb5b23badf61fa05012c3e166dec94db7e596d67f2690225876",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-coordinator-http.json",
+      "current_sha256": "2c5056cac1a5983635f7b07f88bfafbfa3f0073aa7c767f6c9fe57b81ef7c98a",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-fresh-reloaded.png",
+      "current_sha256": "41afe2e6d54234ae0f7be785d4f1c4b57fe75670eda98751db6471f2ec589629",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-coordinator-assets.json",
+      "current_sha256": "c4e0d7a8896fd8dca0aaa42ea8418141572ada459b3f6b9f49859ff4bc8ea82c",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-ready-ax.txt",
+      "current_sha256": "db265719a89c0b3c4862bc7488c28c12083656605cf987cbfc9840b673ef0fbb",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-review.json",
+      "current_sha256": "18e2ea1cb2d13730709e5537d3ccdb60d210e0a3a27fd5703b223da45071bff5",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-identity.json",
+      "current_sha256": "a5b25f744975dc8c626fe5a88ca5d36e1fd20c9985c3dd382db18aa4db21c84b",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-settled-ax.txt",
+      "current_sha256": "d4b915d038e8c6b5fdb5b3e59af3f3fb9e57bd51e1a8241ccd7fa6bc0482150a",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-ready.png",
+      "current_sha256": "fdf033bab2fbdfb88885512d774caf9516dc8da60d6d1fdd9d2cdb574e39d8f4",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-evaluator-binding.json",
+      "current_sha256": "c1f170028b8ecf021e9a3d297fbde5d14c1b62eb210ff99ec58682a3bb001840",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-navigation-ax.txt",
+      "current_sha256": "5681c6bf186d90bffdab6ee79efd3fe80d29dfa8d8ba2af4d763c3fb53c91627",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-resources-before.txt",
+      "current_sha256": "a9d797967e3083be1e4fd5c4e19f7c1549d5e04238a17e6c6034b9f71a65696b",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-window-restored-ax.txt",
+      "current_sha256": "0912e5d289178f4abab2907f1b9362a6d898dfc057ef904ad5c37b62c983ad74",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-settled.png",
+      "current_sha256": "980eec36a721cdd084db7d87896d3678694b4e7b4d57ebae363f224d231d55ba",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-review-inconclusive-preserved.json",
+      "current_sha256": "d8cf68b2fdda8797c409e4abf2b778ce88f3e85a577c7c8efd15a2032572f2bc",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-after-button-ax.txt",
+      "current_sha256": "bf67048b43931105e208d42fc91574cd19fc8315570fbe1551d722fd87bbf7c3",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-fresh-tab.png",
+      "current_sha256": "dfe31b6077117a4c03eb755e486ff65cbdab92bc09e29137e757cedc2363e5eb",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-health-before.txt",
+      "current_sha256": "f10de3f8331e74b92fc41d118724146ed25bbf532cea7f3b95e8c2f3f1b9cc85",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-scope-correction-devlog.json",
+      "current_sha256": "ab11fbf89f7269c13b8b2b0e02ffeb4989667e0104c87d0b4c20b62b82b4ad68",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-retained-final-ax.txt",
+      "current_sha256": "41292684181286b43f776848f086269297d6ace57cdee67c4b313473323e0048",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-health-after.txt",
+      "current_sha256": "aaa1df3507dc8b89a480d1edfe3aaba26dcf985849723f7d0ac43e8139952f13",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-navigation.png",
+      "current_sha256": "57c4ef65f1dab4bfdd52d337261cb0dd580739665d420f9e216a8eae4308b619",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-fresh-checks.png",
+      "current_sha256": "2e385ec35d7563c92db49df7af2e471888afe4f88ac8b16cf85e41a17bdaf635",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-before-ax.txt",
+      "current_sha256": "db265719a89c0b3c4862bc7488c28c12083656605cf987cbfc9840b673ef0fbb",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-resources-after.txt",
+      "current_sha256": "5571f43d9d3228f2f6e33e08395fd475fc7fcbe58ac149d33555bace4a29c841",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-window-restored.png",
+      "current_sha256": "c54a1390dc3386ad19b57b3261fb59b75aed5d8931eb7377fad5a9a505414679",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-retained-final.png",
+      "current_sha256": "41ea25facfc0e1e2bfdb488291b8a46bc558f9b63d97a0679818778335604530",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-evaluator-context.json",
+      "current_sha256": "116c16d84b2b48913bb44b510597ab8ef049b1489fc6be9451c5c4829aa30507",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-fresh-reloaded-ax.txt",
+      "current_sha256": "9e6fffe1098c2d7e08db73525cb792ead438cae1efc9a31eee2cec80ecaa4c11",
+      "matches_worker_expected": true
+    },
+    {
+      "path": "development/evidence/qualify-g02/integration/reload-fresh-tab-ax.txt",
+      "current_sha256": "eff836c26d087b818d8f56c19359606208380680d7340ce4b086efff03839e53",
+      "matches_worker_expected": true
+    }
+  ],
+  "http": [
+    {
+      "url": "http://127.0.0.1:43182/",
+      "status": 200,
+      "bytes": 1650,
+      "sha256": "b21d34b4d2235591af5cf2f9f2a43148f830ff9a37bd049c3c5f6fab1b28a9e0",
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "1650",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 21:20:21 GMT"
+      },
+      "body": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>DungeonFlux S00 transport laboratory</title><style>body{margin:0;background:#10141c;color:#e6eaf3;font:17px system-ui,sans-serif}main{max-width:880px;margin:64px auto;padding:0 24px}h1{font-size:38px;line-height:1.1}p{color:#b7c3d4;line-height:1.5}button{background:#88dfb5;color:#10141c;border:0;border-radius:8px;font:600 17px system-ui;padding:14px 22px;cursor:pointer}button:disabled{opacity:.5}pre{white-space:pre-wrap;padding:20px;background:#1a2331;line-height:1.7;border-radius:10px}.tag{color:#88dfb5;letter-spacing:2px;font-size:13px}a{color:#88dfb5}</style></head><body><main><div class=\"tag\">DUNGEONFLUX / EXPERIMENTAL S00</div><h1>Rust transport laboratory</h1><p>Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly.</p><p>This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.</p><button id=\"run\" disabled>Loading Rust/WASM\u2026</button><button id=\"qualify\" disabled>Loading qualification\u2026</button><pre id=\"qualification\" role=\"status\" aria-live=\"polite\">Desktop pressure qualification has not run.</pre><pre id=\"results\" role=\"status\" aria-live=\"polite\">Loading generated WebAssembly bindings\u2026</pre><p><a href=\"/fixture-health\">Native fixture diagnostics</a></p><p id=\"build\"></p></main><script type=\"module\">import init from '/pkg/df_tools.js';await init();</script></body></html>"
+    },
+    {
+      "url": "http://127.0.0.1:43182/fixture-health",
+      "status": 200,
+      "bytes": 129,
+      "sha256": "aaa1df3507dc8b89a480d1edfe3aaba26dcf985849723f7d0ac43e8139952f13",
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "129",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 21:20:21 GMT"
+      },
+      "body": "S00 experimental; active=0; completed=137; cancelled=7; otel_spans=148; durable_export=false; dropped_spans=0; deadline_headers=3"
+    },
+    {
+      "url": "http://127.0.0.1:43182/fixture-resources",
+      "status": 200,
+      "bytes": 4000,
+      "sha256": "5571f43d9d3228f2f6e33e08395fd475fc7fcbe58ac149d33555bace4a29c841",
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "4000",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 21:20:21 GMT"
+      },
+      "body": "Ok(ConnectionSnapshot { pipe_owners: 0, driver_failed: false, closed: true, received_bytes: 18424, sent_bytes: 1121, callback_bytes: BufferSnapshot { current: 0, peak: 0, total: 0 }, callback_items: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 15369, total: 18424 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 163, total: 1121 }, websocket_receive: BufferSnapshot { current: 0, peak: 15369, total: 18424 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 38 }, websocket_send: BufferSnapshot { current: 0, peak: 163, total: 1121 }, receive_credit: CreditSnapshot { available: 1031719, peak_grant: 1048576, data_bytes: 16857, update_bytes: 983041, peak_held: 16857 }, send_credit: CreditSnapshot { available: 1048187, peak_grant: 1048576, data_bytes: 389, update_bytes: 983041, peak_held: 389 }, received_frames: 56, sent_frames: 44, decode_yields: 76, rejected: false, receive_reservation_bytes: 7110656 })\nOk(ConnectionSnapshot { pipe_owners: 0, driver_failed: false, closed: true, received_bytes: 12441, sent_bytes: 10108991, callback_bytes: BufferSnapshot { current: 0, peak: 0, total: 0 }, callback_items: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 259, total: 12441 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 524761, total: 10108991 }, websocket_receive: BufferSnapshot { current: 0, peak: 259, total: 12441 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 322 }, websocket_send: BufferSnapshot { current: 0, peak: 16384, total: 10108991 }, receive_credit: CreditSnapshot { available: 1045841, peak_grant: 1048576, data_bytes: 2735, update_bytes: 983041, peak_held: 2735 }, send_credit: CreditSnapshot { available: 949539, peak_grant: 1048576, data_bytes: 10098109, update_bytes: 10982113, peak_held: 827467 }, received_frames: 441, sent_frames: 1135, decode_yields: 644, rejected: false, receive_reservation_bytes: 7110656 })\nOk(ConnectionSnapshot { pipe_owners: 0, driver_failed: false, closed: true, received_bytes: 18424, sent_bytes: 1096, callback_bytes: BufferSnapshot { current: 0, peak: 0, total: 0 }, callback_items: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 15369, total: 18424 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 163, total: 1096 }, websocket_receive: BufferSnapshot { current: 0, peak: 15369, total: 18424 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 38 }, websocket_send: BufferSnapshot { current: 0, peak: 163, total: 1096 }, receive_credit: CreditSnapshot { available: 1031719, peak_grant: 1048576, data_bytes: 16857, update_bytes: 983041, peak_held: 16857 }, send_credit: CreditSnapshot { available: 1048181, peak_grant: 1048576, data_bytes: 395, update_bytes: 983041, peak_held: 395 }, received_frames: 56, sent_frames: 43, decode_yields: 76, rejected: false, receive_reservation_bytes: 7110656 })\nOk(ConnectionSnapshot { pipe_owners: 0, driver_failed: false, closed: true, received_bytes: 18424, sent_bytes: 1127, callback_bytes: BufferSnapshot { current: 0, peak: 0, total: 0 }, callback_items: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 15369, total: 18424 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 163, total: 1127 }, websocket_receive: BufferSnapshot { current: 0, peak: 15369, total: 18424 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 38 }, websocket_send: BufferSnapshot { current: 0, peak: 163, total: 1127 }, receive_credit: CreditSnapshot { available: 1031719, peak_grant: 1048576, data_bytes: 16857, update_bytes: 983041, peak_held: 16857 }, send_credit: CreditSnapshot { available: 1048181, peak_grant: 1048576, data_bytes: 395, update_bytes: 983041, peak_held: 395 }, received_frames: 56, sent_frames: 44, decode_yields: 76, rejected: false, receive_reservation_bytes: 7110656 })"
+    },
+    {
+      "url": "http://127.0.0.1:43182/pkg/df_tools.js",
+      "status": 200,
+      "bytes": 26155,
+      "sha256": "08bdbf4b57d2034666b6652916e694f03f1512a22eede60ef3cccc5dc5a40d16",
+      "headers": {
+        "content-type": "text/javascript",
+        "accept-ranges": "bytes",
+        "last-modified": "Wed, 30 Sep 2026 19:46:45 GMT",
+        "content-length": "26155",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 21:20:21 GMT"
+      }
+    },
+    {
+      "url": "http://127.0.0.1:43182/pkg/df_tools_bg.wasm",
+      "status": 200,
+      "bytes": 3401877,
+      "sha256": "ca0cbedf6e4145996c8a3974a19cee405c270d191905c5ab49f3c4bbfbaab11f",
+      "headers": {
+        "content-type": "application/wasm",
+        "accept-ranges": "bytes",
+        "last-modified": "Wed, 30 Sep 2026 19:46:45 GMT",
+        "content-length": "3401877",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 21:20:21 GMT"
+      }
+    }
+  ],
+  "commands": {
+    "head": {
+      "args": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "stdout": "f79bebf6f88f72f80bfb62d71798ebc56f64ca96\n",
+      "stderr": ""
+    },
+    "app_diff": {
+      "args": [
+        "git",
+        "diff",
+        "ba0d3860fb27124be352b48766e99a955f746672",
+        "--",
+        "crates",
+        "Cargo.toml",
+        "Cargo.lock",
+        ".cargo",
+        "rust-toolchain.toml",
+        "rustfmt.toml",
+        "development/build-fixture.sh"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "processes": {
+      "args": [
+        "ps",
+        "-p",
+        "1222,18905,18907,25530,27721,80873",
+        "-o",
+        "pid,ppid,lstart,command"
+      ],
+      "exit_code": 0,
+      "stdout": "  PID  PPID STARTED                      COMMAND\n 1222     1 Fri Aug 28 21:01:38 2026     /Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta\n18905     1 Wed Sep 30 15:11:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/web\n18907     1 Wed Sep 30 15:11:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web 43181\n25530     1 Wed Sep 30 15:50:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/web 43182\n27721     1 Wed Sep 30 16:38:29 2026     /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python /Users/earlcameron/Desktop/dungeonflux/development/screenshot_journey.py run-loop\n80873     1 Wed Sep 30 13:46:12 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install/bin/postgres -D /Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/data -c listen_addresses= -c unix_socket_directories=/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/socket -c unix_socket_permissions=0700 -c port=55439 -c max_connections=16 -c fsync=on -c full_page_writes=on -c synchronous_commit=on\n",
+      "stderr": ""
+    },
+    "listener": {
+      "args": [
+        "lsof",
+        "-nP",
+        "-a",
+        "-p",
+        "25530",
+        "-iTCP:43182",
+        "-sTCP:LISTEN"
+      ],
+      "exit_code": 0,
+      "stdout": "COMMAND     PID        USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\ndf-transp 25530 earlcameron    9u  IPv4 0x9cc19e8a92f29046      0t0  TCP 127.0.0.1:43182 (LISTEN)\n",
+      "stderr": ""
+    },
+    "browser_loaded": {
+      "args": [
+        "lsof",
+        "-a",
+        "-p",
+        "1222",
+        "-d",
+        "txt"
+      ],
+      "exit_code": 0,
+      "stdout": "Google    1222 earlcameron  txt    REG   1,15   1175272             3577342 /Applications/Google Chrome Beta.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/153.0.8010.12/Resources/chrome_100_percent.pak\nGoogle    1222 earlcameron  txt    REG   1,15  10823536             3577345 /Applications/Google Chrome Beta.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/153.0.8010.12/Resources/icudtl.dat\nGoogle    1222 earlcameron  txt    REG   1,15   2312607             3577343 /Applications/Google Chrome Beta.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/153.0.8010.12/Resources/chrome_200_percent.pak\nGoogle    1222 earlcameron  txt    REG   1,15    582832             3577391 /Applications/Google Chrome Beta.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/153.0.8010.12/Resources/en.lproj/locale.pak\nGoogle    1222 earlcameron  txt    REG   1,15  20940552             3577348 /Applications/Google Chrome Beta.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/153.0.8010.12/Resources/resources.pak\nGoogle    1222 earlcameron  txt    REG   1,15  40482672             3577321 /Applications/Google Chrome Beta.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/153.0.8010.12/Libraries/liboptimization_guide_internal.dylib\nGoogle    1222 earlcameron  txt    REG   1,15 515382512             3577199 /Applications/Google Chrome Beta.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/153.0.8010.12/Google Chrome Framework",
+      "stderr": ""
+    },
+    "host": {
+      "args": [
+        "sw_vers"
+      ],
+      "exit_code": 0,
+      "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83\n",
+      "stderr": ""
+    },
+    "arch": {
+      "args": [
+        "uname",
+        "-m"
+      ],
+      "exit_code": 0,
+      "stdout": "arm64\n",
+      "stderr": ""
+    }
+  },
+  "installed_browser_version": "156.0.8078.4",
+  "worker_devlog": [
+    {
+      "id": "recovery-g02-coordinator-sol-dispatch-20260930",
+      "kind": "challenge",
+      "summary": "Dispatched independent bounded read-only retained-tab recovery diagnosis.",
+      "outcome": "Diagnosis active, fullG02 recovery still open; no fix or browser environmental change authorized."
+    },
+    {
+      "id": "diagnose-g02-a1-native-locked-20260930",
+      "kind": "blocker",
+      "summary": "Current native Chrome Beta diagnosis unavailable: Mac locked; fixture identity remains pinned.",
+      "outcome": "Current tab identity, reload reproduction, read-only DevTools console/network observations, foreground/suspend behavior and current vision remain unperformed. Root cause and repair unverified; independent frontier review still required."
+    },
+    {
+      "id": "diagnose-g02-a1-report-submitted-20260930",
+      "kind": "discovery",
+      "summary": "Bounded recovery diagnostic report pins current build and retained counterexample; native gap remains.",
+      "outcome": "Report submitted as operational sha256:1362c2afbd987cb608fc5b0ae1f7dbf78878486339f0a3067b067bb261fbea91. Root cause/repair/fullG02 unverified; acceptance current native diagnosis incomplete. Independent frontier review remains required."
+    }
+  ],
+  "governing_sources": [
+    {
+      "path": "AGENTS.md",
+      "matches_brief": true
+    },
+    {
+      "path": "planning/coding-style.md",
+      "matches_brief": true
+    },
+    {
+      "path": "planning/rpc-transport.md",
+      "matches_brief": true
+    },
+    {
+      "path": "planning/runtime-reliability.md",
+      "matches_brief": true
+    },
+    {
+      "path": "ADR/0001-sqlite-agent-workflow.md",
+      "matches_brief": true
+    },
+    {
+      "path": "ADR/0002-resource-scheduling-and-cleanup.md",
+      "matches_brief": true
+    },
+    {
+      "path": "ADR/0003-agent-devlog.md",
+      "matches_brief": true
+    },
+    {
+      "path": "ADR/0004-development-reliability.md",
+      "matches_brief": true
+    },
+    {
+      "path": "ADR/0005-frontier-output-evaluation.md",
+      "matches_brief": true
+    }
+  ],
+  "limits": "HTTP/native state and preserved prior screenshots are not current browser/DevTools recovery proof."
+}

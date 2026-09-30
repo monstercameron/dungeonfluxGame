@@ -1,0 +1,10 @@
+{
+  "id": "contracts-g03-a1-frozen-validation-receipt",
+  "kind": "resolution",
+  "summary": "Frozen first-wave contract candidate native/WASM gates and source boundaries verified",
+  "details": "At frozen clean commit 9898c70614a8555efa63d3cec47ba9adbc395bbb, repository wrapper native fmt/Clippy/workspace tests and native/WASM builds pass, plus WASM df-types/df-protocol and df-tools lib Clippy and both actual consuming tests cross-compile. Native workspace executes 19 ordinary tests plus1 compile-fail distinct-ID doctest. Target-filtered metadata and normal-edge trees confirm df-types has0dependencies and df-protocol has no project production dependency. Historical fixed-four-crate audit exits1 with stale Cargo.toml as required.",
+  "action": "Used offline/locked shared project caches, separate owned contracts-g03 build/tmp, serial jobs1 after coordinator resource follow-up. Retained command stdout/argv/results, actual schema/ledger, source/artifact SHA256 identities and sampled process-tree RSS.",
+  "outcome": "All frozen-commit commands succeeded; historical stale refusal is expected. Sampled peak process-tree RSS625952KiB (~0.597GiB), not absolute heap/system qualification. No appsource/preview changes. WASM execution, fullG03/fullG02 gates and independent evaluator verdict remain unperformed/pending; worker does not approve completion.",
+  "related_entry_id": "contracts-g03-a1-protobuf-unknown-presence",
+  "evidence_ref": "development/evidence/contracts-g03/worker/handoff.json"
+}

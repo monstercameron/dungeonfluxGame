@@ -1,0 +1,41 @@
+{
+  "record_role": "source_feasibility_receipt",
+  "observed_at": "2026-09-30T21:45:22.520607+00:00",
+  "dispatch_ready": false,
+  "scope": "Preparation for next bounded native OTLP/spool/SQLite foundation; no dependency installation or production completion.",
+  "current_source": "f79bebf6f88f72f80bfb62d71798ebc56f64ca96",
+  "candidate_contract_source": "9898c70614a8555efa63d3cec47ba9adbc395bbb independently reviewing",
+  "current_sdk": "0.31.0 pinned; preserve this version unless explicit compatibility decision",
+  "primary_sources": [
+    {
+      "url": "https://docs.rs/opentelemetry-proto/0.31.0/opentelemetry_proto/",
+      "observation": "Matching generated OTLP Rust messages and SDK transforms exist; default features none. gen-tonic-messages plus logs/trace considered; network transport not required for local native spool."
+    },
+    {
+      "url": "https://docs.rs/rusqlite/latest/rusqlite/",
+      "observation": "Primary documentation reports rusqlite0.40.2; SQLite wrapper provides read-only flags and typed statements. Native build and closure suitability still unperformed."
+    },
+    {
+      "url": "https://opentelemetry.io/docs/specs/otel/logs/data-model/",
+      "observation": "Source/observed timestamps, structured body/attributes, resource/scope, trace/span fields govern mapping; this is no runtime compatibility proof."
+    },
+    {
+      "url": "https://www.sqlite.org/pragma.html#pragma_query_only",
+      "observation": "Read-only review must use connection permissions and fixed queries, not assume a toggle alone grants trusted authorization."
+    }
+  ],
+  "cache_observation": "OTEL API/SDK0.31.0 and serde already cached. opentelemetry-proto, rusqlite and libsqlite3-sys absent from current shared registry and Cargo.lock.",
+  "open_before_dispatch": [
+    "Freeze exact dependency versions/features and native/WASM architecture edges against approved merged G03 source.",
+    "Freeze native-only safe source identity, bounded OTLP receipts/query/health/spool layout and synthetic fixture configuration; no auth stub or public raw SQL.",
+    "Keep existing experimental preview telemetry intact until an explicitly owned consumer integration; first foundation must execute actual emitted SDK logs/spans and durable ingest boundary.",
+    "Durable runtime/spool outside artifacts; preserve workflow/game stores. Each accepted record must have stable identity and durable boundary; gaps before acceptance explicit.",
+    "No full G06/browser/auth/game/readiness/retention/commercial qualification from standalone fixture."
+  ],
+  "coordinator_direction": {
+    "next_scope": "Standalone native SDK logs/spans -> bounded OTLP -> durable spool -> SQLite -> read-only diagnostic fixture. Existing transport preview integration remains a later separately owned consumer task.",
+    "why": "Current experimental FixtureTelemetry default has no durable storage configuration. Silent replacement would hide a public lifecycle/configuration change and require an owned df-tools consumer edit outside prepared areas.",
+    "freeze_needed": "Actual SDK record identity before retry, shared owning ingress/source/receipt/error types, explicit durability boundary/limits/read-only queries, and deterministic crash/replay checks. A local synthetic source is never an authenticated operator or tenant.",
+    "scope_policy": "This is a required first native G06 foundation and not a production stub/fullG06 approval."
+  }
+}

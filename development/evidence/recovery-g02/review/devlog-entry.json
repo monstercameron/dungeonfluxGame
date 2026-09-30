@@ -1,0 +1,10 @@
+{
+  "id": "diagnose-g02-a1-independent-current-cua-locked-20260930",
+  "kind": "blocker",
+  "summary": "Independent recovery diagnosis remains inconclusive because current native Chrome access is locked.",
+  "details": "OperationalreportSHA1362c2afmatches. Independent6artifact/33priorhashes match; live25530/43182andpublicHTTP200confirmunchangedba0delivery; mainf79appinputs equalba0. ActualnativeChromeentryreturnsMaclocked/noautomaticunlock. No currentAX/pixels/DevTools/reload; retainedvision/HTTP cannot replace them.",
+  "action": "Retainednativefailure, readonlyHTTP/process/identitychecks and exact3criterionmapping. No UI/source/build/queue/processchanges.",
+  "outcome": "INCONCLUSIVE criterion2environmentgap, not implementationrejection. Criteria1/3pass. Manualunlock/currentboundedCUA+vision diagnosis required; rootcause/fullG02remainunverified.",
+  "related_entry_id": "diagnose-g02-a1-native-locked-20260930",
+  "evidence_ref": "development/evidence/recovery-g02/review/review.json; development/evidence/recovery-g02/review/native-cua-observation.json"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "active-cleanup-008-independent-inventory-20260930",
+  "kind": "discovery",
+  "summary": "Cleanup008 immutable totals verified; current growth is retained G01 evaluator fixture scratch only.",
+  "details": "28root snapshot56699files/10782411732bytes recomputesexactly; report/script hashesmatch. Current57124files/10979332340bytes adds425files/196920608bytes onlytwoG01a2reviewroots. No priorpathmissing,zeroscanerrors;76symlinks/13specialentries notfollowed. Protected5PIDs/3listeners/4binaryhashes current.",
+  "action": "Independentlstat/recomputation/read-onlyclaims/process/hashcheck. No deletion/source/queue/processchange.",
+  "outcome": "APPROVE bothexactoperationalcriteria, testedidentity=reportSHA; allretained,eligible/deleted/reclaimed0.",
+  "evidence_ref": "development/evidence/cleanup-008/review.json; development/evidence/cleanup-008/independent-boundary.json"
+}

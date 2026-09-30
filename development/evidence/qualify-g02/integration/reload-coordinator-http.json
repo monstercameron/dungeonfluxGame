@@ -1,0 +1,40 @@
+{
+  "observed_at": "2026-09-30T20:43:37.399031+00:00",
+  "source": "822ffc4992b34ab548a47cf91efad845ca50c716",
+  "scope": "Coordinator read-only HTTP reachability; no browser behavior inference.",
+  "responses": [
+    {
+      "path": "/",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "1650",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 20:43:37 GMT"
+      },
+      "bytes": 1650,
+      "sha256": "b21d34b4d2235591af5cf2f9f2a43148f830ff9a37bd049c3c5f6fab1b28a9e0"
+    },
+    {
+      "path": "/fixture-health",
+      "status": 200,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "129",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 20:43:37 GMT"
+      },
+      "bytes": 129,
+      "sha256": "f10de3f8331e74b92fc41d118724146ed25bbf532cea7f3b95e8c2f3f1b9cc85",
+      "body": "S00 experimental; active=0; completed=123; cancelled=5; otel_spans=131; durable_export=false; dropped_spans=0; deadline_headers=2"
+    },
+    {
+      "path": "/df_tools.js",
+      "error": "HTTP Error 404: Not Found"
+    },
+    {
+      "path": "/df_tools_bg.wasm",
+      "error": "HTTP Error 404: Not Found"
+    }
+  ]
+}

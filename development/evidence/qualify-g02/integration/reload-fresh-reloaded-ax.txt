@@ -1,0 +1,14 @@
+The following is a diff from the previous accessibility tree for Window: "DungeonFlux S00 transport laboratory" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 41-51
++				54 HTML content DungeonFlux S00 transport laboratory, URL: 127.0.0.1:43182/
++					55 container
++						56 text DUNGEONFLUX / EXPERIMENTAL S00
++						57 heading Rust transport laboratory, Value: 1
++							58 text Rust transport laboratory
++						59 text Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly. This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.
++						60 button Run transport checks
++						61 button Run desktop pressure qualification
++						62 text Desktop pressure qualification has not run. READY · Rust/WASM initialized. Run all four RPC modes and failure checks.
++						63 link Native fixture diagnostics, Value: 127.0.0.1:43182/fixture-health
++						64 text Candidate: S00 transport / G02 qualification · Rust 1.98.1 · tonic 0.14.6 · h2 0.4.19 + browser clock · build ba0d3860fb27124be352b48766e99a955f746672
+The focused UI element is 54 HTML content DungeonFlux S00 transport laboratory, URL: 127.0.0.1:43182/

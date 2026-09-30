@@ -1,0 +1,9 @@
+{
+  "id": "contracts-g03-a1-protobuf-unknown-presence",
+  "kind": "discovery",
+  "summary": "Protobuf unknown-oneof data needs explicit required capability incompatibility",
+  "details": "Actual native generated decode/consumer tests at 9898c70614a8555efa63d3cec47ba9adbc395bbb show an unknown-only oneof yields no known payload and rejects. Unknown fields alongside a known payload are skipped by prost; an old consumer cannot infer that a future field was a new required oneof alternative. All5 build labels and all5 IDs have actual encode/decode invalid-presence/value checks. The historical scalar revision tag refuses its incompatible wire type.",
+  "action": "Kept wrappers explicitly experimental, rejected missing payload and unknown required capabilities, documented future required behavior must signal capability/protocol incompatibility. Added actual descriptor/schema ledger mutation tests.",
+  "outcome": "Current native workspace tests and Clippy pass. This is a compatibility contract boundary, not production auth/negotiation/game behavior or browser execution evidence. WASM gates and independent frontier review remain pending.",
+  "evidence_ref": "development/evidence/contracts-g03/worker/commands/test-native-current.txt"
+}

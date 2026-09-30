@@ -1,0 +1,15 @@
+{
+  "task_id": "ACTIVE-CLEANUP-007",
+  "attempt_id": "ACTIVE-CLEANUP-007-a1",
+  "at": "2026-09-30T20:49:46.611107+00:00",
+  "tested_revision": "sha256:5e983aa55e23520bc242fb163ff9dcc3142c79a4cfea4eff720db2715164faeb",
+  "integrated_revision": "sha256:5e983aa55e23520bc242fb163ff9dcc3142c79a4cfea4eff720db2715164faeb",
+  "checks": [
+    {
+      "result": "pass",
+      "tested_revision": "sha256:5e983aa55e23520bc242fb163ff9dcc3142c79a4cfea4eff720db2715164faeb",
+      "evidence_ref": "development/evidence/cleanup-007/review.json",
+      "procedure": "Exact independently reviewed operational report rehashed; all criteria pass, live audit scratch differences disclosed, zero deletions."
+    }
+  ]
+}

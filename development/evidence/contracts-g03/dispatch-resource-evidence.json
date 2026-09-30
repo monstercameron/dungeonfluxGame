@@ -1,0 +1,27 @@
+{
+  "at": "2026-09-30T21:26:46.159859+00:00",
+  "system_headroom_gib": 3.2,
+  "review_reserve_gib": 2,
+  "build_peak_estimate_gib": 2,
+  "cargo_jobs": 2,
+  "commands": [
+    {
+      "argv": [
+        "sysctl",
+        "-n",
+        "hw.memsize"
+      ],
+      "exit": 0,
+      "stdout": "17179869184\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "memory_pressure"
+      ],
+      "exit": 0,
+      "stdout": "The system has 17179869184 (1048576 pages with a page size of 16384).\n\nStats: \nPages free: 18366 \nPages purgeable: 1241 \nPages purged: 40298255 \n\nSwap I/O:\nSwapins: 4963393 \nSwapouts: 9374121 \n\nPage Q counts:\nPages active: 205608 \nPages inactive: 200078 \nPages speculative: 4949 \nPages throttled: 0 \nPages wired down: 182777 \n\nCompressor Stats:\nPages used by compressor: 382623 \nPages decompressed: 315810345 \nPages compressed: 395691782 \n\nFile I/O:\nPageins: 79909340 \nPageouts: 900973 \n\nSystem-wide memory free percentage: 43%\n",
+      "stderr": ""
+    }
+  ]
+}

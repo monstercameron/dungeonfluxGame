@@ -1,0 +1,167 @@
+{
+  "source": {
+    "Cargo.lock": true,
+    "Cargo.toml": true,
+    "crates/df-protocol/build.rs": true,
+    "crates/df-protocol/proto/common.proto": true,
+    "crates/df-protocol/proto/contract_fixture.proto": true,
+    "crates/df-protocol/proto/field-ledger.txt": true,
+    "crates/df-protocol/src/lib.rs": true,
+    "crates/df-tools/Cargo.toml": true,
+    "crates/df-tools/tests/schema_ledger.rs": true,
+    "crates/df-tools/tests/shared_contracts.rs": true,
+    "crates/df-types/Cargo.toml": true,
+    "crates/df-types/src/identity.rs": true,
+    "crates/df-types/src/lib.rs": true,
+    "crates/df-types/src/provenance.rs": true,
+    "crates/df-types/src/revision.rs": true,
+    "development/shared-contracts.md": true
+  },
+  "required_docs": {
+    "AGENTS.md": true,
+    "planning/coding-style.md": true,
+    "planning/subsystem-architecture.md": true,
+    "planning/subsystem-interfaces.md": true,
+    "planning/rpc-api.md": true,
+    "planning/service-operations.md": true,
+    "planning/implementation-roadmap.md": true,
+    "planning/plan-database.md": true,
+    "ADR/0001-sqlite-agent-workflow.md": true,
+    "ADR/0004-development-reliability.md": true,
+    "ADR/0005-frontier-output-evaluation.md": true,
+    "planning/runtime-reliability.md": true,
+    "ADR/0002-resource-scheduling-and-cleanup.md": true,
+    "ADR/0003-agent-devlog.md": true
+  },
+  "artifacts_before": {
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/df-transport-fixture": true,
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/df_tools.wasm": true,
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/shared_contracts-85fc7226712f19f5.wasm": true,
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/schema_ledger-cbbc866e3ec1b7e4.wasm": true,
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/shared_contracts-0be3eba5daacf3c5": true,
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/schema_ledger-56337483e9b61314": true,
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-37c24844737020b2/out/contracts.bin": true,
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-5797462c41c050e0/out/contracts.bin": true,
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-7a981dd87cf667dc/out/contracts.bin": true,
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-ccaa6772dee1e2e1/out/contracts.bin": true
+  },
+  "handoff_sha256": "97c4d2c14f18dbba0d41fdd4d3144ba07a50645dfba6bd0bd81076f5253aa200",
+  "linked_rlibs": {
+    "prost": {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/libprost-dbc301b537223d83.rlib",
+      "sha256": "66991475e300e16962cd70ba9ee857bb0d53a5c72aefa4ee0ceccbea0f0e725a"
+    },
+    "prost_types": {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/libprost_types-f542bcdbe7654c60.rlib",
+      "sha256": "8888903e2265886eaa502f1b4f7a99919769f03be78adca55638779ae4b30454"
+    },
+    "df_types": {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/libdf_types-83a5dbbac8d317c7.rlib",
+      "sha256": "8e1fe32c3046c03919e467fd861afd15df86b43efc7e51e6ab70aa96afc631d4"
+    },
+    "df_protocol": {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/libdf_protocol-cfbec9cd966372fe.rlib",
+      "sha256": "01abe7a35c8eb9d92960ef99b5f52b33bc67bb6ebd58ac87ffa318d8910fe015"
+    }
+  },
+  "source_after": {
+    "Cargo.lock": true,
+    "Cargo.toml": true,
+    "crates/df-protocol/build.rs": true,
+    "crates/df-protocol/proto/common.proto": true,
+    "crates/df-protocol/proto/contract_fixture.proto": true,
+    "crates/df-protocol/proto/field-ledger.txt": true,
+    "crates/df-protocol/src/lib.rs": true,
+    "crates/df-tools/Cargo.toml": true,
+    "crates/df-tools/tests/schema_ledger.rs": true,
+    "crates/df-tools/tests/shared_contracts.rs": true,
+    "crates/df-types/Cargo.toml": true,
+    "crates/df-types/src/identity.rs": true,
+    "crates/df-types/src/lib.rs": true,
+    "crates/df-types/src/provenance.rs": true,
+    "crates/df-types/src/revision.rs": true,
+    "development/shared-contracts.md": true
+  },
+  "git_blob_matches": {
+    "Cargo.lock": true,
+    "Cargo.toml": true,
+    "crates/df-protocol/build.rs": true,
+    "crates/df-protocol/proto/common.proto": true,
+    "crates/df-protocol/proto/contract_fixture.proto": true,
+    "crates/df-protocol/proto/field-ledger.txt": true,
+    "crates/df-protocol/src/lib.rs": true,
+    "crates/df-tools/Cargo.toml": true,
+    "crates/df-tools/tests/schema_ledger.rs": true,
+    "crates/df-tools/tests/shared_contracts.rs": true,
+    "crates/df-types/Cargo.toml": true,
+    "crates/df-types/src/identity.rs": true,
+    "crates/df-types/src/lib.rs": true,
+    "crates/df-types/src/provenance.rs": true,
+    "crates/df-types/src/revision.rs": true,
+    "development/shared-contracts.md": true
+  },
+  "post_gate_artifacts": [
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/df-transport-fixture",
+      "before": "67d5a12e71acf9fbf98fed08715906b01efc5e8eb955db10e9ab3efb4510731e",
+      "after": "2ba367a30c588063dc4a344aa7215da93a756aeda97871739b3e7acde09eec67",
+      "match": false
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/df_tools.wasm",
+      "before": "1a776a2aaed6841cd794e63ece391f4df5e32e1c283b336ac852544d7d4498e8",
+      "after": "1a776a2aaed6841cd794e63ece391f4df5e32e1c283b336ac852544d7d4498e8",
+      "match": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/shared_contracts-85fc7226712f19f5.wasm",
+      "before": "082f807e6f1bf6f30d938eaa2dd7fd821f2764e32f65f76fc982000e66bb60a3",
+      "after": "082f807e6f1bf6f30d938eaa2dd7fd821f2764e32f65f76fc982000e66bb60a3",
+      "match": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/schema_ledger-cbbc866e3ec1b7e4.wasm",
+      "before": "41e3b9bb4521a83c1c45dc634410eb2c4509a413418ffab4e4c01b6a5eed20b5",
+      "after": "41e3b9bb4521a83c1c45dc634410eb2c4509a413418ffab4e4c01b6a5eed20b5",
+      "match": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/shared_contracts-0be3eba5daacf3c5",
+      "before": "43c459fe84d9029a8a3be776a9d52198eba3c12b6e289330cfb042a64f341da0",
+      "after": "2228445a2b73e8403437cc59ad18a7e12a78cb92bad131f6a0bc442ec3cada07",
+      "match": false
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/schema_ledger-56337483e9b61314",
+      "before": "fb1d8bc61adee1a702de1c58a1164dca7249a16c0f37006fe2246de1bfb5018b",
+      "after": "4e6d5548499005f9344776fa6e0f0f59e552107bcaa847862318160863063927",
+      "match": false
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-37c24844737020b2/out/contracts.bin",
+      "before": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+      "after": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+      "match": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-5797462c41c050e0/out/contracts.bin",
+      "before": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+      "after": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+      "match": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-7a981dd87cf667dc/out/contracts.bin",
+      "before": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+      "after": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+      "match": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-ccaa6772dee1e2e1/out/contracts.bin",
+      "before": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+      "after": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+      "match": true
+    }
+  ],
+  "current_native_embedded_source": true,
+  "current_status": ""
+}

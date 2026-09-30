@@ -1,0 +1,36 @@
+{
+  "observed_at": "2026-09-30T20:43:59.305449+00:00",
+  "scope": "Read-only actual /pkg assets from fixture.rs HTML import; earlier root-relative guesses returned expected404 and do not indicate asset failure.",
+  "responses": [
+    {
+      "path": "/pkg/df_tools.js",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript",
+        "accept-ranges": "bytes",
+        "last-modified": "Wed, 30 Sep 2026 19:46:45 GMT",
+        "content-length": "26155",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 20:43:59 GMT"
+      },
+      "bytes": 26155,
+      "sha256": "08bdbf4b57d2034666b6652916e694f03f1512a22eede60ef3cccc5dc5a40d16",
+      "equals_pinned_bytes": true
+    },
+    {
+      "path": "/pkg/df_tools_bg.wasm",
+      "status": 200,
+      "headers": {
+        "content-type": "application/wasm",
+        "accept-ranges": "bytes",
+        "last-modified": "Wed, 30 Sep 2026 19:46:45 GMT",
+        "content-length": "3401877",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 20:43:59 GMT"
+      },
+      "bytes": 3401877,
+      "sha256": "ca0cbedf6e4145996c8a3974a19cee405c270d191905c5ab49f3c4bbfbaab11f",
+      "equals_pinned_bytes": true
+    }
+  ]
+}

@@ -1,0 +1,260 @@
+[
+  {
+    "name": "actual-success",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "development/dependency-audit.py"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/audit-g01",
+    "exit_code": 0,
+    "seconds": 0.040379750076681376,
+    "stdout": "{\"ok\": true, \"packages\": 150, \"targets\": 2}\n",
+    "stderr": ""
+  },
+  {
+    "name": "python-version",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "--version"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/audit-g01",
+    "exit_code": 0,
+    "seconds": 0.008438375080004334,
+    "stdout": "Python 3.12.14\n",
+    "stderr": ""
+  },
+  {
+    "name": "syntax",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "-c",
+      "from pathlib import Path; compile(Path('development/dependency-audit.py').read_text(), 'development/dependency-audit.py', 'exec')"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/audit-g01",
+    "exit_code": 0,
+    "seconds": 0.02170283393934369,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "source-diff-check",
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/audit-g01",
+    "exit_code": 0,
+    "seconds": 0.018488874891772866,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "commit-diff-check",
+    "command": [
+      "git",
+      "diff",
+      "822ffc4992b34ab548a47cf91efad845ca50c716",
+      "HEAD",
+      "--check"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/audit-g01",
+    "exit_code": 0,
+    "seconds": 0.025490833912044764,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "source-status",
+    "command": [
+      "git",
+      "status",
+      "--porcelain"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/audit-g01",
+    "exit_code": 0,
+    "seconds": 0.022560958052054048,
+    "stdout": "?? development/evidence/dependency-g01/\n",
+    "stderr": ""
+  },
+  {
+    "name": "changed-paths",
+    "command": [
+      "git",
+      "diff",
+      "--name-only",
+      "822ffc4992b34ab548a47cf91efad845ca50c716",
+      "HEAD"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/audit-g01",
+    "exit_code": 0,
+    "seconds": 0.015387749997898936,
+    "stdout": "development/dependency-audit.md\ndevelopment/dependency-audit.py\ndevelopment/dependency-audit/metadata/native.json\ndevelopment/dependency-audit/metadata/wasm.json\ndevelopment/dependency-audit/packages.json\ndevelopment/dependency-audit/report.json\n",
+    "stderr": ""
+  },
+  {
+    "name": "head",
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/audit-g01",
+    "exit_code": 0,
+    "seconds": 0.014930415898561478,
+    "stdout": "2743c4a65e2d6be1769211a9809836294af903ab\n",
+    "stderr": ""
+  },
+  {
+    "name": "app-input-diff",
+    "command": [
+      "git",
+      "diff",
+      "822ffc4992b34ab548a47cf91efad845ca50c716",
+      "HEAD",
+      "--",
+      "Cargo.toml",
+      "Cargo.lock",
+      "rust-toolchain.toml",
+      "rustfmt.toml",
+      ".cargo",
+      "crates",
+      "development/build-fixture.sh"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/audit-g01",
+    "exit_code": 0,
+    "seconds": 0.015718083828687668,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "edited-report",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/edited-report/development/dependency-audit.py"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/edited-report",
+    "exit_code": 1,
+    "seconds": 0.023879291024059057,
+    "stdout": "{\"ok\": false, \"reason\": \"audit report differs from its pinned bytes\"}\n",
+    "stderr": "",
+    "fixture": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/edited-report"
+  },
+  {
+    "name": "stale-source",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/stale-source/development/dependency-audit.py"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/stale-source",
+    "exit_code": 1,
+    "seconds": 0.024474957957863808,
+    "stdout": "{\"ok\": false, \"reason\": \"stale or changed pinned input: Cargo.toml\"}\n",
+    "stderr": "",
+    "fixture": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/stale-source"
+  },
+  {
+    "name": "omitted-package-rebound-parser",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/omitted-package-rebound-parser/development/dependency-audit.py"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/omitted-package-rebound-parser",
+    "exit_code": 1,
+    "seconds": 0.02754845912568271,
+    "stdout": "{\"ok\": false, \"reason\": \"package identity set is omitted, added, or reordered\"}\n",
+    "stderr": "",
+    "fixture": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/omitted-package-rebound-parser"
+  },
+  {
+    "name": "malformed-metadata-rebound-parser",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/malformed-metadata-rebound-parser/development/dependency-audit.py"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/malformed-metadata-rebound-parser",
+    "exit_code": 1,
+    "seconds": 0.026914082933217287,
+    "stdout": "{\"ok\": false, \"reason\": \"Expecting property name enclosed in double quotes: line 1 column 2 (char 1)\"}\n",
+    "stderr": "",
+    "fixture": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/malformed-metadata-rebound-parser"
+  },
+  {
+    "name": "missing-input",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/missing-input/development/dependency-audit.py"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/missing-input",
+    "exit_code": 1,
+    "seconds": 0.024387541925534606,
+    "stdout": "{\"ok\": false, \"reason\": \"missing input: Cargo.toml\"}\n",
+    "stderr": "",
+    "fixture": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/missing-input"
+  },
+  {
+    "name": "fifo-input",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/fifo-input/development/dependency-audit.py"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/fifo-input",
+    "exit_code": 1,
+    "seconds": 0.02535887504927814,
+    "stdout": "{\"ok\": false, \"reason\": \"input is not a bounded regular file: Cargo.toml\"}\n",
+    "stderr": "",
+    "fixture": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/fifo-input"
+  },
+  {
+    "name": "directory-input",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/directory-input/development/dependency-audit.py"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/directory-input",
+    "exit_code": 1,
+    "seconds": 0.02466979087330401,
+    "stdout": "{\"ok\": false, \"reason\": \"input is not a bounded regular file: Cargo.toml\"}\n",
+    "stderr": "",
+    "fixture": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/directory-input"
+  },
+  {
+    "name": "symlink-input",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/symlink-input/development/dependency-audit.py"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/symlink-input",
+    "exit_code": 1,
+    "seconds": 0.02449637488462031,
+    "stdout": "{\"ok\": false, \"reason\": \"input is not a bounded regular file: Cargo.toml\"}\n",
+    "stderr": "",
+    "fixture": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/symlink-input"
+  },
+  {
+    "name": "oversized-input",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/oversized-input/development/dependency-audit.py"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/oversized-input",
+    "exit_code": 1,
+    "seconds": 0.024746624985709786,
+    "stdout": "{\"ok\": false, \"reason\": \"input is not a bounded regular file: Cargo.toml\"}\n",
+    "stderr": "",
+    "fixture": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/oversized-input"
+  },
+  {
+    "name": "symlink-parent-outside-root",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/symlink-parent-outside-root/development/dependency-audit.py"
+    ],
+    "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/symlink-parent-outside-root",
+    "exit_code": 0,
+    "seconds": 0.038145875092595816,
+    "stdout": "{\"ok\": true, \"packages\": 150, \"targets\": 2}\n",
+    "stderr": "",
+    "fixture": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-review/symlink-parent-outside-root"
+  }
+]

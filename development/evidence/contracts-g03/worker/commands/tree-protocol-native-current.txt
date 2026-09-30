@@ -1,0 +1,63 @@
+df-protocol v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-protocol)
+├── prost v0.14.4
+│   ├── bytes v1.12.1
+│   └── prost-derive v0.14.4 (proc-macro)
+│       ├── anyhow v1.0.104
+│       ├── itertools v0.14.0
+│       │   └── either v1.18.0
+│       ├── proc-macro2 v1.0.107
+│       │   └── unicode-ident v1.0.26
+│       ├── quote v1.0.47
+│       │   └── proc-macro2 v1.0.107 (*)
+│       └── syn v2.0.119
+│           ├── proc-macro2 v1.0.107 (*)
+│           ├── quote v1.0.47 (*)
+│           └── unicode-ident v1.0.26
+├── tonic v0.14.6
+│   ├── async-trait v0.1.92 (proc-macro)
+│   │   ├── proc-macro2 v1.0.107 (*)
+│   │   ├── quote v1.0.47 (*)
+│   │   └── syn v3.0.6
+│   │       ├── proc-macro2 v1.0.107 (*)
+│   │       ├── quote v1.0.47 (*)
+│   │       └── unicode-ident v1.0.26
+│   ├── base64 v0.22.1
+│   ├── bytes v1.12.1
+│   ├── http v1.5.0
+│   │   ├── bytes v1.12.1
+│   │   └── itoa v1.0.18
+│   ├── http-body v1.1.0
+│   │   ├── bytes v1.12.1
+│   │   └── http v1.5.0 (*)
+│   ├── http-body-util v0.1.5
+│   │   ├── bytes v1.12.1
+│   │   ├── futures-core v0.3.34
+│   │   ├── http v1.5.0 (*)
+│   │   ├── http-body v1.1.0 (*)
+│   │   └── pin-project-lite v0.2.17
+│   ├── percent-encoding v2.3.2
+│   ├── pin-project v1.1.13
+│   │   └── pin-project-internal v1.1.13 (proc-macro)
+│   │       ├── proc-macro2 v1.0.107 (*)
+│   │       ├── quote v1.0.47 (*)
+│   │       └── syn v2.0.119 (*)
+│   ├── sync_wrapper v1.0.2
+│   ├── tokio-stream v0.1.19
+│   │   ├── futures-core v0.3.34
+│   │   ├── pin-project-lite v0.2.17
+│   │   └── tokio v1.53.1
+│   │       └── pin-project-lite v0.2.17
+│   ├── tower-layer v0.3.3
+│   ├── tower-service v0.3.3
+│   └── tracing v0.1.44
+│       ├── pin-project-lite v0.2.17
+│       ├── tracing-attributes v0.1.31 (proc-macro)
+│       │   ├── proc-macro2 v1.0.107 (*)
+│       │   ├── quote v1.0.47 (*)
+│       │   └── syn v2.0.119 (*)
+│       └── tracing-core v0.1.36
+│           └── once_cell v1.21.4
+└── tonic-prost v0.14.6
+    ├── bytes v1.12.1
+    ├── prost v0.14.4 (*)
+    └── tonic v0.14.6 (*)

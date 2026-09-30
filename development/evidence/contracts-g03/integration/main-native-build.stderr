@@ -1,0 +1,6 @@
+   Compiling prost-types v0.14.4
+   Compiling prost-build v0.14.4
+   Compiling tonic-prost-build v0.14.6
+   Compiling df-protocol v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/crates/df-protocol)
+   Compiling df-tools v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/crates/df-tools)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.68s

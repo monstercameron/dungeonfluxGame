@@ -1,0 +1,53 @@
+{
+  "at": "2026-09-30T21:10:57.754925+00:00",
+  "files": [
+    {
+      "path": "development/evidence/recovery-g02/worker/current-http.json",
+      "bytes": 8920,
+      "sha256": "31ccdeca8ac06b90f795ad6d21878bc153a85068b463c112e309ccac3cccc3e8"
+    },
+    {
+      "path": "development/evidence/recovery-g02/worker/current-identity.json",
+      "bytes": 41881,
+      "sha256": "f40449926edea23eb870c40c84435f6f0879c9b1e0aced91a4f1576d72f4d36b"
+    },
+    {
+      "path": "development/evidence/recovery-g02/worker/devlog-native-blocker.json",
+      "bytes": 1501,
+      "sha256": "7ddcd810599f375eb00fb198e0d451269b5ece680d5471e855669f7334c3fa2d"
+    },
+    {
+      "path": "development/evidence/recovery-g02/worker/devlog-report-submitted.json",
+      "bytes": 1384,
+      "sha256": "a7b1078d71b77ca4fb85c7851b13f2ea2c76f105a08f253ae7a39cb23d45d156"
+    },
+    {
+      "path": "development/evidence/recovery-g02/worker/devlog-write-receipts.json",
+      "bytes": 1457,
+      "sha256": "91ead72024f5358653d8b394f8e832d1c15d581ff8dec0ccfdf0dcb2f4945ee7"
+    },
+    {
+      "path": "development/evidence/recovery-g02/worker/diagnostic-report.json",
+      "bytes": 16230,
+      "sha256": "1362c2afbd987cb608fc5b0ae1f7dbf78878486339f0a3067b067bb261fbea91"
+    },
+    {
+      "path": "development/evidence/recovery-g02/worker/native-cua-observation.json",
+      "bytes": 876,
+      "sha256": "8413f70d0ce2d33933d2f5bfcefa165d425f199db6b85a163fbece303db8fb84"
+    },
+    {
+      "path": "development/evidence/recovery-g02/worker/prior-evidence-integrity.json",
+      "bytes": 10353,
+      "sha256": "96f307467c25e5b37d8bd8a9c9065cd0d149dbaf020fd4d16c81f9b208c79682"
+    },
+    {
+      "path": "development/evidence/recovery-g02/worker/report-identity.json",
+      "bytes": 700,
+      "sha256": "10616d5cc0a21e15646cf752c1751fca93aefe647b253ac3dc1fd27ac57e910b"
+    }
+  ],
+  "prior_evidence_rechecked_unchanged": true,
+  "report_sha256": "1362c2afbd987cb608fc5b0ae1f7dbf78878486339f0a3067b067bb261fbea91",
+  "json_parse_and_scoped_devlog_verified": true
+}

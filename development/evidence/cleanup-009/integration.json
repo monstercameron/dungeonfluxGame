@@ -1,0 +1,15 @@
+{
+  "task_id": "ACTIVE-CLEANUP-009",
+  "attempt_id": "ACTIVE-CLEANUP-009-a1",
+  "at": "2026-09-30T21:52:21.168911+00:00",
+  "tested_revision": "sha256:c4390a7684469729111865c0ae12684dd5bf9f989f3907346334373a06350681",
+  "integrated_revision": "sha256:c4390a7684469729111865c0ae12684dd5bf9f989f3907346334373a06350681",
+  "checks": [
+    {
+      "result": "pass",
+      "tested_revision": "sha256:c4390a7684469729111865c0ae12684dd5bf9f989f3907346334373a06350681",
+      "evidence_ref": "development/evidence/cleanup-009/review.json",
+      "procedure": "Independent immutable operational report/script hash, current nonfollowing inventory/process/live-binary retention; evaluator Cargo changes in candidate scratch explicitly attributed, zero cleanup deletion."
+    }
+  ]
+}

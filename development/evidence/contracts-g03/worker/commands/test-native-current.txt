@@ -1,0 +1,104 @@
+   Compiling df-tools v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-tools)
+   Compiling df-rpc-bridge v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-rpc-bridge)
+   Compiling df-protocol v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-protocol)
+   Compiling df-observe v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-observe)
+   Compiling df-types v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-types)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.63s
+     Running unittests src/lib.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/df_observe-d8ea1cfe357a5c5e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/df_protocol-1acc3f42d104b5a0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/df_rpc_bridge-6f30ae3d9399c510)
+
+running 7 tests
+test resources::tests::partial_frame_boundaries_preserve_data_credit ... ok
+test resources::tests::tiny_control_frame_flood_is_explicitly_rejected ... ok
+test native::tests::oversized_http2_frame_rejected_before_pipe_admission ... ok
+test native::tests::oversized_binary_websocket_is_rejected_at_gateway ... ok
+test native::tests::tiny_http2_control_flood_rejected_at_native_boundary ... ok
+test native::tests::continuation_chain_rejected_by_established_h2_limit ... ok
+test native::tests::oversized_hpack_header_list_rejected_at_native_boundary ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/df_tools-1c63f462e5608d2b)
+
+running 2 tests
+test fixture::tests::cancellation_releases_stream_owner ... ok
+test fixture::tests::rejected_unary_preserves_terminal_metadata ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/df_transport_fixture-1047e1480371f69d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/schema_ledger.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/schema_ledger-56337483e9b61314)
+
+running 3 tests
+test ledger_matches_actual_protoc_descriptor_for_all_allocated_names_numbers_and_presence ... ok
+test retired_number_and_name_remain_reserved_and_cannot_be_reallocated ... ok
+test actual_descriptor_mutations_reject_field_reuse_removal_renaming_type_and_presence_changes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/shared_contracts.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/shared_contracts-0be3eba5daacf3c5)
+
+running 7 tests
+test missing_and_zero_recovery_components_and_old_scalar_ambiguity_reject ... ok
+test older_wire_and_unknown_optional_fields_remain_additive ... ok
+test distinct_supplied_ids_round_trip_canonical_bytes ... ok
+test unknown_required_capability_zero_enum_missing_oneof_and_protocol_reject ... ok
+test recovery_round_trip_orders_newer_epoch_before_sequence_and_checks_overflow ... ok
+test five_required_build_labels_round_trip_without_granting_authority ... ok
+test every_identity_refuses_missing_empty_short_long_and_zero_values ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/df_types-c6240baaad8b3dc6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests df_observe
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests df_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests df_rpc_bridge
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests df_tools
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests df_types
+
+running 1 test
+test crates/df-types/src/lib.rs - (line 5) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+

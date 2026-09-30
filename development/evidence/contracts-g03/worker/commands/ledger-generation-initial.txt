@@ -1,0 +1,204 @@
+   Compiling libc v0.2.189
+   Compiling syn v3.0.6
+   Compiling pin-project-lite v0.2.17
+   Compiling futures-core v0.3.34
+   Compiling bytes v1.12.1
+   Compiling memchr v2.8.3
+   Compiling cfg-if v1.0.5
+   Compiling futures-sink v0.3.34
+   Compiling itoa v1.0.18
+   Compiling log v0.4.34
+   Compiling slab v0.4.12
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling futures-channel v0.3.34
+   Compiling errno v0.3.14
+   Compiling signal-hook-registry v1.4.8
+   Compiling http v1.5.0
+   Compiling tokio-macros v2.7.2
+   Compiling futures-macro v0.3.34
+   Compiling mio v1.2.3
+   Compiling socket2 v0.6.5
+   Compiling futures-io v0.3.34
+   Compiling futures-task v0.3.34
+   Compiling futures-util v0.3.34
+   Compiling tokio v1.53.1
+   Compiling getrandom v0.3.4
+   Compiling zerocopy v0.8.59
+   Compiling version_check v0.9.5
+   Compiling generic-array v0.14.7
+   Compiling once_cell v1.21.4
+   Compiling tracing-core v0.1.36
+   Compiling httparse v1.10.1
+   Compiling thiserror v2.0.21
+   Compiling typenum v1.20.1
+   Compiling tracing v0.1.44
+   Compiling ppv-lite86 v0.2.21
+   Compiling rand_core v0.9.5
+   Compiling tokio-util v0.7.19
+   Compiling http-body v1.1.0
+   Compiling thiserror-impl v2.0.21
+   Compiling unicase v2.9.0
+   Compiling serde_core v1.0.229
+   Compiling rand_chacha v0.9.0
+   Compiling indexmap v2.14.2
+   Compiling tower-service v0.3.3
+   Compiling percent-encoding v2.3.2
+   Compiling rand v0.9.5
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling httpdate v1.0.3
+   Compiling atomic-waker v1.1.2
+   Compiling try-lock v0.2.5
+   Compiling fnv v1.0.7
+   Compiling h2 v0.4.19 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-rpc-bridge/vendor/h2)
+   Compiling want v0.3.1
+   Compiling digest v0.10.7
+   Compiling cpufeatures v0.2.17
+   Compiling mime v0.3.17
+   Compiling smallvec v1.16.2
+   Compiling tower-layer v0.3.3
+   Compiling serde v1.0.229
+   Compiling zmij v1.0.23
+   Compiling hyper v1.11.1
+   Compiling sha1 v0.10.7
+   Compiling http-body-util v0.1.5
+   Compiling sync_wrapper v1.0.2
+   Compiling serde_json v1.0.151
+   Compiling data-encoding v2.11.1
+   Compiling tungstenite v0.29.0
+   Compiling hyper-util v0.1.21
+   Compiling pulldown-cmark v0.13.4
+   Compiling getrandom v0.4.3
+   Compiling form_urlencoded v1.2.2
+   Compiling ryu v1.0.23
+   Compiling tempfile v3.27.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling petgraph v0.8.3
+   Compiling pulldown-cmark-to-cmark v22.0.3
+   Compiling prost-types v0.14.4
+   Compiling tokio-tungstenite v0.29.0
+   Compiling tower v0.5.3
+   Compiling axum-core v0.5.6
+   Compiling serde_path_to_error v0.1.20
+   Compiling matchit v0.8.4
+   Compiling base64 v0.22.1
+   Compiling prost-build v0.14.4
+   Compiling axum v0.8.9
+   Compiling pin-project v1.1.13
+   Compiling hyper-timeout v0.5.2
+   Compiling tokio-stream v0.1.19
+   Compiling futures-executor v0.3.34
+   Compiling async-trait v0.1.92
+   Compiling tonic v0.14.6
+   Compiling tonic-prost-build v0.14.6
+   Compiling prost v0.14.4
+   Compiling opentelemetry v0.31.0
+   Compiling mime_guess v2.0.5
+   Compiling opentelemetry_sdk v0.31.0
+   Compiling df-protocol v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-protocol)
+   Compiling df-observe v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-observe)
+   Compiling tonic-prost v0.14.6
+   Compiling futures v0.3.34
+   Compiling web-time v1.1.0
+   Compiling bitflags v2.13.2
+   Compiling http-range-header v0.4.2
+   Compiling tower-http v0.6.11
+   Compiling df-rpc-bridge v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-rpc-bridge)
+   Compiling df-tools v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-tools)
+   Compiling df-types v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-types)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 54.13s
+     Running tests/schema_ledger.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/schema_ledger-56337483e9b61314)
+
+running 1 test
+LEDGER_BEGIN
+enum dungeonflux.experimental.contract.v1.CapabilityKind
+enum dungeonflux.experimental.transport.v1.Sample.Behavior
+enum-value dungeonflux.experimental.contract.v1.CapabilityKind 0 CAPABILITY_KIND_UNSPECIFIED
+enum-value dungeonflux.experimental.contract.v1.CapabilityKind 1 COMPOSITE_RECOVERY
+enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 0 BEHAVIOR_UNSPECIFIED
+enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 1 ECHO
+enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 2 REJECT
+enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 3 WAIT
+field dungeonflux.experimental.contract.v1.Capability 1 kind type=14 label=1 presence=true target=.dungeonflux.experimental.contract.v1.CapabilityKind oneof=_kind
+field dungeonflux.experimental.contract.v1.Capability 2 required type=8 label=1 presence=true target=- oneof=_required
+field dungeonflux.experimental.contract.v1.CompatibilityFixture 1 protocol_revision type=13 label=1 presence=true target=- oneof=_protocol_revision
+field dungeonflux.experimental.contract.v1.CompatibilityFixture 2 capabilities type=11 label=3 presence=false target=.dungeonflux.experimental.contract.v1.Capability oneof=-
+field dungeonflux.experimental.contract.v1.CompatibilityFixture 3 revision type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionRevision oneof=payload
+field dungeonflux.experimental.contract.v1.CompatibilityFixture 4 build type=11 label=1 presence=false target=.dungeonflux.public.v1.BuildIdentity oneof=payload
+field dungeonflux.experimental.contract.v1.Identities 1 session type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionId oneof=-
+field dungeonflux.experimental.contract.v1.Identities 2 member type=11 label=1 presence=false target=.dungeonflux.public.v1.MemberId oneof=-
+field dungeonflux.experimental.contract.v1.Identities 3 client_binding type=11 label=1 presence=false target=.dungeonflux.public.v1.ClientBindingId oneof=-
+field dungeonflux.experimental.contract.v1.Identities 4 run type=11 label=1 presence=false target=.dungeonflux.public.v1.RunId oneof=-
+field dungeonflux.experimental.contract.v1.Identities 5 operation type=11 label=1 presence=false target=.dungeonflux.public.v1.OperationId oneof=-
+field dungeonflux.experimental.transport.v1.Sample 1 sequence type=13 label=1 presence=false target=- oneof=-
+field dungeonflux.experimental.transport.v1.Sample 2 payload type=12 label=1 presence=false target=- oneof=-
+field dungeonflux.experimental.transport.v1.Sample 3 behavior type=14 label=1 presence=false target=.dungeonflux.experimental.transport.v1.Sample.Behavior oneof=-
+field dungeonflux.experimental.transport.v1.Sample 4 active_calls type=13 label=1 presence=false target=- oneof=-
+field dungeonflux.experimental.transport.v1.Sample 5 deadline_calls type=13 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.BuildIdentity 1 source_revision type=9 label=1 presence=true target=- oneof=_source_revision
+field dungeonflux.public.v1.BuildIdentity 2 native_revision type=9 label=1 presence=true target=- oneof=_native_revision
+field dungeonflux.public.v1.BuildIdentity 3 wasm_revision type=9 label=1 presence=true target=- oneof=_wasm_revision
+field dungeonflux.public.v1.BuildIdentity 4 configuration_revision type=9 label=1 presence=true target=- oneof=_configuration_revision
+field dungeonflux.public.v1.BuildIdentity 5 content_revision type=9 label=1 presence=true target=- oneof=_content_revision
+field dungeonflux.public.v1.ClientBindingId 1 value type=12 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.MemberId 1 value type=12 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.OperationId 1 value type=12 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.RecoveryEpoch 1 value type=4 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.RunId 1 value type=12 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.SessionId 1 value type=12 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.SessionRevision 1 epoch type=11 label=1 presence=false target=.dungeonflux.public.v1.RecoveryEpoch oneof=-
+field dungeonflux.public.v1.SessionRevision 2 sequence type=4 label=1 presence=true target=- oneof=_sequence
+file common.proto dungeonflux.public.v1 proto3
+file contract_fixture.proto dungeonflux.experimental.contract.v1 proto3
+file transport_fixture.proto dungeonflux.experimental.transport.v1 proto3
+message dungeonflux.experimental.contract.v1.Capability
+message dungeonflux.experimental.contract.v1.CompatibilityFixture
+message dungeonflux.experimental.contract.v1.Identities
+message dungeonflux.experimental.transport.v1.Sample
+message dungeonflux.public.v1.BuildIdentity
+message dungeonflux.public.v1.ClientBindingId
+message dungeonflux.public.v1.MemberId
+message dungeonflux.public.v1.OperationId
+message dungeonflux.public.v1.RecoveryEpoch
+message dungeonflux.public.v1.RunId
+message dungeonflux.public.v1.SessionId
+message dungeonflux.public.v1.SessionRevision
+method dungeonflux.experimental.transport.v1.TransportFixture Bidi .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=true server-stream=true
+method dungeonflux.experimental.transport.v1.TransportFixture ClientStream .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=true server-stream=false
+method dungeonflux.experimental.transport.v1.TransportFixture ServerStream .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=false server-stream=true
+method dungeonflux.experimental.transport.v1.TransportFixture Unary .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=false server-stream=false
+oneof dungeonflux.experimental.contract.v1.Capability _kind
+oneof dungeonflux.experimental.contract.v1.Capability _required
+oneof dungeonflux.experimental.contract.v1.CompatibilityFixture _protocol_revision
+oneof dungeonflux.experimental.contract.v1.CompatibilityFixture payload
+oneof dungeonflux.public.v1.BuildIdentity _configuration_revision
+oneof dungeonflux.public.v1.BuildIdentity _content_revision
+oneof dungeonflux.public.v1.BuildIdentity _native_revision
+oneof dungeonflux.public.v1.BuildIdentity _source_revision
+oneof dungeonflux.public.v1.BuildIdentity _wasm_revision
+oneof dungeonflux.public.v1.ClientBindingId _value
+oneof dungeonflux.public.v1.MemberId _value
+oneof dungeonflux.public.v1.OperationId _value
+oneof dungeonflux.public.v1.RecoveryEpoch _value
+oneof dungeonflux.public.v1.RunId _value
+oneof dungeonflux.public.v1.SessionId _value
+oneof dungeonflux.public.v1.SessionRevision _sequence
+service dungeonflux.experimental.transport.v1.TransportFixture
+LEDGER_END
+
+thread 'ledger_matches_actual_protoc_descriptor_for_all_allocated_names_numbers_and_presence' (13052269) panicked at crates/df-tools/tests/schema_ledger.rs:110:5:
+assertion `left == right` failed
+  left: {"enum dungeonflux.experimental.contract.v1.CapabilityKind", "enum dungeonflux.experimental.transport.v1.Sample.Behavior", "enum-value dungeonflux.experimental.contract.v1.CapabilityKind 0 CAPABILITY_KIND_UNSPECIFIED", "enum-value dungeonflux.experimental.contract.v1.CapabilityKind 1 COMPOSITE_RECOVERY", "enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 0 BEHAVIOR_UNSPECIFIED", "enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 1 ECHO", "enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 2 REJECT", "enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 3 WAIT", "field dungeonflux.experimental.contract.v1.Capability 1 kind type=14 label=1 presence=true target=.dungeonflux.experimental.contract.v1.CapabilityKind oneof=_kind", "field dungeonflux.experimental.contract.v1.Capability 2 required type=8 label=1 presence=true target=- oneof=_required", "field dungeonflux.experimental.contract.v1.CompatibilityFixture 1 protocol_revision type=13 label=1 presence=true target=- oneof=_protocol_revision", "field dungeonflux.experimental.contract.v1.CompatibilityFixture 2 capabilities type=11 label=3 presence=false target=.dungeonflux.experimental.contract.v1.Capability oneof=-", "field dungeonflux.experimental.contract.v1.CompatibilityFixture 3 revision type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionRevision oneof=payload", "field dungeonflux.experimental.contract.v1.CompatibilityFixture 4 build type=11 label=1 presence=false target=.dungeonflux.public.v1.BuildIdentity oneof=payload", "field dungeonflux.experimental.contract.v1.Identities 1 session type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionId oneof=-", "field dungeonflux.experimental.contract.v1.Identities 2 member type=11 label=1 presence=false target=.dungeonflux.public.v1.MemberId oneof=-", "field dungeonflux.experimental.contract.v1.Identities 3 client_binding type=11 label=1 presence=false target=.dungeonflux.public.v1.ClientBindingId oneof=-", "field dungeonflux.experimental.contract.v1.Identities 4 run type=11 label=1 presence=false target=.dungeonflux.public.v1.RunId oneof=-", "field dungeonflux.experimental.contract.v1.Identities 5 operation type=11 label=1 presence=false target=.dungeonflux.public.v1.OperationId oneof=-", "field dungeonflux.experimental.transport.v1.Sample 1 sequence type=13 label=1 presence=false target=- oneof=-", "field dungeonflux.experimental.transport.v1.Sample 2 payload type=12 label=1 presence=false target=- oneof=-", "field dungeonflux.experimental.transport.v1.Sample 3 behavior type=14 label=1 presence=false target=.dungeonflux.experimental.transport.v1.Sample.Behavior oneof=-", "field dungeonflux.experimental.transport.v1.Sample 4 active_calls type=13 label=1 presence=false target=- oneof=-", "field dungeonflux.experimental.transport.v1.Sample 5 deadline_calls type=13 label=1 presence=false target=- oneof=-", "field dungeonflux.public.v1.BuildIdentity 1 source_revision type=9 label=1 presence=true target=- oneof=_source_revision", "field dungeonflux.public.v1.BuildIdentity 2 native_revision type=9 label=1 presence=true target=- oneof=_native_revision", "field dungeonflux.public.v1.BuildIdentity 3 wasm_revision type=9 label=1 presence=true target=- oneof=_wasm_revision", "field dungeonflux.public.v1.BuildIdentity 4 configuration_revision type=9 label=1 presence=true target=- oneof=_configuration_revision", "field dungeonflux.public.v1.BuildIdentity 5 content_revision type=9 label=1 presence=true target=- oneof=_content_revision", "field dungeonflux.public.v1.ClientBindingId 1 value type=12 label=1 presence=true target=- oneof=_value", "field dungeonflux.public.v1.MemberId 1 value type=12 label=1 presence=true target=- oneof=_value", "field dungeonflux.public.v1.OperationId 1 value type=12 label=1 presence=true target=- oneof=_value", "field dungeonflux.public.v1.RecoveryEpoch 1 value type=4 label=1 presence=true target=- oneof=_value", "field dungeonflux.public.v1.RunId 1 value type=12 label=1 presence=true target=- oneof=_value", "field dungeonflux.public.v1.SessionId 1 value type=12 label=1 presence=true target=- oneof=_value", "field dungeonflux.public.v1.SessionRevision 1 epoch type=11 label=1 presence=false target=.dungeonflux.public.v1.RecoveryEpoch oneof=-", "field dungeonflux.public.v1.SessionRevision 2 sequence type=4 label=1 presence=true target=- oneof=_sequence", "file common.proto dungeonflux.public.v1 proto3", "file contract_fixture.proto dungeonflux.experimental.contract.v1 proto3", "file transport_fixture.proto dungeonflux.experimental.transport.v1 proto3", "message dungeonflux.experimental.contract.v1.Capability", "message dungeonflux.experimental.contract.v1.CompatibilityFixture", "message dungeonflux.experimental.contract.v1.Identities", "message dungeonflux.experimental.transport.v1.Sample", "message dungeonflux.public.v1.BuildIdentity", "message dungeonflux.public.v1.ClientBindingId", "message dungeonflux.public.v1.MemberId", "message dungeonflux.public.v1.OperationId", "message dungeonflux.public.v1.RecoveryEpoch", "message dungeonflux.public.v1.RunId", "message dungeonflux.public.v1.SessionId", "message dungeonflux.public.v1.SessionRevision", "method dungeonflux.experimental.transport.v1.TransportFixture Bidi .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=true server-stream=true", "method dungeonflux.experimental.transport.v1.TransportFixture ClientStream .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=true server-stream=false", "method dungeonflux.experimental.transport.v1.TransportFixture ServerStream .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=false server-stream=true", "method dungeonflux.experimental.transport.v1.TransportFixture Unary .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=false server-stream=false", "oneof dungeonflux.experimental.contract.v1.Capability _kind", "oneof dungeonflux.experimental.contract.v1.Capability _required", "oneof dungeonflux.experimental.contract.v1.CompatibilityFixture _protocol_revision", "oneof dungeonflux.experimental.contract.v1.CompatibilityFixture payload", "oneof dungeonflux.public.v1.BuildIdentity _configuration_revision", "oneof dungeonflux.public.v1.BuildIdentity _content_revision", "oneof dungeonflux.public.v1.BuildIdentity _native_revision", "oneof dungeonflux.public.v1.BuildIdentity _source_revision", "oneof dungeonflux.public.v1.BuildIdentity _wasm_revision", "oneof dungeonflux.public.v1.ClientBindingId _value", "oneof dungeonflux.public.v1.MemberId _value", "oneof dungeonflux.public.v1.OperationId _value", "oneof dungeonflux.public.v1.RecoveryEpoch _value", "oneof dungeonflux.public.v1.RunId _value", "oneof dungeonflux.public.v1.SessionId _value", "oneof dungeonflux.public.v1.SessionRevision _sequence", "service dungeonflux.experimental.transport.v1.TransportFixture"}
+ right: {}
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test ledger_matches_actual_protoc_descriptor_for_all_allocated_names_numbers_and_presence ... FAILED
+
+failures:
+
+failures:
+    ledger_matches_actual_protoc_descriptor_for_all_allocated_names_numbers_and_presence
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p df-tools --test schema_ledger`

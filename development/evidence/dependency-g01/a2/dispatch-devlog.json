@@ -1,0 +1,10 @@
+{
+  "id": "audit-g01-a2-coordinator-parent-boundary-repair-20260930",
+  "kind": "resolution",
+  "summary": "Rejected unsafe parent-symlink audit verifier and dispatched bounded second attempt.",
+  "details": "Independent unchanged-helper owned fixture followed metadata ancestor symlink outside checkout and returned success. Other four frozen criteria pass; first unsuccessful economical implementation counted. An initial atomic claim tried updating claimed task brief and schema refused; transaction fully rolled back. Correct claim preserves original task contract and immutable a1 history while storing a2 repair brief in new attempt.",
+  "action": "Recorded exact reject evidence/commit2743, terminal unsuccessful a1, current gen2 a2 sameowner and isolatedworktree; froze nofollow anchored path and bounded nonregular-input checks.",
+  "outcome": "A2 active; independent frontier required before sourceintegration; nofullG01/legal/nativeI/O completion.",
+  "evidence_ref": "development/evidence/dependency-g01/a2/brief.json",
+  "related_entry_id": "audit-g01-a1-evaluator-parent-symlink-20260930"
+}

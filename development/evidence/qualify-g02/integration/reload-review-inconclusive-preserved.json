@@ -1,0 +1,124 @@
+{
+  "task_id": "QUALIFY-G02-001",
+  "attempt_id": "QUALIFY-G02-001-a1",
+  "phase": "integration follow-up",
+  "at": "2026-09-30T20:45:14.447793+00:00",
+  "evaluator": "/root/frontier_integrate",
+  "requested_model": "gpt-6-astra (coordinator dispatch binding)",
+  "serving_model_variant": "not exposed by runtime; not independently asserted",
+  "capabilities": {
+    "computer_use": true,
+    "vision": true,
+    "audio": false,
+    "actual": [
+      "Native com.google.Chrome.beta CUA Reload/URL/new-tab/button/resize",
+      "direct screenshot vision",
+      "read-only shell identity/hash/source-equivalence verification",
+      "native fixture HTTP diagnostics"
+    ]
+  },
+  "verdict": "inconclusive",
+  "atomic_approved": false,
+  "reason": "Fresh-tab reload and ten semantics pass, but the original required dedicated retained-tab reload remains blank; integrated retained flow not proven.",
+  "tested_commit": "ba0d3860fb27124be352b48766e99a955f746672",
+  "current_head": "822ffc4992b34ab548a47cf91efad845ca50c716",
+  "identity_ref": "development/evidence/qualify-g02/integration/reload-identity.json",
+  "prior_review_preserved": "development/evidence/qualify-g02/integration/review.json",
+  "acceptance": [
+    {
+      "criterion": "Preserve all four generated native HTTP2 gRPC modes and the ten existing browser semantics checks on the revised fixture.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Native CUA on dedicated integrated43182tab: run ten semantics, then again after pressure at721px; inspect direct screenshots/reports and counter increase; independently execute two fresh integrated native test binaries. Fresh follow-up evaluator: native Reload button in new eighth synthetic43182tab, observe remounted READY, click Run transport checks and visually inspect all ten PASS lines plus COMPLETE.",
+      "expected": "All four generated modes and ten existing semantic checks complete, including errors, metadata/trailers, half-close, deadline, cancel, oversized protobuf and multiplexing.",
+      "observed": "Ten semantics PASS before/after pressure; all four modes/errors/trailers/cancel/deadline/half-close/oversize/multiplexing visible. Completed native counts109\u2192123/deadlines1\u21922 after follow-up. Independent current native binaries pass7bridge+2service tests. Reload semantics pending Mac unlock. Fresh eighth-tab reload and ten semantics PASS on ba0; native completed123->137,cancelled5->7,deadline_headers2->3,active0. Original seventh-tab recovery failure recorded separately, not substituted by fresh-tab evidence.",
+      "evidence_ref": "development/evidence/qualify-g02/integration/semantics.png; development/evidence/qualify-g02/integration/narrow-results-bottom.png; development/evidence/qualify-g02/integration/independent-native-tests.json; development/evidence/qualify-g02/integration/reload-fresh-reloaded.png; development/evidence/qualify-g02/integration/reload-fresh-checks.png; development/evidence/qualify-g02/integration/reload-health-after.txt",
+      "prior_evidence_record": "development/evidence/qualify-g02/integration/review.json",
+      "reuse_basis": "Six deployed artifact hashes independently match build-identity.json; git diff ba0d3860fb27124be352b48766e99a955f746672 -- crates Cargo.toml Cargo.lock rust-toolchain.toml rustfmt.toml development/build-fixture.sh is empty at current HEAD822ffc4992b34ab548a47cf91efad845ca50c716. No pressure or native build repeated."
+    },
+    {
+      "criterion": "Expose real current/peak byte and item diagnostics for owned browser/native tunnel buffers and DATA credit; account for the 8MiB connection envelope and explicitly identify unobservable engine or pre-callback memory.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Independently diff relevant source/input paths versus approved51d and HEAD working source, rehash six current artifacts, inspect fresh current resource reports; reuse proven-equivalent counter-path review.",
+      "expected": "Real current/peak byte/item and DATA credit diagnostics; explicit 8MiB reservation arithmetic and unobservable memory limits.",
+      "observed": "Equivalent source confirmed, fresh counters callback peak400252bytes/33items,current0; DATA10098069bytes,WINDOW_UPDATE10982113bytes,322decode yields. All3native snapshots closed/pipeowners0. Native7110656/browser6062080 payload reservations account below8MiB but total allocator/h2/engine/pre-callback memory unqualified.",
+      "evidence_ref": "development/evidence/qualify-g02/integration/independent-identity.json; development/evidence/qualify-g02/integration/pressure.txt; development/evidence/qualify-g02/integration/current-resources.txt; development/evidence/qualify-g02/review-evidence/independent-observations.json",
+      "prior_evidence_record": "development/evidence/qualify-g02/integration/review.json",
+      "reuse_basis": "Six deployed artifact hashes independently match build-identity.json; git diff ba0d3860fb27124be352b48766e99a955f746672 -- crates Cargo.toml Cargo.lock rust-toolchain.toml rustfmt.toml development/build-fixture.sh is empty at current HEAD822ffc4992b34ab548a47cf91efad845ca50c716. No pressure or native build repeated."
+    },
+    {
+      "criterion": "Exercise slow consumers and simultaneous small RPC/paced media/bulk traffic in a real Rust/WASM browser; retain measured latency samples, responsiveness and cancellation/owner cleanup evidence.",
+      "result": "unverified",
+      "status": "unverified",
+      "procedure": "One native CUA-triggered30s-bounded pressure run; desktop and721px direct screenshots, scrollable completion, follow-up semantics; final same-tab reload requested but blocked by host lock. Follow-up now operates original dedicated tab after unlock; Reload button then one same-URL navigation; compare a fresh synthetic tab with reload/ten semantics.",
+      "expected": "Measured concurrent streams, response/cleanup and complete requested integrated browser flow including final reload semantics.",
+      "observed": "Pressure and follow-up portions PASS:3145728slow/655360paced/6291456bulkbytes; cold2.5ms,warm6.8/6.9ms,pressure34.8/39.5ms;137frames with10.8/11.2ms p95/p99gaps. WASM allocated1769472\u21922621440. Desktop and721px output readable, controls re-enabled, follow-up ten semantics pass. Mac locked before reload command could produce an observed result; final integrated reload/semantics unperformed. Unlock gap resolved, but original seventh tab stays blank with no HTML accessibility subtree for minutes after Reload and same-URL navigation. Fresh eighth tab immediately loads READY, reloads to READY and passes10. Original requested retained-tab flow remains unresolved; no root cause claimed.",
+      "evidence_ref": "development/evidence/qualify-g02/integration/pressure-start.png; development/evidence/qualify-g02/integration/pressure-desktop.png; development/evidence/qualify-g02/integration/pressure-narrow.png; development/evidence/qualify-g02/integration/narrow-results-bottom.png; development/evidence/qualify-g02/integration/pressure.txt; development/evidence/qualify-g02/integration/locked-devlog.json; development/evidence/qualify-g02/integration/reload-retained-final.png; development/evidence/qualify-g02/integration/reload-retained-final-ax.txt; development/evidence/qualify-g02/integration/reload-fresh-checks.png",
+      "prior_evidence_record": "development/evidence/qualify-g02/integration/review.json",
+      "reuse_basis": "Six deployed artifact hashes independently match build-identity.json; git diff ba0d3860fb27124be352b48766e99a955f746672 -- crates Cargo.toml Cargo.lock rust-toolchain.toml rustfmt.toml development/build-fixture.sh is empty at current HEAD822ffc4992b34ab548a47cf91efad845ca50c716. No pressure or native build repeated."
+    },
+    {
+      "criterion": "Exercise oversized messages/headers, bounded continuation handling and tiny-frame flood pressure at the actual native/browser boundaries; controlled termination and owned time-sliced work prevent hangs or silent loss.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Fresh actual five browser malicious probes in integrated run, native current compiled boundary tests invoked independently with15second subprocess deadlines.",
+      "expected": "Oversized WebSocket/frame/header, bounded continuation, tiny-frame flood terminate explicitly without hang or silent loss; owned time slicing and cleanup.",
+      "observed": "Five fresh malicious controlled-rejection PASS: websocket5.1ms,frame1.3ms,header2.7ms,continuation2.0ms,flood12.8ms. Header is stream-level rejection, other cases adapter/h2 failure. Integrated native7bridge+2service tests pass,322browserdecode yields and sequence/trailer assertions pass.",
+      "evidence_ref": "development/evidence/qualify-g02/integration/pressure.txt; development/evidence/qualify-g02/integration/independent-native-tests.json; development/evidence/qualify-g02/integration/narrow-results-bottom.png",
+      "prior_evidence_record": "development/evidence/qualify-g02/integration/review.json",
+      "reuse_basis": "Six deployed artifact hashes independently match build-identity.json; git diff ba0d3860fb27124be352b48766e99a955f746672 -- crates Cargo.toml Cargo.lock rust-toolchain.toml rustfmt.toml development/build-fixture.sh is empty at current HEAD822ffc4992b34ab548a47cf91efad845ca50c716. No pressure or native build repeated."
+    },
+    {
+      "criterion": "Pin source/build/host/browser identities and reproducible native/WASM checks; retain honest PASS/FAIL/INCONCLUSIVE qualification results, with unperformed physical-device requirements still blocking full G02 approval.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Verify actual merge HEAD,relevant-source diff and artifact SHA256/PID/listener/runningChrome; inspect six current integration gate receipts; retain full qualification gaps.",
+      "expected": "Exact source/build/config/browser identity and honest atomic results; no full G02 qualification without required device/memory/audio evidence.",
+      "observed": "Testedba0d3860fb27124be352b48766e99a955f746672, nativePID25530/43182; six artifact hashes match, browser footer/report actualba0. Relevant working source diff empty; main repo has unrelated dynamic evidence changes explicitly recorded. RuntimeChrome153.0.8010.12, installed156.0.8078.4,macOS26.6.2arm64; all six integration gates pass. FullG02 remains INCONCLUSIVE; prior retained-old-tab recovery issue not claimed fixed. Follow-up rehash confirms same ba0artifacts/PID25530; main822ffc has unchanged app inputs; CUA/vision used directly. Requested modelgpt-6-astra recorded by coordinator; actual serving variant not exposed.",
+      "evidence_ref": "development/evidence/qualify-g02/integration/independent-identity.json; development/evidence/qualify-g02/integration/gates.json; development/evidence/qualify-g02/integration/pressure.txt; development/evidence/qualify-g02/integration/reload-identity.json",
+      "prior_evidence_record": "development/evidence/qualify-g02/integration/review.json",
+      "reuse_basis": "Six deployed artifact hashes independently match build-identity.json; git diff ba0d3860fb27124be352b48766e99a955f746672 -- crates Cargo.toml Cargo.lock rust-toolchain.toml rustfmt.toml development/build-fixture.sh is empty at current HEAD822ffc4992b34ab548a47cf91efad845ca50c716. No pressure or native build repeated."
+    }
+  ],
+  "observed_defects": [
+    {
+      "id": "G02-INTEGRATED-RETAINED-RELOAD-BLANK",
+      "classification": "observed browser recovery failure; cause unknown",
+      "reproduction": "Existing seventh Chrome Beta tab43182 showing integrated pressure and ten semantics; first Cmd+R no visible change; actual Reload button removes HTML and leaves blank green content. Same URL navigation remains blank after minutes. Server PID25530 unchanged/healthy. New eighth same-URLtab immediately loads READY and reloads successfully.",
+      "expected": "Original dedicated tab reloads to visible READY and permits ten semantics.",
+      "actual": "No HTML subtree or visible application in original retained tab; original flow cannot execute ten checks.",
+      "evidence": [
+        "reload-after-button.png",
+        "reload-settled.png",
+        "reload-navigation.png",
+        "reload-retained-final.png",
+        "reload-retained-final-ax.txt",
+        "reload-fresh-reloaded.png",
+        "reload-fresh-checks.png"
+      ],
+      "root_cause": "Unverified. Fresh-tab success and healthy pinned server do not establish cause or repair."
+    }
+  ],
+  "verification_gaps": [
+    "Original seventh dedicated-tab reload/recovery remains unverified; targeted diagnosis and independent repeat required."
+  ],
+  "resolved_gap": "Mac lock no longer blocks CUA, but it exposed a retained-tab recovery failure.",
+  "full_G02": "INCONCLUSIVE; physical iOS/Android, supported desktop/network matrix, suspend/foreground/recovery, whole process/engine/pre-callback allocation and complete8MiB bound, CPU, actual audio/playback jitter/action-to-view and approved production budgets remain unqualified.",
+  "earlier_recovery_observations": [
+    {
+      "id": "G02-RETAINED-TAB-RECOVERY",
+      "classification": "observed recovery anomaly; cause unverified",
+      "scope": "Full G02 suspend/foreground/process recovery remains unqualified; fresh atomic run and same-build reload passed.",
+      "observed": "At resume fifth retained tab displayed pre-recovery report. Initial AX click did not change state; coordinate input returned noWindowsAvailable; Raise then AX click showed RUNNING but screenshot retained old pixels. Recovered native process recorded33completed/3cancelled, then active0/closedowner0 with empty qualification report. More than30seconds later AX still RUNNING. Reload removed document and blank pixels persisted. New sixth tab mounted READY immediately, completed all fresh checks and reloaded normally.",
+      "inference": "Stale retained browser/tab state is plausible but not established; no source root cause claimed.",
+      "evidence_ref": "development/evidence/qualify-g02/browser-resume-review/pressure-raised-ax.txt; development/evidence/qualify-g02/browser-resume-review/pressure-observed.png; development/evidence/qualify-g02/browser-resume-review/reload-settled.png; development/evidence/qualify-g02/browser-resume-review/health-pressure.txt; development/evidence/qualify-g02/browser-resume-review/resources-pressure.txt; development/evidence/qualify-g02/browser-resume-review/fresh-tab.png; development/evidence/qualify-g02/browser-resume-review/fresh-reload.png",
+      "required_full_gate_action": "Investigate retained-tab recovery across sleep/process restart and verify supported browser/device matrix before production qualification."
+    }
+  ],
+  "browser_handoff": "Eighth/rightmost synthetic43182tab active, visible post-reload COMPLETE10 PASS. Seventh retained tab preserved blank. Window restored from721x2530to1435x1235, matching prior pressure-desktop evidence.",
+  "protection": "No source/build/queue changes, no duplicate pressure, no private tabs inspected, no process stopped or timer started. PIDs18905/18907/25530andPG80873 verified alive. Earlier evidence unchanged.",
+  "devlog_ids": [
+    "qualify-g02-a1-integrated-retained-reload-blank-20260930"
+  ]
+}

@@ -1,0 +1,221 @@
+{
+  "rows": [
+    {
+      "name": "main-positive-foreign-cwd",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/Users/earlcameron/Desktop/dungeonflux/development/dependency-audit.py"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review",
+      "exit_code": 0,
+      "stdout": "{\"ok\": true, \"packages\": 150, \"targets\": 2}\n",
+      "stderr": "",
+      "seconds": 0.03977883397601545,
+      "pass": true
+    },
+    {
+      "name": "metadata-parent",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review/metadata-parent/development/dependency-audit.py"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review",
+      "exit_code": 1,
+      "stdout": "{\"ok\": false, \"reason\": \"unsafe or unavailable input: development/dependency-audit/metadata/native.json\"}\n",
+      "stderr": "",
+      "seconds": 0.024445459013804793,
+      "pass": true
+    },
+    {
+      "name": "report-parent",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review/report-parent/development/dependency-audit.py"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review",
+      "exit_code": 1,
+      "stdout": "{\"ok\": false, \"reason\": \"unsafe or unavailable input: development/dependency-audit/report.json\"}\n",
+      "stderr": "",
+      "seconds": 0.021896665915846825,
+      "pass": true
+    },
+    {
+      "name": "source-parent",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review/source-parent/development/dependency-audit.py"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review",
+      "exit_code": 1,
+      "stdout": "{\"ok\": false, \"reason\": \"unsafe or unavailable input: crates/df-protocol/Cargo.toml\"}\n",
+      "stderr": "",
+      "seconds": 0.0234285828191787,
+      "pass": true
+    },
+    {
+      "name": "source-leaf-fifo",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review/source-leaf-fifo/development/dependency-audit.py"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review",
+      "exit_code": 1,
+      "stdout": "{\"ok\": false, \"reason\": \"input is not a bounded regular file: Cargo.toml\"}\n",
+      "stderr": "",
+      "seconds": 0.02210837509483099,
+      "pass": true
+    },
+    {
+      "name": "report-leaf-fifo",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review/report-leaf-fifo/development/dependency-audit.py"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review",
+      "exit_code": 1,
+      "stdout": "{\"ok\": false, \"reason\": \"input is not a bounded regular file: development/dependency-audit/report.json\"}\n",
+      "stderr": "",
+      "seconds": 0.02307441714219749,
+      "pass": true
+    },
+    {
+      "name": "metadata-leaf-symlink",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review/metadata-leaf-symlink/development/dependency-audit.py"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review",
+      "exit_code": 1,
+      "stdout": "{\"ok\": false, \"reason\": \"unsafe or unavailable input: development/dependency-audit/metadata/native.json\"}\n",
+      "stderr": "",
+      "seconds": 0.02409558300860226,
+      "pass": true
+    },
+    {
+      "name": "main-descriptor-success",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "-c",
+        "from pathlib import Path;import os,json;s=Path('/Users/earlcameron/Desktop/dungeonflux/development/dependency-audit.py');ns={'__file__':str(s),'__name__':'audit_test'};exec(compile(s.read_text(),str(s),'exec'),ns);\ndef fds():\n a=[]\n for i in range(512):\n  try:os.fstat(i);a.append(i)\n  except OSError:pass\n return a\nbefore=fds();outcomes=[]\nfor i in range(20):\n try:ns['verify']();outcomes.append('success')\n except (ValueError,OSError):outcomes.append('refusal')\nafter=fds();print(json.dumps({'before':before,'after':after,'outcomes':outcomes}));assert before==after\n"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review",
+      "exit_code": 0,
+      "stdout": "{\"before\": [0, 1, 2], \"after\": [0, 1, 2], \"outcomes\": [\"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\", \"success\"]}\n",
+      "stderr": "",
+      "seconds": 0.2740626248996705,
+      "pass": true
+    },
+    {
+      "name": "merged-descriptor-refusal",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "-c",
+        "from pathlib import Path;import os,json;s=Path('/Users/earlcameron/Desktop/dungeonflux/development/dependency-audit.py');ns={'__file__':str(s),'__name__':'audit_test'};exec(compile(s.read_text(),str(s),'exec'),ns);ns['ROOT']='/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review/metadata-parent';\ndef fds():\n a=[]\n for i in range(512):\n  try:os.fstat(i);a.append(i)\n  except OSError:pass\n return a\nbefore=fds();outcomes=[]\nfor i in range(20):\n try:ns['verify']();outcomes.append('success')\n except (ValueError,OSError):outcomes.append('refusal')\nafter=fds();print(json.dumps({'before':before,'after':after,'outcomes':outcomes}));assert before==after\n"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/AUDIT-G01-CLOSURE-001-a2-integration-review",
+      "exit_code": 0,
+      "stdout": "{\"before\": [0, 1, 2], \"after\": [0, 1, 2], \"outcomes\": [\"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\", \"refusal\"]}\n",
+      "stderr": "",
+      "seconds": 0.05013749981299043,
+      "pass": true
+    }
+  ],
+  "identity": [
+    {
+      "path": "development/dependency-audit.md",
+      "sha256": "ed588b9755a5b14459b794c96460c206ccb73f7a8bf77e6b01c70c59fbe2c102",
+      "matches_reviewed_git_blob": true
+    },
+    {
+      "path": "development/dependency-audit.py",
+      "sha256": "61d49fa3a536eef860f37b3653d587944480063cb1df32ce965b5243e5dcfb21",
+      "matches_reviewed_git_blob": true
+    },
+    {
+      "path": "development/dependency-audit/metadata/native.json",
+      "sha256": "08276121a5f63ef2f35f9f3267917d4676dd650e34f160e68999c4d503c15329",
+      "matches_reviewed_git_blob": true
+    },
+    {
+      "path": "development/dependency-audit/metadata/wasm.json",
+      "sha256": "e91bc29f430944f28a06712d6cd5453a9ab6c0bd84134e41822ca9c597bc0d0c",
+      "matches_reviewed_git_blob": true
+    },
+    {
+      "path": "development/dependency-audit/packages.json",
+      "sha256": "dfdf3d1d90d38f7788a31b6c71519c0974e159263a3d99552558dcdacbb56c65",
+      "matches_reviewed_git_blob": true
+    },
+    {
+      "path": "development/dependency-audit/report.json",
+      "sha256": "d569532d942bce4d22b7107f04b969e0a16addc9bc19fe4d59afd523d3fd478c",
+      "matches_reviewed_git_blob": true
+    }
+  ],
+  "commands": {
+    "head": {
+      "args": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "stdout": "f79bebf6f88f72f80bfb62d71798ebc56f64ca96\n",
+      "stderr": ""
+    },
+    "app_diff822": {
+      "args": [
+        "git",
+        "diff",
+        "822ffc4992b34ab548a47cf91efad845ca50c716",
+        "--",
+        "Cargo.toml",
+        "Cargo.lock",
+        ".cargo",
+        "rust-toolchain.toml",
+        "rustfmt.toml",
+        "crates",
+        "development/build-fixture.sh"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "app_diffba0": {
+      "args": [
+        "git",
+        "diff",
+        "ba0d3860fb27124be352b48766e99a955f746672",
+        "--",
+        "Cargo.toml",
+        "Cargo.lock",
+        ".cargo",
+        "rust-toolchain.toml",
+        "rustfmt.toml",
+        "crates",
+        "development/build-fixture.sh"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "source_clean": {
+      "args": [
+        "git",
+        "status",
+        "--porcelain",
+        "--",
+        "development/dependency-audit.md",
+        "development/dependency-audit.py",
+        "development/dependency-audit/metadata/native.json",
+        "development/dependency-audit/metadata/wasm.json",
+        "development/dependency-audit/packages.json",
+        "development/dependency-audit/report.json"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  },
+  "build_scope": "Actualmergedsourcef79 tested. Runningapplication remains separatelypinnedba0; no appbuild or revisedappbuild identity claimed."
+}

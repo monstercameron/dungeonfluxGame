@@ -1,0 +1,9 @@
+{
+  "id": "active-cleanup-007-a1-current-inventory-20260930",
+  "kind": "discovery",
+  "summary": "Inventory retained all candidates and confirmed the currently active G01 audit and recorder processes.",
+  "details": "A sorted lstat-only inventory of artifacts/build and artifacts/tmp found 24 direct-child candidates, 56,292 regular files totaling 10,658,919,436 logical bytes, 3,582 directories, 50 symlinks not followed, five FIFO special entries, and zero scan errors. The delete allowlist is empty, so zero paths were eligible or deleted. The live queue shows AUDIT-G01-CLOSURE-001-a1 active, G02 QUALIFY-G02-001-a1 approved in integration at ba0d3860fb27124be352b48766e99a955f746672, G05 a3 integrated, and SRD pin a2 integrated at HEAD 822ffc4992b34ab548a47cf91efad845ca50c716. Preview PIDs 18905/18907/25530 listen on ports 43180/43181/43182; PostgreSQL PID 80873 holds its runtime socket. Prior recorder PIDs 69190 and 26743 are absent; new recorder PID 27721 holds artifacts/tmp/journey/recorder.log. The report includes this attempt's scratch and verifies the copied script's byte size.",
+  "action": "Read workflow SQLite without mutation; copied the cleanup-006 lstat inventory script into this attempt scratch; scanned only artifacts/build and artifacts/tmp without following symlinks; dynamically checked named old/new PIDs, preview listeners, PostgreSQL socket and recorder open file; hashed retained executables.",
+  "outcome": "Report and script are retained with exact SHA-256 identities. No artifacts were deleted, and no source, queue, runtime or process state was changed; zero scan errors.",
+  "evidence_ref": "development/evidence/cleanup-007/current-interval-inventory.json sha256=5e983aa55e23520bc242fb163ff9dcc3142c79a4cfea4eff720db2715164faeb; artifacts/tmp/ACTIVE-CLEANUP-007-a1/inventory.py sha256=016de305699481a6c96dd65644a1f1e2b05797ea63043d33d77a3742fb636592"
+}

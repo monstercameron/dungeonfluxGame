@@ -1,0 +1,18 @@
+{
+  "at": "2026-09-30T20:53:47.654967+00:00",
+  "commit": "2743c4a65e2d6be1769211a9809836294af903ab",
+  "handoff_sha256": "5f62f7d9fd04a52c7b8bd45ad7f8a3f76018b4fbf284bc8be76243f36ef7beca",
+  "changed_paths": [
+    "development/dependency-audit.md",
+    "development/dependency-audit.py",
+    "development/dependency-audit/metadata/native.json",
+    "development/dependency-audit/metadata/wasm.json",
+    "development/dependency-audit/packages.json",
+    "development/dependency-audit/report.json"
+  ],
+  "source_paths_clean": true,
+  "retained_untracked_evidence": true,
+  "evaluator": "/root/frontier_integrate",
+  "model": "gpt-6-astra",
+  "serving_variant": "unexposed"
+}

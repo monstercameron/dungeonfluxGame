@@ -1,0 +1,41 @@
+Window: "DungeonFlux S00 transport laboratory", App: Google Chrome Beta.
+0 standard window DungeonFlux S00 transport laboratory - Google Chrome Beta, URL: 127.0.0.1:43182/, Secondary Actions: Raise
+	1 container DungeonFlux S00 transport laboratory - Google Chrome Beta, URL: 127.0.0.1:43182/
+		2 container
+			3 toolbar
+				4 button Back
+				5 button Reload
+				6 container
+					7 pop up button View site information
+					8 text field (settable) Address and search bar, Value: 127.0.0.1:43182, Placeholder: Ask Google or type a URL
+					9 button Bookmark this tab
+				10 pop up button Extensions
+				11 button Earl
+				12 pop up button Hidden toolbar buttons
+				13 pop up button New Chrome available
+			14 pop up button Tab Search
+			15 container
+				16 tab group
+					17 tab (settable, boolean) GitHub - monstercameron/dungeonfluxGame · GitHub - Inactive tab - 139 MB freed up, Value: off
+					18 tab (settable, boolean) DungeonFlux: an AI dungeon master for game night - Inactive tab - 47.3 MB freed up, Value: off
+					19 tab (settable, boolean) Project Feedback Review - Memory usage - 545 MB, Value: off
+					20 tab (settable, boolean) DungeonFlux S00 transport laboratory - Memory usage - 81.9 MB, Value: off
+					21 tab (settable, boolean) DungeonFlux S00 transport laboratory - Memory usage - 57.1 MB, Value: off
+					22 tab (settable, boolean) DungeonFlux S00 transport laboratory - Memory usage - 50.1 MB, Value: off
+					23 tab (selected, settable, boolean) DungeonFlux S00 transport laboratory - Memory usage - 55.5 MB, Value: on
+						24 button Close
+			25 button New Tab
+	26 close button
+	27 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	28 minimize button
+29 menu bar
+	30 Chrome Beta
+	31 File
+	32 Edit
+	33 View
+	34 History
+	35 Bookmarks
+	36 Profiles
+	37 Tab
+	38 Window
+	39 Help

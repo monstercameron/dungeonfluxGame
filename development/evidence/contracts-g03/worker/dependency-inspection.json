@@ -1,0 +1,118 @@
+{
+  "commit": "9898c70614a8555efa63d3cec47ba9adbc395bbb",
+  "targets": {
+    "native": {
+      "target": "aarch64-apple-darwin",
+      "metadata_sha256": "8550be6fb4b521ed7b6b9e4c0ddf1d3c73264abf25ccfdc4b3ff36533322528d",
+      "workspace_crates": [
+        "df-observe",
+        "df-protocol",
+        "df-rpc-bridge",
+        "df-tools",
+        "df-types"
+      ],
+      "df_types_dependency_count": 0,
+      "df_protocol_production_project_closure": [
+        "df-protocol"
+      ],
+      "direct_project_edges": {
+        "df-types": [],
+        "df-rpc-bridge": [
+          {
+            "name": "df-observe",
+            "kind": null,
+            "target": null,
+            "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-observe"
+          }
+        ],
+        "df-tools": [
+          {
+            "name": "df-observe",
+            "kind": null,
+            "target": null,
+            "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-observe"
+          },
+          {
+            "name": "df-protocol",
+            "kind": null,
+            "target": null,
+            "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-protocol"
+          },
+          {
+            "name": "df-rpc-bridge",
+            "kind": null,
+            "target": null,
+            "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-rpc-bridge"
+          },
+          {
+            "name": "df-types",
+            "kind": "dev",
+            "target": null,
+            "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-types"
+          }
+        ],
+        "df-observe": [],
+        "df-protocol": []
+      },
+      "resolved_package_count": 141,
+      "full_metadata_evidence": "development/evidence/contracts-g03/worker/commands/metadata-native-current.txt"
+    },
+    "wasm": {
+      "target": "wasm32-unknown-unknown",
+      "metadata_sha256": "0bf819a7cb357df98fd3af710cfbad5adf9d056a17dbf06801431edd444befaa",
+      "workspace_crates": [
+        "df-observe",
+        "df-protocol",
+        "df-rpc-bridge",
+        "df-tools",
+        "df-types"
+      ],
+      "df_types_dependency_count": 0,
+      "df_protocol_production_project_closure": [
+        "df-protocol"
+      ],
+      "direct_project_edges": {
+        "df-types": [],
+        "df-rpc-bridge": [
+          {
+            "name": "df-observe",
+            "kind": null,
+            "target": null,
+            "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-observe"
+          }
+        ],
+        "df-tools": [
+          {
+            "name": "df-observe",
+            "kind": null,
+            "target": null,
+            "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-observe"
+          },
+          {
+            "name": "df-protocol",
+            "kind": null,
+            "target": null,
+            "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-protocol"
+          },
+          {
+            "name": "df-rpc-bridge",
+            "kind": null,
+            "target": null,
+            "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-rpc-bridge"
+          },
+          {
+            "name": "df-types",
+            "kind": "dev",
+            "target": null,
+            "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-types"
+          }
+        ],
+        "df-observe": [],
+        "df-protocol": []
+      },
+      "resolved_package_count": 142,
+      "full_metadata_evidence": "development/evidence/contracts-g03/worker/commands/metadata-wasm-current.txt"
+    }
+  },
+  "limitation": "Target-filtered locked Cargo metadata reflects workspace feature resolution; separate df-protocol normal-edge trees show its actual selected package closure. Descriptive graph inspection does not extend the historical fixed-four-crate audit or approve legal fulfillment."
+}

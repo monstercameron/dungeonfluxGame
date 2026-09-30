@@ -1,0 +1,91 @@
+{
+  "scope": "Read-only public synthetic fixture HTTP delivery/native counters. Not browser-network or browser-rendering evidence.",
+  "responses": [
+    {
+      "url": "http://127.0.0.1:43182/",
+      "observed_at": "2026-09-30T21:07:08.549127+00:00",
+      "timeout_seconds": 4,
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "1650",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 21:07:08 GMT"
+      },
+      "bytes": 1650,
+      "sha256": "b21d34b4d2235591af5cf2f9f2a43148f830ff9a37bd049c3c5f6fab1b28a9e0",
+      "body": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>DungeonFlux S00 transport laboratory</title><style>body{margin:0;background:#10141c;color:#e6eaf3;font:17px system-ui,sans-serif}main{max-width:880px;margin:64px auto;padding:0 24px}h1{font-size:38px;line-height:1.1}p{color:#b7c3d4;line-height:1.5}button{background:#88dfb5;color:#10141c;border:0;border-radius:8px;font:600 17px system-ui;padding:14px 22px;cursor:pointer}button:disabled{opacity:.5}pre{white-space:pre-wrap;padding:20px;background:#1a2331;line-height:1.7;border-radius:10px}.tag{color:#88dfb5;letter-spacing:2px;font-size:13px}a{color:#88dfb5}</style></head><body><main><div class=\"tag\">DUNGEONFLUX / EXPERIMENTAL S00</div><h1>Rust transport laboratory</h1><p>Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly.</p><p>This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.</p><button id=\"run\" disabled>Loading Rust/WASM\u2026</button><button id=\"qualify\" disabled>Loading qualification\u2026</button><pre id=\"qualification\" role=\"status\" aria-live=\"polite\">Desktop pressure qualification has not run.</pre><pre id=\"results\" role=\"status\" aria-live=\"polite\">Loading generated WebAssembly bindings\u2026</pre><p><a href=\"/fixture-health\">Native fixture diagnostics</a></p><p id=\"build\"></p></main><script type=\"module\">import init from '/pkg/df_tools.js';await init();</script></body></html>"
+    },
+    {
+      "url": "http://127.0.0.1:43182/fixture-health",
+      "observed_at": "2026-09-30T21:07:08.558462+00:00",
+      "timeout_seconds": 4,
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "129",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 21:07:08 GMT"
+      },
+      "bytes": 129,
+      "sha256": "aaa1df3507dc8b89a480d1edfe3aaba26dcf985849723f7d0ac43e8139952f13",
+      "body": "S00 experimental; active=0; completed=137; cancelled=7; otel_spans=148; durable_export=false; dropped_spans=0; deadline_headers=3"
+    },
+    {
+      "url": "http://127.0.0.1:43182/fixture-resources",
+      "observed_at": "2026-09-30T21:07:08.559145+00:00",
+      "timeout_seconds": 4,
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "4000",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 21:07:08 GMT"
+      },
+      "bytes": 4000,
+      "sha256": "5571f43d9d3228f2f6e33e08395fd475fc7fcbe58ac149d33555bace4a29c841",
+      "body": "Ok(ConnectionSnapshot { pipe_owners: 0, driver_failed: false, closed: true, received_bytes: 18424, sent_bytes: 1121, callback_bytes: BufferSnapshot { current: 0, peak: 0, total: 0 }, callback_items: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 15369, total: 18424 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 163, total: 1121 }, websocket_receive: BufferSnapshot { current: 0, peak: 15369, total: 18424 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 38 }, websocket_send: BufferSnapshot { current: 0, peak: 163, total: 1121 }, receive_credit: CreditSnapshot { available: 1031719, peak_grant: 1048576, data_bytes: 16857, update_bytes: 983041, peak_held: 16857 }, send_credit: CreditSnapshot { available: 1048187, peak_grant: 1048576, data_bytes: 389, update_bytes: 983041, peak_held: 389 }, received_frames: 56, sent_frames: 44, decode_yields: 76, rejected: false, receive_reservation_bytes: 7110656 })\nOk(ConnectionSnapshot { pipe_owners: 0, driver_failed: false, closed: true, received_bytes: 12441, sent_bytes: 10108991, callback_bytes: BufferSnapshot { current: 0, peak: 0, total: 0 }, callback_items: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 259, total: 12441 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 524761, total: 10108991 }, websocket_receive: BufferSnapshot { current: 0, peak: 259, total: 12441 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 322 }, websocket_send: BufferSnapshot { current: 0, peak: 16384, total: 10108991 }, receive_credit: CreditSnapshot { available: 1045841, peak_grant: 1048576, data_bytes: 2735, update_bytes: 983041, peak_held: 2735 }, send_credit: CreditSnapshot { available: 949539, peak_grant: 1048576, data_bytes: 10098109, update_bytes: 10982113, peak_held: 827467 }, received_frames: 441, sent_frames: 1135, decode_yields: 644, rejected: false, receive_reservation_bytes: 7110656 })\nOk(ConnectionSnapshot { pipe_owners: 0, driver_failed: false, closed: true, received_bytes: 18424, sent_bytes: 1096, callback_bytes: BufferSnapshot { current: 0, peak: 0, total: 0 }, callback_items: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 15369, total: 18424 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 163, total: 1096 }, websocket_receive: BufferSnapshot { current: 0, peak: 15369, total: 18424 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 38 }, websocket_send: BufferSnapshot { current: 0, peak: 163, total: 1096 }, receive_credit: CreditSnapshot { available: 1031719, peak_grant: 1048576, data_bytes: 16857, update_bytes: 983041, peak_held: 16857 }, send_credit: CreditSnapshot { available: 1048181, peak_grant: 1048576, data_bytes: 395, update_bytes: 983041, peak_held: 395 }, received_frames: 56, sent_frames: 43, decode_yields: 76, rejected: false, receive_reservation_bytes: 7110656 })\nOk(ConnectionSnapshot { pipe_owners: 0, driver_failed: false, closed: true, received_bytes: 18424, sent_bytes: 1127, callback_bytes: BufferSnapshot { current: 0, peak: 0, total: 0 }, callback_items: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 15369, total: 18424 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 163, total: 1127 }, websocket_receive: BufferSnapshot { current: 0, peak: 15369, total: 18424 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 38 }, websocket_send: BufferSnapshot { current: 0, peak: 163, total: 1127 }, receive_credit: CreditSnapshot { available: 1031719, peak_grant: 1048576, data_bytes: 16857, update_bytes: 983041, peak_held: 16857 }, send_credit: CreditSnapshot { available: 1048181, peak_grant: 1048576, data_bytes: 395, update_bytes: 983041, peak_held: 395 }, received_frames: 56, sent_frames: 44, decode_yields: 76, rejected: false, receive_reservation_bytes: 7110656 })"
+    },
+    {
+      "url": "http://127.0.0.1:43182/pkg/df_tools.js",
+      "observed_at": "2026-09-30T21:07:08.559780+00:00",
+      "timeout_seconds": 4,
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript",
+        "accept-ranges": "bytes",
+        "last-modified": "Wed, 30 Sep 2026 19:46:45 GMT",
+        "content-length": "26155",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 21:07:08 GMT"
+      },
+      "bytes": 26155,
+      "sha256": "08bdbf4b57d2034666b6652916e694f03f1512a22eede60ef3cccc5dc5a40d16",
+      "pinned_sha256": "08bdbf4b57d2034666b6652916e694f03f1512a22eede60ef3cccc5dc5a40d16",
+      "equals_pinned_bytes": true
+    },
+    {
+      "url": "http://127.0.0.1:43182/pkg/df_tools_bg.wasm",
+      "observed_at": "2026-09-30T21:07:08.560449+00:00",
+      "timeout_seconds": 4,
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "application/wasm",
+        "accept-ranges": "bytes",
+        "last-modified": "Wed, 30 Sep 2026 19:46:45 GMT",
+        "content-length": "3401877",
+        "connection": "close",
+        "date": "Wed, 30 Sep 2026 21:07:08 GMT"
+      },
+      "bytes": 3401877,
+      "sha256": "ca0cbedf6e4145996c8a3974a19cee405c270d191905c5ab49f3c4bbfbaab11f",
+      "pinned_sha256": "ca0cbedf6e4145996c8a3974a19cee405c270d191905c5ab49f3c4bbfbaab11f",
+      "equals_pinned_bytes": true
+    }
+  ]
+}

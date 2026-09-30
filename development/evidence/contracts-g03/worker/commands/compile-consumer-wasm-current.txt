@@ -1,0 +1,57 @@
+   Compiling pin-project-lite v0.2.17
+   Compiling futures-core v0.3.34
+   Compiling once_cell v1.21.4
+   Compiling futures-sink v0.3.34
+   Compiling bytes v1.12.1
+   Compiling futures-channel v0.3.34
+   Compiling futures-io v0.3.34
+   Compiling slab v0.4.12
+   Compiling memchr v2.8.3
+   Compiling futures-task v0.3.34
+   Compiling futures-util v0.3.34
+   Compiling unicode-ident v1.0.26
+   Compiling wasm-bindgen-shared v0.2.129
+   Compiling cfg-if v1.0.5
+   Compiling wasm-bindgen v0.2.129
+   Compiling js-sys v0.3.106
+   Compiling itoa v1.0.18
+   Compiling http v1.5.0
+   Compiling tokio v1.53.1
+   Compiling tracing-core v0.1.36
+   Compiling tracing v0.1.44
+   Compiling http-body v1.1.0
+   Compiling pin-project v1.1.13
+   Compiling http-body-util v0.1.5
+   Compiling tokio-stream v0.1.19
+   Compiling sync_wrapper v1.0.2
+   Compiling percent-encoding v2.3.2
+   Compiling tower-service v0.3.3
+   Compiling base64 v0.22.1
+   Compiling tower-layer v0.3.3
+   Compiling tonic v0.14.6
+   Compiling thiserror v2.0.21
+   Compiling prost v0.14.4
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.2
+   Compiling indexmap v2.14.2
+   Compiling df-protocol v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-protocol)
+   Compiling opentelemetry v0.31.0
+   Compiling tokio-util v0.7.19
+   Compiling web-time v1.1.0
+   Compiling futures-executor v0.3.34
+   Compiling atomic-waker v1.1.2
+   Compiling fnv v1.0.7
+   Compiling h2 v0.4.19 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-rpc-bridge/vendor/h2)
+   Compiling futures v0.3.34
+   Compiling df-observe v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-observe)
+   Compiling tonic-prost v0.14.6
+   Compiling wasm-bindgen-futures v0.4.79
+   Compiling gloo-timers v0.3.0
+   Compiling web-sys v0.3.106
+   Compiling df-rpc-bridge v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-rpc-bridge)
+   Compiling df-tools v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-tools)
+   Compiling prost-types v0.14.4
+   Compiling df-types v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-types)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 28.58s
+  Executable tests/schema_ledger.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/schema_ledger-cbbc866e3ec1b7e4.wasm)
+  Executable tests/shared_contracts.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/shared_contracts-85fc7226712f19f5.wasm)

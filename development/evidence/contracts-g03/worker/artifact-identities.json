@@ -1,0 +1,64 @@
+{
+  "commit": "9898c70614a8555efa63d3cec47ba9adbc395bbb",
+  "artifact_root": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03",
+  "purpose": "Retained current native fixture and WASM library plus consuming native/WASM test binaries for independent review; no preview replacement",
+  "artifacts": [
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/df-transport-fixture",
+      "sha256": "67d5a12e71acf9fbf98fed08715906b01efc5e8eb955db10e9ab3efb4510731e",
+      "bytes": 19180408,
+      "embedded_clean_source_revision": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/df_tools.wasm",
+      "sha256": "1a776a2aaed6841cd794e63ece391f4df5e32e1c283b336ac852544d7d4498e8",
+      "bytes": 26712819,
+      "embedded_clean_source_revision": true
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/shared_contracts-85fc7226712f19f5.wasm",
+      "sha256": "082f807e6f1bf6f30d938eaa2dd7fd821f2764e32f65f76fc982000e66bb60a3",
+      "bytes": 7950009,
+      "embedded_clean_source_revision": false
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/schema_ledger-cbbc866e3ec1b7e4.wasm",
+      "sha256": "41e3b9bb4521a83c1c45dc634410eb2c4509a413418ffab4e4c01b6a5eed20b5",
+      "bytes": 11297507,
+      "embedded_clean_source_revision": false
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/shared_contracts-0be3eba5daacf3c5",
+      "sha256": "43c459fe84d9029a8a3be776a9d52198eba3c12b6e289330cfb042a64f341da0",
+      "bytes": 1664000,
+      "embedded_clean_source_revision": false
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/deps/schema_ledger-56337483e9b61314",
+      "sha256": "fb1d8bc61adee1a702de1c58a1164dca7249a16c0f37006fe2246de1bfb5018b",
+      "bytes": 2312400,
+      "embedded_clean_source_revision": false
+    }
+  ],
+  "generated_descriptors": [
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-37c24844737020b2/out/contracts.bin",
+      "sha256": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560"
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-5797462c41c050e0/out/contracts.bin",
+      "sha256": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560"
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-7a981dd87cf667dc/out/contracts.bin",
+      "sha256": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560"
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/debug/build/df-protocol-ccaa6772dee1e2e1/out/contracts.bin",
+      "sha256": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560"
+    }
+  ],
+  "retained_descriptor_sha256": "f524d0403f03bc9a5a975d7a6c54e3d3c9f5542e9351be3c8ecf869579a8b560",
+  "wasm_execution_performed": false,
+  "native_contract_execution_performed": true
+}

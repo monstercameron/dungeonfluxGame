@@ -1,0 +1,12 @@
+{
+  "case": "stale-source-hash",
+  "exit_code": 1,
+  "expected_exit_code": 1,
+  "mutation": {
+    "case": "stale-source-hash",
+    "operation": "append one byte to pinned Cargo.lock; leave report hash fixed"
+  },
+  "passed": true,
+  "stderr": "",
+  "stdout": "{\"ok\": false, \"reason\": \"stale or changed pinned input: Cargo.lock\"}"
+}

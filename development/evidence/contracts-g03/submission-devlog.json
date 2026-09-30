@@ -1,0 +1,9 @@
+{
+  "id": "contracts-g03-a1-coordinator-frozen-submission-20260930",
+  "kind": "discovery",
+  "summary": "Frozen shared contracts source and artifacts verified before independent review.",
+  "details": "Whole Sol handoff9898c706 is clean;16changed source hashes and6native/WASM artifact hashes reproduce,14current command receipts pass. Worker confirms no further source/evidence rewrites. Native19tests plus1compile-fail and10focused tests passed; WASM cross-compilation is not execution. Historical four-crate audit refusal is expected after newdf-types crate. Independent verdict remains pending.",
+  "action": "Fenced attempt submitted/review to /root/frontier_integrate; supplied original5criteria, canonical evaluator context and isolated evidence paths. Serial jobs1; cleanup009 inventory retains all active artifacts.",
+  "outcome": "Candidate source/build identity verified; no integration or task completion before independent executed-boundary review.",
+  "evidence_ref": "development/evidence/contracts-g03/submission-identity.json; development/evidence/contracts-g03/worker/handoff.json"
+}

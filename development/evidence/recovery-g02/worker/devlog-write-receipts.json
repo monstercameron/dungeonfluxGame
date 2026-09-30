@@ -1,0 +1,47 @@
+{
+  "canonical_command": "python3 development/devlog.py --context development/evidence/recovery-g02/worker-context.json --entry <scoped entry JSON>",
+  "actual_write_outputs": [
+    {
+      "id": "diagnose-g02-a1-native-locked-20260930",
+      "result": "appended",
+      "queue_state_changed": false
+    },
+    {
+      "id": "diagnose-g02-a1-report-submitted-20260930",
+      "result": "appended",
+      "queue_state_changed": false
+    }
+  ],
+  "read_only_verification_columns": [
+    "id",
+    "created_at",
+    "agent_id",
+    "role",
+    "task_id",
+    "attempt_id",
+    "kind",
+    "evidence_ref"
+  ],
+  "read_only_verification_rows": [
+    [
+      "diagnose-g02-a1-native-locked-20260930",
+      "2026-09-30T21:08:18+00:00",
+      "/root/recovery_g02_sol",
+      "worker",
+      "DIAGNOSE-G02-RECOVERY-001",
+      "DIAGNOSE-G02-RECOVERY-001-a1",
+      "blocker",
+      "development/evidence/recovery-g02/worker/native-cua-observation.json; development/evidence/recovery-g02/worker/current-identity.json; development/evidence/recovery-g02/worker/current-http.json"
+    ],
+    [
+      "diagnose-g02-a1-report-submitted-20260930",
+      "2026-09-30T21:10:22+00:00",
+      "/root/recovery_g02_sol",
+      "worker",
+      "DIAGNOSE-G02-RECOVERY-001",
+      "DIAGNOSE-G02-RECOVERY-001-a1",
+      "discovery",
+      "development/evidence/recovery-g02/worker/diagnostic-report.json; development/evidence/recovery-g02/worker/report-identity.json"
+    ]
+  ]
+}

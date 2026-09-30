@@ -1,0 +1,57 @@
+{
+  "missed_minute_count": 0,
+  "id": "49cabf2bdeab4fa2-29846749",
+  "observed_at": "2026-09-30T21:49:00+00:00",
+  "minute_bucket": 29846749,
+  "target": "DungeonFlux integrated experimental transport fixture (atomic pressure/reload verified; full G02 and gameplay pending)",
+  "preview_kind": "owned-preview",
+  "task_id": "CONTRACT-G03-001",
+  "attempt_id": null,
+  "outcome": "captured",
+  "recorder_id": "screenshot-recorder:49cabf2bdeab4fa2",
+  "devlog_context": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/journey/recorder-contexts/49cabf2bdeab4fa2.json",
+  "observed_work_context": {
+    "agent_id": "/root",
+    "task_id": "CONTRACT-G03-001",
+    "attempt_id": "CONTRACT-G03-001-a1"
+  },
+  "capture_tool_identity": {
+    "helper_sha256": "2b12f10aa53f2cd3ac776119de3b724a69a1f1ef13d728e770e6724a1022a2e1",
+    "browser_helper_sha256": "0427d4dce5aebb8872b22eea72f034fb77be8509b05593757ffdd136e8a53f40"
+  },
+  "source_before": {
+    "files": {
+      "Cargo.lock": "9e31198cc295b4985dd6047101643c9f377d9fa9454116872dfefc3bc4e2f243",
+      "rust-toolchain.toml": "9500030ccefd0bab631fb7f1763f79f4103eca3a344c36cf15be869e330683bb"
+    },
+    "sha256": "c5056f241b1d32432f1e91dfc367bb4ac4db29b9f5127cd11873709f1f4ce00b"
+  },
+  "image": "development/evidence/journey/shots/49cabf2bdeab4fa2-29846749.png",
+  "image_sha256": "426c3d8011719e07c9577a71b8534dc00d6e84c07dfc51bef8d066b13c9d5ad0",
+  "image_bytes": 92240,
+  "browser": {
+    "browser_version": "156.0.8078.4",
+    "url": "http://127.0.0.1:43182/",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "status": 200,
+    "page_error_names": [],
+    "network_blocks": {
+      "external_origin": 0,
+      "write_method": 0,
+      "websocket": 0
+    },
+    "screenshot": "actual_browser_viewport"
+  },
+  "source_after": {
+    "files": {
+      "Cargo.lock": "9e31198cc295b4985dd6047101643c9f377d9fa9454116872dfefc3bc4e2f243",
+      "rust-toolchain.toml": "9500030ccefd0bab631fb7f1763f79f4103eca3a344c36cf15be869e330683bb"
+    },
+    "sha256": "c5056f241b1d32432f1e91dfc367bb4ac4db29b9f5127cd11873709f1f4ce00b"
+  },
+  "source_changed_during_capture": false,
+  "devlog_status": "appended_or_existing"
+}

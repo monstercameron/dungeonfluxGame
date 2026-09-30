@@ -1,0 +1,12 @@
+{
+  "case": "nonregular-input",
+  "exit_code": 1,
+  "expected_exit_code": 1,
+  "mutation": {
+    "case": "nonregular-input",
+    "operation": "replace pinned Cargo.lock regular file with symlink"
+  },
+  "passed": true,
+  "stderr": "",
+  "stdout": "{\"ok\": false, \"reason\": \"input is not a bounded regular file: Cargo.lock\"}"
+}

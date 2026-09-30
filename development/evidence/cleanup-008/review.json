@@ -1,0 +1,48 @@
+{
+  "task_id": "ACTIVE-CLEANUP-008",
+  "attempt_id": "ACTIVE-CLEANUP-008-a1",
+  "evaluator": "/root/frontier_integrate",
+  "at": "2026-09-30T21:19:02.454105+00:00",
+  "requested_model": "gpt-6-astra",
+  "serving_model_variant": "unexposed",
+  "tested_revision": "sha256:e59834f405a95f956e4d02603707e2e4e9c535900730204c6bce40e3ce868ac0",
+  "tested_operational_report": "development/evidence/cleanup-008/current-interval-inventory.json",
+  "input_source_revision": "822ffc4992b34ab548a47cf91efad845ca50c716",
+  "current_head": "f79bebf6f88f72f80bfb62d71798ebc56f64ca96",
+  "verdict": "approve",
+  "capabilities": {
+    "computer_use": true,
+    "vision": true,
+    "used": [
+      "Independent lstat filesystem execution",
+      "read-only queue/ownership SQL",
+      "ps/lsof process/listener check",
+      "SHA256 protectedbinary/report checks"
+    ],
+    "visual_gate": "Internalinventory; noUIchange orvisualgate required."
+  },
+  "acceptance": [
+    {
+      "criterion": "Inventory only artifacts/build and artifacts/tmp without following symlinks, rechecking live attempt/process ownership and preserving active/latest verified builds, shared caches, unknown files, durable state and evidence.",
+      "result": "pass",
+      "procedure": "Independently lstat only build/tmp; do not traverse symlinks/openFIFO. Recheck scopedattemptclaims, protectedprocess/listener and fourbinary hashes.",
+      "expected": "Preserve active/latest/unknown/durable/evidence; scoped nonfollowing inventory.",
+      "observed": "Snapshot28roots fullyretained; allsubmitted paths stillpresent. Current4300directories,57124files,76symlinks,13specialentries; zeroscanerrors. All5protectedPIDs live,3previewlisteners and4binaryhashesmatch. Readonly claims reflect currentG01integration/cleanup/DIAGreviews.",
+      "evidence_ref": "development/evidence/cleanup-008/independent-boundary.json"
+    },
+    {
+      "criterion": "Report truthful eligible/retained/deleted paths and bytes with deterministic retained evidence and devlog; no deletion without all ADR0002 conditions and an explicit coordinator allowlist.",
+      "result": "pass",
+      "procedure": "Hashimmutable report/script, independently recomputeeverydirectorysum andleaftotal; comparecurrentinventory; readscopedworkerdevlog/emptyallowlist.",
+      "expected": "Truthful deterministicretained/eligible/deleted totals,no unauthorizeddeletion.",
+      "observed": "PinnedreportSHAe59834f405a95f956e4d02603707e2e4e9c535900730204c6bce40e3ce868ac0matches; scriptSHA016de305matches. Submitted56699files/10782411732bytes exactlyrecompute; eligible0/deleted0/reclaimed0. Current10979332340bytes growth196920608 only2new evaluatorG01a2scratchroots, not missing/deletedsubmittedpaths. Workerdevlog verified.",
+      "evidence_ref": "development/evidence/cleanup-008/independent-boundary.json"
+    }
+  ],
+  "defects": [],
+  "verification_gaps": [],
+  "protection": "No deletions, queue/source mutation, signals or timers. All evidence/caches/PG/previewdata preserved.",
+  "devlog_ids": [
+    "active-cleanup-008-independent-inventory-20260930"
+  ]
+}

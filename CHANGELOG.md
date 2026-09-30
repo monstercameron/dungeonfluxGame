@@ -14,6 +14,44 @@ commit into the next block: keep the recorded ending revision as the next
 baseline and capture baseline..HEAD, which includes the bookkeeping commit.
 Do not invent a self-hash or silently discard metadata commits.
 
+## 2026-09-30 resumed work — active block
+
+First durable attempt: 2026-09-30T16:38:04-04:00; coordinator prerequisite reads preceded it.
+Updated: 2026-09-30T17:58:04-04:00. Work continues; this block is not closed.
+
+Range: dd63d194a8e87ce575e861199abc28861ac2c28d..9898c70614a8555efa63d3cec47ba9adbc395bbb
+
+- 822ffc4 — Preserve reviewed development setup, source pins and pending transport evidence
+- 2743c4a — Add experimental dependency closure audit evidence
+- f79bebf — Harden dependency audit input paths
+- 9898c70 — Freeze first shared identity recovery and protobuf contracts
+
+G02 atomic pressure/reload acceptance completed on the retained integrated ba0 fixture.
+The fresh current reload passed; retained-tab blank recovery remains a full G02 gap.
+Current recovery diagnosis is inconclusive because the Mac is locked.
+
+The current four-crate descriptive dependency/notice audit is approved. Its first
+verifier submission failed ancestor-symlink confinement; the approved repair uses
+anchored no-follow input reads. This audit is historical evidence and correctly
+refuses the fifth-crate Cargo inputs; full G01/runtime/legal qualification stays open.
+
+First shared contracts are independently approved on actual merged 9898 source.
+Pure IDs, provenance and composite recovery revisions, generated common protobufs,
+compatibility cases and actual descriptor ledger pass native and WASM compile gates.
+Fresh isolated MAIN native/WASM builds and ten consuming/schema checks pass. WASM
+execution and full G03 models, effects, audiences, authorization and services remain
+pending. A reviewer Cargo rerun replaced three native candidate artifacts; original
+and resulting identities are disclosed. Fresh merged builds used a separate root;
+all live previews stayed fixed.
+
+Cleanup inventories 007–009 retained all candidates, with zero cleanup deletions.
+One bounded passive screenshot recorder continues; its fixed preview is ba0 even
+though workspace source is now 9898. Native telemetry foundation preparation is
+still a nondispatchable candidate with explicit durability/limit decisions to freeze.
+
+The next update retains the starting baseline above and captures every commit in
+integration order, including the bookkeeping commit writing this open record.
+
 ## 2026-09-30T12:45:15-04:00 to 2026-09-30T16:17:22-04:00
 
 Range: 4cac7647d4b2aa8e62f2c5c264d8561878383124..dd63d194a8e87ce575e861199abc28861ac2c28d

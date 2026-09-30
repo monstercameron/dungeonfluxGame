@@ -1,0 +1,87 @@
+[
+  {
+    "case": "current-success",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "mutation": {
+      "case": "current-success",
+      "operation": "none"
+    },
+    "passed": true,
+    "stderr": "",
+    "stdout": "{\"ok\": true, \"packages\": 150, \"targets\": 2}"
+  },
+  {
+    "case": "stale-source-hash",
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "mutation": {
+      "case": "stale-source-hash",
+      "operation": "append one byte to pinned Cargo.lock; leave report hash fixed"
+    },
+    "passed": true,
+    "stderr": "",
+    "stdout": "{\"ok\": false, \"reason\": \"stale or changed pinned input: Cargo.lock\"}"
+  },
+  {
+    "case": "edited-report",
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "mutation": {
+      "case": "edited-report",
+      "operation": "change report content without changing verifier pin"
+    },
+    "passed": true,
+    "stderr": "",
+    "stdout": "{\"ok\": false, \"reason\": \"audit report differs from its pinned bytes\"}"
+  },
+  {
+    "case": "omitted-package-identity",
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "mutation": {
+      "case": "omitted-package-identity",
+      "operation": "remove a package record and update its file hash and report package_ids; target metadata remains pinned",
+      "removed_id": "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.23"
+    },
+    "passed": true,
+    "stderr": "",
+    "stdout": "{\"ok\": false, \"reason\": \"package identity set differs from the union of target metadata\"}"
+  },
+  {
+    "case": "malformed-metadata",
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "mutation": {
+      "case": "malformed-metadata",
+      "operation": "replace pinned native metadata with malformed JSON and update report hash"
+    },
+    "passed": true,
+    "stderr": "",
+    "stdout": "{\"ok\": false, \"reason\": \"Expecting property name enclosed in double quotes: line 1 column 2 (char 1)\"}"
+  },
+  {
+    "case": "missing-input",
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "mutation": {
+      "case": "missing-input",
+      "operation": "remove pinned Cargo.toml"
+    },
+    "passed": true,
+    "stderr": "",
+    "stdout": "{\"ok\": false, \"reason\": \"missing input: Cargo.toml\"}"
+  },
+  {
+    "case": "nonregular-input",
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "mutation": {
+      "case": "nonregular-input",
+      "operation": "replace pinned Cargo.lock regular file with symlink"
+    },
+    "passed": true,
+    "stderr": "",
+    "stdout": "{\"ok\": false, \"reason\": \"input is not a bounded regular file: Cargo.lock\"}"
+  }
+]

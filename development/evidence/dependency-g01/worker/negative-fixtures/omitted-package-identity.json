@@ -1,0 +1,13 @@
+{
+  "case": "omitted-package-identity",
+  "exit_code": 1,
+  "expected_exit_code": 1,
+  "mutation": {
+    "case": "omitted-package-identity",
+    "operation": "remove a package record and update its file hash and report package_ids; target metadata remains pinned",
+    "removed_id": "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.23"
+  },
+  "passed": true,
+  "stderr": "",
+  "stdout": "{\"ok\": false, \"reason\": \"package identity set differs from the union of target metadata\"}"
+}

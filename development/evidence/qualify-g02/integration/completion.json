@@ -1,0 +1,31 @@
+{
+  "task_id": "QUALIFY-G02-001",
+  "attempt_id": "QUALIFY-G02-001-a1",
+  "at": "2026-09-30T20:47:27.018824+00:00",
+  "review_sha256": "18e2ea1cb2d13730709e5537d3ccdb60d210e0a3a27fd5703b223da45071bff5",
+  "tested_revision": "ba0d3860fb27124be352b48766e99a955f746672",
+  "integrated_revision": "ba0d3860fb27124be352b48766e99a955f746672",
+  "current_head": "822ffc4992b34ab548a47cf91efad845ca50c716",
+  "app_source_difference": {
+    "argv": [
+      "git",
+      "diff",
+      "ba0d3860fb27124be352b48766e99a955f746672",
+      "HEAD",
+      "--",
+      "Cargo.toml",
+      "Cargo.lock",
+      ".cargo",
+      "rust-toolchain.toml",
+      "rustfmt.toml",
+      "crates",
+      "development/build-fixture.sh"
+    ],
+    "exit": 0,
+    "stdout": ""
+  },
+  "result": "pass",
+  "atomic_scope_only": true,
+  "full_G02": "INCONCLUSIVE; physical iOS/Android, supported desktop/network matrix, suspend/foreground/recovery, whole process/engine/pre-callback allocation and complete8MiB bound, CPU, actual audio/playback jitter/action-to-view and approved production budgets remain unqualified.",
+  "retained_tab_defect": "G02-INTEGRATED-RETAINED-RELOAD-BLANK remains open; cause unverified"
+}

@@ -1,12 +1,12 @@
 {
   "record_role": "atomic-dispatch-preparation",
-  "scope_status": "candidate awaiting prerequisite integration",
+  "scope_status": "superseded by frozen active CONTRACT-G03-001/a1",
   "dispatch_ready": false,
   "proposed_task_id": "CONTRACT-G03-001",
   "objective": "Implement and independently exercise the first required common identity/recovery revision/protocol compatibility contracts for S00/S01. Full project/all TODO objective remains unchanged.",
-  "prepared_at": "2026-09-30T20:00:46.154434+00:00",
-  "candidate_input": "ba0d3860fb27124be352b48766e99a955f746672",
-  "input_policy": "Re-read actual independently approved integration before fenced claim; preserve current G02 source ownership until integration.",
+  "prepared_at": "2026-09-30T21:29:15.502346+00:00",
+  "candidate_input": "f79bebf6f88f72f80bfb62d71798ebc56f64ca96",
+  "input_policy": "Re-read actual independently approved integration before fenced claim. G02 atomic source integrated and completion approved; retain fixed preview builds and full G02 gaps. Wait for current fixed-four-crate G01 audit integration before changing Cargo workspace inputs.",
   "required_sources": [
     "AGENTS.md",
     "planning/coding-style.md",
@@ -88,10 +88,7 @@
     "no_recursive_delegation": true,
     "isolation": "fresh source worktree from accepted integration; independent artifacts/build/contracts-g03 and tmp/attempt; preserve previews"
   },
-  "unresolved_before_dispatch": [
-    "Current G02 integrated final reload verification remains unperformed due Mac lock; overlapping protocol/workspace ownership retained until that same task completes.",
-    "Re-read actual accepted HEAD and affected fixture/schema layout before immutable claim; SRD may integrate independent non-Cargo source paths."
-  ],
+  "unresolved_before_dispatch": [],
   "coordinator_decisions": {
     "build_identity": "The first wave describes a paired native/WASM fixture build: source_revision, native_revision, wasm_revision, configuration_revision and content_revision are each required bounded provenance labels. Missing/empty values reject; labels cannot mint tested-build approval, credentials, content rights or a real game catalog. No optional fields concealed as default strings. Later runtime-specific identity shapes require explicit consuming-contract refinement.",
     "revision_label": "ASCII letters/digits and . _ - : / only, 1..128 bytes. Use a typed error for missing/empty/too-long/invalid-character cases; supplied labels confer no authority and must contain no credentials.",
@@ -99,5 +96,21 @@
     "epoch_revision": "RecoveryEpoch is nonzero u64; SessionRevision is epoch plus u64 sequence, sequence0 valid. Checked next sequence errors at max; no epoch issuance/recovery authority. Required protobuf presence distinct from zero.",
     "units": "No speculative time/distance/money quantities in this first-wave schema. Numeric fields explicitly name dimensionless protocol revision and in-epoch sequence; local elapsed durations remain Rust Duration. Later consuming quantities require distinct units when first needed.",
     "protocol": "public.v1 common messages additive; protocol revision1 supported, zero/missing/unsupported rejected by actual consuming boundary fixture. Capability requiredness explicit; unknown optional skipped, unknown required rejected, zero/unknown enum and missing oneof never manufacture required behavior. Preserve all allocated names/numbers with actual descriptor/schema boundary check."
-  }
+  },
+  "accepted_transport_atomic": {
+    "task": "QUALIFY-G02-001",
+    "tested_integrated_revision": "ba0d3860fb27124be352b48766e99a955f746672",
+    "completion": "development/evidence/qualify-g02/integration/completion.json",
+    "full_G02": "INCONCLUSIVE; retained-tab recovery and required device/memory/network/audio/production bounds remainpending."
+  },
+  "actual_existing_schema": {
+    "crate": "crates/df-protocol",
+    "package": "dungeonflux.experimental.transport.v1",
+    "proto": "crates/df-protocol/proto/transport_fixture.proto",
+    "build": "crates/df-protocol/build.rs",
+    "module": "transport_fixture",
+    "production_project_crate_dependencies": [],
+    "next_wave": "Add common namespace/contracts without altering experimental transport schema or browser Rust source; actual mapping consumer limited to df-tools tests."
+  },
+  "active_brief": "development/evidence/contracts-g03/brief.json"
 }
