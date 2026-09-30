@@ -1,0 +1,146 @@
+use df_observe::TelemetryError;
+use std::{
+    fs::{self, File, OpenOptions},
+    io::{Read, Write},
+    os::unix::fs::{MetadataExt, OpenOptionsExt},
+    path::{Component, Path, PathBuf},
+};
+#[cfg(target_os = "macos")]
+const NOFOLLOW: i32 = 0x100;
+#[cfg(not(target_os = "macos"))]
+const NOFOLLOW: i32 = 0x20000;
+const MARKER: &[u8] = b"df-telemetry native synthetic owned root v1\n";
+pub(crate) struct OwnedRoot {
+    pub path: PathBuf,
+    _lock: File,
+}
+pub(crate) fn safe_path(path: &Path) -> Result<(), TelemetryError> {
+    if !path.is_absolute() {
+        return Err(TelemetryError::ForeignRoot);
+    }
+    let mut prefix = PathBuf::new();
+    for component in path.components() {
+        if matches!(component, Component::ParentDir | Component::CurDir) {
+            return Err(TelemetryError::ForeignRoot);
+        }
+        prefix.push(component);
+        match fs::symlink_metadata(&prefix) {
+            Ok(metadata)
+                if metadata.file_type().is_symlink()
+                    || (metadata.is_file() && metadata.nlink() != 1) =>
+            {
+                return Err(TelemetryError::ForeignRoot);
+            }
+            Ok(_) => (),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+            Err(_) => return Err(TelemetryError::Io),
+        }
+    }
+    Ok(())
+}
+pub(crate) fn open_file(
+    path: &Path,
+    write: bool,
+    create_new: bool,
+) -> Result<File, TelemetryError> {
+    safe_path(path)?;
+    OpenOptions::new()
+        .read(true)
+        .write(write)
+        .create_new(create_new)
+        .custom_flags(NOFOLLOW)
+        .mode(0o600)
+        .open(path)
+        .map_err(|_| TelemetryError::Io)
+}
+pub(crate) fn sync_directory(path: &Path) -> Result<(), TelemetryError> {
+    open_file(path, false, false)?
+        .sync_all()
+        .map_err(|_| TelemetryError::Io)
+}
+impl OwnedRoot {
+    pub fn open(path: &Path) -> Result<Self, TelemetryError> {
+        safe_path(path)?;
+        let parent = path.parent().ok_or(TelemetryError::ForeignRoot)?;
+        // This foundation deliberately has no deployment path/configuration authority.
+        // Only coordinator-provisioned synthetic roots beneath this local MAIN are writable.
+        if parent
+            != Path::new("/Users/earlcameron/Desktop/dungeonflux/development/runtime/telemetry-g06")
+        {
+            return Err(TelemetryError::ForeignRoot);
+        }
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or(TelemetryError::ForeignRoot)?;
+        if !name.starts_with("ownedfixture-")
+            || name.len() > 100
+            || !name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        {
+            return Err(TelemetryError::ForeignRoot);
+        }
+        let new = match fs::create_dir(path) {
+            Ok(()) => true,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => false,
+            Err(_) => return Err(TelemetryError::Io),
+        };
+        if new {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+                .map_err(|_| TelemetryError::Io)?;
+            let mut marker = open_file(&path.join("OWNER"), true, true)?;
+            marker.write_all(MARKER).map_err(|_| TelemetryError::Io)?;
+            marker.sync_all().map_err(|_| TelemetryError::Io)?;
+            fs::create_dir(path.join("spool")).map_err(|_| TelemetryError::Io)?;
+            sync_directory(path)?;
+            sync_directory(parent)?;
+        } else {
+            let mut marker = open_file(&path.join("OWNER"), false, false)
+                .map_err(|_| TelemetryError::ForeignRoot)?;
+            if marker.metadata().map_err(|_| TelemetryError::Io)?.len() != MARKER.len() as u64 {
+                return Err(TelemetryError::ForeignRoot);
+            }
+            let mut content = [0u8; MARKER.len()];
+            marker
+                .read_exact(&mut content)
+                .map_err(|_| TelemetryError::ForeignRoot)?;
+            if content != MARKER {
+                return Err(TelemetryError::ForeignRoot);
+            }
+        }
+        for entry in fs::read_dir(path).map_err(|_| TelemetryError::Io)? {
+            let entry = entry.map_err(|_| TelemetryError::Io)?;
+            safe_path(&entry.path())?;
+            let name = entry.file_name();
+            if !matches!(
+                name.to_str(),
+                Some(
+                    "OWNER"
+                        | "LOCK"
+                        | "spool"
+                        | "telemetry.sqlite3"
+                        | "telemetry.sqlite3-wal"
+                        | "telemetry.sqlite3-shm"
+                        | "checkpoint"
+                        | "checkpoint-next"
+                        | "emergency"
+                )
+            ) {
+                return Err(TelemetryError::ForeignRoot);
+            }
+        }
+        let lock_path = path.join("LOCK");
+        let lock = if lock_path.exists() {
+            open_file(&lock_path, true, false)?
+        } else {
+            open_file(&lock_path, true, true)?
+        };
+        lock.try_lock().map_err(|_| TelemetryError::Ownership)?;
+        Ok(Self {
+            path: path.to_owned(),
+            _lock: lock,
+        })
+    }
+}
