@@ -1,0 +1,11 @@
+//! Runnable S00 experiment. The fixture UI is Rust compiled to WebAssembly.
+#[cfg(target_arch = "wasm32")]
+mod browser;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod fixture;
+
+/// Source identity injected by the reproducible fixture build command.
+pub const BUILD_ID: &str = match option_env!("DF_FIXTURE_BUILD") {
+    Some(value) => value,
+    None => "unregistered-cargo-build",
+};

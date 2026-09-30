@@ -8,10 +8,16 @@ Project site: [dungeonfluxdnd.com](https://dungeonfluxdnd.com/).
 
 ## Current state
 
-This directory contains the new project's architecture, development strategies,
-coding standards and SQLite planning tools. **The Cargo workspace, game server,
-browser application, generated RPC code and PostgreSQL deployment do not exist
-yet.** Planned interfaces and feature coverage are not implemented gameplay.
+This directory contains the architecture, development strategies, coding standards
+and SQLite planning tools, plus a pinned Rust workspace and runnable **experimental
+S00 transport fixture**. Its generated protobuf Rust client and native service exercise
+all four HTTP/2 gRPC modes over a binary WebSocket in a Rust/WASM browser.
+
+Run `./development/build-fixture.sh build` then `./development/build-fixture.sh serve`
+and open <http://127.0.0.1:43180>. See [fixture setup, checks and qualification gaps](development/start-s00.md).
+The game server, player/display application, rules and PostgreSQL deployment remain
+unimplemented. The transport fixture is synthetic; it does not approve production
+G02 device/resource qualification or G06 telemetry durability.
 
 The sibling `dungeonflux.old/` preserves the earlier implementation as a read-only
 reference. Its website was explicitly moved into [docs/](docs/); the remaining
@@ -132,8 +138,10 @@ The planned transport ports the GoGRPCBridge idea: established HTTP/2 gRPC over 
 binary WebSocket byte stream, with generated Rust/protobuf contracts. Preserve
 unary, server-streaming, client-streaming and bidirectional calls, metadata,
 trailers/status, deadlines, cancellation, half-close and bounded flow control.
-Tonic/prost and browser executors remain candidates; a real WASM/browser feasibility
-test must pass before dependent implementation. See [RPC transport](planning/rpc-transport.md)
+The S00 experiment uses tonic/prost generated contracts, a local h2 browser driver
+and wasm-bindgen bindings. Its narrow browser clock patch retains upstream h2 reset
+semantics. Full browser/device/resource qualification must pass before dependent
+production implementation; desktop smoke evidence alone does not close G02. See [RPC transport](planning/rpc-transport.md)
 and [RPC API](planning/rpc-api.md).
 
 A session owner serializes decisions. PostgreSQL commits state, operation result,
@@ -215,7 +223,8 @@ one-minute heartbeat. It claims bounded new/changed authored Rust files and cach
 MD5, relevant review context and successful review time in separate
 `development/quality.sqlite3`. It reviews smells, complexity, duplication, bugs,
 test evidence and Rust idioms. Unchanged successful reviews are skipped; MD5 is
-change detection, not a security guarantee. There is no Rust source to review yet.
+change detection, not a security guarantee. The S00 workspace now contains authored
+Rust source and an attributed vendored h2 clock adaptation to review.
 Findings enter the workflow through coordinator-only deduplicated intake, not
 automatic task approval. New runners must install/verify the personal skill;
 see [development quality](planning/development-quality.md).

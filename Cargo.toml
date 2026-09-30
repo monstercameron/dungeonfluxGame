@@ -1,0 +1,29 @@
+[workspace]
+members = ["crates/df-protocol", "crates/df-rpc-bridge", "crates/df-observe", "crates/df-tools"]
+resolver = "3"
+exclude = ["crates/df-rpc-bridge/vendor/h2"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+version = "0.1.0"
+
+[workspace.dependencies]
+bytes = "1.11"
+futures = "0.3"
+h2 = "0.4.19"
+http = "1.4"
+http-body = "1.0"
+http-body-util = "0.1"
+prost = "0.14"
+tokio = { version = "1.50", default-features = false, features = ["io-util", "sync"] }
+tonic = { version = "0.14.6", default-features = false, features = ["codegen"] }
+tonic-prost = "0.14.6"
+tower-service = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = "0.3"
+
+[patch.crates-io]
+h2 = { path = "crates/df-rpc-bridge/vendor/h2" }
