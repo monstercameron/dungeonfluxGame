@@ -6,7 +6,7 @@ use df_observe::{Signal, TelemetryError, TelemetryLimits};
 use rusqlite::{Connection, OpenFlags, params};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     fs,
     io::{Read, Write},
     path::Path,
@@ -97,6 +97,7 @@ impl Persistence {
         let mut spool_bytes = 0u64;
         let mut identities = HashMap::new();
         let mut sequences = HashMap::new();
+        let mut checkpointed = HashSet::new();
         for entry in fs::read_dir(root.path.join("spool")).map_err(|_| TelemetryError::Io)? {
             let entry = entry.map_err(|_| TelemetryError::Io)?;
             safe_path(&entry.path())?;
@@ -122,6 +123,9 @@ impl Persistence {
             for record in batch.records {
                 let pair = (record.key.producer, record.key.record);
                 let value = (record.key.sequence.get(), digest(&record));
+                if position <= checkpoint {
+                    checkpointed.insert(pair);
+                }
                 if let Some(prior) = identities.insert(pair, value.clone())
                     && prior != value
                 {
@@ -144,7 +148,9 @@ impl Persistence {
         // records before using the durable identity index instead of per-record SQL lookups.
         {
             let mut statement = connection
-                .prepare("SELECT producer,record,sequence,digest FROM records")
+                .prepare(
+                    "SELECT producer,record,sequence,digest,signal,length(otlp),otlp FROM records",
+                )
                 .map_err(|_| TelemetryError::Corrupt)?;
             let mut rows = statement.query([]).map_err(|_| TelemetryError::Corrupt)?;
             while let Some(row) = rows.next().map_err(|_| TelemetryError::Corrupt)? {
@@ -159,11 +165,36 @@ impl Persistence {
                 )
                 .map_err(|_| TelemetryError::Corrupt)?;
                 let sequence: i64 = row.get(2).map_err(|_| TelemetryError::Corrupt)?;
-                let digest: Vec<u8> = row.get(3).map_err(|_| TelemetryError::Corrupt)?;
-                if identities.get(&(producer, record)) != Some(&(sequence, digest)) {
+                let stored_digest = row
+                    .get_ref(3)
+                    .map_err(|_| TelemetryError::Corrupt)?
+                    .as_blob()
+                    .map_err(|_| TelemetryError::Corrupt)?;
+                if stored_digest.len() != 32 {
                     return Err(TelemetryError::Corrupt);
                 }
+                let signal: i64 = row.get(4).map_err(|_| TelemetryError::Corrupt)?;
+                let length: i64 = row.get(5).map_err(|_| TelemetryError::Corrupt)?;
+                if !matches!(signal, 1 | 2) || length <= 0 || length > limits.record_bytes as i64 {
+                    return Err(TelemetryError::Corrupt);
+                }
+                let bytes: Vec<u8> = row.get(6).map_err(|_| TelemetryError::Corrupt)?;
+                let mut content_digest = Sha256::new();
+                content_digest.update([signal as u8]);
+                content_digest.update(&bytes);
+                if content_digest.finalize().as_slice() != stored_digest
+                    || identities.get(&(producer, record))
+                        != Some(&(sequence, stored_digest.to_vec()))
+                {
+                    return Err(TelemetryError::Corrupt);
+                }
+                checkpointed.remove(&(producer, record));
             }
+        }
+        // A numeric checkpoint is only a claim. Every identity/content it covers must
+        // exist in the committed corpus, including when its value is in spool range.
+        if !checkpointed.is_empty() {
+            return Err(TelemetryError::Corrupt);
         }
         positions.sort_unstable();
         for (index, position) in positions.iter().enumerate() {

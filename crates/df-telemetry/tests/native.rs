@@ -37,7 +37,7 @@ fn root(name: &str) -> PathBuf {
         PathBuf::from("/Users/earlcameron/Desktop/dungeonflux/development/runtime/telemetry-g06");
     fs::create_dir_all(&base).unwrap();
     base.join(format!(
-        "ownedfixture-{}-{nonce}-{}-{}",
+        "ownedfixture-a2-{}-{nonce}-{}-{}",
         name,
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
@@ -767,4 +767,147 @@ fn every_enabled_sdk_log_level_is_captured_with_an_unsampled_trace() {
     );
     producer.shutdown(WAIT).unwrap();
     store.shutdown(WAIT).unwrap();
+}
+
+#[test]
+fn sdk_rejects_aggregate_empty_log_and_span_structure_without_admission() {
+    fn tree(depth: usize) -> AnyValue {
+        if depth == 0 {
+            AnyValue::String("".into())
+        } else {
+            AnyValue::ListAny(Box::new((0..16).map(|_| tree(depth - 1)).collect()))
+        }
+    }
+    let path = root("structural-budget");
+    let limits = TelemetryLimits::default();
+    let mut store = Store::open(&path, limits, None).unwrap();
+    let mut producer = make_producer(&store, limits);
+    let key = producer.reserve(RecordId::new([1; 16]).unwrap()).unwrap();
+    let mut input = log("");
+    input.attributes.clear();
+    input.body = tree(2);
+    producer
+        .emit_log(key, input)
+        .unwrap()
+        .pending
+        .wait(WAIT)
+        .unwrap();
+    for (index, depth) in [3, 4, 2].into_iter().enumerate() {
+        let key = producer
+            .reserve(RecordId::new([index as u8 + 2; 16]).unwrap())
+            .unwrap();
+        let mut input = log("");
+        input.attributes.clear();
+        input.body = tree(depth);
+        if depth == 2 {
+            input.attributes.push(("additional".into(), tree(2)));
+        }
+        assert!(matches!(
+            producer.emit_log(key, input),
+            Err(TelemetryError::Oversized)
+        ));
+    }
+    let key = producer.reserve(RecordId::new([5; 16]).unwrap()).unwrap();
+    let time = SystemTime::UNIX_EPOCH + Duration::from_secs(1);
+    let attributes: Vec<KeyValue> = (0..4)
+        .map(|index| {
+            KeyValue::new(
+                format!("array-{index}"),
+                opentelemetry::Value::Array(opentelemetry::Array::String(vec!["".into(); 64])),
+            )
+        })
+        .collect();
+    let context = SpanContext::new(
+        TraceId::from_bytes([1; 16]),
+        SpanId::from_bytes([2; 8]),
+        TraceFlags::SAMPLED,
+        true,
+        TraceState::default(),
+    );
+    let input = SpanInput {
+        name: "aggregate-span".into(),
+        start: time,
+        end: time,
+        parent: Context::new(),
+        links: vec![Link::new(context, attributes.clone(), 0)],
+        attributes,
+    };
+    assert!(matches!(
+        producer.emit_span(key, input),
+        Err(TelemetryError::Oversized)
+    ));
+    assert_eq!(store.health().admitted, 1);
+    producer.shutdown(WAIT).unwrap();
+    store.shutdown(WAIT).unwrap();
+    assert_eq!(
+        DiagnosticReader::open(&path)
+            .unwrap()
+            .query(&QueryFilter::default(), 0, 100)
+            .unwrap()
+            .records
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn checkpoint_coverage_and_actual_sqlite_content_are_validated_on_reopen() {
+    for content_corruption in [false, true] {
+        let path = root(if content_corruption {
+            "sql-content-corrupt"
+        } else {
+            "checkpoint-missing-record"
+        });
+        let limits = TelemetryLimits::default();
+        let mut store = Store::open(&path, limits, None).unwrap();
+        let mut producer = make_producer(&store, limits);
+        for id in [1, 2] {
+            let key = producer.reserve(RecordId::new([id; 16]).unwrap()).unwrap();
+            producer
+                .emit_log(key, log("accepted"))
+                .unwrap()
+                .pending
+                .wait(WAIT)
+                .unwrap();
+        }
+        producer.shutdown(WAIT).unwrap();
+        store.shutdown(WAIT).unwrap();
+        assert_eq!(
+            u64::from_be_bytes(
+                fs::read(path.join("checkpoint"))
+                    .unwrap()
+                    .try_into()
+                    .unwrap()
+            ),
+            2
+        );
+        let database = Connection::open(path.join("telemetry.sqlite3")).unwrap();
+        if content_corruption {
+            database
+                .execute(
+                    "UPDATE records SET otlp=zeroblob(length(otlp)) WHERE sequence=2",
+                    [],
+                )
+                .unwrap();
+        } else {
+            database
+                .execute("DELETE FROM records WHERE sequence=2", [])
+                .unwrap();
+        }
+        database.close().unwrap();
+        assert!(matches!(
+            Store::open(&path, limits, None),
+            Err(TelemetryError::Corrupt)
+        ));
+        assert_eq!(fs::read_dir(path.join("spool")).unwrap().count(), 2);
+        assert_eq!(
+            u64::from_be_bytes(
+                fs::read(path.join("checkpoint"))
+                    .unwrap()
+                    .try_into()
+                    .unwrap()
+            ),
+            2
+        );
+    }
 }

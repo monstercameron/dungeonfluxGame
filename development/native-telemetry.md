@@ -73,7 +73,16 @@ OTLP bytes preserve resource/scope, supported typed bodies and causal fields.
 The allocation-free wire pass checks supplied/declared lengths before prost decode,
 including malformed varints/tags, 12 nested schema levels, 4,096 total fields,
 128 fields per message, record size and count. Producer inputs additionally bound
-attributes, nested AnyValue values, span links and timestamp conversion. Queue byte
+attributes, nested AnyValue values, span links and timestamp conversion. One aggregate
+preflight budget covers the complete log body plus all attributes, or the complete
+span plus attributes and links: at most 512 charged structural nodes, 16 bytes per
+node plus payload/key bytes within the selected record ceiling. Empty strings,
+empty containers, array entries and map/attribute keys consume budget. Depth is
+at most eight and each container has at most 64 entries. Rejection stops preflight
+on the first failed charge before SDK conversion/encoding; successful inputs still
+pass the encoded record/batch bounds. These are conservative input admission
+limits, not an exact SDK heap accounting promise. Caller-owned input construction
+and destruction remain proportional to the graph supplied by the caller. Queue byte
 accounting includes encoded requests, canonical records and fixed per-record
 allowance. It is not a whole-process memory limit or browser 8MiB qualification.
 
@@ -92,7 +101,12 @@ Writable roots are limited to coordinator-provisioned
 An explicit marker, fixed filenames, no symlink or multiply-linked regular file
 adoption, nofollow opens and an exclusive OS file lock protect ownership. Foreign
 stores and incompatible schema versions are refused; corrupted, truncated or
-noncontiguous spool/checkpoint state is refused without repair. Workflow SQLite,
+noncontiguous spool/checkpoint state is refused without repair. On reopen, every
+identity covered by the checkpoint must exist in SQLite with its matching sequence
+and signal/OTLP content digest; actual bounded SQLite OTLP bytes are hashed again.
+An in-range numeric checkpoint is not sufficient proof of commit. Missing covered
+records or modified SQL content return `Corrupt` before replay can skip a frame;
+the accepted spool and checkpoint remain preserved for investigation. Workflow SQLite,
 PostgreSQL, evidence and unrelated runtime stores are separate. Runtime data never
 belongs beneath artifacts or in the source worktree. This local path binding is
 intentional; there is no deployment configuration or remote listener.

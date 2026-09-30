@@ -230,24 +230,17 @@ impl NativeProducer {
         if key.producer != self.source || input.attributes.len() > 64 {
             return Err(TelemetryError::InvalidIdentity);
         }
-        let body_bytes = value_bytes(&input.body, 0)?;
-        let attribute_bytes =
-            input
-                .attributes
-                .iter()
-                .try_fold(0usize, |bytes, (name, value)| {
-                    if name.starts_with("df.producer_id")
-                        || name == "df.record_id"
-                        || name == "df.source_sequence"
-                    {
-                        return Err(TelemetryError::InvalidIdentity);
-                    }
-                    Ok(bytes
-                        .saturating_add(name.len())
-                        .saturating_add(value_bytes(value, 0)?))
-                })?;
-        if body_bytes.saturating_add(attribute_bytes) > self.limits.record_bytes {
-            return Err(TelemetryError::Oversized);
+        let mut budget = InputBudget::new(self.limits.record_bytes);
+        budget.log_value(&input.body, 0)?;
+        for (name, value) in &input.attributes {
+            if name.starts_with("df.producer_id")
+                || name == "df.record_id"
+                || name == "df.source_sequence"
+            {
+                return Err(TelemetryError::InvalidIdentity);
+            }
+            budget.node(name.len())?;
+            budget.log_value(value, 0)?;
         }
         validate_time(input.timestamp)?;
         validate_time(input.observed_timestamp)?;
@@ -289,27 +282,21 @@ impl NativeProducer {
         }) {
             return Err(TelemetryError::InvalidIdentity);
         }
-        let mut measured = input.name.len();
+        let mut budget = InputBudget::new(self.limits.record_bytes);
+        budget.node(input.name.len())?;
         for attribute in &input.attributes {
-            measured = add_limited(
-                measured,
-                attribute.key.as_str().len() + span_value_bytes(&attribute.value)?,
-            )?;
+            budget.node(attribute.key.as_str().len())?;
+            budget.span_value(&attribute.value)?;
         }
         for link in &input.links {
             if link.attributes.len() > 64 {
                 return Err(TelemetryError::Oversized);
             }
-            measured = add_limited(measured, 64)?;
+            budget.node(64)?;
             for attribute in &link.attributes {
-                measured = add_limited(
-                    measured,
-                    attribute.key.as_str().len() + span_value_bytes(&attribute.value)?,
-                )?;
+                budget.node(attribute.key.as_str().len())?;
+                budget.span_value(&attribute.value)?;
             }
-        }
-        if measured > self.limits.record_bytes {
-            return Err(TelemetryError::Oversized);
         }
         validate_time(input.start)?;
         validate_time(input.end)?;
@@ -350,82 +337,101 @@ fn validate_time(time: SystemTime) -> Result<(), TelemetryError> {
     }
     Ok(())
 }
-fn value_bytes(value: &AnyValue, depth: usize) -> Result<usize, TelemetryError> {
-    if depth > 8 {
-        return Err(TelemetryError::Oversized);
-    }
-    match value {
-        AnyValue::String(value) => add_limited(0, value.as_str().len()),
-        AnyValue::Bytes(value) => add_limited(0, value.len()),
-        AnyValue::Int(_) | AnyValue::Double(_) | AnyValue::Boolean(_) => Ok(8),
-        AnyValue::ListAny(values) => {
-            if values.len() > 64 {
-                return Err(TelemetryError::Oversized);
-            }
-            values.iter().try_fold(0usize, |bytes, value| {
-                add_limited(bytes, value_bytes(value, depth + 1)?)
-            })
-        }
-        AnyValue::Map(values) => {
-            if values.len() > 64 {
-                return Err(TelemetryError::Oversized);
-            }
-            values.iter().try_fold(0usize, |bytes, (name, value)| {
-                add_limited(
-                    bytes,
-                    name.as_str()
-                        .len()
-                        .saturating_add(value_bytes(value, depth + 1)?),
-                )
-            })
-        }
-        _ => Err(TelemetryError::Malformed),
-    }
+// One budget spans the complete caller input, before SDK conversion or allocation.
+// Nonzero structural charges bound empty values too; the node cap bounds traversal.
+const INPUT_NODES_MAX: usize = 512;
+const STRUCTURAL_BYTES: usize = 16;
+struct InputBudget {
+    bytes_left: usize,
+    nodes_left: usize,
 }
-
-fn add_limited(left: usize, right: usize) -> Result<usize, TelemetryError> {
-    left.checked_add(right)
-        .filter(|bytes| *bytes <= 8192)
-        .ok_or(TelemetryError::Oversized)
-}
-fn span_value_bytes(value: &opentelemetry::Value) -> Result<usize, TelemetryError> {
-    use opentelemetry::{Array, Value};
-    match value {
-        Value::Bool(_) | Value::I64(_) | Value::F64(_) => Ok(8),
-        Value::String(value) => add_limited(0, value.as_str().len()),
-        Value::Array(array) => match array {
-            Array::Bool(values) => {
-                if values.len() <= 64 {
-                    Ok(values.len())
-                } else {
-                    Err(TelemetryError::Oversized)
-                }
-            }
-            Array::I64(values) => {
-                if values.len() <= 64 {
-                    Ok(values.len() * 8)
-                } else {
-                    Err(TelemetryError::Oversized)
-                }
-            }
-            Array::F64(values) => {
-                if values.len() <= 64 {
-                    Ok(values.len() * 8)
-                } else {
-                    Err(TelemetryError::Oversized)
-                }
-            }
-            Array::String(values) => {
+impl InputBudget {
+    fn new(bytes: usize) -> Self {
+        Self {
+            bytes_left: bytes,
+            nodes_left: INPUT_NODES_MAX,
+        }
+    }
+    fn node(&mut self, payload_bytes: usize) -> Result<(), TelemetryError> {
+        let bytes = payload_bytes
+            .checked_add(STRUCTURAL_BYTES)
+            .ok_or(TelemetryError::Oversized)?;
+        self.bytes_left = self
+            .bytes_left
+            .checked_sub(bytes)
+            .ok_or(TelemetryError::Oversized)?;
+        self.nodes_left = self
+            .nodes_left
+            .checked_sub(1)
+            .ok_or(TelemetryError::Oversized)?;
+        Ok(())
+    }
+    fn log_value(&mut self, value: &AnyValue, depth: usize) -> Result<(), TelemetryError> {
+        if depth > 8 {
+            return Err(TelemetryError::Oversized);
+        }
+        match value {
+            AnyValue::String(value) => self.node(value.as_str().len()),
+            AnyValue::Bytes(value) => self.node(value.len()),
+            AnyValue::Int(_) | AnyValue::Double(_) | AnyValue::Boolean(_) => self.node(8),
+            AnyValue::ListAny(values) => {
+                self.node(0)?;
                 if values.len() > 64 {
                     return Err(TelemetryError::Oversized);
                 }
-                values.iter().try_fold(0usize, |bytes, value| {
-                    add_limited(bytes, value.as_str().len())
-                })
+                for value in values.iter() {
+                    self.log_value(value, depth + 1)?;
+                }
+                Ok(())
+            }
+            AnyValue::Map(values) => {
+                self.node(0)?;
+                if values.len() > 64 {
+                    return Err(TelemetryError::Oversized);
+                }
+                for (name, value) in values.iter() {
+                    self.node(name.as_str().len())?;
+                    self.log_value(value, depth + 1)?;
+                }
+                Ok(())
             }
             _ => Err(TelemetryError::Malformed),
-        },
-        _ => Err(TelemetryError::Malformed),
+        }
+    }
+    fn span_value(&mut self, value: &opentelemetry::Value) -> Result<(), TelemetryError> {
+        use opentelemetry::{Array, Value};
+        match value {
+            Value::Bool(_) | Value::I64(_) | Value::F64(_) => self.node(8),
+            Value::String(value) => self.node(value.as_str().len()),
+            Value::Array(array) => {
+                self.node(0)?;
+                match array {
+                    Array::Bool(values) => self.scalar_array(values.len(), 1),
+                    Array::I64(values) => self.scalar_array(values.len(), 8),
+                    Array::F64(values) => self.scalar_array(values.len(), 8),
+                    Array::String(values) => {
+                        if values.len() > 64 {
+                            return Err(TelemetryError::Oversized);
+                        }
+                        for value in values {
+                            self.node(value.as_str().len())?;
+                        }
+                        Ok(())
+                    }
+                    _ => Err(TelemetryError::Malformed),
+                }
+            }
+            _ => Err(TelemetryError::Malformed),
+        }
+    }
+    fn scalar_array(&mut self, length: usize, element_bytes: usize) -> Result<(), TelemetryError> {
+        if length > 64 {
+            return Err(TelemetryError::Oversized);
+        }
+        for _ in 0..length {
+            self.node(element_bytes)?;
+        }
+        Ok(())
     }
 }
 
@@ -438,4 +444,59 @@ fn ordered_resource(resource: &Resource) -> ResourceAttributesWithSchema {
         .0
         .sort_by(|left, right| left.key.cmp(&right.key));
     converted
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tree(depth: usize) -> AnyValue {
+        if depth == 0 {
+            AnyValue::String("".into())
+        } else {
+            AnyValue::ListAny(Box::new((0..16).map(|_| tree(depth - 1)).collect()))
+        }
+    }
+
+    #[test]
+    fn empty_tree_preflight_exhausts_one_shared_budget_before_sdk_work() {
+        let mut budget = InputBudget::new(8192);
+        budget.log_value(&tree(2), 0).unwrap();
+        assert_eq!(budget.nodes_left, INPUT_NODES_MAX - 273);
+        assert!(matches!(
+            budget.log_value(&tree(2), 0),
+            Err(TelemetryError::Oversized)
+        ));
+        // Successful charges can never exceed 512. Each rejected traversal stops
+        // at its first failed charge; no subsequent sibling is visited.
+        assert_eq!(budget.nodes_left, 0);
+        for depth in [3, 4] {
+            let mut budget = InputBudget::new(8192);
+            assert_eq!(
+                budget.log_value(&tree(depth), 0),
+                Err(TelemetryError::Oversized)
+            );
+            assert_eq!(budget.nodes_left, 0);
+        }
+    }
+
+    #[test]
+    fn empty_maps_and_span_arrays_charge_structure_across_attributes_and_links() {
+        let mut budget = InputBudget::new(8192);
+        let empty_map = AnyValue::Map(Box::default());
+        budget.log_value(&empty_map, 0).unwrap();
+        assert_eq!(budget.bytes_left, 8192 - STRUCTURAL_BYTES);
+        let values = opentelemetry::Value::Array(opentelemetry::Array::String(vec!["".into(); 64]));
+        for _ in 0..7 {
+            budget.node(0).unwrap();
+            budget.span_value(&values).unwrap();
+        }
+        assert_eq!(budget.span_value(&values), Err(TelemetryError::Oversized));
+        let mut small = InputBudget::new(31);
+        small.log_value(&AnyValue::String("".into()), 0).unwrap();
+        assert_eq!(
+            small.log_value(&AnyValue::ListAny(Box::default()), 0),
+            Err(TelemetryError::Oversized)
+        );
+    }
 }
