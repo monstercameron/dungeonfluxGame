@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Verify this planning snapshot read-only; negative SQL probes use an in-memory backup."""
 from pathlib import Path
-import sqlite3,json,hashlib,re,collections,tempfile,datetime
-ROOT=Path(__file__).resolve().parent.parent;BASE=ROOT/'development'
+import sqlite3,json,hashlib,re,collections,tempfile,datetime,argparse
+parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--root',type=Path,default=Path(__file__).resolve().parent.parent);parser.add_argument('--directory',type=Path);parser.add_argument('--output',type=Path);args=parser.parse_args()
+ROOT=args.root.resolve();BASE=(args.directory or ROOT/'development').resolve()
 m=json.loads((BASE/'plan-manifest.json').read_text());checks={};errors=[]
 if (BASE/'operational-tasks.json').exists():
  operations=json.loads((BASE/'operational-tasks.json').read_text())
@@ -25,7 +26,7 @@ for table in ['features','tasks']:
    assert want==have,(table,row['id'],key)
 checks['full_manifest_db_plan_parity']=True
 seed_ids={t['id'] for t in m['tasks']}
-actual_deps={(t,p) for t,p in c.execute('SELECT task_id,prerequisite_task_id FROM dependencies') if t in seed_ids}
+actual_deps={(t,p) for t,p in c.execute('SELECT task_id,prerequisite_task_id FROM dependencies') if t in seed_ids and p in seed_ids}
 assert actual_deps=={(d['task_id'],d['prerequisite_task_id']) for d in m['dependencies']}
 checks['dependency_parity']=True
 graph=collections.defaultdict(list)
@@ -100,6 +101,15 @@ checks['game_features_done']=c.execute("SELECT count(*) FROM features WHERE kind
 # Negative schema checks on disposable in-memory copy; they cannot mutate durable plans/evidence.
 s=sqlite3.connect(':memory:');c.backup(s);s.execute('PRAGMA foreign_keys=ON')
 negative=[]
+# Plan aggregates/reference roles never dispatch even if their flag is accidentally true.
+s.execute('SAVEPOINT selection')
+s.execute('DELETE FROM dependencies WHERE task_id=?',('G01-RESOLVE',))
+for role,scope,flag,want in [('aggregate','frozen',True,0),('reference','frozen',True,0),('atomic_blueprint','planned',True,0),('atomic','planned',True,0),('atomic','frozen',True,1),('operational','frozen',True,1)]:
+ brief=json.loads(s.execute('SELECT brief_json FROM tasks WHERE id=?',('G01-RESOLVE',)).fetchone()[0]);brief.update(record_role=role,scope_status=scope,dispatch_ready=flag)
+ s.execute('UPDATE tasks SET brief_json=? WHERE id=?',(json.dumps(brief),'G01-RESOLVE'))
+ assert s.execute('SELECT count(*) FROM dispatch_ready_tasks WHERE id=?',('G01-RESOLVE',)).fetchone()[0]==want,(role,scope)
+s.execute('ROLLBACK TO selection');s.execute('RELEASE selection')
+checks['atomic_selection_policy_positive_and_negative']=True
 def rejects(label,sql,args=()):
  s.execute('SAVEPOINT negative')
  try:
@@ -107,7 +117,7 @@ def rejects(label,sql,args=()):
  except sqlite3.IntegrityError as e:negative.append({'case':label,'result':'rejected','reason':str(e)})
  else:raise AssertionError('Invalid schema transition accepted: '+label)
  finally:s.execute('ROLLBACK TO negative');s.execute('RELEASE negative')
-rejects('dependency cycle',"INSERT INTO dependencies VALUES ('G01-RESOLVE','G02-RESOLVE')")
+rejects('dependency cycle',"INSERT INTO dependencies VALUES ('B-G01-D01','B-G01-D04')" if m.get('backlog_expansion') else "INSERT INTO dependencies VALUES ('G01-RESOLVE','G02-RESOLVE')")
 rejects('dangling prerequisite',"INSERT INTO dependencies VALUES ('G01-RESOLVE','not-a-task')")
 rejects('blocked task lacks reason',"UPDATE tasks SET status='blocked',blocking_reason=NULL WHERE id='G01-RESOLVE'")
 rejects('task done without independent integrated evidence',"UPDATE tasks SET status='done' WHERE id='G01-RESOLVE'")
@@ -151,6 +161,10 @@ s.execute("UPDATE attempts SET phase='integration',lease_owner='coordinator' WHE
 s.execute("UPDATE attempts SET status='integrated',phase='terminal',integrated_revision='changed',integration_evidence_json='[\"integration check\"]' WHERE id='test-a'")
 rejects('changed integrated revision cannot close reviewed task',"UPDATE tasks SET status='done' WHERE id='G01-RESOLVE'")
 s.execute("UPDATE attempts SET integrated_revision='source' WHERE id='test-a'")
+if m.get('backlog_expansion'):
+ rejects('aggregate cannot close with unfinished children',"UPDATE tasks SET status='done' WHERE id='G01-RESOLVE'")
+ # Only this isolated lifecycle fixture removes the test task's prerequisite edges.
+ s.execute("DELETE FROM dependencies WHERE task_id='G01-RESOLVE'")
 s.execute("UPDATE tasks SET status='done' WHERE id='G01-RESOLVE'")
 checks['positive_independent_review_integration_transition']=True
 log=('test-log',now.isoformat(),'worker','worker','G01-RESOLVE','test-a','discovery','schema probe','Observed test fixture','probe','recorded',None,None,None)
@@ -160,5 +174,5 @@ rejects('devlog delete',"DELETE FROM devlog WHERE id='test-log'")
 rejects('devlog task attempt mismatch','INSERT INTO devlog VALUES ('+','.join('?' for _ in log)+')',('other-log',*log[1:4],'G02-RESOLVE',*log[5:]))
 checks['negative_schema_checks']=negative
 result={'date':now.isoformat(),'candidate_manifest_sha256':digest(BASE/'plan-manifest.json'),'schema_sha256':digest(BASE/'schema.sql'),'source_fingerprint':m['source_fingerprint'],'checks':checks,'unperformed':['Game/native/WASM execution, rendered browser and physical-device/audio acceptance; no game implementation exists.','Actual source/book access/catalog freeze, vendor/tool/device/budget decisions remain G01–G12 work.']}
-(BASE/'evidence/verification.json').write_text(json.dumps(result,indent=2)+'\n')
+(args.output or BASE/'evidence/verification.json').write_text(json.dumps(result,indent=2)+'\n')
 print(json.dumps({'integrity':checks['integrity'],'task_dag':checks['acyclic_tasks'],'negative_checks':len(negative),'source_docs':checks['manifest_input_fingerprints'],'links':links,'archive_ids':len(ids),'archive_paths':len(paths),'dispatch_ready':checks['dispatch_ready']}))

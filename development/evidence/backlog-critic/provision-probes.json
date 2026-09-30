@@ -1,0 +1,112 @@
+{
+  "source_manifest_sha256": "ae2dfe764bb9b6fa65d31c8838e7ac0d729a1608e7a990af33b3d819f06da844",
+  "checks": [
+    {
+      "probe": "exact_seed_twice",
+      "outcome": "PASS",
+      "rows_unchanged": true
+    },
+    {
+      "probe": "legacy_v2_view_replaced",
+      "outcome": "PASS",
+      "view_sql": "CREATE VIEW dispatch_ready_tasks AS\nSELECT t.id,t.feature_id,t.title,t.stage,t.priority FROM tasks t\nWHERE t.status='pending' AND json_extract(t.brief_json,'$.dispatch_ready')=1\n AND json_extract(t.brief_json,'$.record_role') IN ('atomic','operational')\n AND json_extract(t.brief_json,'$.scope_status')='frozen'\n AND NOT EXISTS(\n SELECT 1 FROM dependencies d JOIN tasks p ON p.id=d.prerequisite_task_id WHERE d.task_id=t.id AND p.status!='done'\n)"
+    },
+    {
+      "probe": "duplicate_id",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": "Duplicate task across main and operational manifests\n"
+    },
+    {
+      "probe": "dangling_dependency",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": "r/work/backlog-expansion/critic/provision-fixtures-final/dangling_dependency/validate-plan-seed.py\", line 35, in validate\n    t,p=pair;assert t in tasks and p in tasks and t!=p,('invalid dependency',pair);graph[t].append(p)\nAssertionError: ('invalid dependency', ('B-C-df-ai-A01', 'CRITIC-MISSING'))\n"
+    },
+    {
+      "probe": "self_cycle",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": "26-09-29/cr/work/backlog-expansion/critic/provision-fixtures-final/self_cycle/validate-plan-seed.py\", line 35, in validate\n    t,p=pair;assert t in tasks and p in tasks and t!=p,('invalid dependency',pair);graph[t].append(p)\nAssertionError: ('invalid dependency', ('B-C-df-ai-A01', 'B-C-df-ai-A01'))\n"
+    },
+    {
+      "probe": "reverse_existing_edge",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": " in graph[t]:walk(p)\n  File \"/Users/earlcameron/Documents/Codex/2026-09-29/cr/work/backlog-expansion/critic/provision-fixtures-final/reverse_existing_edge/validate-plan-seed.py\", line 38, in walk\n    assert t not in active,('dependency cycle',t)\nAssertionError: ('dependency cycle', 'B-C-df-ai-A01')\n"
+    },
+    {
+      "probe": "invalid_stage",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": " line 49, in validate\n    keys=list(values);c.execute(f'INSERT INTO {table} ({\",\".join(keys)}) VALUES ({\",\".join(\"?\" for _ in keys)})',[values[k] for k in keys])\nsqlite3.IntegrityError: CHECK constraint failed: stage IN ('resolution','design','implementation','acceptance','optimization','planning')\n"
+    },
+    {
+      "probe": "empty_acceptance",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": "arlcameron/Documents/Codex/2026-09-29/cr/work/backlog-expansion/critic/provision-fixtures-final/empty_acceptance/validate-plan-seed.py\", line 15, in validate\n    assert t['acceptance_json'] and t['verification_json'],(t['id'],'empty acceptance')\nAssertionError: ('B-C-df-ai-A01', 'empty acceptance')\n"
+    },
+    {
+      "probe": "missing_feature",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": "ext())\n  File \"/Users/earlcameron/Documents/Codex/2026-09-29/cr/work/backlog-expansion/critic/provision-fixtures-final/missing_feature/validate-plan-seed.py\", line 13, in validate\n    assert t['feature_id'] in features,(t['id'],'missing feature')\nAssertionError: ('B-C-df-ai-A01', 'missing feature')\n"
+    },
+    {
+      "probe": "active_plan_revision_refusal",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true
+    },
+    {
+      "probe": "same_source_active_edit_scope",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": "Refusing claimed/integrated contract change B-C-df-ai-A01:edit_areas_json\n"
+    },
+    {
+      "probe": "same_source_active_criteria",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": "Refusing claimed/integrated contract change B-C-df-ai-A01:acceptance_json\n"
+    },
+    {
+      "probe": "same_source_active_brief",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": "Refusing claimed/integrated contract change B-C-df-ai-A01:brief_json\n"
+    },
+    {
+      "probe": "same_source_active_add_dependency",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": "Refusing claimed/integrated prerequisite change B-C-df-ai-A01\n"
+    },
+    {
+      "probe": "same_source_active_remove_dependency",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": "Refusing claimed/integrated prerequisite change B-C-df-ai-A01\n"
+    },
+    {
+      "probe": "same_source_active_family",
+      "outcome": "PASS",
+      "negative_rejected": true,
+      "plan_rows_preserved": true,
+      "error": "Refusing claimed/integrated contract change C-df-types:goal\n"
+    }
+  ]
+}

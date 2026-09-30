@@ -74,9 +74,13 @@ SELECT t.id,t.feature_id,t.title,t.stage,t.priority FROM tasks t
 WHERE t.status='pending' AND NOT EXISTS(
  SELECT 1 FROM dependencies d JOIN tasks p ON p.id=d.prerequisite_task_id WHERE d.task_id=t.id AND p.status!='done'
 );
-CREATE VIEW IF NOT EXISTS dispatch_ready_tasks AS
+DROP VIEW IF EXISTS dispatch_ready_tasks;
+CREATE VIEW dispatch_ready_tasks AS
 SELECT t.id,t.feature_id,t.title,t.stage,t.priority FROM tasks t
-WHERE t.status='pending' AND json_extract(t.brief_json,'$.dispatch_ready')=1 AND NOT EXISTS(
+WHERE t.status='pending' AND json_extract(t.brief_json,'$.dispatch_ready')=1
+ AND json_extract(t.brief_json,'$.record_role') IN ('atomic','operational')
+ AND json_extract(t.brief_json,'$.scope_status')='frozen'
+ AND NOT EXISTS(
  SELECT 1 FROM dependencies d JOIN tasks p ON p.id=d.prerequisite_task_id WHERE d.task_id=t.id AND p.status!='done'
 );
 

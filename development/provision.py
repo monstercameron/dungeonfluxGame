@@ -5,6 +5,7 @@ import argparse,hashlib,json,sqlite3,os
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--directory',type=Path,default=Path(__file__).resolve().parent)
 p.add_argument('--check-only',action='store_true')
+p.add_argument('--root',type=Path,default=Path(__file__).resolve().parent.parent,help='Governing project root when staging in another directory')
 a=p.parse_args();base=a.directory.resolve()
 manifest=json.loads((base/'plan-manifest.json').read_text())
 operational_path=base/'operational-tasks.json'
@@ -13,7 +14,35 @@ if operational_path.exists():
  manifest['tasks']+=operational.get('tasks',[])
  manifest['dependencies']+=operational.get('dependencies',[])
  if len({t['id'] for t in manifest['tasks']})!=len(manifest['tasks']):raise SystemExit('Duplicate task across main and operational manifests')
+# Validate the complete reviewed candidate before opening/mutating destination or schema.
+from importlib.util import spec_from_file_location,module_from_spec
+spec=spec_from_file_location('seed_validation',Path(__file__).with_name('validate-plan-seed.py'));validator=module_from_spec(spec);spec.loader.exec_module(validator)
+validator.validate(manifest,a.root.resolve(),(base/'schema.sql').read_text())
 path=base/'workflow.sqlite3'
+if path.exists() and not a.check_only:
+ # Refuse changes to claimed/integrated payloads or their prerequisite sets before
+ # executing schema DDL. Equal fingerprint alone is not contract equality.
+ inspect=sqlite3.connect(path.as_uri()+'?mode=ro',uri=True)
+ if inspect.execute('PRAGMA user_version').fetchone()[0]==2:
+  incoming_edges={(e['task_id'],e['prerequisite_task_id']) for e in manifest['dependencies']}
+  seeded_ids={r['id'] for r in manifest['tasks']}
+  protected={r[0] for r in inspect.execute("SELECT id FROM tasks WHERE status IN ('running','review') UNION SELECT task_id FROM attempts WHERE role IN ('worker','coordinator','cleanup') AND status IN ('active','submitted','approved','inconclusive','integrated')")}
+  for table in ['features','tasks']:
+   for row in manifest[table]:
+    old=inspect.execute(f'SELECT * FROM {table} WHERE id=?',(row['id'],)).fetchone()
+    if not old:continue
+    names=[v[1] for v in inspect.execute(f'PRAGMA table_info({table})')];prior=dict(zip(names,old))
+    held=row['id'] in protected if table=='tasks' else prior['status'] in ['active','review','done']
+    if held:
+     for key,value in row.items():
+      if key in {'status','created_at','updated_at','blocking_reason','originating_task_id','lease_generation','active_attempt_id'}:continue
+      prev=json.loads(prior[key]) if isinstance(value,(dict,list)) else prior[key]
+      if prev!=value:raise SystemExit(f'Refusing claimed/integrated contract change {row["id"]}:{key}')
+     if table=='tasks':
+      existing_edges={(row['id'],p) for (p,) in inspect.execute('SELECT prerequisite_task_id FROM dependencies WHERE task_id=?',(row['id'],))}
+      desired={e for e in incoming_edges if e[0]==row['id']} | {e for e in existing_edges if e[1] not in seeded_ids}
+      if desired!=existing_edges:raise SystemExit(f'Refusing claimed/integrated prerequisite change {row["id"]}')
+ inspect.close()
 if path.exists() and not a.check_only:
  old=sqlite3.connect(path);version=old.execute('PRAGMA user_version').fetchone()[0]
  if version==1:
@@ -58,7 +87,8 @@ else:
   seeded={t['id'] for t in manifest['tasks']}
   actual=set(con.execute('SELECT task_id,prerequisite_task_id FROM dependencies'))
   for t,prereq in actual-expected:
-   if t in seeded:con.execute('DELETE FROM dependencies WHERE task_id=? AND prerequisite_task_id=?',(t,prereq))
+   # Preserve edges to coordinator-intake rows outside the reviewed seed.
+   if t in seeded and prereq in seeded:con.execute('DELETE FROM dependencies WHERE task_id=? AND prerequisite_task_id=?',(t,prereq))
   for t,prereq in expected:con.execute('INSERT OR IGNORE INTO dependencies VALUES (?,?)',(t,prereq))
 # Read-only status. Extra coordinator-intake rows are allowed; seeded rows must match design payloads.
 con.execute('PRAGMA foreign_keys=ON')

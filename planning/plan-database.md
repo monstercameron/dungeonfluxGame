@@ -38,7 +38,9 @@ Each plan identifies its models, owner, source, boundary and meaningful failure
 checks. Crate boundary plans and all-crate optimization passes remain distinct
 from feature delivery and final integrated acceptance.
 
-This is the entire planning corpus, not thousands of invented per-spell tasks.
+The user requested several thousand detailed, source-backed project plans. This
+expansion covers concrete outcomes across every system; it does not invent
+per-spell catalog tasks before authorized source extraction.
 Exact catalog entries and required book access are resolved at G07; catalog
 completion cannot be counted before its denominator/source revision exists.
 Model/vendor/tool availability, transport/WASM feasibility, target devices,
@@ -55,7 +57,8 @@ contracts, precise edit paths, commands, limits, hook owners and tool capability
 evidence in the preserved brief. Only then may it set `dispatch_ready` true.
 `dependency_ready_plans` therefore differs from `dispatch_ready_tasks`: satisfying
 dependencies alone does not authorize a large family blueprint as a runnable task.
-Expand only the next useful two to three atomic tasks per available worker.
+Plan the full detailed backlog now; prepare only the next useful two to three
+dependency-ready atomic tasks per available worker for dispatch.
 
 Feature and slice blueprints reuse one canonical bounded implementation child.
 Before expansion, look up the same behavior, owner, contract revision and scope;
@@ -145,3 +148,60 @@ policy, four CustomerService RPCs and bounded specific repair acceptance. It pre
 all47 game/17rules/12gates/9slices and existing execution state. Current source/manifest
 identity and counts are in development/plan-index.md; earlier gap/feature PASS evidence
 retains its historical identity and does not approve new service behavior.
+
+## Detailed backlog arcs and aggregate completion
+
+The authorized full-project expansion uses `development/backlog-catalog.json` and
+`development/expand-backlog.py` as a deterministic final manifest refinement. Each
+explicit catalog outcome has its own stable ID, expected result, phase, canonical
+owner, source references, consumer hooks and verification procedure. The catalog
+is curated rather than a verb-by-entity product. Planned source paths and commands
+are provisional until G01/G03 and scoped dispatch; no runtime evidence is implied.
+
+Original coarse task IDs and all execution history remain intact. Their briefs
+classify them as `aggregate` records, which cannot enter `dispatch_ready_tasks`,
+even when an erroneous dispatch flag is true. They own coordinator evidence
+rollup, not another implementation of their children. Children complete through
+the existing independent frontier review and integrated-attempt lifecycle. The
+coordinator then claims a bounded aggregation/evidence-review attempt through its
+trusted direct command, reviews every original criterion plus child receipts and
+actual integrated behavior, and follows the same submit/review/integration
+triggers. Counting completed children never marks an aggregate or feature done.
+The dispatch view is for worker selection; it deliberately excludes this separate
+coordinator-only evidence operation. SQL itself is not an authorization boundary.
+
+Contract children precede implementation; implementation and wiring precede their
+matching negative and observable fixtures. Optimization requires accepted
+component evidence and the relevant integrated baseline. A feature adapter calls
+canonical crate/rules behavior; slice work connects these adapters and proves the
+whole flow rather than implementing a second handler. Each brief carries that
+reuse map and its dependency edges. Shared wire/domain codecs belong to native
+or browser consumers; shared protocol and pure model crates retain their DAG.
+
+Gate decisions split early contract/component milestones from later integrated
+qualification. G03 freezes the next contract wave, not every future game type.
+G06's complete game trace and G12's audiovisual qualification stay required final
+evidence after their slices; their early design decisions permit component work.
+S08 tooling and operations begin alongside S00. Full2024 coverage, all47 required
+features and required hosted remote play remain final-scope requirements.
+
+Unselected optional fidelity/custom/async/community branches remain planned and
+nondispatchable. An explicit coordinator scope-selection receipt, independently
+reviewed against the source policy, identifies which child IDs are selected,
+mandatory fallback criteria, evidence and affected dependents. For an unselected
+branch the coordinator keeps the original task as the scope-decision/flat-fallback
+acceptance record, moves optional children to a separately retained conditional
+backlog scope (or removes their feature association through a reviewed plan
+revision), and redirects prerequisite edges to the accepted fallback/decision
+record. This is reviewed rescoping, never pretending the unbuilt optional feature
+is done. Existing schema requires all currently scoped feature tasks done and
+never treats cancelled prerequisites as satisfied. No such selection or rescope
+is performed by this seed.
+
+Candidate provisioning validates IDs, roles, source hashes, nonempty criteria,
+canonical references and the entire task DAG before schema or data mutation.
+It preserves execution fields, attempts, append-only logs and externally owned
+intake edges. The coordinator backs up through SQLite's backup API, applies the
+reviewed seed and compares row-level history. Repeating the same candidate is
+idempotent. The five workflow tables remain distinct from runtime OTEL and
+quality-review databases.

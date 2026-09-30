@@ -558,7 +558,7 @@ content reuse the existing authorities; custom mechanics require disclosed opt-i
 selected/deferred/rejected with rights, privacy, cost and actual evidence:
 
 
-Unselected expansion creates no implementation tasks, public endpoint, new crate,
+Unselected expansion creates no active implementation assignment, public endpoint, new crate,
 second rules engine or autonomous offline authority. Offline core UI is stale/read-only
 with explicit unknown receipts and deliberate refreshed input. A creator's prose or
 module import never becomes executable mechanics.

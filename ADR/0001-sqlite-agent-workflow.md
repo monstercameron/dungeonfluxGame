@@ -40,8 +40,10 @@ and its acceptance criteria. Tasks describe independently reviewable changes
 that deliver that outcome. Atomic
 means one bounded result, not necessarily one file.
 
-Keep the feature backlog broad, but expand only the next useful features into
-detailed tasks. Maintain approximately two to three ready tasks per worker.
+The user authorized a detailed full-project backlog with several thousand
+meaningful outcomes. Keep source-backed contracts, integration, failure, acceptance
+and optimization arcs planned across every system; prepare approximately two to
+three dispatch-ready atomic tasks per worker.
 Reassess plans as implementation reveals new information.
 
 Dispatch each user work message or scoped atomic work-item message to one
@@ -166,8 +168,9 @@ Each feature includes a final acceptance task that depends on its implementation
 tasks and verifies the complete user behavior. Completing this task completes the
 feature.
 
-Verify an integrated game slice early, before expanding the backlog into many
-isolated components. Browser-facing feature acceptance includes real browser
+Verify an integrated game slice early, before executing many isolated components.
+Detailed full-project planning is now authorized; it does not waive early running
+integration or scoped dispatch. Browser-facing feature acceptance includes real browser
 behavior; helpers, coverage figures, and a server-only walkthrough are supporting
 evidence. Record the exact integrated build checked and any remaining gaps.
 The frontier evaluator operates the affected browser flow and visually inspects

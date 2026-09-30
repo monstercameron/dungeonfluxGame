@@ -1,0 +1,263 @@
+{
+  "draft_only": true,
+  "observed_at": "2026-09-30T13:17:52.411302+00:00",
+  "manifest_sha256": "bbf02259c6e9d25cee5d471ebd1fa7f004c93951d29389011d909d23bf1efa58",
+  "source_fingerprint": "608d7edaeb14595dca6d89de271f88ea80f61bcad1638408ce3aa99678368155",
+  "findings": [
+    {
+      "task_id": "B-C-df-protocol-W01",
+      "title": "Connect public generated services to API service set",
+      "owners": [
+        "df-protocol"
+      ],
+      "edit_areas": [
+        "crates/df-protocol/src/ (planned owner boundary; exact module paths frozen at dispatch)"
+      ],
+      "prerequisites": [
+        "B-C-df-protocol-D01",
+        "B-C-df-protocol-D02",
+        "B-C-df-protocol-D03",
+        "B-C-df-protocol-D04",
+        "B-C-df-protocol-I01",
+        "B-C-df-protocol-I02",
+        "B-C-df-protocol-I03",
+        "B-C-df-protocol-I04",
+        "B-G01-R04",
+        "B-G03-R04"
+      ]
+    },
+    {
+      "task_id": "B-C-df-engine-W02",
+      "title": "Connect transition to session commit boundary",
+      "owners": [
+        "df-engine"
+      ],
+      "edit_areas": [
+        "crates/df-engine/src/ (planned owner boundary; exact module paths frozen at dispatch)"
+      ],
+      "prerequisites": [
+        "B-C-df-engine-D01",
+        "B-C-df-engine-D02",
+        "B-C-df-engine-D03",
+        "B-C-df-engine-D04",
+        "B-C-df-engine-I01",
+        "B-C-df-engine-I02",
+        "B-C-df-engine-I03",
+        "B-C-df-engine-I04",
+        "B-G01-R04",
+        "B-G03-R04",
+        "C-df-combat-BOUNDARY",
+        "C-df-content-BOUNDARY",
+        "C-df-encounter-BOUNDARY",
+        "C-df-experience-BOUNDARY",
+        "C-df-intent-BOUNDARY",
+        "C-df-interaction-BOUNDARY",
+        "C-df-knowledge-BOUNDARY",
+        "C-df-model-BOUNDARY",
+        "C-df-narrative-BOUNDARY",
+        "C-df-presentation-BOUNDARY",
+        "C-df-rules-BOUNDARY",
+        "C-df-tempo-BOUNDARY",
+        "C-df-types-BOUNDARY",
+        "C-df-world-BOUNDARY"
+      ]
+    },
+    {
+      "task_id": "B-F11-W01",
+      "title": "Bind encounter state to role views",
+      "owners": [
+        "df-engine"
+      ],
+      "edit_areas": [
+        "crates/df-engine/src/ (planned owner boundary; exact module paths frozen at dispatch)"
+      ],
+      "prerequisites": [
+        "B-C-df-combat-I01",
+        "B-C-df-combat-I02",
+        "B-C-df-combat-I03",
+        "B-C-df-combat-I04",
+        "B-C-df-encounter-I01",
+        "B-C-df-encounter-I02",
+        "B-C-df-encounter-I03",
+        "B-C-df-encounter-I04",
+        "B-C-df-engine-I01",
+        "B-C-df-engine-I02",
+        "B-C-df-engine-I03",
+        "B-C-df-engine-I04",
+        "B-C-df-rules-I01",
+        "B-C-df-rules-I02",
+        "B-C-df-rules-I03",
+        "B-C-df-rules-I04",
+        "B-F11-D01",
+        "B-F11-D02",
+        "B-F11-D03",
+        "B-F11-I01",
+        "B-F11-I02",
+        "B-F11-I03",
+        "B-F11-I04",
+        "B-G03-R04",
+        "B-G05-D04",
+        "B-G07-R04",
+        "B-G09-D04",
+        "B-R05-I01",
+        "B-R05-I02",
+        "B-R05-I03",
+        "B-R05-I04",
+        "B-R05-I05",
+        "B-R05-I06",
+        "B-R07-I01",
+        "B-R07-I02",
+        "B-R07-I03",
+        "B-R07-I04",
+        "B-R07-I05",
+        "B-R07-I06",
+        "B-R08-I01",
+        "B-R08-I02",
+        "B-R08-I03",
+        "B-R08-I04",
+        "B-R08-I05",
+        "B-R08-I06",
+        "B-R09-I01",
+        "B-R09-I02",
+        "B-R09-I03",
+        "B-R09-I04",
+        "B-R09-I05",
+        "B-R09-I06",
+        "C-df-combat-BOUNDARY",
+        "C-df-encounter-BOUNDARY",
+        "C-df-engine-BOUNDARY",
+        "C-df-rules-BOUNDARY",
+        "F10-DELIVER",
+        "F12-DELIVER"
+      ]
+    },
+    {
+      "task_id": "B-F16-I02",
+      "title": "Wire accepted reusable TTS asset",
+      "owners": [
+        "df-engine"
+      ],
+      "edit_areas": [
+        "crates/df-engine/src/ (planned owner boundary; exact module paths frozen at dispatch)"
+      ],
+      "prerequisites": [
+        "B-C-df-audio-I01",
+        "B-C-df-audio-I02",
+        "B-C-df-audio-I03",
+        "B-C-df-audio-I04",
+        "B-C-df-media-I01",
+        "B-C-df-media-I02",
+        "B-C-df-media-I03",
+        "B-C-df-media-I04",
+        "B-C-df-presentation-I01",
+        "B-C-df-presentation-I02",
+        "B-C-df-presentation-I03",
+        "B-C-df-presentation-I04",
+        "B-F16-D01",
+        "B-F16-D02",
+        "B-F16-D03",
+        "B-G02-R04",
+        "B-G03-R04",
+        "B-G04-D04",
+        "B-G08-D04",
+        "B-G09-D04",
+        "B-G10-D04",
+        "B-G12-D04",
+        "C-df-audio-BOUNDARY",
+        "C-df-media-BOUNDARY",
+        "C-df-presentation-BOUNDARY",
+        "F25-DELIVER",
+        "F26-DELIVER"
+      ]
+    },
+    {
+      "task_id": "B-X12-W01",
+      "title": "Integrate payment webhook and reconciliation",
+      "owners": [
+        "df-web"
+      ],
+      "edit_areas": [
+        "crates/df-web/src/ (planned owner boundary; exact module paths frozen at dispatch)"
+      ],
+      "prerequisites": [
+        "B-C-df-api-I01",
+        "B-C-df-api-I02",
+        "B-C-df-api-I03",
+        "B-C-df-api-I04",
+        "B-C-df-auth-I01",
+        "B-C-df-auth-I02",
+        "B-C-df-auth-I03",
+        "B-C-df-auth-I04",
+        "B-C-df-client-I01",
+        "B-C-df-client-I02",
+        "B-C-df-client-I03",
+        "B-C-df-client-I04",
+        "B-C-df-commerce-I01",
+        "B-C-df-commerce-I02",
+        "B-C-df-commerce-I03",
+        "B-C-df-commerce-I04",
+        "B-C-df-persistence-I01",
+        "B-C-df-persistence-I02",
+        "B-C-df-persistence-I03",
+        "B-C-df-persistence-I04",
+        "B-C-df-ui-I01",
+        "B-C-df-ui-I02",
+        "B-C-df-ui-I03",
+        "B-C-df-ui-I04",
+        "B-C-df-web-I01",
+        "B-C-df-web-I02",
+        "B-C-df-web-I03",
+        "B-C-df-web-I04",
+        "B-G02-R04",
+        "B-G03-R04",
+        "B-X12-D01",
+        "B-X12-D02",
+        "B-X12-D03",
+        "B-X12-D04",
+        "B-X12-I01",
+        "B-X12-I02",
+        "B-X12-I03",
+        "B-X12-I04",
+        "C-df-api-BOUNDARY",
+        "C-df-auth-BOUNDARY",
+        "C-df-client-BOUNDARY",
+        "C-df-persistence-BOUNDARY",
+        "C-df-providers-BOUNDARY",
+        "C-df-ui-BOUNDARY",
+        "C-df-web-BOUNDARY"
+      ]
+    },
+    {
+      "task_id": "B-C-df-engine-I01",
+      "title": "Implement command reduction entrypoint",
+      "owners": [
+        "df-engine"
+      ],
+      "edit_areas": [
+        "crates/df-engine/src/ (planned owner boundary; exact module paths frozen at dispatch)"
+      ],
+      "prerequisites": [
+        "B-C-df-engine-D01",
+        "B-C-df-engine-D02",
+        "B-C-df-engine-D03",
+        "B-C-df-engine-D04",
+        "B-G01-R04",
+        "B-G03-R04",
+        "C-df-combat-BOUNDARY",
+        "C-df-content-BOUNDARY",
+        "C-df-encounter-BOUNDARY",
+        "C-df-experience-BOUNDARY",
+        "C-df-intent-BOUNDARY",
+        "C-df-interaction-BOUNDARY",
+        "C-df-knowledge-BOUNDARY",
+        "C-df-model-BOUNDARY",
+        "C-df-narrative-BOUNDARY",
+        "C-df-presentation-BOUNDARY",
+        "C-df-rules-BOUNDARY",
+        "C-df-tempo-BOUNDARY",
+        "C-df-types-BOUNDARY",
+        "C-df-world-BOUNDARY"
+      ]
+    }
+  ]
+}

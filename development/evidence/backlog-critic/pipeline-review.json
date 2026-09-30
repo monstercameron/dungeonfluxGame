@@ -1,0 +1,11 @@
+{
+  "verdict": "PASS",
+  "exact_manifest_parity": true,
+  "full_logical_manifest_parity": true,
+  "operational_logical_parity": true,
+  "operational_difference": "Only updated_at refresh differs; DNS execution fields/blocked status/source/payload preserved.",
+  "tasks": 3144,
+  "dependencies": 47084,
+  "candidate_sha256": "ae2dfe764bb9b6fa65d31c8838e7ac0d729a1608e7a990af33b3d819f06da844",
+  "normalization": "Only generated_at/updated_at; no payload/source/ID/edge changes allowed."
+}

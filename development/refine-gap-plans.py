@@ -213,7 +213,11 @@ m['dependencies']=[{'task_id':t,'prerequisite_task_id':v} for t,v in sorted(edge
 m['source_fingerprint']=fingerprint;m['generated_at']=now
 note='Gap brief refinement maps all 76 research rows; no new crates/API methods/schema, X10 private authoring and X11 conditional expansion plus four targeted existing-family refinement plans. Historical critics remain scoped to their original fingerprints.'
 if note not in m['notes']:m['notes'].append(note)
-a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(m,indent=2,ensure_ascii=False)+'\n')
+if (root/'development/backlog-catalog.json').exists():
+ from importlib.util import spec_from_file_location,module_from_spec
+ spec=spec_from_file_location('backlog_refinement',root/'development/expand-backlog.py');module=module_from_spec(spec);spec.loader.exec_module(module)
+ m=module.expand(m,root,json.loads((root/'development/backlog-catalog.json').read_text()));fingerprint=m['source_fingerprint'];hashes={path:value['sha256'] for path,value in m['source_documents'].items()}
+a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(m,indent=2,ensure_ascii=False,sort_keys=True)+'\n')
 if a.operational_output:
  operational_path=root/'development/operational-tasks.json'
  operational=json.loads(operational_path.read_text())
@@ -221,6 +225,7 @@ if a.operational_output:
  for row in operational.get('tasks',[]):
   row['source_fingerprint']=fingerprint;row['updated_at']=now
   row['brief_json']['input_revision']=fingerprint
+  row['brief_json'].update(record_role='operational',scope_status='planned')
  a.operational_output.parent.mkdir(parents=True,exist_ok=True)
  a.operational_output.write_text(json.dumps(operational,indent=2,ensure_ascii=False)+'\n')
-print(json.dumps({'families':len(m['features']),'tasks':len(m['tasks']),'dependencies':len(edges),'sources':len(docs),'source_fingerprint':fingerprint}))
+print(json.dumps({'families':len(m['features']),'tasks':len(m['tasks']),'dependencies':len(m['dependencies']),'sources':len(m['source_documents']),'source_fingerprint':fingerprint}))

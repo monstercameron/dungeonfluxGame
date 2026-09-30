@@ -15,6 +15,9 @@ while writes are active.
 Source files to track once Git exists:
 
 - `schema.sql`: constraints, indexes, views and schema version.
+- `backlog-catalog.json`: explicit per-case owners and expectations across all140 families.
+- `expand-backlog.py`: deterministic final backlog refinement; candidate output only.
+- `validate-plan-seed.py`: source/classification/payload/DAG preflight before queue or schema mutation.
 - `plan-manifest.json`: deterministic plan IDs, complete briefs/models/source
   sections and fingerprints, dependencies and planned RPC service inventory.
 - `refine-gap-plans.py`: coordinator-only idempotent source/brief refinement over
@@ -67,3 +70,25 @@ The first baseline captures the static project site, not a playable game. The
 user-facing timeline lives at `../../outputs/dungeonflux-visual-journey.html`.
 Keep browser caches/profiles in `../artifacts/tmp/journey/`, preserve retained
 history, and stop the recorder at the end of an active development run.
+
+## Detailed backlog seed pipeline
+
+The full-project catalogue is durable and source-hashed. The standard
+`refine-gap-plans.py` automatically applies `expand-backlog.py` last when the
+catalogue exists; older refinement cannot silently reduce the reviewed queue to
+coarse plans. Use explicit candidate outputs and independently review them before
+the coordinator replaces seed files and runs provisioning.
+
+```sh
+python3 development/refine-gap-plans.py --output artifacts/tmp/plan-candidate.json --operational-output artifacts/tmp/operational-candidate.json
+```
+
+For a staging directory containing the reviewed manifest, operational manifest,
+schema and a SQLite-backup copy of the baseline, use
+`python3 development/provision.py --directory <stage> --root <project>` and
+`python3 development/verify-plans.py --directory <stage> --root <project> --output <retained-proof.json>`.
+These commands do not imply approval to mutate the authoritative queue. Preserve
+all baseline execution fields and history, plus intake dependencies outside the
+seed. No planning seed enables dispatch. Only frozen `atomic`/`operational` roles
+can enter the worker selection view; aggregates use a separate coordinator-owned
+evidence-review attempt under the same integration triggers.

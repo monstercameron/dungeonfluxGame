@@ -18,3 +18,16 @@ SELECT id,task_id,role,status,verdict,evidence_json,defects_json FROM attempts O
 -- Data consistency checks, expected 'ok' and no rows respectively.
 PRAGMA integrity_check;
 PRAGMA foreign_key_check;
+
+-- Complete beginning-to-end outcome arcs per family, without dumping every brief.
+SELECT feature_id,json_extract(brief_json,'$.case_phase') AS arc_phase,count(*) AS outcomes
+FROM tasks WHERE json_extract(brief_json,'$.backlog_generated')=1
+GROUP BY feature_id,arc_phase ORDER BY feature_id,arc_phase;
+-- Inspect one explicit case and its canonical implementation dependencies.
+SELECT id,title,json_extract(brief_json,'$.record_role') AS role,acceptance_json,verification_json,
+ json_extract(brief_json,'$.owners') AS owners,
+ json_extract(brief_json,'$.canonical_task_refs') AS canonical_reuse
+FROM tasks WHERE feature_id='F16' ORDER BY id;
+-- Aggregate evidence obligations remain visible but never enter worker selection.
+SELECT id,json_extract(brief_json,'$.aggregation_requires') AS selected_children
+FROM tasks WHERE json_extract(brief_json,'$.record_role')='aggregate' ORDER BY id;

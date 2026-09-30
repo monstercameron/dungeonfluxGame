@@ -20,8 +20,9 @@ messages may run concurrently when dependencies/edit areas/resources allow.
 Independent frontier evaluation is a separate completion gate, not a split of
 implementation. The coordinator resolves shared gates and integrates sequentially.
 
-Create only the next useful dependency-ready tasks, roughly two to three per
-available worker. A task brief names governing sections, fixed input revision,
+The user authorized the complete detailed backlog across every system. Preserve
+that source-backed plan now; freeze roughly two to three dependency-ready atomic
+tasks per available worker for execution. A task brief names governing sections, fixed input revision,
 owning crate(s), permitted edits, hook owners, normal/failure criteria and evidence.
 Unresolved prerequisites block affected dispatch rather than invite invented APIs.
 Maintain one active owner for protobuf/types, migrations, manifests/composition,
