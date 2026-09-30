@@ -65,7 +65,7 @@ workspace native/WASM gates passed independently. Future tool upgrades are separ
 qualification work.
 
 Visit **http://127.0.0.1:43180** and click **Run transport checks**. The server accepts
-only this synthetic loopback WebSocket Origin and holds at most four admitted
+only the preview's configured synthetic loopback WebSocket Origin and holds at most four admitted
 connections. These bounds/admission checks do not implement production authentication
 or WSS deployment. Ctrl-C stops the owned preview. Health is `/fixture-health`;
 read-only safe OTEL spans are `/fixture-telemetry`.
@@ -97,7 +97,7 @@ an evaluator's interaction.
 ./development/build-fixture.sh build
 ```
 
-Three native behavior tests cover explicit rejection trailers, cancellation-owned
+The original three native behavior tests cover explicit rejection trailers, cancellation-owned
 stream disposal, and a **256KiB+1 binary WebSocket** rejected by the actual native
 WebSocket gateway. Browser interaction is mandatory beyond those tests. Its ten
 checks cover all four generated modes; native response metadata; ordered DATA/OK
@@ -138,7 +138,7 @@ remain part of bridge review. Do not disable retention to evade browser clocks.
 | Receive credit: connection / stream | 1MiB / 256KiB |
 | WebSocket tunnel message | 256KiB |
 | Browser callback queue | 1MiB and 256 messages, close visibly on overflow |
-| Browser send backlog | pause at 256KiB bufferedAmount; writes ≤16KiB |
+| Browser send backlog | writes fit remaining 256KiB bufferedAmount allowance; writes ≤16KiB |
 | Native byte pipes | 1MiB per direction; outbound messages ≤16KiB |
 | Decoded/encoded service protobuf | 64KiB |
 | Client/bidi input items | 16 |
@@ -146,12 +146,15 @@ remain part of bridge review. Do not disable retention to evade browser clocks.
 | Native fixture OTEL export | 512 spans; old-span loss counter visible |
 
 h2 releases DATA credit after the preceding response body chunk is consumed.
-No application compression is enabled. These selected bounds and the local smoke
-are not proof of a hostile peer's pre-callback browser allocations, total <8MiB
-receive memory, tiny-frame CPU flood defense, or production latency/capacity.
-Physical iOS/Android/desktop matrix, suspend/foreground timing, slow consumers,
-mixed audio/bulk priorities, CPU/process/WASM memory and p95/p99 action/audio latency
-remain unperformed. In particular web-time documents browser sleep-clock differences.
+No application compression is enabled. Subsequent [desktop pressure/resource
+qualification](qualify-g02.md) adds real queue/pipe/receipt/credit snapshots, bounded
+native socket write buffers, time-sliced receive work, slow-consumer/paced-media/bulk
+pressure, full small-RPC/frame-gap samples, and native/browser adversarial checks.
+Those local observations do not prove hostile pre-callback browser allocations or
+total process/engine memory under 8MiB, or approve physical-device/network budgets.
+Physical iOS/Android/desktop matrix, suspend/foreground timing, engine/process CPU
+and memory, actual audio playback and action-to-view latency remain unqualified.
+In particular web-time documents browser sleep-clock differences.
 **G02 remains INCONCLUSIVE** and cannot authorize dependent production transport work
 without the required resource/device evidence.
 

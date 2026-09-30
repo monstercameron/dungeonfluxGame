@@ -3,6 +3,8 @@
 mod browser;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod fixture;
+#[cfg(target_arch = "wasm32")]
+mod qualification;
 
 /// Source identity injected by the reproducible fixture build command.
 pub const BUILD_ID: &str = match option_env!("DF_FIXTURE_BUILD") {

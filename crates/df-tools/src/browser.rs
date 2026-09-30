@@ -14,8 +14,8 @@ use tonic::{Code, Request, Status};
 use wasm_bindgen::{JsCast, prelude::*};
 use web_sys::{Document, HtmlButtonElement};
 
-type FixtureClient = TransportFixtureClient<BrowserChannel>;
-fn sample(sequence: u32) -> Sample {
+pub(super) type FixtureClient = TransportFixtureClient<BrowserChannel>;
+pub(super) fn sample(sequence: u32) -> Sample {
     Sample {
         sequence,
         payload: b"synthetic protobuf".to_vec(),
@@ -23,7 +23,7 @@ fn sample(sequence: u32) -> Sample {
         ..Sample::default()
     }
 }
-fn request<T>(body: T) -> Result<Request<T>, String> {
+pub(super) fn request<T>(body: T) -> Result<Request<T>, String> {
     let mut request = Request::new(body);
     request.metadata_mut().insert(
         "traceparent",
@@ -33,7 +33,7 @@ fn request<T>(body: T) -> Result<Request<T>, String> {
     );
     Ok(request)
 }
-fn require(condition: bool, message: &str) -> Result<(), String> {
+pub(super) fn require(condition: bool, message: &str) -> Result<(), String> {
     if condition {
         Ok(())
     } else {
@@ -75,7 +75,7 @@ async fn run(document: Document) -> Result<(), String> {
         &mut lines,
         "CONNECTING · binary WebSocket / native HTTP/2",
     );
-    let (connection, channel) = BrowserConnection::connect("ws://127.0.0.1:43180/tunnel")
+    let (connection, channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
         .await
         .map_err(|error| error.to_string())?;
     let mut client = FixtureClient::new(channel)
@@ -297,17 +297,25 @@ async fn run(document: Document) -> Result<(), String> {
         &mut lines,
         "PASS · Simultaneous streams share the same connection",
     );
+    let wire = connection.snapshot().map_err(|error| error.to_string())?;
     connection.close();
     let context = OperationContext {
         trace_parent: "00-11111111111111111111111111111111-2222222222222222-01".to_owned(),
-        build: "S00-experimental".to_owned(),
+        build: crate::BUILD_ID.to_owned(),
     };
-    df_observe::record(&context, "browser.fixture", "complete", 0);
+    df_observe::record(
+        &context,
+        "browser.fixture",
+        "complete",
+        wire.received_bytes + wire.sent_bytes,
+    );
     append(
         &document,
         &mut lines,
         "COMPLETE · 10 transport checks passed\nG02 INCONCLUSIVE · physical devices / adversarial receive memory pending",
     );
+    crate::qualification::save_report("semantics", &format!("Build: {}\n{lines}", crate::BUILD_ID))
+        .await?;
     Ok(())
 }
 async fn wait_for_cancellation(client: &mut FixtureClient, expected: u32) -> Result<(), String> {
@@ -343,9 +351,10 @@ pub fn start() -> Result<(), JsValue> {
         "READY · Rust/WASM initialized. Run all four RPC modes and failure checks.",
     );
     if let Some(build) = document.get_element_by_id("build") {
-        build.set_text_content(Some(&format!("Candidate: START-S00-001-a1 · Rust 1.98.1 · tonic 0.14.6 · h2 0.4.19 + browser clock · build {}", crate::BUILD_ID)));
+        build.set_text_content(Some(&format!("Candidate: S00 transport / G02 qualification · Rust 1.98.1 · tonic 0.14.6 · h2 0.4.19 + browser clock · build {}", crate::BUILD_ID)));
     }
     let active = Rc::new(Cell::new(false));
+    crate::qualification::install(&document, active.clone())?;
     let callback_button = button.clone();
     let callback = Closure::wrap(Box::new(move || {
         if active.replace(true) {
@@ -421,4 +430,10 @@ async fn rejection_modes(client: &mut FixtureClient) -> Result<(), String> {
         )?;
     }
     Ok(())
+}
+
+pub(super) fn tunnel_url(path: &str) -> Result<String, String> {
+    let location = web_sys::window().ok_or("window unavailable")?.location();
+    let host = location.host().map_err(|_| "location host unavailable")?;
+    Ok(format!("ws://{host}{path}"))
 }

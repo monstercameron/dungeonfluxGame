@@ -193,6 +193,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "web-time",
 ]
 
 [[package]]
@@ -206,6 +207,7 @@ dependencies = [
  "df-rpc-bridge",
  "futures",
  "gloo-timers",
+ "js-sys",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -213,6 +215,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "web-time",
 ]
 
 [[package]]

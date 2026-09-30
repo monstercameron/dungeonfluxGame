@@ -1,4 +1,7 @@
-use crate::{CONCURRENT_STREAMS, FRAME_BYTES, MESSAGE_BYTES, RECEIVE_BYTES};
+use crate::{
+    CONCURRENT_STREAMS, ConnectionMetrics, ConnectionSnapshot, FRAME_BYTES, MESSAGE_BYTES,
+    RECEIVE_BYTES,
+};
 use bytes::Bytes;
 use futures::{
     FutureExt,
@@ -14,6 +17,7 @@ use std::{
     io,
     pin::Pin,
     rc::Rc,
+    sync::Arc,
     task::{Context, Poll, Waker},
 };
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -21,6 +25,17 @@ use tower_service::Service;
 use wasm_bindgen::{JsCast, closure::Closure};
 use web_sys::{Event, MessageEvent, WebSocket};
 
+struct ReceiptOwner {
+    metrics: Arc<ConnectionMetrics>,
+    bytes: usize,
+}
+impl Drop for ReceiptOwner {
+    fn drop(&mut self) {
+        if self.metrics.socket_receive(self.bytes, false).is_err() {
+            self.metrics.reject();
+        }
+    }
+}
 struct ReceiveState {
     messages: VecDeque<Bytes>,
     bytes: usize,
@@ -28,6 +43,7 @@ struct ReceiveState {
     closed: bool,
     failed: bool,
     waker: Option<Waker>,
+    read_budget: usize,
 }
 impl ReceiveState {
     fn wake(&mut self) {
@@ -44,9 +60,11 @@ struct WebSocketIo {
     _close: Closure<dyn FnMut(Event)>,
     _error: Closure<dyn FnMut(Event)>,
     write_wakeup: Option<Timeout>,
+    read_wakeup: Option<Timeout>,
+    metrics: Arc<ConnectionMetrics>,
 }
 impl WebSocketIo {
-    async fn connect(url: &str) -> io::Result<Self> {
+    async fn connect(url: &str, metrics: Arc<ConnectionMetrics>) -> io::Result<Self> {
         let socket =
             WebSocket::new(url).map_err(|_| io::Error::other("WebSocket creation failed"))?;
         socket.set_binary_type(web_sys::BinaryType::Arraybuffer);
@@ -57,30 +75,53 @@ impl WebSocketIo {
             closed: false,
             failed: false,
             waker: None,
+            read_budget: 64 * 1024,
         }));
+        let message_metrics = metrics.clone();
         let message_state = state.clone();
         let message_socket = socket.clone();
         let message = Closure::wrap(Box::new(move |event: MessageEvent| {
             let mut state = message_state.borrow_mut();
             let Ok(array) = event.data().dyn_into::<js_sys::ArrayBuffer>() else {
+                message_metrics.reject();
                 state.failed = true;
                 state.wake();
                 let _ = message_socket.close();
                 return;
             };
             let size = array.byte_length() as usize;
+            if message_metrics.socket_receive(size, true).is_err() {
+                state.failed = true;
+                state.wake();
+                let _ = message_socket.close();
+                return;
+            }
+            // The engine already allocated this ArrayBuffer; this owner covers its callback reference.
+            let _receipt = ReceiptOwner {
+                metrics: message_metrics.clone(),
+                bytes: size,
+            };
             if size > MESSAGE_BYTES
                 || state.bytes.saturating_add(size) > RECEIVE_BYTES
                 || state.messages.len() >= 256
             {
+                message_metrics.reject();
                 state.failed = true;
-                state.messages.clear();
+                for bytes in state.messages.drain(..) {
+                    let _ = message_metrics.queue(bytes.len(), false, true);
+                }
                 state.bytes = 0;
                 state.wake();
                 let _ = message_socket.close();
                 return;
             }
             let bytes = js_sys::Uint8Array::new(&array).to_vec();
+            if message_metrics.queue(bytes.len(), true, false).is_err() {
+                state.failed = true;
+                state.wake();
+                let _ = message_socket.close();
+                return;
+            }
             state.bytes += bytes.len();
             state.messages.push_back(bytes.into());
             state.wake();
@@ -115,6 +156,8 @@ impl WebSocketIo {
             _close: close,
             _error: error,
             write_wakeup: None,
+            read_wakeup: None,
+            metrics,
         };
         poll_fn(|context| {
             let mut state = io.state.borrow_mut();
@@ -142,11 +185,13 @@ impl Drop for WebSocketIo {
         self.socket.set_onclose(None);
         self.socket.set_onerror(None);
         let _ = self.socket.close();
+        self.state.borrow_mut().messages.clear();
+        self.metrics.close();
     }
 }
 impl AsyncRead for WebSocketIo {
     fn poll_read(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         context: &mut Context<'_>,
         buffer: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
@@ -157,9 +202,37 @@ impl AsyncRead for WebSocketIo {
                 "WebSocket receive bound or transport failure",
             )));
         }
+        if state.read_budget == 0 {
+            drop(state);
+            let state = self.state.clone();
+            let waker = context.waker().clone();
+            self.read_wakeup = Some(Timeout::new(0, move || {
+                state.borrow_mut().read_budget = 64 * 1024;
+                waker.wake();
+            }));
+            if let Err(error) = self.metrics.yield_decode() {
+                return Poll::Ready(Err(error));
+            }
+            return Poll::Pending;
+        }
         if let Some(mut bytes) = state.messages.pop_front() {
-            let count = buffer.remaining().min(bytes.len());
-            buffer.put_slice(&bytes.split_to(count));
+            let count = buffer
+                .remaining()
+                .min(bytes.len())
+                .min(FRAME_BYTES)
+                .min(state.read_budget);
+            let chunk = bytes.split_to(count);
+            if let Err(error) = self
+                .metrics
+                .observe(true, &chunk)
+                .and_then(|()| self.metrics.queue(count, false, bytes.is_empty()))
+            {
+                state.failed = true;
+                let _ = self.socket.close();
+                return Poll::Ready(Err(error));
+            }
+            buffer.put_slice(&chunk);
+            state.read_budget -= count;
             state.bytes -= count;
             if !bytes.is_empty() {
                 state.messages.push_front(bytes);
@@ -185,19 +258,31 @@ impl AsyncWrite for WebSocketIo {
                 "WebSocket closed",
             )));
         }
-        if self.socket.buffered_amount() as usize >= MESSAGE_BYTES {
+        let buffered = self.socket.buffered_amount() as usize;
+        if let Err(error) = self.metrics.backlog(buffered) {
+            return Poll::Ready(Err(error));
+        }
+        if buffered >= MESSAGE_BYTES {
             self.wait_for_write(context);
             return Poll::Pending;
         }
-        let count = bytes.len().min(FRAME_BYTES);
+        let count = bytes.len().min(FRAME_BYTES).min(MESSAGE_BYTES - buffered);
         Poll::Ready(
             self.socket
                 .send_with_u8_array(&bytes[..count])
-                .map(|()| count)
-                .map_err(|_| io::Error::other("WebSocket send failed")),
+                .map_err(|_| io::Error::other("WebSocket send failed"))
+                .and_then(|()| {
+                    self.metrics.observe(false, &bytes[..count])?;
+                    self.metrics
+                        .backlog(self.socket.buffered_amount() as usize)?;
+                    Ok(count)
+                }),
         )
     }
     fn poll_flush(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        if let Err(error) = self.metrics.backlog(self.socket.buffered_amount() as usize) {
+            return Poll::Ready(Err(error));
+        }
         if self.socket.buffered_amount() == 0 {
             Poll::Ready(Ok(()))
         } else {
@@ -224,11 +309,13 @@ impl Drop for AbortOnDrop {
 /// Owns the local driver lifetime. Drop closes the socket and releases callbacks.
 pub struct BrowserConnection {
     driver: AbortOnDrop,
+    metrics: Arc<ConnectionMetrics>,
 }
 impl BrowserConnection {
     /// Connect one HTTP/2 session with bounded frame, header, DATA credit and concurrency.
     pub async fn connect(url: &str) -> io::Result<(Self, BrowserChannel)> {
-        let socket = WebSocketIo::connect(url).await?;
+        let metrics = Arc::new(ConnectionMetrics::new(true));
+        let socket = WebSocketIo::connect(url, metrics.clone()).await?;
         let (sender, connection) = h2::client::Builder::new()
             .initial_window_size(MESSAGE_BYTES as u32)
             .initial_connection_window_size(RECEIVE_BYTES as u32)
@@ -241,26 +328,38 @@ impl BrowserConnection {
             .await
             .map_err(io::Error::other)?;
         let (abort, registration) = AbortHandle::new_pair();
+        let driver_metrics = metrics.clone();
+        let context = df_observe::OperationContext {
+            trace_parent: String::new(),
+            build: option_env!("DF_FIXTURE_BUILD")
+                .unwrap_or("unregistered-cargo-build")
+                .to_owned(),
+        };
+        let mut span = df_observe::begin(&context, "bridge.driver");
         wasm_bindgen_futures::spawn_local(async move {
-            if let Ok(result) = Abortable::new(connection, registration).await {
-                let context = df_observe::OperationContext {
-                    trace_parent: String::new(),
-                    build: "S00-experimental".to_owned(),
-                };
-                df_observe::record(
-                    &context,
-                    "bridge.driver",
-                    if result.is_ok() { "closed" } else { "failed" },
-                    0,
-                );
+            let result = Abortable::new(connection, registration).await;
+            let status = match &result {
+                Ok(Ok(())) => "closed",
+                Ok(Err(_)) => "failed",
+                Err(_) => "cancelled",
+            };
+            driver_metrics.driver_finished(matches!(result, Ok(Err(_))));
+            match driver_metrics.snapshot() {
+                Ok(value) => span.finish(status, value.received_bytes + value.sent_bytes),
+                Err(_) => span.finish_unmeasured("measurement_failed"),
             }
         });
         Ok((
             Self {
                 driver: AbortOnDrop(abort),
+                metrics,
             },
             BrowserChannel { sender },
         ))
+    }
+    /// Current and peak resource measurements owned by this connection.
+    pub fn snapshot(&self) -> io::Result<ConnectionSnapshot> {
+        self.metrics.snapshot()
     }
     /// Explicit cancellation is idempotent and owned by the fixture run.
     pub fn close(&self) {

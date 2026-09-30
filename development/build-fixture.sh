@@ -4,8 +4,8 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 ARTIFACT_ROOT=${DUNGEONFLUX_ARTIFACT_ROOT:-$ROOT/artifacts}
 export RUSTUP_HOME="$ARTIFACT_ROOT/cache/rustup"
 export CARGO_HOME="$ARTIFACT_ROOT/cache/cargo"
-export CARGO_TARGET_DIR="$ARTIFACT_ROOT/build/start-s00"
-export TMPDIR="$ARTIFACT_ROOT/tmp/start-s00"
+export CARGO_TARGET_DIR=${DUNGEONFLUX_BUILD_ROOT:-$ARTIFACT_ROOT/build/start-s00}
+export TMPDIR=${DUNGEONFLUX_TMP_ROOT:-$ARTIFACT_ROOT/tmp/start-s00}
 export PATH="$CARGO_HOME/bin:$PATH"
 export CARGO_BUILD_JOBS=2
 DF_FIXTURE_BUILD=$(git -C "$ROOT" rev-parse HEAD)
@@ -30,6 +30,6 @@ case "${1:-build}" in
     mv "$STAGING" "$CARGO_TARGET_DIR/web"
     printf '%s\n' "$DF_FIXTURE_BUILD" > "$CARGO_TARGET_DIR/web/source-revision.txt"
     ;;
-  serve) exec "$CARGO_TARGET_DIR/debug/df-transport-fixture" "$ARTIFACT_ROOT/build/start-s00/web" ;;
+  serve) exec "$CARGO_TARGET_DIR/debug/df-transport-fixture" "$CARGO_TARGET_DIR/web" "${DUNGEONFLUX_PREVIEW_PORT:-43180}" ;;
   *) echo 'usage: build-fixture.sh [build|serve|cargo arguments...]' >&2; exit 2 ;;
 esac
