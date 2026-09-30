@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-30T19:47:46.365782+00:00",
+  "criteria": [
+    {
+      "criterion": "Inventory only artifacts/build and artifacts/tmp without following symlinks, rechecking live attempt/process ownership and preserving active/latest verified builds, shared caches, unknown files, durable state and evidence.",
+      "procedure": "Inspect no-follow script and report scope; independently enumerate only main artifacts/build,tmp via scandir/lstat; read current attempts/protected process ownership, ensure all roots retained."
+    },
+    {
+      "criterion": "Report truthful eligible/retained/deleted paths and bytes with deterministic retained evidence and devlog; no deletion without all ADR0002 conditions and an explicit coordinator allowlist.",
+      "procedure": "Rehash exact report/script/handoff, verify aggregate arithmetic, zero deletion and empty allowlist; reconcile current inventory delta with time and active integration; verify worker scoped devlog."
+    }
+  ]
+}

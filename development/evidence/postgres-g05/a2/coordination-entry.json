@@ -1,0 +1,9 @@
+{
+  "id": "postgres-g05-coordinator-repair-claimed",
+  "kind": "resolution",
+  "summary": "Independent process-ownership rejection carried into second bounded implementing attempt.",
+  "details": "A1 current-boundary tests demonstrated unrelated-dummy SIGINT, false already-running, symlink ancestry traversal and incomplete command bounds. The coordinator first attempted verdict and terminal phase in one UPDATE; review-phase fencing rejected it and rolled back allchanges.",
+  "action": "Recorded verdict while tracked reviewphase remainedcurrent, then terminalrejection separately withintransaction. Claimed generation2/a2 sameLunaworker, retained defects/reproduction and safeisolatedfixture; clarified finitebuild900s/setup1200s versusnormal60s/readiness10s.",
+  "outcome": "No completion or weakened gate. Actual repair running in parallel with transport. Another unsuccessful economical attempt will escalate asrequired.",
+  "evidence_ref": "development/evidence/postgres-g05/a2/brief.json"
+}

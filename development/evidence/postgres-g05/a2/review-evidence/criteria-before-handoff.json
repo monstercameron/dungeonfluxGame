@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-09-30T18:39:50.789217+00:00",
+  "evaluator": "/root/postgres_review_a2",
+  "configured_model": "gpt-6-astra (coordinator configured; exact serving variant not independently exposed)",
+  "model_self_identity": "GPT-6",
+  "computer_use_enabled": "mcp__cua_repl.js present",
+  "vision_enabled": "image understanding and view_image present",
+  "native_task": "No UI/audio output; execute actual native boundaries per ADR0005.",
+  "criteria": [
+    "Reproducibly download, verify official SHA256, build and install pinned PostgreSQL 18.6 into owned project artifacts without global packages or shell/home changes.",
+    "Provide bounded setup/start/status/stop commands for an owned durable development cluster outside artifacts; deny TCP listening, protect socket/data permissions, and never replace existing data or stop an unrelated process.",
+    "Use real psql transactions to verify version, rollback/commit, restart persistence, parameter-safe diagnostic output and Pg readiness; preserve fsync/full_page_writes/synchronous_commit and explicit configured connection/process limits.",
+    "Retain source/runtime/build/configuration/ownership hashes, exact commands, error outcomes, startup and shutdown evidence and devlog; do not claim G05 persistence/schema/tenant/recovery/media or production readiness is complete."
+  ],
+  "procedures": [
+    "Verify pinned archive, official checksum and exact reused build identity, installation provenance, source edit scope.",
+    "Run actual lifecycle/permissions/TCP checks, malformed/dead/foreign/stale PID/socket/symlink/orphan and timeout boundaries only in evaluator-owned fixture.",
+    "Run real rollback, commit, readiness/settings checks and restart persistence.",
+    "Retain all identities, commands/outcomes and ownership protections; inspect setup-only scope and append devlog."
+  ],
+  "derived_before_worker_handoff": true
+}

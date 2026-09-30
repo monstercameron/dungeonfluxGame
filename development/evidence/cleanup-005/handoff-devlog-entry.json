@@ -1,0 +1,10 @@
+{
+  "id": "active-cleanup-005-a1-handoff-state-20260930",
+  "kind": "resolution",
+  "summary": "Queue and source advanced after the inventory snapshot; a separate handoff snapshot preserves the transition.",
+  "details": "The immutable inventory report records the queue and HEAD as observed at inventory time: G05 a3 was submitted and PIN-G07-SRD-001-a1 was active at HEAD f9343cb5ec17b33c76a03b20f6afec9168f9fb7a. Before handoff, read-only checks observed G05 a3 integrated at c68e168eeb2ab040ec1d6064765c647c4454a041, PIN-G07-SRD-001-a1 submitted, and repository HEAD at that integrated commit. G02 remains inconclusive. The inventory report was not edited; a timestamped companion captures handoff-time queue/process state and links to the unchanged report hash.",
+  "action": "Re-read the relevant workflow attempts, current Git HEAD, targeted process IDs and preview listeners; preserved the later state as a separate durable handoff snapshot.",
+  "outcome": "Inventory report SHA-256 remains 20e5edf52ea59beb8232d67e320f09995698caf64afaa023906d692706ff9c8a. Handoff snapshot SHA-256 is fa93b973f295845047c25e9cc25976af5c8d69b36133d014ecc2fbc53b9f7c5f. No source or queue writes were made by this cleanup attempt.",
+  "related_entry_id": "active-cleanup-005-a1-current-inventory-20260930",
+  "evidence_ref": "development/evidence/cleanup-005/handoff-snapshot.json"
+}

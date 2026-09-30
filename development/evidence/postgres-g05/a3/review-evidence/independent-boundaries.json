@@ -1,0 +1,634 @@
+[
+  {
+    "label": "syntax",
+    "argv": [
+      "bash",
+      "-n",
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "seconds": 0.005
+  },
+  {
+    "label": "status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 0,
+    "stdout": "stopped: owned cluster at /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data\n",
+    "stderr": "",
+    "seconds": 1.317
+  },
+  {
+    "label": "setup",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "setup"
+    ],
+    "exit": 0,
+    "stdout": "/Users/earlcameron/Desktop/dungeonflux/e/artifacts/cache/postgres-g05/postgresql-18.6.tar.gz: OK\nExisting owned PostgreSQL 18.6 cluster preserved at /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data\n",
+    "stderr": "",
+    "seconds": 1.59
+  },
+  {
+    "label": "start",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 0,
+    "stdout": "waiting for server to start.... done\nserver started\nstarted PostgreSQL 18.6 pid=20450 version=18.6 data_directory=/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data max_connections=16 max_worker_processes=8 max_parallel_workers=8 max_parallel_workers_per_gather=2 autovacuum_max_workers=3 fsync=on full_page_writes=on synchronous_commit=on listen_addresses='' tcp=false socket=/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/socket/.s.PGSQL.55439\n",
+    "stderr": "",
+    "seconds": 1.216
+  },
+  {
+    "label": "status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 0,
+    "stdout": "ready pid=20450 version=18.6 data_directory=/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data max_connections=16 max_worker_processes=8 max_parallel_workers=8 max_parallel_workers_per_gather=2 autovacuum_max_workers=3 fsync=on full_page_writes=on synchronous_commit=on listen_addresses='' tcp=false\n",
+    "stderr": "",
+    "seconds": 1.355
+  },
+  {
+    "label": "start-idempotent",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 0,
+    "stdout": "already running: verified owned PostgreSQL 18.6 pid=20450 version=18.6 data_directory=/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data max_connections=16 max_worker_processes=8 max_parallel_workers=8 max_parallel_workers_per_gather=2 autovacuum_max_workers=3 fsync=on full_page_writes=on synchronous_commit=on listen_addresses='' tcp=false\n",
+    "stderr": "",
+    "seconds": 0.943
+  },
+  {
+    "label": "settings",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/artifacts/build/postgres-g05/install/bin/psql",
+      "-XAtq",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-w",
+      "-h",
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/socket",
+      "-p",
+      "55439",
+      "-d",
+      "postgres",
+      "-c",
+      "select version(),current_setting('listen_addresses'),current_setting('max_connections'),current_setting('max_worker_processes'),current_setting('max_parallel_workers'),current_setting('max_parallel_workers_per_gather'),current_setting('autovacuum_max_workers'),current_setting('fsync'),current_setting('full_page_writes'),current_setting('synchronous_commit'),inet_server_addr() is null;"
+    ],
+    "exit": 0,
+    "stdout": "PostgreSQL 18.6 on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit||16|8|8|2|3|on|on|on|t\n",
+    "stderr": "",
+    "seconds": 0.008
+  },
+  {
+    "label": "no-owned-tcp",
+    "argv": [
+      "lsof",
+      "-nP",
+      "-a",
+      "-p",
+      "20450",
+      "-iTCP",
+      "-sTCP:LISTEN"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "",
+    "seconds": 0.023
+  },
+  {
+    "label": "real-transactions",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/artifacts/build/postgres-g05/install/bin/psql",
+      "-XAtq",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-w",
+      "-h",
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/socket",
+      "-p",
+      "55439",
+      "-d",
+      "postgres",
+      "-c",
+      "BEGIN;CREATE TABLE evaluator_a3_rollback(v int);INSERT INTO evaluator_a3_rollback VALUES(186);ROLLBACK;SELECT to_regclass('public.evaluator_a3_rollback') IS NULL;BEGIN;CREATE TABLE evaluator_a3_commit(v int);INSERT INTO evaluator_a3_commit VALUES(186);COMMIT;SELECT v FROM evaluator_a3_commit;"
+    ],
+    "exit": 0,
+    "stdout": "t\n186\n",
+    "stderr": "",
+    "seconds": 0.015
+  },
+  {
+    "label": "stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 0,
+    "stdout": "stopped owned PostgreSQL pid=20450\n",
+    "stderr": "",
+    "seconds": 1.035
+  },
+  {
+    "label": "start",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 0,
+    "stdout": "waiting for server to start.... done\nserver started\nstarted PostgreSQL 18.6 pid=20761 version=18.6 data_directory=/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data max_connections=16 max_worker_processes=8 max_parallel_workers=8 max_parallel_workers_per_gather=2 autovacuum_max_workers=3 fsync=on full_page_writes=on synchronous_commit=on listen_addresses='' tcp=false socket=/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/socket/.s.PGSQL.55439\n",
+    "stderr": "",
+    "seconds": 1.239
+  },
+  {
+    "label": "restart-persistence",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/artifacts/build/postgres-g05/install/bin/psql",
+      "-XAtq",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-w",
+      "-h",
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/socket",
+      "-p",
+      "55439",
+      "-d",
+      "postgres",
+      "-c",
+      "SELECT v FROM evaluator_a3_commit;"
+    ],
+    "exit": 0,
+    "stdout": "186\n",
+    "stderr": "",
+    "seconds": 0.008
+  },
+  {
+    "label": "stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 0,
+    "stdout": "stopped owned PostgreSQL pid=20761\n",
+    "stderr": "",
+    "seconds": 1.256
+  },
+  {
+    "label": "absent-status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 3,
+    "stdout": "not initialized: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05\n",
+    "stderr": "",
+    "seconds": 0.625
+  },
+  {
+    "label": "malformed-pid-start",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: postmaster.pid is malformed; refusing lifecycle action\n",
+    "seconds": 0.861
+  },
+  {
+    "label": "malformed-pid-status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: postmaster.pid is malformed; refusing lifecycle action\n",
+    "seconds": 1.234
+  },
+  {
+    "label": "malformed-pid-stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: postmaster.pid is malformed; refusing lifecycle action\n",
+    "seconds": 0.853
+  },
+  {
+    "label": "incomplete-dead-pid-start",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: running-server identity check failed: postmaster.pid is incomplete\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n",
+    "seconds": 0.923
+  },
+  {
+    "label": "incomplete-dead-pid-status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: running-server identity check failed: postmaster.pid is incomplete\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n",
+    "seconds": 1.29
+  },
+  {
+    "label": "incomplete-dead-pid-stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: running-server identity check failed: postmaster.pid is incomplete\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n",
+    "seconds": 0.939
+  },
+  {
+    "label": "foreign-dummy-start",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: running-server identity check failed: PID executable does not match the owned PostgreSQL binary\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n",
+    "seconds": 0.92
+  },
+  {
+    "label": "foreign-dummy-status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: running-server identity check failed: PID executable does not match the owned PostgreSQL binary\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n",
+    "seconds": 1.286
+  },
+  {
+    "label": "foreign-dummy-stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: running-server identity check failed: PID executable does not match the owned PostgreSQL binary\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n",
+    "seconds": 0.945
+  },
+  {
+    "label": "stale-socket-start",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: socket exists without postmaster.pid; refusing lifecycle action\n",
+    "seconds": 0.951
+  },
+  {
+    "label": "stale-socket-status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: socket exists without postmaster.pid; refusing lifecycle action\n",
+    "seconds": 1.291
+  },
+  {
+    "label": "stale-socket-stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: socket exists without postmaster.pid; refusing lifecycle action\n",
+    "seconds": 0.94
+  },
+  {
+    "label": "symlink-ancestor-setup",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "setup"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: refusing symlink component: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime\n",
+    "seconds": 0.287
+  },
+  {
+    "label": "symlink-ancestor-start",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: refusing symlink component: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime\n",
+    "seconds": 0.269
+  },
+  {
+    "label": "symlink-ancestor-status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: refusing symlink component: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime\n",
+    "seconds": 0.274
+  },
+  {
+    "label": "symlink-ancestor-stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: refusing symlink component: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime\n",
+    "seconds": 0.271
+  },
+  {
+    "label": "symlink-log-setup",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "setup"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: refusing symlink component: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/server.log\n",
+    "seconds": 0.38
+  },
+  {
+    "label": "symlink-log-start",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: refusing symlink component: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/server.log\n",
+    "seconds": 0.383
+  },
+  {
+    "label": "symlink-log-status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: refusing symlink component: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/server.log\n",
+    "seconds": 0.383
+  },
+  {
+    "label": "symlink-log-stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: refusing symlink component: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/server.log\n",
+    "seconds": 0.402
+  },
+  {
+    "label": "foreign-owner-setup",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "setup"
+    ],
+    "exit": 1,
+    "stdout": "/Users/earlcameron/Desktop/dungeonflux/e/artifacts/cache/postgres-g05/postgresql-18.6.tar.gz: OK\n",
+    "stderr": "postgres-g05: ownership check failed: cluster owner/version does not match this runtime\n",
+    "seconds": 1.609
+  },
+  {
+    "label": "foreign-owner-start",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: ownership check failed: cluster owner/version does not match this runtime\n",
+    "seconds": 1.003
+  },
+  {
+    "label": "foreign-owner-status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: ownership check failed: cluster owner/version does not match this runtime\n",
+    "seconds": 1.242
+  },
+  {
+    "label": "foreign-owner-stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: ownership check failed: cluster owner/version does not match this runtime\n",
+    "seconds": 0.8
+  },
+  {
+    "label": "unsafe-data-mode-setup",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "setup"
+    ],
+    "exit": 1,
+    "stdout": "/Users/earlcameron/Desktop/dungeonflux/e/artifacts/cache/postgres-g05/postgresql-18.6.tar.gz: OK\n",
+    "stderr": "postgres-g05: ownership check failed: directory ownership or permissions are unsafe: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data\n",
+    "seconds": 1.557
+  },
+  {
+    "label": "unsafe-data-mode-start",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: ownership check failed: directory ownership or permissions are unsafe: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data\n",
+    "seconds": 0.813
+  },
+  {
+    "label": "unsafe-data-mode-status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: ownership check failed: directory ownership or permissions are unsafe: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data\n",
+    "seconds": 1.16
+  },
+  {
+    "label": "unsafe-data-mode-stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: ownership check failed: directory ownership or permissions are unsafe: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data\n",
+    "seconds": 0.788
+  },
+  {
+    "label": "suffix-initdb",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/artifacts/build/postgres-g05/install/bin/initdb",
+      "-D",
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data-suffix-eval3",
+      "--encoding=UTF8",
+      "--locale=C",
+      "--auth-local=trust",
+      "--auth-host=reject"
+    ],
+    "exit": 0,
+    "stdout": "The files belonging to this database system will be owned by user \"earlcameron\".\nThis user must also own the server process.\n\nThe database cluster will be initialized with locale \"C\".\nThe default text search configuration will be set to \"english\".\n\nData page checksums are enabled.\n\nfixing permissions on existing directory /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data-suffix-eval3 ... ok\ncreating subdirectories ... ok\nselecting dynamic shared memory implementation ... posix\nselecting default \"max_connections\" ... 100\nselecting default \"shared_buffers\" ... 128MB\nselecting default time zone ... America/New_York\ncreating configuration files ... ok\nrunning bootstrap script ... ok\nperforming post-bootstrap initialization ... ok\nsyncing data to disk ... ok\n\nSuccess. You can now start the database server using:\n\n    /Users/earlcameron/Desktop/dungeonflux/e/artifacts/build/postgres-g05/install/bin/pg_ctl -D /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data-suffix-eval3 -l logfile start\n\n",
+    "stderr": "",
+    "seconds": 0.496
+  },
+  {
+    "label": "same-second-main-valid",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 0,
+    "stdout": "ready pid=22471 version=18.6 data_directory=/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data max_connections=16 max_worker_processes=8 max_parallel_workers=8 max_parallel_workers_per_gather=2 autovacuum_max_workers=3 fsync=on full_page_writes=on synchronous_commit=on listen_addresses='' tcp=false\n",
+    "stderr": "",
+    "seconds": 1.336
+  },
+  {
+    "label": "same-second-prefix-pid-start",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: running-server identity check failed: PID command line does not name the owned data directory\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n",
+    "seconds": 0.935
+  },
+  {
+    "label": "same-second-prefix-pid-status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: running-server identity check failed: PID command line does not name the owned data directory\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n",
+    "seconds": 1.268
+  },
+  {
+    "label": "same-second-prefix-pid-stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: running-server identity check failed: PID command line does not name the owned data directory\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n",
+    "seconds": 0.919
+  },
+  {
+    "label": "wrong-answering-backend-start",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "start"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: running-server identity check failed: SQL backend does not belong to the verified postmaster PID\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n",
+    "seconds": 1.316
+  },
+  {
+    "label": "wrong-answering-backend-status",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: running-server identity check failed: SQL backend does not belong to the verified postmaster PID\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n",
+    "seconds": 1.325
+  },
+  {
+    "label": "wrong-answering-backend-stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "postgres-g05: running-server identity check failed: SQL backend does not belong to the verified postmaster PID\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n",
+    "seconds": 0.957
+  },
+  {
+    "label": "captured-pid-stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "stop"
+    ],
+    "exit": 0,
+    "stdout": "stopped owned PostgreSQL pid=22471\n",
+    "stderr": "",
+    "seconds": 1.258
+  },
+  {
+    "label": "suffix-survives-captured-stop",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/artifacts/build/postgres-g05/install/bin/pg_isready",
+      "-h",
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/ev3",
+      "-p",
+      "55440",
+      "-t",
+      "2"
+    ],
+    "exit": 0,
+    "stdout": "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/ev3:55440 - accepting connections\n",
+    "stderr": "",
+    "seconds": 0.006
+  },
+  {
+    "label": "final-stopped-phase1",
+    "argv": [
+      "/Users/earlcameron/Desktop/dungeonflux/e/development/postgres.sh",
+      "status"
+    ],
+    "exit": 0,
+    "stdout": "stopped: owned cluster at /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data\n",
+    "stderr": "",
+    "seconds": 1.358
+  }
+]

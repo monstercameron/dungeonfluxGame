@@ -1,0 +1,94 @@
+{
+  "attempt_id": "SETUP-G05-001-a1",
+  "build_jobs": 1,
+  "checks": {
+    "git_diff_check": "git diff --cached --check passed before both commits",
+    "retained_devlog": [
+      "setup-g05-a1-initialization-sync",
+      "setup-g05-a1-pgctl-pid-regex"
+    ],
+    "shell_syntax": "bash -n development/postgres.sh passed",
+    "source_boundary": "only .gitignore, development/postgres.sh, development/postgres-g05.md committed"
+  },
+  "commands": [
+    "bash -n development/postgres.sh",
+    "./development/postgres.sh setup",
+    "./development/postgres.sh start",
+    "./development/postgres.sh status",
+    "./development/postgres.sh stop",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install/bin/pg_isready -h /Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/socket -p 55439 -t 5",
+    "psql -X -v ON_ERROR_STOP=1 over the owned Unix socket: temporary-table transaction rolled back, persistent value 186 committed, then confirmed after graceful restart"
+  ],
+  "compiler": "Apple clang 21.0.0",
+  "created_at_utc": "2026-09-30T17:49:33.902277+00:00",
+  "dependency": {
+    "configure": [
+      "--without-readline",
+      "--without-icu",
+      "--without-llvm",
+      "--without-lz4",
+      "--without-zstd",
+      "--without-openssl",
+      "--without-pam",
+      "--without-systemd",
+      "--without-bonjour",
+      "--without-gssapi",
+      "--without-ldap",
+      "--without-perl",
+      "--without-python",
+      "--without-tcl",
+      "--without-libxml",
+      "--without-libxslt"
+    ],
+    "sha256": "983ee554ec53dbeb9b70797bef9fcf4e67e117e7e48ca1463cc80b3ff8e8ff3f",
+    "system_zlib": "enabled",
+    "url": "https://ftp.postgresql.org/pub/source/v18.6/postgresql-18.6.tar.gz",
+    "version": "18.6"
+  },
+  "devlog_ids": [
+    "setup-g05-a1-initialization-sync",
+    "setup-g05-a1-pgctl-pid-regex"
+  ],
+  "host": "macOS 26.5 arm64",
+  "input_revision": "f9343cb5ec17b33c76a03b20f6afec9168f9fb7a",
+  "known_gap": "The first executed setup draft included initdb --no-sync and emitted PostgreSQL \u201cSync to disk skipped\u201d. The option was removed from the final script before handoff. The already-created cluster was preserved under the explicit no-reset rule; its initial creation was not crash-durability tested. Subsequent server settings and graceful restart checks passed. Do not claim crash recovery, full G05, schema/tenant isolation, backup/restore, or production readiness.",
+  "observations": {
+    "baseline_pid_67387": "still present and unchanged; port 43180 fixture not touched",
+    "existing_data": "setup rerun verified archive and reported existing cluster preserved",
+    "initial_status": "not initialized exit 3",
+    "ownership_failure": "wrong UID manifest refused; restored manifest and status passed",
+    "permissions": {
+      "data": "0700",
+      "runtime_root": "0700",
+      "socket": "0700"
+    },
+    "permissions_failure": "socket directory changed to mode 0755; status refused it; restored mode 0700 and status passed",
+    "psql_version": "psql (PostgreSQL) 18.6",
+    "readiness": "accepting connections",
+    "restart": "graceful stop PID 80716; restart PID 80873; value 186 persisted",
+    "settings": {
+      "fsync": "on",
+      "full_page_writes": "on",
+      "listen_addresses": "",
+      "max_connections": "16",
+      "synchronous_commit": "on"
+    },
+    "setup": "archive hash verified; installed PostgreSQL 18.6; initialized cluster",
+    "tcp_listener": "none found on port 55439",
+    "transactions": "rollback-ok; commit-ok value=186"
+  },
+  "sha256": {
+    "archive": "983ee554ec53dbeb9b70797bef9fcf4e67e117e7e48ca1463cc80b3ff8e8ff3f",
+    "cluster/PG_VERSION": "7ee29791fc17e986b97128845622b077fb45e349fdb80523fac9dba879b4ad60",
+    "cluster/owner.json": "8d531bef812ac541bb3f54be78556885ef0550855300e58abdf427f4e83e3141",
+    "cluster/postgresql.conf": "618ee97b55881ce33a39487c32df565130b10c25520cc0e2f0b00c08c5b1759b",
+    "runtime/pg_ctl": "401d19cff0e8c98a76bb0965cb7ca0c7a66c27b3480796fcd03ddbfe4b24e0b4",
+    "runtime/postgres": "fdb263f367f30e248021c9f74441c9120c2091aceaed0957bdb7a13efca7f8d9",
+    "runtime/psql": "572ac7789c613a4c066cdb4deaf1b4d5c18d1975000cb097c1ce764f828432a7",
+    "source/.gitignore": "9e3fd09e7e8290b6698c4e1c7938c34a893d590cb99758143edc2a515894a685",
+    "source/development/postgres-g05.md": "9afbd2d016cbc47bba31c52e8512efa38d4ff1da1df30de618aebac9084dac59",
+    "source/development/postgres.sh": "5a9810276a952d68e1116b46a27c292099956b3e1579ae919b7d8088b8ef4307"
+  },
+  "submitted_commit": "25af2ecd54bfb2b918405d354972f7a652c05342",
+  "task_id": "SETUP-G05-001"
+}

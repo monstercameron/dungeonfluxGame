@@ -1,0 +1,9 @@
+{
+  "id": "qualify-g02-coordinator-integrated-check-gap-20260930",
+  "kind": "blocker",
+  "summary": "Integrated transport remains in review pending real browser reload after repeated Mac lock.",
+  "details": "Integrated ba0d386 transport passed native tests, browser semantics/pressure/probes/desktop/narrow visuals; final dedicated43182 reload check unperformed because Mac locked/automatic unlock failed. Candidate approval retained; integration incomplete until current independent check finishes.",
+  "action": "Retained current independent ba0 build evidence and approval of original51d candidate; kept taskreview and attemptapproved/integration, preserved nativepreview25530/43182 and all prior builds. Sent async manual-unlock request.",
+  "outcome": "No completion or failed implementation count; final integrated criterion remains unverified. Next overlapping shared-contract work stays unclaimed.",
+  "evidence_ref": "development/evidence/qualify-g02/integration/review.json"
+}

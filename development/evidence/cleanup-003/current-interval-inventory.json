@@ -1,0 +1,272 @@
+{
+  "active_claims": [
+    {
+      "attempt_id": "QUALIFY-G02-001-a1",
+      "lease_expires_at": "2026-09-30T20:25:20.465066+00:00",
+      "owner": "/root/start_s00",
+      "protected_paths": [
+        "artifacts/build/qualify-g02",
+        "artifacts/tmp/QUALIFY-G02-001-a1"
+      ],
+      "role": "worker",
+      "status": "active"
+    },
+    {
+      "attempt_id": "SETUP-G05-001-a2",
+      "lease_expires_at": "2026-09-30T20:03:27.860428+00:00",
+      "owner": "/root/postgres_g05",
+      "protected_paths": [
+        "artifacts/build/postgres-g05",
+        "artifacts/tmp/SETUP-G05-001-a2"
+      ],
+      "role": "worker",
+      "status": "active"
+    },
+    {
+      "attempt_id": "ACTIVE-CLEANUP-003-a1",
+      "lease_expires_at": "2026-09-30T19:01:10.276028+00:00",
+      "owner": "/root/cleanup_interval",
+      "protected_paths": [
+        "artifacts/tmp/ACTIVE-CLEANUP-003-a1"
+      ],
+      "role": "cleanup",
+      "status": "active"
+    }
+  ],
+  "attempt_id": "ACTIVE-CLEANUP-003-a1",
+  "candidates": [
+    {
+      "classification": "retained",
+      "deleted": false,
+      "directories": 83,
+      "eligible": false,
+      "errors": [],
+      "kind": "directory",
+      "path": "artifacts/build/postgres-g05",
+      "reason": "No coordinator delete allowlist; active, protected, evidence-referenced, or unknown ownership retained under ADR 0002.",
+      "regular_file_bytes": 30542989,
+      "regular_files": 1655,
+      "special_entries": 0,
+      "symlinks_not_followed": 4
+    },
+    {
+      "classification": "retained",
+      "deleted": false,
+      "directories": 766,
+      "eligible": false,
+      "errors": [],
+      "kind": "directory",
+      "path": "artifacts/build/qualify-g02",
+      "reason": "No coordinator delete allowlist; active, protected, evidence-referenced, or unknown ownership retained under ADR 0002.",
+      "regular_file_bytes": 3247783484,
+      "regular_files": 14457,
+      "special_entries": 0,
+      "symlinks_not_followed": 0
+    },
+    {
+      "classification": "retained",
+      "deleted": false,
+      "directories": 1123,
+      "eligible": false,
+      "errors": [],
+      "kind": "directory",
+      "path": "artifacts/build/start-s00",
+      "reason": "No coordinator delete allowlist; active, protected, evidence-referenced, or unknown ownership retained under ADR 0002.",
+      "regular_file_bytes": 3454519620,
+      "regular_files": 15379,
+      "special_entries": 0,
+      "symlinks_not_followed": 0
+    },
+    {
+      "classification": "retained",
+      "deleted": false,
+      "directories": 1,
+      "eligible": false,
+      "errors": [],
+      "kind": "directory",
+      "path": "artifacts/tmp/ACTIVE-CLEANUP-002-a1",
+      "reason": "No coordinator delete allowlist; active, protected, evidence-referenced, or unknown ownership retained under ADR 0002.",
+      "regular_file_bytes": 7465,
+      "regular_files": 2,
+      "special_entries": 0,
+      "symlinks_not_followed": 0
+    },
+    {
+      "classification": "retained",
+      "deleted": false,
+      "directories": 1,
+      "eligible": false,
+      "errors": [],
+      "kind": "directory",
+      "path": "artifacts/tmp/ACTIVE-CLEANUP-003-a1",
+      "reason": "No coordinator delete allowlist; active, protected, evidence-referenced, or unknown ownership retained under ADR 0002.",
+      "regular_file_bytes": 9723,
+      "regular_files": 2,
+      "special_entries": 0,
+      "symlinks_not_followed": 0
+    },
+    {
+      "classification": "retained",
+      "deleted": false,
+      "directories": 4,
+      "eligible": false,
+      "errors": [],
+      "kind": "directory",
+      "path": "artifacts/tmp/QUALIFY-G02-001-a1",
+      "reason": "No coordinator delete allowlist; active, protected, evidence-referenced, or unknown ownership retained under ADR 0002.",
+      "regular_file_bytes": 10245301,
+      "regular_files": 17,
+      "special_entries": 0,
+      "symlinks_not_followed": 0
+    },
+    {
+      "classification": "retained",
+      "deleted": false,
+      "directories": 661,
+      "eligible": false,
+      "errors": [],
+      "kind": "directory",
+      "path": "artifacts/tmp/SETUP-G05-001-a1",
+      "reason": "No coordinator delete allowlist; active, protected, evidence-referenced, or unknown ownership retained under ADR 0002.",
+      "regular_file_bytes": 201295036,
+      "regular_files": 8892,
+      "special_entries": 0,
+      "symlinks_not_followed": 46
+    },
+    {
+      "classification": "retained",
+      "deleted": false,
+      "directories": 1,
+      "eligible": false,
+      "errors": [],
+      "kind": "directory",
+      "path": "artifacts/tmp/SETUP-G05-001-a2",
+      "reason": "No coordinator delete allowlist; active, protected, evidence-referenced, or unknown ownership retained under ADR 0002.",
+      "regular_file_bytes": 9182,
+      "regular_files": 1,
+      "special_entries": 0,
+      "symlinks_not_followed": 0
+    },
+    {
+      "classification": "retained",
+      "deleted": false,
+      "directories": 1,
+      "eligible": false,
+      "errors": [],
+      "kind": "directory",
+      "path": "artifacts/tmp/START-S00-001-a1",
+      "reason": "No coordinator delete allowlist; active, protected, evidence-referenced, or unknown ownership retained under ADR 0002.",
+      "regular_file_bytes": 12217773,
+      "regular_files": 3,
+      "special_entries": 0,
+      "symlinks_not_followed": 0
+    },
+    {
+      "classification": "retained",
+      "deleted": false,
+      "directories": 103,
+      "eligible": false,
+      "errors": [],
+      "kind": "directory",
+      "path": "artifacts/tmp/journey",
+      "reason": "No coordinator delete allowlist; active, protected, evidence-referenced, or unknown ownership retained under ADR 0002.",
+      "regular_file_bytes": 17107549,
+      "regular_files": 329,
+      "special_entries": 0,
+      "symlinks_not_followed": 0
+    },
+    {
+      "classification": "retained",
+      "deleted": false,
+      "directories": 4,
+      "eligible": false,
+      "errors": [],
+      "kind": "directory",
+      "path": "artifacts/tmp/start-s00",
+      "reason": "No coordinator delete allowlist; active, protected, evidence-referenced, or unknown ownership retained under ADR 0002.",
+      "regular_file_bytes": 9385416,
+      "regular_files": 14,
+      "special_entries": 0,
+      "symlinks_not_followed": 0
+    }
+  ],
+  "decision": "No paths deleted. The frozen brief has an empty delete allowlist; all candidates retained.",
+  "delete_allowlist": [],
+  "generated_at_utc": "2026-09-30T18:34:22+00:00",
+  "input_revision": "f9343cb5ec17b33c76a03b20f6afec9168f9fb7a",
+  "inventory_script": "artifacts/tmp/ACTIVE-CLEANUP-003-a1/inventory.py",
+  "inventory_script_sha256": "a4af00c5838b3b14fafa97e795744ce6bba2b5b32373cd9f2c02e63f33b4a004",
+  "live_processes": [
+    {
+      "listener": "127.0.0.1:43180",
+      "pid": 67387,
+      "process": "67387 27005 Wed Sep 30 12:27:03 2026     Ss   /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/web",
+      "use": "latest verified baseline build/start-s00"
+    },
+    {
+      "listener": "127.0.0.1:43181",
+      "pid": 96977,
+      "process": "96977 27005 Wed Sep 30 14:32:03 2026     Ss   /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web 43181",
+      "use": "active qualification build qualify-g02"
+    },
+    {
+      "listener": "Unix socket under development/runtime/postgres-g05/socket; TCP disabled",
+      "pid": 80873,
+      "process": "80873     1 Wed Sep 30 13:46:12 2026     Ss   /Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install/bin/postgres -D /Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/data -c listen_addresses= -c unix_socket_directories=/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/socket -c unix_socket_permissions=0700 -c port=55439 -c max_connections=16 -c fsync=on -c full_page_writes=on -c synchronous_commit=on",
+      "use": "PostgreSQL server executing build/postgres-g05"
+    },
+    {
+      "listener": null,
+      "pid": 69190,
+      "process": "69190     1 Wed Sep 30 13:25:20 2026     Ss   /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python /Users/earlcameron/Desktop/dungeonflux/development/screenshot_journey.py run-loop",
+      "use": "screenshot recorder using artifacts/tmp/journey"
+    }
+  ],
+  "method": "Sorted recursive os.lstat inventory of direct children under artifacts/build and artifacts/tmp; directories are recursed only after lstat identifies them as directories; symlinks are counted and never traversed. Logical regular-file bytes only; directory metadata and allocation overhead excluded.",
+  "protected_claims": [
+    "artifacts/cache is excluded by scope and remains governed by separate retention policy.",
+    "artifacts/build/start-s00 and artifacts/tmp/start-s00 are the latest verified baseline, used by PID 67387 on port 43180.",
+    "artifacts/build/qualify-g02 and artifacts/tmp/QUALIFY-G02-001-a1 are owned by active attempt QUALIFY-G02-001-a1; PID 96977 listens on port 43181.",
+    "artifacts/build/postgres-g05 and artifacts/tmp/SETUP-G05-001-a1 plus a2 are protected by PostgreSQL setup work; PID 80873 executes the build; runtime database under development/runtime is durable and out of scope.",
+    "artifacts/tmp/journey is used by recorder PID 69190; development/evidence/journey is durable and out of scope.",
+    "artifacts/tmp/ACTIVE-CLEANUP-002-a1 is retained because its inventory script/report is evidence referenced by the prior interval attempt.",
+    "artifacts/tmp/ACTIVE-CLEANUP-003-a1 is this live attempt's scratch path.",
+    "Unknown/unclaimed paths remain retained pending an explicit coordinator allowlist and verified ownership/use checks.",
+    "development/evidence, development/runtime, workflow SQLite plus sidecars, Git/source/user deliverables/old archives, and repository e/ and p/ clones were outside the requested scan and untouched."
+  ],
+  "record_role": "operational",
+  "runtime_build_identity": {
+    "active_qualification": {
+      "path": "artifacts/build/qualify-g02/debug/df-transport-fixture",
+      "sha256": "7840d2ea80898025a72887fc7de7b9ee23c6ebee747627ac4ee3138520cc86be"
+    },
+    "latest_verified_baseline": {
+      "path": "artifacts/build/start-s00/debug/df-transport-fixture",
+      "sha256": "b2a3a7d058afdb9735672b90ec9623d55ccd2bc1f53f537e6c2c363ddd6913e1"
+    },
+    "postgres_install_server": {
+      "path": "artifacts/build/postgres-g05/install/bin/postgres",
+      "sha256": "fdb263f367f30e248021c9f74441c9120c2091aceaed0957bdb7a13efca7f8d9"
+    }
+  },
+  "scope": [
+    "artifacts/build",
+    "artifacts/tmp"
+  ],
+  "task_id": "ACTIVE-CLEANUP-003",
+  "totals": {
+    "candidates": 11,
+    "deleted": 0,
+    "directories": 2748,
+    "eligible": 0,
+    "eligible_bytes": 0,
+    "reclaimed_bytes": 0,
+    "regular_file_bytes": 6983123538,
+    "regular_files": 40751,
+    "retained": 11,
+    "retained_bytes": 6983123538,
+    "scan_errors": 0,
+    "special_entries": 0,
+    "symlinks_not_followed": 50
+  }
+}

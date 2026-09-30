@@ -1,0 +1,9 @@
+{
+  "id": "g05-a3-sol-identity-design-20260930",
+  "kind": "discovery",
+  "summary": "Exact process argument boundaries and live SQL backend parent replace prefix/timestamp association",
+  "details": "Re-read a1/a2 failures and full frozen a3 contract. a2 used substring process command matching and matching second timestamps; those cannot bind a postmaster PID to the answering SQL server. Log path had no guard. Source/doc hashes match frozen brief. s fixture requires its own real-file artifacts prefix because script computes repository root from git common directory; coordinator explicitly clarified and authorized it.",
+  "action": "Added NUL-delimited OS argv check for exact -D argument, held SQL connection with pg_backend_pid and OS ppid check, and guards for log/runtime config/PID/socket paths. Reused exact-hash verified a1 native 18.6 install/archive in s clone; new initdb synced disk.",
+  "outcome": "Fresh lifecycle passes; current boundary tests continue. No production/G05 persistence completion claim.",
+  "evidence_ref": "development/evidence/postgres-g05/a3/identity-before.json"
+}

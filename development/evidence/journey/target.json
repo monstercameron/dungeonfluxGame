@@ -1,10 +1,14 @@
 {
-  "kind": "static-site",
-  "label": "DungeonFlux public project-site preview (planned Rust game)",
-  "url": null,
+  "kind": "owned-preview",
+  "label": "DungeonFlux integrated experimental transport fixture (G02 final reload pending; gameplay pending)",
+  "url": "http://127.0.0.1:43182",
   "public_safe": true,
-  "ownership_proof": null,
-  "source_paths": [],
+  "ownership_proof": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/qualify-g02/integration/ownership.json",
+  "source_paths": [
+    "crates",
+    "Cargo.lock",
+    "rust-toolchain.toml"
+  ],
   "disk_cap_bytes": 536870912,
   "node_executable": "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node",
   "playwright_module": "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",

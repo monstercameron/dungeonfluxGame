@@ -1,0 +1,31 @@
+{
+  "timestamp_utc": "2026-09-30T19:45:16.396079+00:00",
+  "command": [
+    "curl",
+    "--fail",
+    "--location",
+    "--proto",
+    "=https",
+    "--max-time",
+    "55",
+    "--max-filesize",
+    "67108864",
+    "--silent",
+    "--show-error",
+    "--dump-header",
+    "/Users/earlcameron/Desktop/dungeonflux/development/evidence/srd-g07/review-evidence/publisher-download.headers",
+    "--output",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/publisher-check.pdf",
+    "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf"
+  ],
+  "exit": 0,
+  "stdout": "",
+  "stderr": "",
+  "seconds": 0.34080737503245473,
+  "publisher_page": "https://www.dndbeyond.com/srd",
+  "license_source": "https://creativecommons.org/licenses/by/4.0/legalcode",
+  "creator_faq": "https://www.dndbeyond.com/creator-faq",
+  "bytes": 6031375,
+  "sha256": "8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87",
+  "identical_to_pin": true
+}

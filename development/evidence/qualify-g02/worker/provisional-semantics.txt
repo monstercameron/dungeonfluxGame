@@ -1,0 +1,14 @@
+Build: f9343cb5ec17b33c76a03b20f6afec9168f9fb7a-dirty
+CONNECTING · binary WebSocket / native HTTP/2
+PASS · Unary + response metadata
+PASS · Server streaming + ordered DATA + OK trailers
+PASS · Client streaming + request half-close
+PASS · Bidirectional streaming + response before half-close
+PASS · INVALID_ARGUMENT + error trailers
+PASS · Error statuses + trailers in all four RPC modes
+PASS · Cancellation resets stream + server owner released
+PASS · Deadline (local browser deadline: DeadlineExceeded) + native grpc-timeout + cleanup
+PASS · Oversized protobuf rejected at native decoding boundary
+PASS · Simultaneous streams share the same connection
+COMPLETE · 10 transport checks passed
+G02 INCONCLUSIVE · physical devices / adversarial receive memory pending

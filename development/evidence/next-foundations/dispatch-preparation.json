@@ -1,0 +1,117 @@
+{
+  "goal": "complete this project, complete all todos",
+  "prepared_at": "2026-09-30T17:43:00Z",
+  "record_role": "coordinator_dispatch_preparation",
+  "input_baseline": "f9343cb5ec17b33c76a03b20f6afec9168f9fb7a",
+  "dispatch_ready": false,
+  "reason": "Current QUALIFY-G02-001 owns protocol, telemetry instrumentation, tools, and workspace manifests. Re-read its accepted integration and freeze each dependent brief before dispatch; this preparation does not claim a queue completion.",
+  "ordered_candidates": [
+    {
+      "proposed_task_id": "CONTRACT-G03-001",
+      "objective": "Implement the first common identity, composite revision and protocol compatibility wave needed by the durable two-role slice.",
+      "governing_sources": [
+        "planning/subsystem-interfaces.md#Common contract rules",
+        "planning/rpc-api.md#Common envelopes and outcomes",
+        "planning/rpc-api.md#Debug, telemetry and compatibility",
+        "planning/rpc-api.md#Recovery revision ordering",
+        "planning/service-operations.md#Composite revision after disaster restore",
+        "planning/coding-style.md",
+        "planning/subsystem-architecture.md#Shared and transport crates"
+      ],
+      "owner": "one df-types/df-protocol implementing owner",
+      "permitted_edit_areas": [
+        "crates/df-types/",
+        "crates/df-protocol/",
+        "Cargo.toml",
+        "Cargo.lock",
+        "development/shared-contracts.md"
+      ],
+      "scope": [
+        "Only required first-wave distinct session/member/client-binding/run/operation IDs, validated nonsecret identity representation, explicit units, BuildIdentity and checked RecoveryEpoch/SessionRevision values; no auth authority, secret token, engine, database or serialization framework in df-types.",
+        "SessionRevision orders lexicographically by verified recovery epoch then sequence. Constructors validate supplied values; only the future protected recovery owner issues an epoch. Overflow and missing/invalid epochs reject explicitly.",
+        "Generated common v1 wire messages and explicit boundary validation/encoding, stable field numbering and ledger, presence and unknown required-capability policy, native and WASM compatibility fixtures.",
+        "No new game service registration, model/rules placeholder or speculative full 41-method skeleton. Later action/view/effect/audience wave waits for actual consuming slice and its owner decisions.",
+        "Preserve df-protocol production import closure: it has no project-crate dependencies. Domain/protocol conversions belong to the actual consuming boundary; compatibility fixtures may compose required types through an allowed test or df-tools boundary rather than adding a prohibited protocol-to-types edge."
+      ],
+      "evidence_required": [
+        "native/WASM fmt/lint/compile",
+        "actual generated encode/decode compatibility and rejected malformed/presence cases",
+        "old recovery revision versus newer epoch compare",
+        "overflow behavior",
+        "secret/import closure review",
+        "independent frontier affected-boundary evaluation"
+      ],
+      "reuse_backlog": [
+        "B-G03-D01",
+        "B-G03-D02",
+        "B-G03-D03",
+        "B-G03-R01",
+        "B-G03-F01",
+        "B-G03-F02",
+        "B-G03-F03"
+      ],
+      "full_gate_policy": "This bounded wave does not complete full G03. Pure contract work does not waive G02 physical/memory feasibility or authorize dependent production clients."
+    },
+    {
+      "proposed_task_id": "TELEMETRY-G06-001",
+      "objective": "Replace the experimental in-memory native telemetry sink with a real bounded durable OTEL log/span pipeline, spool recovery and separate SQLite read-only diagnostics.",
+      "governing_sources": [
+        "planning/observability.md",
+        "planning/storage-architecture.md#SQLite telemetry and workflow",
+        "planning/subsystem-interfaces.md#Observability and development tooling",
+        "planning/service-operations.md#Proposed workload and service targets",
+        "planning/service-operations.md#Retention, deletion and provenance",
+        "planning/coding-style.md",
+        "planning/subsystem-architecture.md#Tooling crates"
+      ],
+      "owner": "one df-observe/df-telemetry implementing owner with a native internal executable fixture",
+      "permitted_edit_areas": [
+        "crates/df-observe/",
+        "crates/df-telemetry/",
+        "Cargo.toml",
+        "Cargo.lock",
+        ".gitignore",
+        "development/native-telemetry.md"
+      ],
+      "scope": [
+        "Use shared native Rust OTEL producer/export instrumentation and actual OTLP mapping; preserve typed log fields, timestamps, resource/scope identity, trace parents/links and stable producer/record identities.",
+        "Capture enabled logs independently of trace sampling; bounded exporter/spool/batches have explicit durable-acceptance receipt, duplicate suppression and checkpoint only after SQLite commit.",
+        "Keep telemetry SQLite, immutable retained evidence and spool outside artifacts and separate from workflow/game storage. Native CLI read-only queries return watermark/gaps/retention; no agent mutation or public raw SQL API.",
+        "Exercise sink outage, restart, duplicate delivery, malformed/oversized records, contention, capacity exhaustion and emergency diagnostics without recursive logging or blocking the transport fixture.",
+        "Freeze supported local capture/failure envelope, measured counts/latency/overhead, finite quotas and readiness policy honestly. Full browser upload, df-auth operator/tenant scope, commercial retention/deletion and full game correlation remain later required integration.",
+        "Preserve architecture edges: df-tools accesses telemetry through RPC and does not import df-telemetry directly. The initial internal native executable fixture belongs to df-telemetry; production operator RPC wiring awaits df-auth and exact generated contracts."
+      ],
+      "evidence_required": [
+        "current SDK/dependency source verification before freeze",
+        "native style gates",
+        "real emitted known OTEL corpus read from SQLite with causality/counts/typed fields",
+        "durable spool replay after process restart and lost receipt",
+        "read-only query denial",
+        "capacity/outage loss indicators and transport responsiveness",
+        "independent frontier actual affected-boundary evaluation"
+      ],
+      "reuse_backlog": [
+        "B-G06-D01",
+        "B-G06-D02",
+        "B-G06-D03",
+        "B-G06-D04",
+        "B-G06-R01",
+        "B-G06-R02",
+        "B-G06-R03",
+        "B-G06-F01",
+        "B-G06-F04"
+      ],
+      "full_gate_policy": "Native foundation evidence cannot close complete G06 or the two-role telemetry acceptance before their actual browser/auth/game consumers are wired."
+    }
+  ],
+  "parallel_work": {
+    "SETUP-G05-001": "Independent local PostgreSQL bootstrap is claimed with separate .gitignore/development tooling paths and one compiler job; no Cargo/application overlap."
+  },
+  "required_external_prerequisites": [
+    "Physical iOS/Android availability for G02/G04/G08",
+    "Authorized exact 2024 core source/catalog files and reviewed distribution basis for G07/full rules release",
+    "Verified Pages configuration and GoDaddy domain control for SITE-GODADDY-DNS",
+    "Provider/payment/hosting/operator/customer cohort decisions at their scoped gates"
+  ],
+  "conditional_scope": "No async/community/marketplace/fidelity selection is inferred from complete-all-TODOs. Preserve required F01-F47/R01-R17/41-crate completion; obtain explicit optional-scope receipts before dispatch."
+}

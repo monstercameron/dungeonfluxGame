@@ -1,0 +1,1 @@
+S00 experimental; active=0; completed=170; cancelled=10; otel_spans=185; durable_export=false; dropped_spans=0; deadline_headers=3

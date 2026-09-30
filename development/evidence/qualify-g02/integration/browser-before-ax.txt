@@ -1,0 +1,20 @@
+The following is a diff from the previous accessibility tree for Window: "DungeonFlux S00 transport laboratory" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 20-30
+~0 standard window DungeonFlux S00 transport laboratory - Google Chrome Beta, URL: 127.0.0.1:43182/, Secondary Actions: Raise
+~	1 container DungeonFlux S00 transport laboratory - Google Chrome Beta, URL: 127.0.0.1:43182/
+~					10 text field (settable) Address and search bar, Value: 127.0.0.1:43182, Placeholder: Ask Google or type a URL
++				61 HTML content DungeonFlux S00 transport laboratory, URL: 127.0.0.1:43182/
++					62 container
++						63 text DUNGEONFLUX / EXPERIMENTAL S00
++						64 heading Rust transport laboratory, Value: 1
++							65 text Rust transport laboratory
++						66 text Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly. This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.
++						67 button Run transport checks
++						68 button Run desktop pressure qualification
++						69 text Desktop pressure qualification has not run. READY · Rust/WASM initialized. Run all four RPC modes and failure checks.
++						70 link Native fixture diagnostics, Value: 127.0.0.1:43182/fixture-health
++						71 text Candidate: S00 transport / G02 qualification · Rust 1.98.1 · tonic 0.14.6 · h2 0.4.19 + browser clock · build ba0d3860fb27124be352b48766e99a955f746672
+~					44 tab (settable, boolean) DungeonFlux S00 transport laboratory - Memory usage - 50.1 MB, Value: off
++					72 tab (selected, settable, boolean) DungeonFlux S00 transport laboratory, Value: on
++						73 button Close
+The focused UI element is 61 HTML content DungeonFlux S00 transport laboratory, URL: 127.0.0.1:43182/

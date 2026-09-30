@@ -1,0 +1,6 @@
+{
+  "agent_id": "/root/cleanup_interval",
+  "role": "cleanup",
+  "task_id": "ACTIVE-CLEANUP-003",
+  "attempt_id": "ACTIVE-CLEANUP-003-a1"
+}

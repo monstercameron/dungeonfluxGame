@@ -1,13 +1,13 @@
 {
   "active": false,
-  "session_id": "873d2d3587234a49",
-  "context": "/Users/earlcameron/Documents/Codex/2026-09-29/cr/dungeonflux/development/evidence/journey/recorder-contexts/873d2d3587234a49.json",
+  "session_id": "12513c39eae94292",
+  "context": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/journey/recorder-contexts/12513c39eae94292.json",
   "observed_work_context": {
     "agent_id": "/root",
-    "task_id": null,
-    "attempt_id": null
+    "task_id": "QUALIFY-G02-001",
+    "attempt_id": "QUALIFY-G02-001-a1"
   },
-  "started_at": "2026-09-30T13:49:03+00:00",
-  "expires_at_epoch": 1790777943.5493839,
+  "started_at": "2026-09-30T20:10:18+00:00",
+  "expires_at_epoch": 1790800818.108299,
   "stop_reason": "coordinator_work_ended"
 }

@@ -1,0 +1,85 @@
+Window: "DungeonFlux S00 transport laboratory", App: Google Chrome Beta.
+0 standard window DungeonFlux S00 transport laboratory - Google Chrome Beta, URL: 127.0.0.1:43182/, Secondary Actions: Raise
+	1 container DungeonFlux S00 transport laboratory - Google Chrome Beta, URL: 127.0.0.1:43182/
+		2 container
+			3 toolbar
+				4 button Back
+				5 button (disabled) Forward
+				6 button Reload
+				7 button Home
+				8 container
+					9 pop up button View site information
+					10 text field (settable) Address and search bar, Value: 127.0.0.1:43182, Placeholder: Ask Google or type a URL
+					11 button Bookmark this tab
+				12 container
+					13 pop up button Turn Off the Lights
+Has access to this site
+					14 pop up button Automatic picture-in-picture (on)
+Has access to this site
+					15 pop up button ChatGPT
+Has access to this site
+					16 pop up button Extensions
+				17 button Earl
+				18 pop up button New Chrome available
+			19 container
+				20 HTML content DungeonFlux S00 transport laboratory, URL: 127.0.0.1:43182/
+					21 container
+						22 text DUNGEONFLUX / EXPERIMENTAL S00
+						23 heading Rust transport laboratory, Value: 1
+							24 text Rust transport laboratory
+						25 text Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly. This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.
+						26 button Run transport checks again
+						27 button Run desktop pressure qualification
+						28 text PASS · desktop pressure streams complete with generated OK trailers
+Slow: 3145728 bytes; paced media: 655360 bytes; bulk: 6291456 bytes
+Cold connection: 2.500ms
+Warm RPC p95/p99: 6.800/6.900ms
+Pressure RPC p95/p99: 34.800/39.500ms
+Animation gaps p95/p99: 10.800/11.200ms; frames=137
+WASM linear memory allocated: before=1769472, peak=2621440, after=2621440 bytes (not live heap or engine memory)
+Pressure resource snapshot: ConnectionSnapshot { pipe_owners: 0, driver_failed: false, closed: false, received_bytes CONNECTING · binary WebSocket / native HTTP/2
+PASS · Unary + response metadata
+PASS · Server streaming + ordered DATA + OK trailers
+PASS · Client streaming + request half-close
+PASS · Bidirectional streaming + response before half-close
+PASS · INVALID_ARGUMENT + error trailers
+PASS · Error statuses + trailers in all four RPC modes
+PASS · Cancellation resets stream + server owner released
+PASS · Deadline (local browser deadline: DeadlineExceeded) + native grpc-timeout + cleanup
+PASS · Oversized protobuf reje
+						29 link Native fixture diagnostics, Value: 127.0.0.1:43182/fixture-health
+						30 text Candidate: S00 transport / G02 qualification · Rust 1.98.1 · tonic 0.14.6 · h2 0.4.19 + browser clock · build ba0d3860fb27124be352b48766e99a955f746672
+			31 pop up button Tab Search
+			32 container
+				33 tab group
+					34 tab (settable, boolean) GitHub - monstercameron/dungeonfluxGame · GitHub - Inactive tab - 139 MB freed up, Value: off
+						35 button Close
+					36 tab (settable, boolean) DungeonFlux: an AI dungeon master for game night - Inactive tab - 47.3 MB freed up, Value: off
+						37 button Close
+					38 tab (settable, boolean) Project Feedback Review - Memory usage - 545 MB, Value: off
+						39 button Close
+					40 tab (settable, boolean) DungeonFlux S00 transport laboratory - Memory usage - 81.9 MB, Value: off
+						41 button Close
+					42 tab (settable, boolean) DungeonFlux S00 transport laboratory - Memory usage - 57.1 MB, Value: off
+						43 button Close
+					44 tab (settable, boolean) DungeonFlux S00 transport laboratory - Memory usage - 50.1 MB, Value: off
+						45 button Close
+					46 tab (selected, settable, boolean) DungeonFlux S00 transport laboratory - Memory usage - 81.1 MB, Value: on
+						47 button Close
+			48 button New Tab
+	49 close button
+	50 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	51 minimize button
+52 menu bar
+	53 Chrome Beta
+	54 File
+	55 Edit
+	56 View
+	57 History
+	58 Bookmarks
+	59 Profiles
+	60 Tab
+	61 Window
+	62 Help
+
+The focused UI element is 20 HTML content DungeonFlux S00 transport laboratory, URL: 127.0.0.1:43182/

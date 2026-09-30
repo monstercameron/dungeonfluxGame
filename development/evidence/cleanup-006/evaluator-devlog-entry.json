@@ -1,0 +1,10 @@
+{
+  "id": "active-cleanup-006-independent-preservation-20260930",
+  "kind": "discovery",
+  "summary": "Independent inventory preserved all paths and reconciled coordinator recorder stop.",
+  "details": "Report and copied script hashes match exact submission. Historical22 roots/56285 files/10657294126 logical bytes independently recompute; current scan retains every path with only108 bytes of recorder-log growth, no errors,50 symlinks never followed and5 special FIFO entries. Preview18905/43180,18907/43181,25530/43182 and PG80873 Unix55439 remain live and executable hashes match. Recorder26743 is now absent, active=false/coordinator_work_ended; coordinator explicitly confirmed intentional official stop after the report. G02 remains approved/integration, G05 and SRDa2 integrated.",
+  "action": "Performed independent read-only lstat inventory, targeted ps/lsof, executable hashing, read-only attempt/devlog queries and current recorder registration checks. No deletion, signals, queue mutation or browser action.",
+  "outcome": "Approve both exact operational criteria. All22 candidates retained; empty allowlist and zero eligible/deleted/reclaimed. Preserve historical report and current transition evidence.",
+  "related_entry_id": "active-cleanup-006-a1-current-inventory-20260930",
+  "evidence_ref": "development/evidence/cleanup-006/review.json; development/evidence/cleanup-006/independent-inventory.json"
+}

@@ -1,0 +1,1 @@
+{"pid": 242, "creator": "/root/postgres_review_a2", "command": "import signal,time,pathlib; p=pathlib.Path('/Users/earlcameron/Desktop/dungeonflux/development/evidence/postgres-g05/a2/review-evidence/dummy-signals.txt'); signal.signal(signal.SIGINT,lambda s,f:p.write_text(str(s))); signal.signal(signal.SIGTERM,lambda s,f:exit(0)); time.sleep(180)"}

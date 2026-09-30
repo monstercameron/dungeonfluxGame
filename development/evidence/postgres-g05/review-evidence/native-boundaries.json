@@ -1,0 +1,158 @@
+{
+  "timestamp": "2026-09-30T17:57:46.301948+00:00",
+  "evaluation_repo": "/Users/earlcameron/Desktop/dungeonflux/e",
+  "results": [
+    {
+      "name": "real-transactions",
+      "command": [
+        "/Users/earlcameron/Desktop/dungeonflux/e/artifacts/build/postgres-g05/install/bin/psql",
+        "-XAtq",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-h",
+        "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/socket",
+        "-p",
+        "55439",
+        "-d",
+        "postgres",
+        "-c",
+        "BEGIN; CREATE TABLE evaluation_rollback(value integer); INSERT INTO evaluation_rollback VALUES (99); ROLLBACK; SELECT CASE WHEN to_regclass('public.evaluation_rollback') IS NULL THEN 'rollback-pass' ELSE 'rollback-fail' END; BEGIN; CREATE TABLE evaluation_committed(value integer primary key); INSERT INTO evaluation_committed VALUES (186); COMMIT; SELECT 'commit='||value FROM evaluation_committed;"
+      ],
+      "exit_code": 0,
+      "stdout": "rollback-pass\ncommit=186\n",
+      "stderr": ""
+    },
+    {
+      "name": "existing-data-preserved",
+      "command": [
+        "./development/postgres.sh",
+        "setup"
+      ],
+      "exit_code": 0,
+      "stdout": "/Users/earlcameron/Desktop/dungeonflux/e/artifacts/cache/postgres-g05/postgresql-18.6.tar.gz: OK\nExisting owned PostgreSQL 18.6 cluster preserved at /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data\n",
+      "stderr": ""
+    },
+    {
+      "name": "graceful-stop",
+      "command": [
+        "./development/postgres.sh",
+        "stop"
+      ],
+      "exit_code": 0,
+      "stdout": "waiting for server to shut down.... done\nserver stopped\nstopped owned PostgreSQL pid=83098\n",
+      "stderr": ""
+    },
+    {
+      "name": "restart",
+      "command": [
+        "./development/postgres.sh",
+        "start"
+      ],
+      "exit_code": 0,
+      "stdout": "waiting for server to start.... done\nserver started\nstarted PostgreSQL 18.6 pid=83409 socket=/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/socket/.s.PGSQL.55439\n",
+      "stderr": ""
+    },
+    {
+      "name": "restart-row-preserved",
+      "command": [
+        "/Users/earlcameron/Desktop/dungeonflux/e/artifacts/build/postgres-g05/install/bin/psql",
+        "-XAtq",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-h",
+        "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/socket",
+        "-p",
+        "55439",
+        "-d",
+        "postgres",
+        "-c",
+        "SELECT 'persisted='||value FROM evaluation_committed;"
+      ],
+      "exit_code": 0,
+      "stdout": "persisted=186\n",
+      "stderr": ""
+    },
+    {
+      "name": "stop-before-safe-refusal-probes",
+      "command": [
+        "./development/postgres.sh",
+        "stop"
+      ],
+      "exit_code": 0,
+      "stdout": "waiting for server to shut down.... done\nserver stopped\nstopped owned PostgreSQL pid=83409\n",
+      "stderr": ""
+    },
+    {
+      "name": "wrong-owner-refusal",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "postgres-g05: ownership check failed: cluster owner does not match current user\n"
+    },
+    {
+      "name": "unsafe-permissions-refusal",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "postgres-g05: ownership check failed: directory ownership or permissions are unsafe: /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/socket\n"
+    },
+    {
+      "name": "ancestor-symlink-refusal-expected",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 0,
+      "stdout": "stopped: owned cluster at /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data\n",
+      "stderr": ""
+    },
+    {
+      "name": "foreign-live-pid-start-must-refuse",
+      "command": [
+        "./development/postgres.sh",
+        "start"
+      ],
+      "exit_code": 0,
+      "stdout": "already running: pg_ctl: server is running (PID: 83480)\n/Users/earlcameron/Desktop/dungeonflux/e/artifacts/build/postgres-g05/install/bin/postgres \"-D\" \"/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data\" \"-c\" \"listen_addresses=\" \"-c\" \"unix_socket_directories=/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/socket\" \"-c\" \"unix_socket_permissions=0700\" \"-c\" \"port=55439\" \"-c\" \"max_connections=16\" \"-c\" \"fsync=on\" \"-c\" \"full_page_writes=on\" \"-c\" \"synchronous_commit=on\"\n",
+      "stderr": ""
+    },
+    {
+      "name": "foreign-live-pid-stop-must-not-signal",
+      "command": [
+        "./development/postgres.sh",
+        "stop"
+      ],
+      "exit_code": 1,
+      "stdout": "waiting for server to shut down.... failed\n",
+      "stderr": "pg_ctl: server does not shut down\n"
+    },
+    {
+      "name": "final-evaluation-status",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 0,
+      "stdout": "stopped: owned cluster at /Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data\n",
+      "stderr": ""
+    }
+  ],
+  "before_existing_setup_hashes": {
+    "owner.json": "21f644d5f8e06976d4f26f10684a2a18816eb3fda40152952a973dc635f89700",
+    "data/postgresql.conf": "9a9539ddef3920aaccf243150ac01118f09101923bd88a00fec5faf5bb70ce90",
+    "data/global/pg_control": "c75b5c3f2a7755cd14f5a5fae71fd5f07484c11bbbf9532bee9095aaf3209603"
+  },
+  "dummy_signal": {
+    "pid": 83480,
+    "signal": 2,
+    "owned_evaluator_dummy": true
+  },
+  "main_cluster_untouched": true,
+  "evaluator_cluster_retained_stopped": true
+}

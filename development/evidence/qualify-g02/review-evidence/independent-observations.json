@@ -1,0 +1,45 @@
+{
+  "observed_at_utc": "2026-09-30T18:55:00.001472+00:00",
+  "semantics_count": 10,
+  "qualification_passes": [
+    "PASS \u00b7 desktop pressure streams complete with generated OK trailers",
+    "PASS \u00b7 cancellation/server owner cleanup + browser callback cleanup",
+    "PASS \u00b7 malicious websocket controlled rejection: (ConnectionSnapshot { pipe_owners: 0, driver_failed: true, closed: true, received_bytes: 0, sent_bytes: 249, callback_bytes: BufferSnapshot { current: 0, peak: 0, total: 0 }, callback_items: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 0, total: 0 }, websocket_receive: BufferSnapshot { current: 0, peak: 262145, total: 262145 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 1 }, websocket_send: BufferSnapshot { current: 249, peak: 249, total: 249 }, receive_credit: CreditSnapshot { available: 1048576, peak_grant: 1048576, data_bytes: 0, update_bytes: 983041, peak_held: 0 }, send_credit: CreditSnapshot { available: 65508, peak_grant: 65535, data_bytes: 27, update_bytes: 0, peak_held: 27 }, received_frames: 0, sent_frames: 5, decode_yields: 0, rejected: true, receive_reservation_bytes: 6062080 }, Unknown, 3.3)",
+    "PASS \u00b7 malicious frame controlled rejection: (ConnectionSnapshot { pipe_owners: 0, driver_failed: true, closed: true, received_bytes: 8192, sent_bytes: 249, callback_bytes: BufferSnapshot { current: 0, peak: 16403, total: 16403 }, callback_items: BufferSnapshot { current: 0, peak: 1, total: 1 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 0, total: 0 }, websocket_receive: BufferSnapshot { current: 0, peak: 16403, total: 16403 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 1 }, websocket_send: BufferSnapshot { current: 249, peak: 249, total: 249 }, receive_credit: CreditSnapshot { available: 1048576, peak_grant: 1048576, data_bytes: 0, update_bytes: 983041, peak_held: 0 }, send_credit: CreditSnapshot { available: 65508, peak_grant: 65535, data_bytes: 27, update_bytes: 0, peak_held: 27 }, received_frames: 1, sent_frames: 5, decode_yields: 0, rejected: true, receive_reservation_bytes: 6062080 }, Unknown, 0.5)",
+    "PASS \u00b7 malicious header controlled rejection: (ConnectionSnapshot { pipe_owners: 0, driver_failed: false, closed: false, received_bytes: 10819, sent_bytes: 271, callback_bytes: BufferSnapshot { current: 0, peak: 10819, total: 10819 }, callback_items: BufferSnapshot { current: 0, peak: 1, total: 1 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 0, total: 0 }, websocket_receive: BufferSnapshot { current: 0, peak: 10819, total: 10819 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 1 }, websocket_send: BufferSnapshot { current: 0, peak: 249, total: 271 }, receive_credit: CreditSnapshot { available: 1048576, peak_grant: 1048576, data_bytes: 0, update_bytes: 983041, peak_held: 0 }, send_credit: CreditSnapshot { available: 65508, peak_grant: 65535, data_bytes: 27, update_bytes: 0, peak_held: 27 }, received_frames: 2, sent_frames: 7, decode_yields: 0, rejected: false, receive_reservation_bytes: 6062080 }, Unknown, 2.9)",
+    "PASS \u00b7 malicious continuation controlled rejection: (ConnectionSnapshot { pipe_owners: 0, driver_failed: true, closed: true, received_bytes: 1299, sent_bytes: 275, callback_bytes: BufferSnapshot { current: 0, peak: 1299, total: 1299 }, callback_items: BufferSnapshot { current: 0, peak: 1, total: 1 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 0, total: 0 }, websocket_receive: BufferSnapshot { current: 0, peak: 1299, total: 1299 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 1 }, websocket_send: BufferSnapshot { current: 0, peak: 249, total: 275 }, receive_credit: CreditSnapshot { available: 1048576, peak_grant: 1048576, data_bytes: 0, update_bytes: 983041, peak_held: 0 }, send_credit: CreditSnapshot { available: 65508, peak_grant: 65535, data_bytes: 27, update_bytes: 0, peak_held: 27 }, received_frames: 130, sent_frames: 7, decode_yields: 0, rejected: false, receive_reservation_bytes: 6062080 }, Unknown, 2.2)",
+    "PASS \u00b7 malicious flood controlled rejection: (ConnectionSnapshot { pipe_owners: 0, driver_failed: true, closed: true, received_bytes: 18450, sent_bytes: 15603, callback_bytes: BufferSnapshot { current: 0, peak: 18450, total: 18450 }, callback_items: BufferSnapshot { current: 0, peak: 1, total: 1 }, pipe_to_grpc: BufferSnapshot { current: 0, peak: 0, total: 0 }, pipe_to_websocket: BufferSnapshot { current: 0, peak: 0, total: 0 }, websocket_receive: BufferSnapshot { current: 0, peak: 18450, total: 18450 }, websocket_receive_items: BufferSnapshot { current: 0, peak: 1, total: 1 }, websocket_send: BufferSnapshot { current: 15354, peak: 15354, total: 15603 }, receive_credit: CreditSnapshot { available: 1048576, peak_grant: 1048576, data_bytes: 0, update_bytes: 983041, peak_held: 0 }, send_credit: CreditSnapshot { available: 65508, peak_grant: 65535, data_bytes: 27, update_bytes: 0, peak_held: 27 }, received_frames: 2049, sent_frames: 1711, decode_yields: 0, rejected: true, receive_reservation_bytes: 6062080 }, Unknown, 12.7)"
+  ],
+  "latency_lines": [
+    "Cold connection: 3.700ms",
+    "Warm RPC p95/p99: 7.600/7.900ms",
+    "Pressure RPC p95/p99: 30.400/41.000ms",
+    "Animation gaps p95/p99: 10.800/10.900ms; frames=138",
+    "WASM linear memory allocated: before=1769472, peak=2555904, after=2555904 bytes (not live heap or engine memory)"
+  ],
+  "native_connections": 6,
+  "native_all_closed": true,
+  "native_all_pipe_owners_zero": true,
+  "browser_control_sequence": [
+    "Fresh tab at 43181 via native Chrome CUA",
+    "Initial READY observed and screenshot retained",
+    "Clicked Run transport checks; 10 PASS visible and screenshot retained",
+    "Clicked Run desktop pressure qualification; RUNNING observed with disabled pressure button",
+    "Read finite server-retained reports produced by this visible run",
+    "Final CUA observation failed because Mac locked; no substitute screenshot used"
+  ],
+  "gaps": [
+    "Post-pressure visual completion capture pending unlock",
+    "Frozen candidate reload/reconnect check pending unlock"
+  ],
+  "source_observations": [
+    "Current/peak queue bytes/items are measured from actual enqueue/dequeue; native duplex metrics wrap successful read/write polls and final owned endpoint drop.",
+    "Oversized callback ArrayBuffer measured before Rust copy but after browser allocation; source honestly preserves that limitation.",
+    "DATA/WINDOW_UPDATE credit is observed wire credit and does not claim heap measurement.",
+    "8MiB check compares conservative static payload capacity reservation: native7,110,656/browser6,062,080; allocator/control/engine/pre-callback memory remains unproven.",
+    "Malicious close snapshots retain last observed send backlog; zero callback ownership is distinguished from browser-engine pending close backlog.",
+    "Rust/WASM read adapter yields after64KiB with owned timers; native byte work yields per16KiB/message; established h2 handles HPACK/continuations.",
+    "Fixture shared OTEL reports real payload and wire bytes, distinguishes unmeasured abandoned spans, and discloses nondurable bounded retention."
+  ],
+  "running_browser_identity": "Independently verified main Chrome PID1222 loaded framework153.0.8010.12 via lsof; installed bundle156.0.8078.4. No browser restart/upgrade."
+}

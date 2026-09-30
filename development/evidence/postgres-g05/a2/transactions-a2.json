@@ -1,0 +1,45 @@
+{
+  "attempt_id": "SETUP-G05-001-a2",
+  "evaluation_repo": "/Users/earlcameron/Desktop/dungeonflux/p",
+  "cluster_retained_stopped": true,
+  "socket_path_bytes": 95,
+  "commands": [
+    {
+      "command": "./development/postgres.sh setup",
+      "result": "verified official archive SHA256; preserved existing owned PostgreSQL 18.6 cluster"
+    },
+    {
+      "command": "./development/postgres.sh start",
+      "result": "started PostgreSQL 18.6; authenticated pid=98371 before verification"
+    },
+    {
+      "command": "artifacts/build/postgres-g05/install/bin/pg_isready -h \"$PWD/development/runtime/postgres-g05/socket\" -p 55439 -t 5",
+      "result": "accepting connections"
+    },
+    {
+      "command": "psql -X -v ON_ERROR_STOP=1 ... -c \"BEGIN; CREATE TEMP TABLE g05_rollback_probe (v integer); INSERT INTO g05_rollback_probe VALUES (1); ROLLBACK; SELECT 'rollback-ok';\"",
+      "result": "BEGIN, CREATE TABLE, INSERT 0 1, ROLLBACK, rollback-ok"
+    },
+    {
+      "command": "psql -X -v ON_ERROR_STOP=1 ... -c \"CREATE TABLE IF NOT EXISTS g05_a2_persistence_probe (v integer PRIMARY KEY); INSERT INTO g05_a2_persistence_probe VALUES (186) ON CONFLICT (v) DO NOTHING; SELECT 'commit-ok', v FROM g05_a2_persistence_probe WHERE v=186;\"",
+      "result": "CREATE TABLE, INSERT 0 1, commit-ok | 186"
+    },
+    {
+      "command": "./development/postgres.sh stop && ./development/postgres.sh start",
+      "result": "graceful stop pid=98371 and restart pid=98617"
+    },
+    {
+      "command": "psql -XAt -v ON_ERROR_STOP=1 ... -c \"SELECT 'restart-persistence-ok|' || v FROM g05_a2_persistence_probe WHERE v=186\"",
+      "result": "restart-persistence-ok|186"
+    },
+    {
+      "command": "./development/postgres.sh stop && ./development/postgres.sh status",
+      "result": "graceful stop; stopped: owned cluster"
+    }
+  ],
+  "notes": [
+    "The first pg_isready call used a relative socket path and correctly returned no response because PostgreSQL creates the socket at the absolute directory configured for the server. Re-running with the documented absolute path returned accepting connections.",
+    "The p evaluation cluster was freshly initialized with synced initdb, then its final worker settings were applied to its config for this qualification. This does not alter the source initialization path, which writes these settings automatically for new clusters."
+  ],
+  "preservation": "Main durable cluster PID 80873 and unrelated baseline PID 67387 remained live; neither was signaled or stopped."
+}

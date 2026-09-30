@@ -1,0 +1,128 @@
+{
+  "task_id": "SETUP-G05-001",
+  "attempt_id": "SETUP-G05-001-a1",
+  "evaluator_id": "/root/evaluate_s00",
+  "model": "GPT-6 inherited frontier session; exact serving variant not exposed",
+  "tested_revision": "25af2ecd54bfb2b918405d354972f7a652c05342",
+  "timestamp_utc": "2026-09-30T17:59:41.090895+00:00",
+  "verdict": "reject",
+  "capabilities_actually_used": [
+    "shell/native subprocess execution",
+    "Python bounded command orchestration",
+    "real PostgreSQL psql/pg_isready/pg_ctl boundaries",
+    "filesystem hash/permission inspection",
+    "ps/lsof",
+    "HTTPS official checksum retrieval",
+    "safe signal-catching owned dummy process"
+  ],
+  "computer_use_required": false,
+  "vision_required": false,
+  "audio_required": false,
+  "build_hashes": {
+    "postgres": "fdb263f367f30e248021c9f74441c9120c2091aceaed0957bdb7a13efca7f8d9",
+    "psql": "572ac7789c613a4c066cdb4deaf1b4d5c18d1975000cb097c1ce764f828432a7",
+    "pg_ctl": "401d19cff0e8c98a76bb0965cb7ca0c7a66c27b3480796fcd03ddbfe4b24e0b4",
+    "initdb": "b9dc5c551ca309f8d2500e78d815e1aae3f7745c92d22c180345cd7283b0f0f9",
+    "pg_isready": "1d851244735169d4d0ceef5d472af935fac397bfb6cc90297b8391e5b623b994"
+  },
+  "source_runtime_configuration_hashes_ref": "development/evidence/postgres-g05/review-evidence/identity-after.json",
+  "evaluation_repo": "/Users/earlcameron/Desktop/dungeonflux/e",
+  "evaluation_runtime_state": "durable retained stopped; no evaluator subprocess left running",
+  "original_runtime_state": "PID80873 unchanged; no original data mutation/stop/restart",
+  "criteria": [
+    {
+      "criterion": "Reproducibly download, verify official SHA256, build and install pinned PostgreSQL 18.6 into owned project artifacts without global packages or shell/home changes.",
+      "result": "pass",
+      "procedure": "Inspect pin/download/checksum/configure/make/install paths and source scope; independently retrieve official SHA256, hash cached archive and installed binaries, then reuse exact verified install in isolated evaluation checkout per coordinator instruction.",
+      "observed": "Official checksum retrieved over HTTPS matches pinned archive983ee...8ff3f. All five copied tools hash-identical to submitted install; psql/server report18.6. Candidate builds into project artifacts with make-j1 and optional integrations explicitly disabled; no global/home/shell change. Full native compile was not repeated; installed build and reproducibility commands inspected and exercised with fresh setup.",
+      "evidence_ref": [
+        "development/evidence/postgres-g05/review-evidence/official-sha256.txt",
+        "development/evidence/postgres-g05/review-evidence/original-readonly.json",
+        "development/evidence/postgres-g05/review-evidence/fresh-setup.json",
+        "development/evidence/postgres-g05/SETUP-G05-001-a1-evidence.json"
+      ]
+    },
+    {
+      "criterion": "Provide bounded setup/start/status/stop commands for an owned durable development cluster outside artifacts; deny TCP listening, protect socket/data permissions, and never replace existing data or stop an unrelated process.",
+      "result": "fail",
+      "procedure": "Run absent/setup/start/status/stop against isolated exact-candidate clone; verify private settings and permission/owner failures; safely test stale/recycled PID with owned dummy and symlinked runtime ancestor.",
+      "observed": "Private socket,0700 directories,0600 owner, TCP disabled, existing-data preservation and normal lifecycle pass. However stale postmaster.pid pointing to owned unrelated Python PID83480 causes start exit0/already-running without PostgreSQL readiness. With stale socket inode, stop delivers SIGINT to that dummy before eventually failing. Status also follows symlinked development/runtime ancestor and exits0. These violate unrelated-process safety, honest readiness and symlink refusal. Setup configure/make and status psql additionally lack script-level timeout guards.",
+      "evidence_ref": [
+        "development/evidence/postgres-g05/review-evidence/native-boundaries.json",
+        "development/evidence/postgres-g05/review-evidence/dummy-signal.json",
+        "development/evidence/postgres-g05/review-evidence/run-boundary-probes.py",
+        "development/evidence/postgres-g05/review-evidence/fresh-setup.json",
+        "artifacts/worktrees/postgres-g05/development/postgres.sh:46",
+        "artifacts/worktrees/postgres-g05/development/postgres.sh:145",
+        "artifacts/worktrees/postgres-g05/development/postgres.sh:176"
+      ]
+    },
+    {
+      "criterion": "Use real psql transactions to verify version, rollback/commit, restart persistence, parameter-safe diagnostic output and Pg readiness; preserve fsync/full_page_writes/synchronous_commit and explicit configured connection/process limits.",
+      "result": "pass",
+      "procedure": "Use fixed SQL through real psql-X/ON_ERROR_STOP over isolated private socket; verify rollback and committed row; repeat setup preserving data, graceful stop/start, query persisted row. Read real original version/settings/readiness without mutating it.",
+      "observed": "Rollback table absent, committed row186 present before/after restart. Fresh final-candidate initdb explicitly reports syncing data to disk...ok, closing original --no-sync verification gap for new initialization only. Original server18.6 is ready; listen_addresses empty,max_connections16,fsync/full_page_writes/synchronous_commit on. No TCP55439 listener. False-positive start path remains defect under criterion2; no crash-recovery qualification inferred.",
+      "evidence_ref": [
+        "development/evidence/postgres-g05/review-evidence/native-boundaries.json",
+        "development/evidence/postgres-g05/review-evidence/fresh-setup.json",
+        "development/evidence/postgres-g05/review-evidence/original-readonly.json",
+        "development/evidence/postgres-g05/review-evidence/evaluation-server.log"
+      ]
+    },
+    {
+      "criterion": "Retain source/runtime/build/configuration/ownership hashes, exact commands, error outcomes, startup and shutdown evidence and devlog; do not claim G05 persistence/schema/tenant/recovery/media or production readiness is complete.",
+      "result": "pass",
+      "procedure": "Retain exact candidate/archive/runtime binary/config/owner identities, command outputs and errors, evaluator server startup/shutdown log, reproducible probes and scoped devlog; inspect explicit production gaps.",
+      "observed": "Retained full current identities and native evidence, including failed safety cases and initialization-sync distinction. Candidate worktree and evaluator source remain clean. Original owner/config hashes and PID80873 remain unchanged; baseline67387/recorder69190 retained. Docs explicitly leave schema/tenant/recovery/media/fullG05/production readiness open.",
+      "evidence_ref": [
+        "development/evidence/postgres-g05/review-evidence/identity-after.json",
+        "development/evidence/postgres-g05/review-evidence/fresh-setup.json",
+        "development/evidence/postgres-g05/review-evidence/native-boundaries.json",
+        "development/evidence/postgres-g05/review-evidence/evaluation-server.log",
+        "artifacts/worktrees/postgres-g05/development/postgres-g05.md"
+      ]
+    }
+  ],
+  "defects": [
+    {
+      "id": "G05-EVAL-001",
+      "priority": "P1",
+      "title": "Stale PID reuse can signal an unrelated process and fabricate readiness",
+      "file": "development/postgres.sh",
+      "line": 176,
+      "reproduction": "In evaluator-owned stopped cluster, write signal-catching evaluator dummy PID to postmaster.pid. start exits0/already-running. Bind and close an AF_UNIX socket at expected socket filename to simulate stale inode. stop calls pg_ctl and delivers SIGINT to dummy (retained dummy-signal.json), then exits1. No unrelated user process was signaled.",
+      "expected": "Verify current PID executable, data-directory ownership, start identity and actual bounded readiness; refuse stale/reused/mismatched ownership before signaling. Do not rely on pg_ctl status/printed postmaster.opts or socket inode alone.",
+      "observed": "Python dummy83480 recorded signal2. pg_ctl status only uses kill(pid,0); its status output does not authenticate postmaster executable or data directory.",
+      "evidence_ref": "development/evidence/postgres-g05/review-evidence/native-boundaries.json"
+    },
+    {
+      "id": "G05-EVAL-002",
+      "priority": "P2",
+      "title": "Existing runtime operations traverse symlinked ancestors",
+      "file": "development/postgres.sh",
+      "line": 46,
+      "reproduction": "With stopped evaluator cluster, rename evaluator development/runtime to runtime-evaluator-preserved and place a symlink at development/runtime pointing to it. status succeeds and reads through link; restore directories afterward.",
+      "expected": "Reject symlink components before any ownership/read/start/stop/data operations for existing runtimes, not only fresh setup.",
+      "observed": "status exit0/stopped through symlink ancestor.",
+      "evidence_ref": "development/evidence/postgres-g05/review-evidence/native-boundaries.json"
+    },
+    {
+      "id": "G05-EVAL-003",
+      "priority": "P2",
+      "title": "Command deadlines are not enforced across setup and readiness",
+      "file": "development/postgres.sh",
+      "line": 162,
+      "reproduction": "Source inspection: configure/make/install calls have no deadline wrapper; status invokes psql without connect or query deadline. Only curl90s and pg_ctl30s are explicitly bounded.",
+      "expected": "Apply declared bounded command execution and readiness failure handling, with owned-child cleanup on timeout.",
+      "observed": "Native happy-path calls finished, but candidate does not implement promised bounds for these paths; pathological stall was not injected.",
+      "evidence_ref": "artifacts/worktrees/postgres-g05/development/postgres.sh"
+    }
+  ],
+  "limitations": [
+    "Full source rebuild intentionally reused verified install per coordinator.",
+    "Original cluster initial draft used --no-sync; it remains preserved. Fresh exact candidate initialization now independently observed sync to disk. Neither case establishes crash recovery.",
+    "FullG05 production/schema/tenant/media/backup/recovery qualification remains open."
+  ],
+  "queue_mutated": false,
+  "candidate_source_git_mutated": false
+}

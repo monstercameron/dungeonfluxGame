@@ -1,0 +1,104 @@
+{
+  "task_id": "QUALIFY-G02-001",
+  "attempt_id": "QUALIFY-G02-001-a1",
+  "verdict": "inconclusive",
+  "reviewed_at_utc": "2026-09-30T18:56:29.231744+00:00",
+  "submitted_revision": "51d59602c16a7a705c7c224fc03abd21b24828ac",
+  "tested_revision": "51d59602c16a7a705c7c224fc03abd21b24828ac",
+  "build": {
+    "native_sha256": "7840d2ea80898025a72887fc7de7b9ee23c6ebee747627ac4ee3138520cc86be",
+    "wasm_sha256": "c0fc263be0b9f408cd59cfef8c942f5d840060ab846f1e1781cc495ee6b771ec",
+    "preview": "http://127.0.0.1:43181",
+    "pid": 96977,
+    "configuration": "Frozen isolated debug native/WASM fixture; two cargo jobs at worker build; no evaluator rebuild",
+    "host": "macOS26.6.2 build25G83 arm64",
+    "browser": "Google Chrome Beta running153.0.8010.12; installed156.0.8078.4"
+  },
+  "evaluator": {
+    "agent_id": "/root/frontier_review",
+    "configured_model": "gpt-6-astra",
+    "actual_model_identity": "Codex based on GPT-6 as exposed in session instructions; exact backend model ID not independently exposed",
+    "enabled_capabilities": [
+      "computer_use",
+      "vision",
+      "shell",
+      "read_only_sqlite"
+    ],
+    "used_capabilities": [
+      "native Chrome CUA input and AX",
+      "vision of real before/semantics screenshots",
+      "shell native executable tests",
+      "source/counter and process/file identity inspection"
+    ],
+    "computer_use_blocker": "Mac locked; automatic unlock failed on two bounded checks; no bypass attempted"
+  },
+  "acceptance": [
+    {
+      "criterion": "Preserve all four generated native HTTP2 gRPC modes and the ten existing browser semantics checks on the revised fixture.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Independently open fresh Chrome tab, visually inspect initial UI, click Run transport checks, inspect visible completion and finite report; rerun preserved native tests.",
+      "expected": "All four generated modes plus existing ten semantics checks complete on frozen native/WASM build.",
+      "observed": "Fresh real Chrome tab rendered cleanly with readable controls and pinned source footer; screenshot shows ten PASS including all modes, trailers, half-close, deadlines, cancellation, oversized protobuf and multiplexing. Nine native cases also pass.",
+      "evidence_ref": "development/evidence/qualify-g02/review-evidence/semantics-run1.txt; development/evidence/qualify-g02/review-evidence/browser-semantics.png; development/evidence/qualify-g02/review-evidence/native-tests.json"
+    },
+    {
+      "criterion": "Expose real current/peak byte and item diagnostics for owned browser/native tunnel buffers and DATA credit; account for the 8MiB connection envelope and explicitly identify unobservable engine or pre-callback memory.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Inspect counter update/drop paths and passive wire observer, compare actual independent pressure/native snapshots to source and documented reservation arithmetic.",
+      "expected": "Current/peak bytes/items and DATA credit reflect observed operations, account explicitly for8MiB envelope while disclosing engine/pre-callback memory gaps.",
+      "observed": "Browser callback peak401,660bytes/34items, actual DATA10,098,069bytes and WINDOW_UPDATE10,785,527bytes; current callback0 at completion. Native pipe/receipt counters are tied to poll/owned-drop operations; six captured native connections closed with pipe owners0. Native7,110,656/browser6,062,080bytes are static payload capacity reservations, explicitly not complete per-connection memory proof; engine/allocator/h2 metadata gaps remain INCONCLUSIVE.",
+      "evidence_ref": "development/evidence/qualify-g02/review-evidence/qualification-run1.txt; development/evidence/qualify-g02/review-evidence/resources-run1.txt; development/evidence/qualify-g02/review-evidence/independent-observations.json"
+    },
+    {
+      "criterion": "Exercise slow consumers and simultaneous small RPC/paced media/bulk traffic in a real Rust/WASM browser; retain measured latency samples, responsiveness and cancellation/owner cleanup evidence.",
+      "result": "unverified",
+      "status": "unverified",
+      "procedure": "Click pressure button through CUA, observe RUNNING/disabled state, preserve finite Rust report and attempt final rendered-state screenshot; inspect cleanup and latency sampling implementation.",
+      "expected": "Simultaneous real Rust/WASM slow/paced/bulk/small calls complete, remain responsive, and visually observed output plus samples prove cleanup.",
+      "observed": "Actual run completed: slow3,145,728bytes, paced655,360bytes, bulk6,291,456bytes; pressure RPCp95/p99=30.4/41.0ms;138animation callbacks withp95/p99gaps10.8/10.9ms; callback cleanup and server cancellation passed. However Mac locked before final rendered pressure output/screenshot and follow-up responsive interaction could be independently observed. Final visual acceptance remains unperformed.",
+      "evidence_ref": "development/evidence/qualify-g02/review-evidence/browser-pressure-start-ax.txt; development/evidence/qualify-g02/review-evidence/qualification-run1.txt; development/evidence/qualify-g02/review-evidence/locked-devlog.json"
+    },
+    {
+      "criterion": "Exercise oversized messages/headers, bounded continuation handling and tiny-frame flood pressure at the actual native/browser boundaries; controlled termination and owned time-sliced work prevent hangs or silent loss.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Run real browser qualification control that executes five finite malicious peers; inspect retained current report; independently execute native gateway/frame/header/continuation/flood test binaries with deadlines and check source ownership/time slicing.",
+      "expected": "Oversized messages/headers, continuation pressure and tiny-frame flood terminate at actual browser/native boundaries without hangs or silent loss.",
+      "observed": "Browser probes rejected within3.3/0.5/2.9/2.2/12.7ms for websocket/frame/header/continuation/flood. Header is a bounded stream-level rejection, other cases show adapter rejection or driver failure. Native seven bridge tests and two service cases pass on retained binaries; pressure sequences/trailers prevent silent-loss PASS;283browser decode yields measured. Final visual pressure panel remains a criterion3 verification gap.",
+      "evidence_ref": "development/evidence/qualify-g02/review-evidence/qualification-run1.txt; development/evidence/qualify-g02/review-evidence/native-tests.json"
+    },
+    {
+      "criterion": "Pin source/build/host/browser identities and reproducible native/WASM checks; retain honest PASS/FAIL/INCONCLUSIVE qualification results, with unperformed physical-device requirements still blocking full G02 approval.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Rehash all submitted artifacts and check clean source/PID/listeners; inspect pinned native/WASM gate logs; independently run compiled native tests; read actual loaded browser framework and bundle identity; verify full qualification limitations remain explicit.",
+      "expected": "Exact source/build/host/browser and reproducible checks retained, partial desktop pass never becomes full G02 approval.",
+      "observed": "Clean source51d59602c16a7a705c7c224fc03abd21b24828ac; all native/WASM/generated artifact hashes match. PID96977/43181 unchanged. Runtime Chrome153.0.8010.12 established by loaded framework, bundle156.0.8078.4; macOS26.6.2 arm64. Five style/native/WASM gates and build have pinned passing logs; nine native tests independently rerun without rebuild. Physical devices/network matrix, engine/pre-callback/total8MiB memory, suspend/reconnect and real media/audio remain INCONCLUSIVE; blank reload concern remains explicitly unresolved.",
+      "evidence_ref": "development/evidence/qualify-g02/review-evidence/independent-build-identity.json; development/evidence/qualify-g02/review-evidence/running-browser-process.json; development/evidence/qualify-g02/review-evidence/native-tests.json; development/evidence/qualify-g02/worker/candidate-gates.json"
+    }
+  ],
+  "defects": [],
+  "verification_gaps": [
+    {
+      "id": "G02-REVIEW-VISUAL-LOCK",
+      "summary": "Final pressure rendered-output/response observation unavailable because Mac locked.",
+      "required_action": "Unlock host, observe completed pressure results and controls with CUA/vision, retain screenshot and responsive follow-up; repeat bounded run only if completion provenance lost.",
+      "evidence_ref": "development/evidence/qualify-g02/review-evidence/locked-devlog.json"
+    },
+    {
+      "id": "G02-RELOAD-UNRESOLVED",
+      "summary": "Worker observed existing-tab blank reload after rebuild; evaluator fresh-tab startup succeeds but current fixed-candidate reload has not been tested because host locked.",
+      "required_action": "After unlock, reload only evaluator-owned dedicated43181tab, inspect READY and rerun semantics; retain any reproducible failure.",
+      "evidence_ref": "development/evidence/qualify-g02/worker/handoff.json"
+    }
+  ],
+  "full_G02": "INCONCLUSIVE; this atomic review cannot authorize dependent production transport/client work",
+  "gates": "Retained worker exact-commit fmt/native+WASM Clippy/build logs inspected and reused;9native tests independently rerun from hashed existing binaries, no candidate overwrite",
+  "protection": "Baseline67387/43180, G02PID96977/43181, PostgreSQL80873, recorder69190 retained. No source, build, process or queue mutation.",
+  "devlog_ids": [
+    "qualify-g02-a1-evaluator-mac-locked-20260930"
+  ],
+  "evidence_ref": "development/evidence/qualify-g02/review-evidence/independent-observations.json"
+}

@@ -1,0 +1,38 @@
+{
+  "source_hashes": {
+    "AGENTS.md": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182",
+    "planning/coding-style.md": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb",
+    "planning/implementation-roadmap.md": "0160ad8e8ec38f768e2348209b9989e30e8f403d9b1a4ebf694f0801f7206932",
+    "planning/storage-architecture.md": "69c6ef1ec2ce02b0ecc33c361e83ef9a027f669df1abe49199605552466a1da6",
+    "planning/subsystem-interfaces.md": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a",
+    "planning/observability.md": "30860fcd071abe3664487a796e424748f40622fafbaf15d56dd18dd0328cbbf2",
+    "planning/service-operations.md": "780360bcff243a96f5fc9a39a88b47efc1402e563623c134229f56579eb714df",
+    "planning/commerce-service.md": "bf56a48d8055639cb3634ba6fa32d72b19fb64ea3fc8df0cb649e5f7ad768b5e",
+    "planning/commercial-validation.md": "98c08b66ba87e67a1c190de4f0f0d1a603d9c0c64db8b4da21f7ccd092a0ec6a",
+    "ADR/0001-sqlite-agent-workflow.md": "acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8",
+    "ADR/0002-resource-scheduling-and-cleanup.md": "a6476cfef449e089639109cc6d3cf5f0800b792b57a32696258d5ac0b9511966",
+    "ADR/0004-development-reliability.md": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae",
+    "ADR/0005-frontier-output-evaluation.md": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c"
+  },
+  "protected_file_hashes": {
+    "development/runtime/postgres-g05/owner.json": "8d531bef812ac541bb3f54be78556885ef0550855300e58abdf427f4e83e3141",
+    "development/runtime/postgres-g05/data/postgresql.conf": "618ee97b55881ce33a39487c32df565130b10c25520cc0e2f0b00c08c5b1759b",
+    "development/runtime/postgres-g05/data/postmaster.pid": "1840dd5d2810924ae20faa2439630cfc028e7a3727fe65f0858d85c4f8a25567",
+    "e/development/runtime/postgres-g05/owner.json": "21f644d5f8e06976d4f26f10684a2a18816eb3fda40152952a973dc635f89700",
+    "e/development/runtime/postgres-g05/data/postgresql.conf": "9a9539ddef3920aaccf243150ac01118f09101923bd88a00fec5faf5bb70ce90",
+    "p/development/runtime/postgres-g05/owner.json": "01466f8bddfb31a75cd70f04f7daf98f67ff169351c7de0d7952baf5130c159a",
+    "p/development/runtime/postgres-g05/data/postgresql.conf": "f5ea0c82cc35b797ef12683eac6374a64055ccfbce73e14072e46e2dc9c64322"
+  },
+  "archive_sha256": "983ee554ec53dbeb9b70797bef9fcf4e67e117e7e48ca1463cc80b3ff8e8ff3f",
+  "tool_hashes": {
+    "postgres": "fdb263f367f30e248021c9f74441c9120c2091aceaed0957bdb7a13efca7f8d9",
+    "pg_ctl": "401d19cff0e8c98a76bb0965cb7ca0c7a66c27b3480796fcd03ddbfe4b24e0b4",
+    "initdb": "b9dc5c551ca309f8d2500e78d815e1aae3f7745c92d22c180345cd7283b0f0f9",
+    "psql": "572ac7789c613a4c066cdb4deaf1b4d5c18d1975000cb097c1ce764f828432a7",
+    "pg_isready": "1d851244735169d4d0ceef5d472af935fac397bfb6cc90297b8391e5b623b994"
+  },
+  "protected_processes": "67387 Wed Sep 30 12:27:03 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/web\n69190 Wed Sep 30 13:25:20 2026     /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python /Users/earlcameron/Desktop/dungeonflux/development/screenshot_journey.py run-loop\n80873 Wed Sep 30 13:46:12 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install/bin/postgres -D /Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/data -c listen_addresses= -c unix_socket_directories=/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/socket -c unix_socket_permissions=0700 -c port=55439 -c max_connections=16 -c fsync=on -c full_page_writes=on -c synchronous_commit=on\n96977 Wed Sep 30 14:32:03 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web 43181\n",
+  "owner": "/root/postgres_g05_sol",
+  "fixture": "/Users/earlcameron/Desktop/dungeonflux/s",
+  "native_build_reused": "exact-hash a1 official 18.6; no global/home changes"
+}

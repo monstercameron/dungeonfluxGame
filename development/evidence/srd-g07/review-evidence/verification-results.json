@@ -1,0 +1,208 @@
+[
+  {
+    "label": "actual-source",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py"
+    ],
+    "exit": 0,
+    "stdout": "{\"full_book_sources\": \"unacquired\", \"page_count\": 364, \"result\": \"verified\", \"scope\": \"partial_srd_contents_only\", \"sha256\": \"8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87\", \"size_bytes\": 6031375, \"version\": \"5.2.1\"}\n",
+    "stderr": "",
+    "seconds": 0.551
+  },
+  {
+    "label": "help",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--help"
+    ],
+    "exit": 0,
+    "stdout": "usage: check-rule-source.py [-h] [--manifest MANIFEST]\n\nBounded integrity check for the retained public SRD source pin.\n\noptions:\n  -h, --help           show this help message and exit\n  --manifest MANIFEST\n",
+    "stderr": "",
+    "seconds": 0.03
+  },
+  {
+    "label": "corrupted-bytes",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/corrupted-bytes/manifest.json"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: source SHA-256 does not match manifest\n",
+    "seconds": 0.035
+  },
+  {
+    "label": "malformed-language",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/malformed-language/manifest.json"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: pinned metadata mismatch for language\n",
+    "seconds": 0.03
+  },
+  {
+    "label": "mixed-edition",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/mixed-edition/manifest.json"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: pinned metadata mismatch for version\n",
+    "seconds": 0.029
+  },
+  {
+    "label": "omitted-required-book-record",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/omitted-required-book-record/manifest.json"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: pinned metadata mismatch for book_titles\n",
+    "seconds": 0.03
+  },
+  {
+    "label": "required-books-recorded-but-unavailable",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/required-books-recorded-but-unavailable/manifest.json"
+    ],
+    "exit": 0,
+    "stdout": "{\"full_book_sources\": \"unacquired\", \"page_count\": 364, \"result\": \"verified\", \"scope\": \"partial_srd_contents_only\", \"sha256\": \"8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87\", \"size_bytes\": 6031375, \"version\": \"5.2.1\"}\n",
+    "stderr": "",
+    "seconds": 0.467
+  },
+  {
+    "label": "empty-attribution",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/empty-attribution/manifest.json"
+    ],
+    "exit": 0,
+    "stdout": "{\"full_book_sources\": \"unacquired\", \"page_count\": 364, \"result\": \"verified\", \"scope\": \"partial_srd_contents_only\", \"sha256\": \"8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87\", \"size_bytes\": 6031375, \"version\": \"5.2.1\"}\n",
+    "stderr": "",
+    "seconds": 0.468
+  },
+  {
+    "label": "short-attribution",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/short-attribution/manifest.json"
+    ],
+    "exit": 0,
+    "stdout": "{\"full_book_sources\": \"unacquired\", \"page_count\": 364, \"result\": \"verified\", \"scope\": \"partial_srd_contents_only\", \"sha256\": \"8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87\", \"size_bytes\": 6031375, \"version\": \"5.2.1\"}\n",
+    "stderr": "",
+    "seconds": 0.468
+  },
+  {
+    "label": "malformed-attribution-type",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/malformed-attribution-type/manifest.json"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: cannot parse source PDF: 'list' object has no attribute 'lower'\n",
+    "seconds": 0.209
+  },
+  {
+    "label": "false-full-coverage",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/false-full-coverage/manifest.json"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: full 2024 rules coverage cannot be claimed\n",
+    "seconds": 0.033
+  },
+  {
+    "label": "false-production-rights",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/false-production-rights/manifest.json"
+    ],
+    "exit": 0,
+    "stdout": "{\"full_book_sources\": \"unacquired\", \"page_count\": 364, \"result\": \"verified\", \"scope\": \"partial_srd_contents_only\", \"sha256\": \"8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87\", \"size_bytes\": 6031375, \"version\": \"5.2.1\"}\n",
+    "stderr": "",
+    "seconds": 0.487
+  },
+  {
+    "label": "wrong-section-page",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/wrong-section-page/manifest.json"
+    ],
+    "exit": 0,
+    "stdout": "{\"full_book_sources\": \"unacquired\", \"page_count\": 364, \"result\": \"verified\", \"scope\": \"partial_srd_contents_only\", \"sha256\": \"8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87\", \"size_bytes\": 6031375, \"version\": \"5.2.1\"}\n",
+    "stderr": "",
+    "seconds": 0.47
+  },
+  {
+    "label": "fifo-manifest-must-not-block",
+    "argv": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1-review/manifest-fifo"
+    ],
+    "external_timeout": 2,
+    "seconds": 2.007
+  },
+  {
+    "label": "diff-check",
+    "argv": [
+      "git",
+      "-C",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07",
+      "diff",
+      "f9343cb5ec17b33c76a03b20f6afec9168f9fb7a..HEAD",
+      "--check"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "seconds": 0.036
+  },
+  {
+    "label": "source-status",
+    "argv": [
+      "git",
+      "-C",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07",
+      "status",
+      "--porcelain"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "seconds": 0.017
+  }
+]

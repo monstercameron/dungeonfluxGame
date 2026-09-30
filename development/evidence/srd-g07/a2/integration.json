@@ -1,0 +1,16 @@
+{
+  "task_id": "PIN-G07-SRD-001",
+  "attempt_id": "PIN-G07-SRD-001-a2",
+  "integrated_revision": "dd63d194a8e87ce575e861199abc28861ac2c28d",
+  "tested_revision": "dd63d194a8e87ce575e861199abc28861ac2c28d",
+  "completed_at": "2026-09-30T20:05:58.085257+00:00",
+  "checks": [
+    {
+      "result": "pass",
+      "tested_revision": "dd63d194a8e87ce575e861199abc28861ac2c28d",
+      "evidence_ref": "development/evidence/srd-g07/a2/integration-review.json",
+      "procedure": "Independent frontier verified actual merged Git blobs/rootbytes, seven current source-boundary commands and applicability of19previousnegativecases/publisher/PDFvisual proof."
+    }
+  ],
+  "full_G07": "Unresolved PHB/DMG/MM source revisions/acquisition, catalog denominator/errata and reviewed rights; this task verifies partial public SRD source pin only."
+}

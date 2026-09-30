@@ -1,0 +1,34 @@
+{
+  "basis": "Same evaluator prior actual publisher acquisition, parsed legal/section locators and four actual view_image PDF inspections; current PDF/manifest SHA256 and size match the prior independent identity exactly. No new rendering or live browser claimed.",
+  "current_identity_ref": "development/evidence/srd-g07/a2/review-evidence/identity.json",
+  "prior_files": {
+    "development/evidence/srd-g07/review-evidence/publisher-verification.json": {
+      "sha256": "d760e1b2329ac7d3af032bb929ec76b974d13c0921a5b23e05011d9f3b949dd0",
+      "bytes": 987
+    },
+    "development/evidence/srd-g07/review-evidence/publisher-sources.json": {
+      "sha256": "acfe39643ba15b8f82ce8512192c76c3f7f1d40760ed18bdaaf0b53382840e83",
+      "bytes": 1173
+    },
+    "development/evidence/srd-g07/review-evidence/pdf-observations.json": {
+      "sha256": "e637cf19cfccda5a07f538a3352889761f259bf8bc0c5fd6156ee9f622866800",
+      "bytes": 14409
+    },
+    "development/evidence/srd-g07/review-evidence/page-001.png": {
+      "sha256": "1765f352f0255cb29f26f1798bc6965c21e3a9b2c62b768f10b9161918edd410",
+      "bytes": 97605
+    },
+    "development/evidence/srd-g07/review-evidence/page-002.png": {
+      "sha256": "5c6151aa68af51a59491fa197e2bd6a80f9c6d8d24f4fe39814025b13532201d",
+      "bytes": 425862
+    },
+    "development/evidence/srd-g07/review-evidence/page-003.png": {
+      "sha256": "65b75202a852b4747327d8be4b2dea6ffdc67a92370dfee5ecdd414c99c0c33b",
+      "bytes": 364178
+    },
+    "development/evidence/srd-g07/review-evidence/page-004.png": {
+      "sha256": "d403cba5fd87b967f8ddcc57d8367d97a3098b0eeea11248db11c4cdd51c9f33",
+      "bytes": 247745
+    }
+  }
+}

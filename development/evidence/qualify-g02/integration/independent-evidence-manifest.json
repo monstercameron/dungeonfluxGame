@@ -1,0 +1,180 @@
+{
+  "at": "2026-09-30T19:55:43.306223+00:00",
+  "files": [
+    {
+      "path": "browser-before-ax.txt",
+      "bytes": 1970,
+      "sha256": "6cc2a9280d205310c343aa892a8f665dc86058477888f568a1b0f5f5c4d9ce2c"
+    },
+    {
+      "path": "build-identity.json",
+      "bytes": 1540,
+      "sha256": "20474ca261bdc548fcbb3337d7c143c088ff7fa2f3cc057334a1f5c4cca55977"
+    },
+    {
+      "path": "current-health.txt",
+      "bytes": 129,
+      "sha256": "f10de3f8331e74b92fc41d118724146ed25bbf532cea7f3b95e8c2f3f1b9cc85"
+    },
+    {
+      "path": "current-resources.txt",
+      "bytes": 3006,
+      "sha256": "a9d797967e3083be1e4fd5c4e19f7c1549d5e04238a17e6c6034b9f71a65696b"
+    },
+    {
+      "path": "current-telemetry.txt",
+      "bytes": 57685,
+      "sha256": "246b8459459f6371dc9ca0d2822b0283292a64ec0c82c773664581dbb8532e4b"
+    },
+    {
+      "path": "followup-ax.txt",
+      "bytes": 204,
+      "sha256": "db265719a89c0b3c4862bc7488c28c12083656605cf987cbfc9840b673ef0fbb"
+    },
+    {
+      "path": "followup-health.txt",
+      "bytes": 129,
+      "sha256": "f10de3f8331e74b92fc41d118724146ed25bbf532cea7f3b95e8c2f3f1b9cc85"
+    },
+    {
+      "path": "followup-semantics.txt",
+      "bytes": 771,
+      "sha256": "143d536ee70096b2434853b3b9c7084ecd1c438f71ce9d839481cab63ba4cc38"
+    },
+    {
+      "path": "gate-1.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "gate-2.log",
+      "bytes": 344,
+      "sha256": "f7e107770d014e95d8c209f17ce0101affa28846bca868ed3ed170aa5774f69d"
+    },
+    {
+      "path": "gate-3.log",
+      "bytes": 2730,
+      "sha256": "bf574144a802ebbc380fbcc0c995f9805b4973740ed8e156e34bd48c042df9bf"
+    },
+    {
+      "path": "gate-4.log",
+      "bytes": 258,
+      "sha256": "21f029cf8e037a4d3ca10ad092142592d8ea23ceb370e8861e1731973e8f727e"
+    },
+    {
+      "path": "gate-5.log",
+      "bytes": 254,
+      "sha256": "ed60f1e8c207322fbed5c84608f43f9daf89f2b43b009b5b43aa92b0d64a5912"
+    },
+    {
+      "path": "gate-6.log",
+      "bytes": 502,
+      "sha256": "2028ebe9e3978a21622d7ebec7f9c2a3aa8a488138240a6949b69289e0b770c5"
+    },
+    {
+      "path": "gates.json",
+      "bytes": 2665,
+      "sha256": "d17278774d4b1451e30863f9cc3d4fc2532829964ff611b4cd0a84cc021a7db7"
+    },
+    {
+      "path": "health-before.txt",
+      "bytes": 125,
+      "sha256": "2d197cf7082d5378e27ebd5ab1d5fd8ad9a77fed14d0e1f63893c986749ed7e0"
+    },
+    {
+      "path": "health-pressure.txt",
+      "bytes": 129,
+      "sha256": "b157ef46df9f41f4ef75bec075c4644c3089f4bd95b86d140ce288efacfedd1f"
+    },
+    {
+      "path": "independent-check-plan.json",
+      "bytes": 2083,
+      "sha256": "6aa9f6b2f96703552367bc4296b150a7059fca7965b8727e89f3a4e1f48e6788"
+    },
+    {
+      "path": "independent-identity.json",
+      "bytes": 47716,
+      "sha256": "944d567b71520278c5864e3e8c5124e3f84374463de965b4cc1266f23cba9e73"
+    },
+    {
+      "path": "independent-native-tests.json",
+      "bytes": 1496,
+      "sha256": "aed7ef929da48ad982e360079fde6971656cd28f65d52a80ae9a704af1daba02"
+    },
+    {
+      "path": "locked-devlog.json",
+      "bytes": 974,
+      "sha256": "ae76624872646cdc2c8eb15ab3485ae980a5d593140e888e7c10fee9546466bf"
+    },
+    {
+      "path": "narrow-ax.txt",
+      "bytes": 3950,
+      "sha256": "9e357b03b1828b5ab1e9f658f70c0a3da21669e5f85b692841ea47683b5119c4"
+    },
+    {
+      "path": "narrow-results-bottom.png",
+      "bytes": 597972,
+      "sha256": "fdf033bab2fbdfb88885512d774caf9516dc8da60d6d1fdd9d2cdb574e39d8f4"
+    },
+    {
+      "path": "ownership.json",
+      "bytes": 1192,
+      "sha256": "2c31353ce18fcb00355230cb4a83b9d953e6370d79b2cf3a5453345fdea0303c"
+    },
+    {
+      "path": "pressure-desktop.png",
+      "bytes": 369409,
+      "sha256": "68775403dddd59f5b11fe4efd98ae2223f7a3a706dbb69304275d2cf643777b4"
+    },
+    {
+      "path": "pressure-final-ax.txt",
+      "bytes": 4307,
+      "sha256": "16929a7344e4cfc9b0cf14b2411113c315dbf3120c9da7942df534a8318e79ba"
+    },
+    {
+      "path": "pressure-narrow.png",
+      "bytes": 599369,
+      "sha256": "3366173f0a2dceadd699f5a378622dd75c739850e34d466071870675526416ff"
+    },
+    {
+      "path": "pressure-start-ax.txt",
+      "bytes": 1032,
+      "sha256": "cf8b2afaa69c7376a71a865fb560617f36e38b5ec5393ae78757e8a152e1908d"
+    },
+    {
+      "path": "pressure-start.png",
+      "bytes": 245945,
+      "sha256": "d1fa7f205337228a698eaec086fce81f3eb52b811f1a49dfc41850980717ef1d"
+    },
+    {
+      "path": "pressure.txt",
+      "bytes": 12087,
+      "sha256": "dddbe3546f84d3ab2a963c4c497cdd0fbb3ee25a1c7cf9a4420ceade65f670c3"
+    },
+    {
+      "path": "resources-pressure.txt",
+      "bytes": 2012,
+      "sha256": "4ee4676ea09da8df61e1ef3bf6de270360630c252aa0dda3edfde09b7fa89631"
+    },
+    {
+      "path": "review.json",
+      "bytes": 58091,
+      "sha256": "3cd4a9e44c1aae885b3d6669924df37ce2cf902627916f691960e3ef60e7e475"
+    },
+    {
+      "path": "semantics-ax.txt",
+      "bytes": 1068,
+      "sha256": "3e24ab23eba86fea98f47cddf418fcf450c8c50c66ec186fa060d85742479e29"
+    },
+    {
+      "path": "semantics.png",
+      "bytes": 242924,
+      "sha256": "5561ed5eabc75dca4a2a684327f74599fbd1f61186dd143b7fa2684ed69a7349"
+    },
+    {
+      "path": "semantics.txt",
+      "bytes": 771,
+      "sha256": "143d536ee70096b2434853b3b9c7084ecd1c438f71ce9d839481cab63ba4cc38"
+    }
+  ]
+}

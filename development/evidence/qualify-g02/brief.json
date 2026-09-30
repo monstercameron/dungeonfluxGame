@@ -1,0 +1,112 @@
+{
+  "record_role": "atomic",
+  "scope_status": "frozen",
+  "dispatch_ready": true,
+  "objective": "Implement and execute the missing transport pressure/resource qualification, correcting discovered limits while preserving native gRPC bridge semantics. This is a required step toward complete project/all TODOs, not a smaller replacement goal.",
+  "input_revision": "f9343cb5ec17b33c76a03b20f6afec9168f9fb7a",
+  "required_sources": [
+    "AGENTS.md",
+    "planning/coding-style.md",
+    "planning/rpc-transport.md",
+    "planning/implementation-roadmap.md",
+    "planning/subsystem-interfaces.md",
+    "planning/observability.md",
+    "planning/runtime-reliability.md",
+    "development/start-s00.md",
+    "ADR/0001-sqlite-agent-workflow.md",
+    "ADR/0002-resource-scheduling-and-cleanup.md",
+    "ADR/0004-development-reliability.md",
+    "ADR/0005-frontier-output-evaluation.md"
+  ],
+  "source_hashes": {
+    "AGENTS.md": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182",
+    "planning/coding-style.md": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb",
+    "planning/rpc-transport.md": "841ba2500a426e6bacf62017d60e106cae402eb62b0e171eccab26dfb9c31c79",
+    "planning/implementation-roadmap.md": "0160ad8e8ec38f768e2348209b9989e30e8f403d9b1a4ebf694f0801f7206932",
+    "planning/subsystem-interfaces.md": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a",
+    "planning/observability.md": "30860fcd071abe3664487a796e424748f40622fafbaf15d56dd18dd0328cbbf2",
+    "planning/runtime-reliability.md": "176e5a8fb04e1d9cb2402225c9eb1bb4ffd110abf353f226a302e10e780acf05",
+    "development/start-s00.md": "0927bc97659cc43fad65c1da7c8dec4b0571512e039fe9e889cc7f7aace07598",
+    "ADR/0001-sqlite-agent-workflow.md": "acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8",
+    "ADR/0002-resource-scheduling-and-cleanup.md": "a6476cfef449e089639109cc6d3cf5f0800b792b57a32696258d5ac0b9511966",
+    "ADR/0004-development-reliability.md": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae",
+    "ADR/0005-frontier-output-evaluation.md": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c"
+  },
+  "governing_sections": {
+    "planning/rpc-transport.md": [
+      "Latency and bounded resources",
+      "Browser resource proof and feasibility result"
+    ],
+    "planning/implementation-roadmap.md": [
+      "Prerequisite decisions G02",
+      "S00",
+      "First-slice failure envelope"
+    ],
+    "planning/coding-style.md": [
+      "all"
+    ]
+  },
+  "edit_paths": [
+    "crates/df-rpc-bridge/",
+    "crates/df-protocol/",
+    "crates/df-observe/",
+    "crates/df-tools/",
+    "Cargo.toml",
+    "Cargo.lock",
+    "development/build-fixture.sh",
+    "development/start-s00.md",
+    "development/qualify-g02.md",
+    "README.md"
+  ],
+  "required_capabilities": {
+    "computer_use": true,
+    "vision": true,
+    "audio": false
+  },
+  "acceptance": [
+    "Preserve all four generated native HTTP2 gRPC modes and the ten existing browser semantics checks on the revised fixture.",
+    "Expose real current/peak byte and item diagnostics for owned browser/native tunnel buffers and DATA credit; account for the 8MiB connection envelope and explicitly identify unobservable engine or pre-callback memory.",
+    "Exercise slow consumers and simultaneous small RPC/paced media/bulk traffic in a real Rust/WASM browser; retain measured latency samples, responsiveness and cancellation/owner cleanup evidence.",
+    "Exercise oversized messages/headers, bounded continuation handling and tiny-frame flood pressure at the actual native/browser boundaries; controlled termination and owned time-sliced work prevent hangs or silent loss.",
+    "Pin source/build/host/browser identities and reproducible native/WASM checks; retain honest PASS/FAIL/INCONCLUSIVE qualification results, with unperformed physical-device requirements still blocking full G02 approval."
+  ],
+  "verification": [
+    "cargo fmt --all -- --check",
+    "cargo clippy --locked --workspace --all-targets -- -D warnings",
+    "cargo test --locked --workspace",
+    "cargo clippy --locked -p df-rpc-bridge --target wasm32-unknown-unknown -- -D warnings",
+    "cargo clippy --locked -p df-tools --lib --target wasm32-unknown-unknown -- -D warnings",
+    "real CUA Rust/WASM pressure/negative/semantic fixture runs",
+    "native adversarial boundary tests with controlled synchronization and deadlines"
+  ],
+  "bounds": {
+    "cargo_jobs": 2,
+    "preview_url": "http://127.0.0.1:43181",
+    "qualification_run_seconds": 30,
+    "paid_calls": 0,
+    "shared_cache": "/Users/earlcameron/Desktop/dungeonflux/artifacts/cache",
+    "owned_output": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02",
+    "scratch": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/QUALIFY-G02-001-a1",
+    "lease_hours": 3
+  },
+  "integration_hooks": {
+    "bridge/proto/native fixture/browser UI/measurement": "one implementing owner",
+    "task/attempt state and integration": "coordinator"
+  },
+  "protection": [
+    "Do not overwrite/rebuild/stop latest verified preview PID67387 at43180 or artifacts/build/start-s00.",
+    "Add explicit wrapper build/temporary root and preview port options as necessary; preserve default startup behavior.",
+    "Use actual counters/observations, not fabricated zero traffic metrics or inferred physical-device success.",
+    "Use established h2 options/driver; no grpc-web/custom envelope/unsafe Send. Any broader mechanism change requires measured owner proposal.",
+    "Fixture-only protocol additions; production G03 schemas remain separate gate.",
+    "Before using CUA, full inherited context preserves IAB access; do not start competing screenshot recorder."
+  ],
+  "canonical_reuse": {
+    "START-S00-001": "existing native/browser transport fixture, no parallel primitive",
+    "B-G02-D03": "resource envelope resolved here",
+    "B-G02-F02": "slow consumer cases implemented here",
+    "B-G02-F03": "message/header/control pressure cases implemented here",
+    "B-G02-O01": "measurement evidence produced here, final qualified baseline still gated"
+  },
+  "scope_notes": "Physical iOS/Android tests and full process/browser memory visibility are required by full G02, not optional. User clarification is pending about available hardware; preserve those gaps and continue all implementable qualification. Only an evidence-backed full gate can permit dependent production client work. Pure storage/contracts/telemetry work can proceed later independently."
+}

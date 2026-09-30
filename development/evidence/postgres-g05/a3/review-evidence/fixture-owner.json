@@ -1,0 +1,6 @@
+{
+  "owner": "/root/frontier_review",
+  "task": "SETUP-G05-001-a3",
+  "fixture": "/Users/earlcameron/Desktop/dungeonflux/e",
+  "retention": "Retain existing and added evaluator durable clusters; e script preserved for restoration; original/p/s protected; only evaluator-started PIDs may be signaled."
+}

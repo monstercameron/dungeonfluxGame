@@ -1,0 +1,25 @@
+{
+  "record_role": "source_feasibility_receipt",
+  "observed_at": "2026-09-30T17:48:00Z",
+  "installed_sdk_version": "0.31.0",
+  "project_source": "crates/df-observe/Cargo.toml",
+  "existing_sdk_scope": "native tracing only; browser SDK exporter and durable/native logs not implemented",
+  "local_primary_sources": {
+    "artifacts/cache/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/opentelemetry_sdk-0.31.0/src/logs/mod.rs": "28a12cf17f989f8de7fc2b0919b695df3d1f64b7dbf51d3440f922bbacad93ea",
+    "artifacts/cache/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/opentelemetry_sdk-0.31.0/Cargo.toml": "df2ddf6d423c67010cf2b51c17c28060fd90ea11c8a6ceeb04d3cecc8242229b"
+  },
+  "observations": [
+    "Pinned SDK source contains native log record, logger/provider, exporter and batch processor APIs under logs feature. Source existence is not runtime qualification.",
+    "Matching opentelemetry-proto0.31.0 primary documentation describes generated OTLP messages and transformations, with explicit logs/trace and gen-tonic-messages features. New dependency compatibility/locked build still unverified.",
+    "OTEL log data model retains separate source/observed timestamps, severity, resource/scope identity, structured body/attributes and optional trace fields; implementation must preserve types and diagnose gaps."
+  ],
+  "primary_links": [
+    "https://docs.rs/opentelemetry-proto/0.31.0/opentelemetry_proto/",
+    "https://opentelemetry.io/docs/specs/otel/logs/data-model/",
+    "https://github.com/open-telemetry/opentelemetry-rust/tree/v0.31.0/opentelemetry-sdk"
+  ],
+  "limitations": [
+    "SDK logs page web open unavailable; verified actual pinned downloaded package source instead.",
+    "No new SDK/storage selection is frozen by this preparatory read. Native/WASM suitability, artifact compatibility and durable pipeline failure envelope remain actual implementation/review checks."
+  ]
+}

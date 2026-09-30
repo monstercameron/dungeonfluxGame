@@ -1,0 +1,139 @@
+{
+  "timestamp_utc": "2026-09-30T20:03:30.826754+00:00",
+  "tested_revision": "dd63d194a8e87ce575e861199abc28861ac2c28d",
+  "approved_candidate": "6856a7457ad335028ccbe787ef01867f6e07c156",
+  "source_equivalence": {
+    "development/check-rule-source.py": {
+      "sha256": "9e72681ee249e7855de17dbbf945a247ac3052404ead78074acb78c3a4aab1f3",
+      "bytes": 12225,
+      "matches_approved_candidate": true,
+      "matches_integrated_git_blob": true
+    },
+    "development/rules-sources/manifest.json": {
+      "sha256": "0defa673b21d19f98b10513b3c51c2a430d0aa3b3af339b57abfaa3d758fdeac",
+      "bytes": 3062,
+      "matches_approved_candidate": true,
+      "matches_integrated_git_blob": true
+    },
+    "development/rules-sources/srd-5.2.1-en.pdf": {
+      "sha256": "8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87",
+      "bytes": 6031375,
+      "matches_approved_candidate": true,
+      "matches_integrated_git_blob": true
+    }
+  },
+  "root_overall_status": "Runtime/evidence changes exist outside these three source paths; reviewed source paths are clean.",
+  "checks": [
+    {
+      "label": "root-default-partial",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/Users/earlcameron/Desktop/dungeonflux/development/check-rule-source.py"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+      "expected_exit": 0,
+      "exit": 0,
+      "stdout": "{\"full_book_sources\": \"unacquired\", \"page_count\": 364, \"result\": \"verified\", \"scope\": \"partial_srd_contents_only\", \"sha256\": \"8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87\", \"size_bytes\": 6031375, \"version\": \"5.2.1\"}\n",
+      "stderr": "",
+      "seconds": 0.4744,
+      "external_bound_seconds": 5
+    },
+    {
+      "label": "root-full-book-refusal",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/Users/earlcameron/Desktop/dungeonflux/development/check-rule-source.py",
+        "--require-full-book-sources"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+      "expected_exit": 1,
+      "exit": 1,
+      "stdout": "",
+      "stderr": "source check failed: full-source check refused: 2024 Player's Handbook bytes are unavailable\n",
+      "seconds": 0.0341,
+      "external_bound_seconds": 5
+    },
+    {
+      "label": "foreign-cwd-default-manifest",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/Users/earlcameron/Desktop/dungeonflux/development/check-rule-source.py"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review",
+      "expected_exit": 0,
+      "exit": 0,
+      "stdout": "{\"full_book_sources\": \"unacquired\", \"page_count\": 364, \"result\": \"verified\", \"scope\": \"partial_srd_contents_only\", \"sha256\": \"8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87\", \"size_bytes\": 6031375, \"version\": \"5.2.1\"}\n",
+      "stderr": "",
+      "seconds": 0.4705,
+      "external_bound_seconds": 5
+    },
+    {
+      "label": "root-script-empty-attribution",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/Users/earlcameron/Desktop/dungeonflux/development/check-rule-source.py",
+        "--manifest",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/empty-attribution/manifest.json"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+      "expected_exit": 1,
+      "exit": 1,
+      "stdout": "",
+      "stderr": "source check failed: required attribution must exactly match the pinned statement\n",
+      "seconds": 0.2126,
+      "external_bound_seconds": 5
+    },
+    {
+      "label": "root-script-fifo-manifest",
+      "command": [
+        "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/Users/earlcameron/Desktop/dungeonflux/development/check-rule-source.py",
+        "--manifest",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/manifest-fifo"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+      "expected_exit": 1,
+      "exit": 1,
+      "stdout": "",
+      "stderr": "source check failed: manifest must be a regular file\n",
+      "seconds": 0.0305,
+      "external_bound_seconds": 5
+    },
+    {
+      "label": "integrated-diff-check",
+      "command": [
+        "git",
+        "diff",
+        "ba0d3860fb27124be352b48766e99a955f746672..HEAD",
+        "--check"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+      "expected_exit": 0,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "seconds": 0.0263,
+      "external_bound_seconds": 5
+    },
+    {
+      "label": "relevant-source-clean",
+      "command": [
+        "git",
+        "status",
+        "--porcelain",
+        "--",
+        "development/check-rule-source.py",
+        "development/rules-sources"
+      ],
+      "cwd": "/Users/earlcameron/Desktop/dungeonflux",
+      "expected_exit": 0,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "seconds": 0.0172,
+      "external_bound_seconds": 5
+    }
+  ],
+  "prior_19_candidate_checks_applicable": true,
+  "prior_pdf_visual_and_publisher_proof_applicable": true
+}

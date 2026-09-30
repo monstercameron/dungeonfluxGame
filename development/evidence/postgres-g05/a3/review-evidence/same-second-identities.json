@@ -1,0 +1,8 @@
+{
+  "main_pid": 22471,
+  "suffix_pid": 22472,
+  "main_epoch": "1790796747",
+  "suffix_epoch": "1790796747",
+  "main_data": "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data",
+  "suffix_data": "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data-suffix-eval3"
+}

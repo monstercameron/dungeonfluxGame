@@ -1,0 +1,27 @@
+The following is a diff from the previous accessibility tree for Window: "DungeonFlux S00 transport laboratory" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 47, 49-99
+~0 standard window DungeonFlux S00 transport laboratory - Google Chrome Beta, URL: 127.0.0.1:43181/, Secondary Actions: Raise
+~	1 container DungeonFlux S00 transport laboratory - Google Chrome Beta, URL: 127.0.0.1:43181/
+~				4 button Back
+~					9 pop up button View site information
+~					10 text field (settable) Address and search bar, Value: 127.0.0.1:43181, Placeholder: Ask Google or type a URL
++					102 button Bookmark this tab
+~					13 pop up button Turn Off the Lights
+Has access to this site
+~					14 pop up button Automatic picture-in-picture (on)
+Has access to this site
+~					15 pop up button ChatGPT
+Has access to this site
++				103 HTML content DungeonFlux S00 transport laboratory, URL: 127.0.0.1:43181/
++					104 container
++						105 text DUNGEONFLUX / EXPERIMENTAL S00
++						106 heading Rust transport laboratory, Value: 1
++							107 text Rust transport laboratory
++						108 text Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly. This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.
++						109 button Run transport checks
++						110 button Run desktop pressure qualification
++						111 text Desktop pressure qualification has not run. READY · Rust/WASM initialized. Run all four RPC modes and failure checks.
++						112 link Native fixture diagnostics, Value: 127.0.0.1:43181/fixture-health
++						113 text Candidate: S00 transport / G02 qualification · Rust 1.98.1 · tonic 0.14.6 · h2 0.4.19 + browser clock · build 51d59602c16a7a705c7c224fc03abd21b24828ac
+~					100 tab (selected, settable, boolean) DungeonFlux S00 transport laboratory, Value: on
+The focused UI element is 103 HTML content DungeonFlux S00 transport laboratory, URL: 127.0.0.1:43181/

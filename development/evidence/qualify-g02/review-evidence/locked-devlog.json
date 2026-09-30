@@ -1,0 +1,9 @@
+{
+  "id": "qualify-g02-a1-evaluator-mac-locked-20260930",
+  "kind": "blocker",
+  "summary": "Mac locked after independently operated semantics and pressure run; final browser visual/reload checks pending.",
+  "details": "Fresh native Chrome tab rendered frozen build51d59602c16a7a705c7c224fc03abd21b24828ac. Initial and completed ten-semantics screenshots retained. Pressure button was independently clicked and RUNNING observed; finite Rust report records completed pressure and five malicious probes. CUA then reported the Mac is locked and automatic unlock failed.",
+  "action": "Preserved independent reports and screenshots, reran nine existing native test cases without rebuilding, rehashed frozen binaries. Requested coordinator relay manual unlock need; no UI bypass or headless substitution.",
+  "outcome": "Required final visual completion observation and reload investigation remain pending host unlock. Native tests passed and artifact identities match.",
+  "evidence_ref": "development/evidence/qualify-g02/review-evidence/independent-observations.json"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "setup-g05-coordinator-stage-correction",
+  "kind": "error",
+  "summary": "Task claim was rolled back when G05 was supplied as lifecycle stage.",
+  "details": "Feature G05 and execution stage are separate columns. The CHECK constraint rejected stage G05; no attempt/task claim survived the transaction.",
+  "action": "Reissued unchanged frozen setup task with stage implementation, preserving G05 feature association.",
+  "outcome": "Task and fenced worker attempt now claimed atomically. No schema/gate was changed."
+}

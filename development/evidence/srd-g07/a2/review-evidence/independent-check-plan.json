@@ -1,0 +1,17 @@
+{
+  "derived_utc": "2026-09-30T19:57:04.933126+00:00",
+  "criteria": [
+    "Retain the unchanged official English SRD 5.2.1 PDF with successful bounded acquisition, SHA256, size, publisher/title/version/language/acquisition provenance, actual page count and verified legal/section page locators.",
+    "Preserve source attribution and license evidence limited to the acquired SRD contents; explicitly record unacquired PHB/DMG/Monster Manual source revisions and unresolved rights/catalog gates, without claiming full 2024 coverage or a reviewed production RightsGrant.",
+    "Provide a bounded read-only development verifier for the pinned source manifest and bytes, with observed success and safe failure for corrupted bytes, malformed metadata, mixed source edition and missing required full-book sources; no game runtime schema or catalog implementation.",
+    "Retain exact committed source/evidence identities, commands and results, relevant PDF visual inspection, known gaps and scoped devlog; edits remain confined to the independent source-pin area."
+  ],
+  "checks": [
+    "Verify clean exact submitted commit and file hashes before exercising it; bind identity mismatch before verdict.",
+    "Reuse own original publisher download/PDF visual evidence only after actual PDF and manifest hash comparison.",
+    "Run partial-source success and explicit full-book requirement against genuinely unavailable books.",
+    "Run empty/truncated/malformed attribution, corrupt PDF, missing language, mixed edition, omitted full-book metadata, claimed acquired metadata with unavailable bytes.",
+    "Run nonblocking FIFO, directory, malformed JSON, oversized manifest admission cases with external 5 second fixture deadlines.",
+    "Confirm read-only source hashes/status and AST/diff checks, only verifier changed; retain unresolved full G07 gates."
+  ]
+}

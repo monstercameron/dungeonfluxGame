@@ -1,0 +1,151 @@
+{
+  "task_id": "SETUP-G05-001",
+  "attempt_id": "SETUP-G05-001-a3",
+  "submitted_commit": "c68e168eeb2ab040ec1d6064765c647c4454a041",
+  "fixture_commit": "c68e168eeb2ab040ec1d6064765c647c4454a041",
+  "source_hashes": {
+    "development/postgres.sh": "b69a566d6905ccf85ca63e8db695a7a4dbb84a163ead957c9ed4198562ee12da",
+    "development/postgres-g05.md": "ff89893757884d0e5537db89c71b70102fdaca625ade4c74d3ea9a1342e44f02",
+    ".gitignore": "9e3fd09e7e8290b6698c4e1c7938c34a893d590cb99758143edc2a515894a685"
+  },
+  "tool_hashes": {
+    "postgres": "fdb263f367f30e248021c9f74441c9120c2091aceaed0957bdb7a13efca7f8d9",
+    "pg_ctl": "401d19cff0e8c98a76bb0965cb7ca0c7a66c27b3480796fcd03ddbfe4b24e0b4",
+    "initdb": "b9dc5c551ca309f8d2500e78d815e1aae3f7745c92d22c180345cd7283b0f0f9",
+    "psql": "572ac7789c613a4c066cdb4deaf1b4d5c18d1975000cb097c1ce764f828432a7",
+    "pg_isready": "1d851244735169d4d0ceef5d472af935fac397bfb6cc90297b8391e5b623b994"
+  },
+  "archive_sha256": "983ee554ec53dbeb9b70797bef9fcf4e67e117e7e48ca1463cc80b3ff8e8ff3f",
+  "configuration_hashes": {
+    "/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/owner.json": "2bb5a220faa93648a118fe50cffa99e2661a86cb8d1e9568447e7d5a56b7a93b",
+    "/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/data/postgresql.conf": "fa2e5341fcd99d3b4ac1d0d953a60e8159e0094f952ba7b745f0b5f558c697dc",
+    "/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/data/pg_hba.conf": "e065812033bb130439bf661555c1507e370efc0b1d8dd206c02cfd06447bb023",
+    "/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/data/pg_ident.conf": "bf8f1664dc42eeb78a71a3746afb6b6c93805bda55ff4504f796dbe339d1fa50",
+    "/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/data/PG_VERSION": "7ee29791fc17e986b97128845622b077fb45e349fdb80523fac9dba879b4ad60"
+  },
+  "configuration_modes": {
+    "/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/owner.json": "0o600",
+    "/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/data/postgresql.conf": "0o600",
+    "/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/data/pg_hba.conf": "0o600",
+    "/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/data/pg_ident.conf": "0o600",
+    "/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/data/PG_VERSION": "0o600"
+  },
+  "protected_file_hashes": {
+    "development/runtime/postgres-g05/owner.json": "8d531bef812ac541bb3f54be78556885ef0550855300e58abdf427f4e83e3141",
+    "development/runtime/postgres-g05/data/postgresql.conf": "618ee97b55881ce33a39487c32df565130b10c25520cc0e2f0b00c08c5b1759b",
+    "development/runtime/postgres-g05/data/postmaster.pid": "1840dd5d2810924ae20faa2439630cfc028e7a3727fe65f0858d85c4f8a25567",
+    "e/development/runtime/postgres-g05/owner.json": "21f644d5f8e06976d4f26f10684a2a18816eb3fda40152952a973dc635f89700",
+    "e/development/runtime/postgres-g05/data/postgresql.conf": "9a9539ddef3920aaccf243150ac01118f09101923bd88a00fec5faf5bb70ce90",
+    "p/development/runtime/postgres-g05/owner.json": "01466f8bddfb31a75cd70f04f7daf98f67ff169351c7de0d7952baf5130c159a",
+    "p/development/runtime/postgres-g05/data/postgresql.conf": "f5ea0c82cc35b797ef12683eac6374a64055ccfbce73e14072e46e2dc9c64322"
+  },
+  "protected_hashes_unchanged": true,
+  "checks": [
+    {
+      "argv": [
+        "bash",
+        "-n",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/postgres-g05-sol/development/postgres.sh"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "seconds": 0.004928874999999999
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/postgres-g05-sol",
+        "diff",
+        "--check"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "seconds": 0.013486499999999998
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/postgres-g05-sol",
+        "status",
+        "--porcelain"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "seconds": 0.020801250000000007
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/Users/earlcameron/Desktop/dungeonflux/s",
+        "status",
+        "--porcelain"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "seconds": 0.016361541000000007
+    },
+    {
+      "argv": [
+        "/Users/earlcameron/Desktop/dungeonflux/s/development/postgres.sh",
+        "status"
+      ],
+      "exit": 0,
+      "stdout": "stopped: owned cluster at /Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/data\n",
+      "stderr": "",
+      "seconds": 1.6640308750000001
+    },
+    {
+      "argv": [
+        "ps",
+        "-p",
+        "80873,18905,18907,69190",
+        "-o",
+        "pid=,lstart=,command="
+      ],
+      "exit": 0,
+      "stdout": "18905 Wed Sep 30 15:11:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/web\n18907 Wed Sep 30 15:11:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web 43181\n69190 Wed Sep 30 13:25:20 2026     /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python /Users/earlcameron/Desktop/dungeonflux/development/screenshot_journey.py run-loop\n80873 Wed Sep 30 13:46:12 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install/bin/postgres -D /Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/data -c listen_addresses= -c unix_socket_directories=/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/socket -c unix_socket_permissions=0700 -c port=55439 -c max_connections=16 -c fsync=on -c full_page_writes=on -c synchronous_commit=on\n",
+      "stderr": "",
+      "seconds": 0.004420083000000075
+    },
+    {
+      "argv": [
+        "/Users/earlcameron/Desktop/dungeonflux/s/artifacts/build/postgres-g05/install/bin/pg_config",
+        "--configure"
+      ],
+      "exit": 0,
+      "stdout": " '--prefix=/Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install' '--without-readline' '--without-icu' '--without-llvm' '--without-lz4' '--without-zstd' '--without-openssl' '--without-pam' '--without-systemd' '--without-bonjour' '--without-gssapi' '--without-ldap' '--without-perl' '--without-python' '--without-tcl' '--without-libxml' '--without-libxslt'\n",
+      "stderr": "",
+      "seconds": 0.004546208999999912
+    },
+    {
+      "argv": [
+        "otool",
+        "-L",
+        "/Users/earlcameron/Desktop/dungeonflux/s/artifacts/build/postgres-g05/install/bin/psql"
+      ],
+      "exit": 0,
+      "stdout": "/Users/earlcameron/Desktop/dungeonflux/s/artifacts/build/postgres-g05/install/bin/psql:\n\t/Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install/lib/libpq.5.dylib (compatibility version 5.0.0, current version 5.18.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)\n",
+      "stderr": "",
+      "seconds": 0.012237250000000088
+    }
+  ],
+  "native_build_provenance": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/postgres-g05/SETUP-G05-001-a1-evidence.json",
+  "native_build_config_hashes": {
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/SETUP-G05-001-a1/postgresql-18.6/config.status": "37a5eef72a384041ef619aa3146a0c8e395ebf7770b39895d8b04756e9af1456",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/SETUP-G05-001-a1/postgresql-18.6/config.log": "06d21b6c41e66fd4b613f006133c20314680263a39844be4a6ccfb08aba8b19e"
+  },
+  "timestamp_utc": "2026-09-30T19:14:31.534595+00:00",
+  "fixture_state": "all owned PostgreSQL/dummy/stall children stopped; wrappers and symlinks restored; durable main and suffix clusters retained",
+  "preview_pid_change": "Coordinator independently recovered absent old preview PIDs67387/96977 to18905/18907; worker did not signal either generation",
+  "preview_recovery_receipts": {
+    "/Users/earlcameron/Desktop/dungeonflux/development/evidence/preview-recovery/baseline-ownership.json": "11bbc7ddfd328e00eb5e56f89473afd55b4b0586d2740eca0234891a8f39c6b7",
+    "/Users/earlcameron/Desktop/dungeonflux/development/evidence/preview-recovery/qualification-ownership.json": "481890669221eaaeb263fbd8498b6aba08a24d52e0a3cfbdbae4c09b97e866f3"
+  }
+}

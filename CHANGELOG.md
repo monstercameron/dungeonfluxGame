@@ -14,6 +14,39 @@ commit into the next block: keep the recorded ending revision as the next
 baseline and capture baseline..HEAD, which includes the bookkeeping commit.
 Do not invent a self-hash or silently discard metadata commits.
 
+## 2026-09-30T12:45:15-04:00 to 2026-09-30T16:17:22-04:00
+
+Range: 4cac7647d4b2aa8e62f2c5c264d8561878383124..dd63d194a8e87ce575e861199abc28861ac2c28d
+
+- f9343cb5ec17b33c76a03b20f6afec9168f9fb7a — Record verified S00 startup evidence and close implementation block
+- 92460d4c58124bc713970da0d895fc59ffbfcb11 — Add owned local PostgreSQL 18.6 setup
+- 25af2ecd54bfb2b918405d354972f7a652c05342 — Enforce PostgreSQL runtime ownership modes
+- db403a4ca58ee5f221fb53e7fc61929345618cfe — Harden local PostgreSQL lifecycle ownership
+- c68e168eeb2ab040ec1d6064765c647c4454a041 — Bind PostgreSQL lifecycle checks to exact server identity
+- 51d59602c16a7a705c7c224fc03abd21b24828ac — Measure transport resources and exercise bounded desktop pressure
+- ba0d3860fb27124be352b48766e99a955f746672 — Merge branch 'codex/qualify-g02'
+- 0df797256ae35350521fa9dc0d4ece8d5b85b4a0 — Pin public SRD 5.2.1 source subset
+- 6856a7457ad335028ccbe787ef01867f6e07c156 — Bound SRD source verification and attribution
+- dd63d194a8e87ce575e861199abc28861ac2c28d — Merge branch 'codex/pin-srd-g07'
+
+Owned PostgreSQL 18.6 development setup independently approved at `c68e168`; real
+process identity, safe shutdown/refusal, transactions and restart persistence passed.
+Public English SRD 5.2.1 source pin and bounded verifier independently approved against
+merged `dd63d194`; full-book source, catalog and commercial rights gates remain open.
+
+Transport candidate `51d5960` passed its five bounded desktop criteria and was merged
+at `ba0d386`. Current native/WASM gates, nine native tests, browser semantics, pressure
+and desktop/narrow visual checks pass. Final integrated reload is unperformed because
+the Mac locked; the task remains in review. Full G02 device, complete memory, audio,
+network and recovery qualification remains inconclusive. No gameplay completion claim.
+
+Cleanup inventories 004–006 retain all output and durable evidence; no deletions.
+The work session ends pending manual Mac unlock. All three previews and the owned
+PostgreSQL runtime remain available; the bounded screenshot recorder is stopped.
+
+Next block baseline: `dd63d194a8e87ce575e861199abc28861ac2c28d`. The bookkeeping commit writing this
+block is captured in the next block, including workflow history and retained evidence.
+
 ## 2026-09-30T11:50:05-04:00 to 2026-09-30T12:45:15-04:00
 
 Range: 0a2c281a02402493636fde9d93873055bf8a3e28..4cac7647d4b2aa8e62f2c5c264d8561878383124

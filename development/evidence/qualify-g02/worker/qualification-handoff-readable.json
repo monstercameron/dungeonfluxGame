@@ -1,0 +1,10 @@
+{
+  "id": "e3a2e371-5fe4-4b9d-98dc-90e64bc9ac7b",
+  "kind": "resolution",
+  "summary": "Readable handoff for frozen transport qualification candidate; local cases pass, full G02 remains inconclusive.",
+  "details": "Candidate51d59602c16a7a705c7c224fc03abd21b24828ac passed all four generated native HTTP/2 gRPC modes, ten browser semantics checks twice, mixed slow-consumer/paced-media/bulk/small-RPC pressure twice, and five malicious browser probes twice. Full reports and actual queue/pipe/receipt/DATA credit, WASM linear memory and process RSS samples are retained. Running Chrome153.0.8010.12 differs from installed bundle156.0.8078.4; the actual running version was verified through CUA. An existing tab went blank after preview restart/reload; a fresh dedicated tab recovered; cause remains unresolved.",
+  "action": "Committed the isolated source, ran clean native/WASM gates and build, executed real CUA interactions, recorded exact artifact hashes and appended scoped evidence. Rewrote handoff prose for readability without changing results.",
+  "outcome": "Local implemented scenarios PASS. Full G02 remains INCONCLUSIVE pending physical devices/network/suspend, allocator/control/process/engine allocation, actual audio/action latency and approved budgets. Payload reservations7,110,656 native/6,062,080 browser bytes do not prove total per-connection memory under8MiB. Frozen preview43181 PID96977 remains available. Verified baseline43180 PID67387 and its build are untouched.",
+  "related_entry_id": "eb6fc08b-49f5-41c3-982b-d2aa467cff32",
+  "evidence_ref": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/qualify-g02/worker/handoff.json"
+}

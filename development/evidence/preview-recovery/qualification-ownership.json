@@ -1,0 +1,23 @@
+{
+  "project_root": "/Users/earlcameron/Desktop/dungeonflux",
+  "url": "http://127.0.0.1:43181",
+  "owner_pid": 18907,
+  "public_safe": true,
+  "read_only": true,
+  "synthetic_public": true,
+  "no_load_effects": true,
+  "source_commit": "51d59602c16a7a705c7c224fc03abd21b24828ac",
+  "owner": "/root",
+  "note": "Coordinator recovered exact retained native/WASM build after authoritative PID/listener absence; no rebuild. Passive load mounts synthetic UI; checks require explicit button.",
+  "recovered_at": "2026-09-30T19:11:08.003257+00:00",
+  "binary_sha256": "7840d2ea80898025a72887fc7de7b9ee23c6ebee747627ac4ee3138520cc86be",
+  "argv": [
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web",
+    "43181"
+  ],
+  "log": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/coordinator-preview-recovery/qualification-20260930T191107Z.log",
+  "initial_health": "S00 experimental; active=0; completed=0; cancelled=0; otel_spans=0; durable_export=false; dropped_spans=0; deadline_headers=0",
+  "process": "18907 18904 Wed Sep 30 15:11:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web 43181",
+  "prior_pid": 96977
+}

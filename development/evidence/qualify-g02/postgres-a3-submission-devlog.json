@@ -1,0 +1,9 @@
+{
+  "id": "g05-a3-coordinator-submitted-20260930",
+  "kind": "discovery",
+  "summary": "Sol submitted clean fixed PostgreSQL runtime candidate for independent current boundary evaluation.",
+  "details": "c68e168eeb2ab040ec1d6064765c647c4454a041 owns exact argv/SQL backend binding, symlink path guards and captured-PID shutdown; worker reports174 bounded checks. Worker evidence is not approval.",
+  "action": "Verified clean committed worktree, recorded submitted/review phase and bound frontier evaluator.",
+  "outcome": "Four original criteria remain awaiting independent native evaluation.",
+  "evidence_ref": "development/evidence/postgres-g05/a3/SETUP-G05-001-a3-evidence.json"
+}

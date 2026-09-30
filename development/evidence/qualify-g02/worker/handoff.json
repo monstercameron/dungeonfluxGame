@@ -1,0 +1,111 @@
+{
+  "task_id": "QUALIFY-G02-001",
+  "attempt_id": "QUALIFY-G02-001-a1",
+  "input_revision": "f9343cb5ec17b33c76a03b20f6afec9168f9fb7a",
+  "submitted_revision": "51d59602c16a7a705c7c224fc03abd21b24828ac",
+  "worktree": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/qualify-g02",
+  "branch": "codex/qualify-g02",
+  "source_clean": true,
+  "preview": {
+    "url": "http://127.0.0.1:43181",
+    "pid": 96977,
+    "exec_session": 22996,
+    "frozen": true,
+    "build_root": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02",
+    "start_command": "DUNGEONFLUX_ARTIFACT_ROOT=/Users/earlcameron/Desktop/dungeonflux/artifacts DUNGEONFLUX_BUILD_ROOT=/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02 DUNGEONFLUX_TMP_ROOT=/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/QUALIFY-G02-001-a1 DUNGEONFLUX_PREVIEW_PORT=43181 ./development/build-fixture.sh serve",
+    "browser": "Native Chrome Beta CUA, final dedicated tab at43181. Refresh getAXState before each native action; a fresh tab recovered blank reloads."
+  },
+  "results": {
+    "fmt_native_wasm_clippy": "PASS",
+    "workspace_tests": "PASS:7 bridge and2 fixture behavioral tests",
+    "clean_native_wasm_build": "PASS",
+    "real_browser_semantics": "PASS twice,10 checks each",
+    "slow_paced_bulk_small_rpc_pressure": "PASS twice",
+    "malicious_ws_frame_hpack_continuation_flood": "PASS twice,5probes each",
+    "native_closed_connections_pipe_owners": "PASS:4 connections closed, pipe owners0, current pipes0",
+    "final_native_health": "S00 experimental; active=0; completed=218; cancelled=6; otel_spans=228; durable_export=false; dropped_spans=0; deadline_headers=2",
+    "full_G02": "INCONCLUSIVE"
+  },
+  "observations": {
+    "run1_pressure_rpc_p95_p99_ms": [
+      39.3,
+      43.8
+    ],
+    "run2_pressure_rpc_p95_p99_ms": [
+      41.0,
+      43.1
+    ],
+    "run1_frame_gap_p95_p99_ms": [
+      10.8,
+      11.1
+    ],
+    "run2_frame_gap_p95_p99_ms": [
+      10.8,
+      11.0
+    ],
+    "browser_callback_peak_bytes_run1": 465230,
+    "browser_callback_peak_items_run1": 40,
+    "native_pipe_to_websocket_peak_bytes_run1": 524761,
+    "wasm_allocated_bytes_before_first_pressure": 1769472,
+    "wasm_allocated_peak_bytes_both_runs": 2555904,
+    "native_payload_reservation_bytes": 7110656,
+    "browser_payload_reservation_bytes": 6062080,
+    "whole_fixture_rss_first_peak_kib": [
+      7392,
+      10128
+    ],
+    "running_chrome": "153.0.8010.12 beta arm64",
+    "installed_chrome_bundle": "156.0.8078.4",
+    "discrepancy": "Measured running engine153.0.8010.12 differs from installed bundle156.0.8078.4. Exact running version was verified through CUA chrome://version. No browser upgrade or restart was performed."
+  },
+  "remaining_required_evidence": [
+    "Physical iOS/Android and supported desktop/network matrix.",
+    "Suspend/foreground/reconnect and development reload reliability: an existing Chrome tab went blank after preview rebuild; a fresh tab worked; cause remains unresolved.",
+    "Allocator/h2 control/reset metadata, whole-process CPU/memory, and browser engine/pre-callback allocation qualification. Payload reservation is not complete8MiB memory proof.",
+    "Actual audio first playback/jitter/action-to-view and approved production latency budgets.",
+    "Full G06 durable telemetry/browser SDK ingestion remains a separate requirement."
+  ],
+  "evidence_root": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/qualify-g02/worker",
+  "evidence": [
+    "candidate-gates.json",
+    "build-identity.json",
+    "host-identity.json",
+    "running-browser.json",
+    "candidate-semantics.txt",
+    "candidate-semantics-run2.txt",
+    "candidate-pressure-run1.txt",
+    "candidate-pressure-run2.txt",
+    "candidate-resources-run1.txt",
+    "candidate-resources-run2.txt",
+    "candidate-health-run1.txt",
+    "candidate-health-run2.txt",
+    "candidate-telemetry-run1.txt",
+    "candidate-telemetry-run2.txt",
+    "candidate-process-samples.json",
+    "candidate-semantics.png",
+    "candidate-pressure-run1.png",
+    "candidate-pressure-run2.png"
+  ],
+  "protection": {
+    "baseline_pid67387": "Untouched",
+    "baseline_build_start_s00": "Untouched",
+    "queue_and_changelog": "Not mutated"
+  },
+  "source_change_summary": [
+    "Shared measured buffers, pipe owners, receipt references and passive DATA/WINDOW_UPDATE observer; bounded frame flood and time-sliced work.",
+    "Explicit native WebSocket read/write bounds and browser writes within remaining bufferedAmount allowance.",
+    "Rust pressure latency/frame/WASM measurement and finite actual malicious boundary probes.",
+    "Bounded loopback report capture, retained snapshots, and explicit measured/unmeasured OTEL counts.",
+    "Separate artifact/tmp/port wrapper options and accurate README/start/qualification documentation."
+  ],
+  "public_contracts": [
+    "ConnectionMetrics/ConnectionSnapshot and buffer/credit snapshots; accept_websocket_measured; BrowserConnection::snapshot.",
+    "OperationSpan::finish_unmeasured; experimental protobuf numbering unchanged."
+  ],
+  "exceptions": [
+    "Browser page-lifetime UI closures retained as in the existing fixture; all per-run streams/timers/driver/animation callbacks are owned and cancelled.",
+    "Bridge bytes are observed wire bytes; service bytes are actual application payload bytes, excluding protobuf/network overhead.",
+    "Fixture telemetry retains at most512 nondurable spans; native bridge connection record remains a terminal observation, not a connection CPU profile."
+  ],
+  "delegation": "none"
+}

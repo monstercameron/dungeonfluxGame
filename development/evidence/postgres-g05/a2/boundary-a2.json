@@ -1,0 +1,335 @@
+{
+  "attempt_id": "SETUP-G05-001-a2",
+  "timestamp_utc": "2026-09-30T18:33:33.488767+00:00",
+  "evaluation_repo": "/Users/earlcameron/Desktop/dungeonflux/p",
+  "socket_path_bytes": 95,
+  "build_archive_reused": true,
+  "results": [
+    {
+      "name": "stop-before-boundary-probes",
+      "command": [
+        "./development/postgres.sh",
+        "stop"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.654,
+      "stdout": "already stopped\n",
+      "stderr": ""
+    },
+    {
+      "name": "absent-runtime-status",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 3,
+      "elapsed_seconds": 0.311,
+      "stdout": "not initialized: /Users/earlcameron/Desktop/dungeonflux/p/development/runtime/postgres-g05\n",
+      "stderr": ""
+    },
+    {
+      "name": "runtime-ancestor-symlink-status",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.288,
+      "stdout": "",
+      "stderr": "postgres-g05: refusing symlink component: /Users/earlcameron/Desktop/dungeonflux/p/development/runtime\n"
+    },
+    {
+      "name": "runtime-ancestor-symlink-start",
+      "command": [
+        "./development/postgres.sh",
+        "start"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.286,
+      "stdout": "",
+      "stderr": "postgres-g05: refusing symlink component: /Users/earlcameron/Desktop/dungeonflux/p/development/runtime\n"
+    },
+    {
+      "name": "runtime-ancestor-symlink-stop",
+      "command": [
+        "./development/postgres.sh",
+        "stop"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.283,
+      "stdout": "",
+      "stderr": "postgres-g05: refusing symlink component: /Users/earlcameron/Desktop/dungeonflux/p/development/runtime\n"
+    },
+    {
+      "name": "runtime-ancestor-symlink-setup",
+      "command": [
+        "./development/postgres.sh",
+        "setup"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.282,
+      "stdout": "",
+      "stderr": "postgres-g05: refusing symlink component: /Users/earlcameron/Desktop/dungeonflux/p/development/runtime\n"
+    },
+    {
+      "name": "malformed-pid-refusal-status",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.593,
+      "stdout": "",
+      "stderr": "postgres-g05: postmaster.pid is malformed; refusing lifecycle action\n"
+    },
+    {
+      "name": "malformed-pid-refusal-start",
+      "command": [
+        "./development/postgres.sh",
+        "start"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.543,
+      "stdout": "",
+      "stderr": "postgres-g05: postmaster.pid is malformed; refusing lifecycle action\n"
+    },
+    {
+      "name": "malformed-pid-refusal-stop",
+      "command": [
+        "./development/postgres.sh",
+        "stop"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.55,
+      "stdout": "",
+      "stderr": "postgres-g05: postmaster.pid is malformed; refusing lifecycle action\n"
+    },
+    {
+      "name": "live-unrelated-pid-stale-socket-status",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.671,
+      "stdout": "",
+      "stderr": "postgres-g05: running-server identity check failed: PID executable does not match the owned PostgreSQL binary\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n"
+    },
+    {
+      "name": "live-unrelated-pid-stale-socket-start",
+      "command": [
+        "./development/postgres.sh",
+        "start"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.622,
+      "stdout": "",
+      "stderr": "postgres-g05: running-server identity check failed: PID executable does not match the owned PostgreSQL binary\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n"
+    },
+    {
+      "name": "live-unrelated-pid-stale-socket-stop",
+      "command": [
+        "./development/postgres.sh",
+        "stop"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.612,
+      "stdout": "",
+      "stderr": "postgres-g05: running-server identity check failed: PID executable does not match the owned PostgreSQL binary\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n"
+    },
+    {
+      "name": "dummy-signal-not-received",
+      "pid": 97297,
+      "still_alive": true,
+      "signal_record_exists": false,
+      "stale_socket_inode": 6852907
+    },
+    {
+      "name": "socket-without-pid-status",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.759,
+      "stdout": "",
+      "stderr": "postgres-g05: socket exists without postmaster.pid; refusing lifecycle action\n"
+    },
+    {
+      "name": "socket-without-pid-start",
+      "command": [
+        "./development/postgres.sh",
+        "start"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.763,
+      "stdout": "",
+      "stderr": "postgres-g05: socket exists without postmaster.pid; refusing lifecycle action\n"
+    },
+    {
+      "name": "socket-without-pid-stop",
+      "command": [
+        "./development/postgres.sh",
+        "stop"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.676,
+      "stdout": "",
+      "stderr": "postgres-g05: socket exists without postmaster.pid; refusing lifecycle action\n"
+    },
+    {
+      "name": "orphan-data-process-refusal-status",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.72,
+      "stdout": "",
+      "stderr": "postgres-g05: process PID 97698 references the owned data directory without its PID file; refusing lifecycle action\n"
+    },
+    {
+      "name": "orphan-data-process-refusal-start",
+      "command": [
+        "./development/postgres.sh",
+        "start"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.683,
+      "stdout": "",
+      "stderr": "postgres-g05: process PID 97698 references the owned data directory without its PID file; refusing lifecycle action\n"
+    },
+    {
+      "name": "orphan-data-process-refusal-stop",
+      "command": [
+        "./development/postgres.sh",
+        "stop"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.686,
+      "stdout": "",
+      "stderr": "postgres-g05: process PID 97698 references the owned data directory without its PID file; refusing lifecycle action\n"
+    },
+    {
+      "name": "orphan-data-process-not-signalled",
+      "pid": 97698,
+      "still_alive": true,
+      "signal_record_exists": false
+    },
+    {
+      "name": "dead-pid-refusal-status",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.661,
+      "stdout": "",
+      "stderr": "postgres-g05: running-server identity check failed: PID has no readable executable path\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n"
+    },
+    {
+      "name": "dead-pid-refusal-start",
+      "command": [
+        "./development/postgres.sh",
+        "start"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.615,
+      "stdout": "",
+      "stderr": "postgres-g05: running-server identity check failed: PID has no readable executable path\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n"
+    },
+    {
+      "name": "dead-pid-refusal-stop",
+      "command": [
+        "./development/postgres.sh",
+        "stop"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.62,
+      "stdout": "",
+      "stderr": "postgres-g05: running-server identity check failed: PID has no readable executable path\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n"
+    },
+    {
+      "name": "start-for-stalled-readiness",
+      "command": [
+        "./development/postgres.sh",
+        "start"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.901,
+      "stdout": "waiting for server to start.... done\nserver started\nstarted PostgreSQL 18.6 pid=98031 version=18.6 data_directory=/Users/earlcameron/Desktop/dungeonflux/p/development/runtime/postgres-g05/data max_connections=16 max_worker_processes=8 max_parallel_workers=8 max_parallel_workers_per_gather=2 autovacuum_max_workers=3 fsync=on full_page_writes=on synchronous_commit=on listen_addresses='' tcp=false socket=/Users/earlcameron/Desktop/dungeonflux/p/development/runtime/postgres-g05/socket/.s.PGSQL.55439\n",
+      "stderr": ""
+    },
+    {
+      "name": "stalled-readiness-query",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 9.672,
+      "stdout": "",
+      "stderr": "postgres-g05: running-server identity check failed: readiness probe exceeded its 10 second deadline\npostgres-g05: postmaster.pid/process/socket ownership is ambiguous; refusing lifecycle action\n"
+    },
+    {
+      "name": "stalled-child-cleanup",
+      "pid": 98101,
+      "alive_after_timeout": false,
+      "deadline_seconds": 10
+    },
+    {
+      "name": "status-after-readiness-timeout",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.708,
+      "stdout": "ready pid=98031 version=18.6 data_directory=/Users/earlcameron/Desktop/dungeonflux/p/development/runtime/postgres-g05/data max_connections=16 max_worker_processes=8 max_parallel_workers=8 max_parallel_workers_per_gather=2 autovacuum_max_workers=3 fsync=on full_page_writes=on synchronous_commit=on listen_addresses='' tcp=false\n",
+      "stderr": ""
+    },
+    {
+      "name": "stop-after-boundary-probes",
+      "command": [
+        "./development/postgres.sh",
+        "stop"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.782,
+      "stdout": "waiting for server to shut down.... done\nserver stopped\nstopped owned PostgreSQL pid=98031\n",
+      "stderr": ""
+    },
+    {
+      "name": "final-status-stopped",
+      "command": [
+        "./development/postgres.sh",
+        "status"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.679,
+      "stdout": "stopped: owned cluster at /Users/earlcameron/Desktop/dungeonflux/p/development/runtime/postgres-g05/data\n",
+      "stderr": ""
+    }
+  ],
+  "protected_hashes_unchanged_across_safety_refusals": true,
+  "protected_hashes_before_safety": {
+    "owner.json": "01466f8bddfb31a75cd70f04f7daf98f67ff169351c7de0d7952baf5130c159a",
+    "data/postgresql.conf": "f5ea0c82cc35b797ef12683eac6374a64055ccfbce73e14072e46e2dc9c64322",
+    "data/global/pg_control": "7936122d3dffbbbb5b9a65235042c445715e8f18c19e652a2932544ba567f48d",
+    "data/PG_VERSION": "7ee29791fc17e986b97128845622b077fb45e349fdb80523fac9dba879b4ad60"
+  },
+  "protected_hashes_after_safety": {
+    "owner.json": "01466f8bddfb31a75cd70f04f7daf98f67ff169351c7de0d7952baf5130c159a",
+    "data/postgresql.conf": "f5ea0c82cc35b797ef12683eac6374a64055ccfbce73e14072e46e2dc9c64322",
+    "data/global/pg_control": "7936122d3dffbbbb5b9a65235042c445715e8f18c19e652a2932544ba567f48d",
+    "data/PG_VERSION": "7ee29791fc17e986b97128845622b077fb45e349fdb80523fac9dba879b4ad60"
+  },
+  "protected_hashes_after_normal_restart_stop": {
+    "owner.json": "01466f8bddfb31a75cd70f04f7daf98f67ff169351c7de0d7952baf5130c159a",
+    "data/postgresql.conf": "f5ea0c82cc35b797ef12683eac6374a64055ccfbce73e14072e46e2dc9c64322",
+    "data/global/pg_control": "27267b845fe25c83f4786e3d99660f72796819ed406d047592e0a13376f8efc6",
+    "data/PG_VERSION": "7ee29791fc17e986b97128845622b077fb45e349fdb80523fac9dba879b4ad60"
+  },
+  "dummy_signal_record": null,
+  "evaluation_cluster_retained_stopped": true
+}

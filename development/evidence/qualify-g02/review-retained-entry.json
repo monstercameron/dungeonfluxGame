@@ -1,0 +1,9 @@
+{
+  "id": "qualify-g02-coordinator-review-retained-locked",
+  "kind": "blocker",
+  "summary": "Frozen G02 candidate retained in review pending final visual verification on unlocked Mac.",
+  "details": "Independent frontier review passed criteria1/2/4/5 and actual browser semantics/pressure/adversarial/native boundaries, but criterion3 final screen/responsive follow-up and dedicated-tab reload remain unperformed after host locked.",
+  "action": "Recorded inconclusive verdict in tracked current review phase, retained source/build/PID and all evidence. Asked user asynchronously to unlock; continue independent PostgreSQL Sol repair and next-contract preparation.",
+  "outcome": "No approval/integration or production G02 claim. Full goal stays active; there is meaningful independent repair work, so goal is not at an impasse.",
+  "evidence_ref": "development/evidence/qualify-g02/review.json"
+}

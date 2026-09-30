@@ -1,0 +1,108 @@
+{
+  "task_id": "PIN-G07-SRD-001",
+  "attempt_id": "PIN-G07-SRD-001-a1",
+  "worker": "/root/pin_srd_g07",
+  "record_role": "atomic",
+  "scope_status": "frozen",
+  "dispatch_ready": true,
+  "input_revision": "f9343cb5ec17b33c76a03b20f6afec9168f9fb7a",
+  "worktree": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07",
+  "objective": "Acquire and verify the explicitly public licensed SRD mechanics source as one partial G07 prerequisite; full required core-book/catalog/rights gate remains open.",
+  "edit_paths": [
+    "development/rules-sources/",
+    "development/check-rule-source.py"
+  ],
+  "acceptance": [
+    "Retain the unchanged official English SRD 5.2.1 PDF with successful bounded acquisition, SHA256, size, publisher/title/version/language/acquisition provenance, actual page count and verified legal/section page locators.",
+    "Preserve source attribution and license evidence limited to the acquired SRD contents; explicitly record unacquired PHB/DMG/Monster Manual source revisions and unresolved rights/catalog gates, without claiming full 2024 coverage or a reviewed production RightsGrant.",
+    "Provide a bounded read-only development verifier for the pinned source manifest and bytes, with observed success and safe failure for corrupted bytes, malformed metadata, mixed source edition and missing required full-book sources; no game runtime schema or catalog implementation.",
+    "Retain exact committed source/evidence identities, commands and results, relevant PDF visual inspection, known gaps and scoped devlog; edits remain confined to the independent source-pin area."
+  ],
+  "required_sources": [
+    "AGENTS.md",
+    "planning/coding-style.md",
+    "planning/rules-support.md",
+    "planning/rules-coverage.md",
+    "planning/implementation-roadmap.md",
+    "planning/subsystem-interfaces.md",
+    "planning/commercial-validation.md",
+    "ADR/0001-sqlite-agent-workflow.md",
+    "ADR/0002-resource-scheduling-and-cleanup.md",
+    "ADR/0004-development-reliability.md",
+    "ADR/0005-frontier-output-evaluation.md"
+  ],
+  "governing_sections": {
+    "planning/rules-coverage.md": [
+      "Scope and source gate",
+      "Tracking and completion gates"
+    ],
+    "planning/rules-support.md": [
+      "Requirement",
+      "Paid rights and novice adjudication"
+    ],
+    "planning/commercial-validation.md": [
+      "Rights-complete launch gate"
+    ]
+  },
+  "source_hashes": {
+    "AGENTS.md": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182",
+    "planning/coding-style.md": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb",
+    "planning/rules-support.md": "a9b38b632d6ff669217da6e2e19be756c00925042afb79966e081581ec09eba4",
+    "planning/rules-coverage.md": "87a61156b1594c93c235a5815e209fbfb6ba5679e9d625bbacfb500d48d684d5",
+    "planning/implementation-roadmap.md": "0160ad8e8ec38f768e2348209b9989e30e8f403d9b1a4ebf694f0801f7206932",
+    "planning/subsystem-interfaces.md": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a",
+    "planning/commercial-validation.md": "98c08b66ba87e67a1c190de4f0f0d1a603d9c0c64db8b4da21f7ccd092a0ec6a",
+    "ADR/0001-sqlite-agent-workflow.md": "acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8",
+    "ADR/0002-resource-scheduling-and-cleanup.md": "a6476cfef449e089639109cc6d3cf5f0800b792b57a32696258d5ac0b9511966",
+    "ADR/0004-development-reliability.md": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae",
+    "ADR/0005-frontier-output-evaluation.md": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c"
+  },
+  "selected_source": {
+    "publisher_page": "https://www.dndbeyond.com/srd",
+    "pdf_url": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf",
+    "creator_faq": "https://www.dndbeyond.com/creator-faq",
+    "version": "5.2.1",
+    "language": "English",
+    "checksum": "compute acquisition pin; do not fabricate publisher checksum"
+  },
+  "required_capabilities": {
+    "computer_use": false,
+    "vision": true,
+    "audio": false
+  },
+  "bounds": {
+    "download_timeout_seconds": 90,
+    "maximum_download_bytes": 67108864,
+    "command_timeout_seconds": 60,
+    "render_relevant_pages_maximum": 4,
+    "paid_calls": 0,
+    "estimated_additional_peak_gib": 0.3,
+    "physical_gib": 16,
+    "observed_free_percent": 45,
+    "system_headroom_gib": 3.2,
+    "review_reserve_gib": 2
+  },
+  "integration_hooks": {
+    "source manifest and verifier": "one worker owner",
+    "queue/sequential integration": "coordinator",
+    "full-book access/revision/errata/catalog/rights selection": "separate unresolved G07 gate; never silently assume available"
+  },
+  "verification": [
+    "Parse original retained PDF with bundled dependencies; visually inspect legal/title and relevant table-of-contents pages.",
+    "Run verifier against retained manifest/source bytes plus bounded owned malformed/corrupt/edition/missing-full-source fixtures.",
+    "Python syntax and git diff check; no Rust/Cargo source changed, so native/WASM gates inapplicable."
+  ],
+  "protection": [
+    "No shared Cargo, proto, README, .gitignore, CHANGELOG, app source or another worktree edits.",
+    "No paid books, unprovided book copying, private dirs/account reads, customer/counsel contacts or paid calls.",
+    "No catalog entry denominator, runtime RulesetId or production RightsGrant invented.",
+    "Keep public source unchanged; scratch under main artifacts/tmp/attempt and durable evidence under main development/evidence/srd-g07.",
+    "Use PDF skill read-only, bundled runtimes; no global/Homebrew/home changes and no screenshot timer.",
+    "No recursive delegation, queue changes or self approval."
+  ],
+  "evidence_root": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/srd-g07",
+  "scratch": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a1",
+  "bundled_python": "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+  "bundled_binary_directory": "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin",
+  "canonical_backlog_overlap": "Partial B-G07-R01/D01/D02 source evidence only; these broad tasks remain pending until full original criteria pass."
+}

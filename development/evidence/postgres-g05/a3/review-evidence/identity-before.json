@@ -1,0 +1,28 @@
+{
+  "candidate_commit": "c68e168eeb2ab040ec1d6064765c647c4454a041",
+  "candidate_status": "",
+  "source_hash": "b69a566d6905ccf85ca63e8db695a7a4dbb84a163ead957c9ed4198562ee12da",
+  "archive_hash": "983ee554ec53dbeb9b70797bef9fcf4e67e117e7e48ca1463cc80b3ff8e8ff3f",
+  "tools": {
+    "postgres": "fdb263f367f30e248021c9f74441c9120c2091aceaed0957bdb7a13efca7f8d9",
+    "psql": "572ac7789c613a4c066cdb4deaf1b4d5c18d1975000cb097c1ce764f828432a7",
+    "pg_ctl": "401d19cff0e8c98a76bb0965cb7ca0c7a66c27b3480796fcd03ddbfe4b24e0b4",
+    "pg_isready": "1d851244735169d4d0ceef5d472af935fac397bfb6cc90297b8391e5b623b994",
+    "initdb": "b9dc5c551ca309f8d2500e78d815e1aae3f7745c92d22c180345cd7283b0f0f9"
+  },
+  "protected": {
+    "/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/owner.json": "8d531bef812ac541bb3f54be78556885ef0550855300e58abdf427f4e83e3141",
+    "/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/data/postgresql.conf": "618ee97b55881ce33a39487c32df565130b10c25520cc0e2f0b00c08c5b1759b",
+    "/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/data/postmaster.pid": "1840dd5d2810924ae20faa2439630cfc028e7a3727fe65f0858d85c4f8a25567",
+    "/Users/earlcameron/Desktop/dungeonflux/p/development/runtime/postgres-g05/owner.json": "01466f8bddfb31a75cd70f04f7daf98f67ff169351c7de0d7952baf5130c159a",
+    "/Users/earlcameron/Desktop/dungeonflux/p/development/runtime/postgres-g05/data/postgresql.conf": "f5ea0c82cc35b797ef12683eac6374a64055ccfbce73e14072e46e2dc9c64322",
+    "/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/owner.json": "2bb5a220faa93648a118fe50cffa99e2661a86cb8d1e9568447e7d5a56b7a93b",
+    "/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/data/postgresql.conf": "fa2e5341fcd99d3b4ac1d0d953a60e8159e0094f952ba7b745f0b5f558c697dc"
+  },
+  "e_initial_configs": {
+    "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/owner.json": "21f644d5f8e06976d4f26f10684a2a18816eb3fda40152952a973dc635f89700",
+    "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data/postgresql.conf": "9a9539ddef3920aaccf243150ac01118f09101923bd88a00fec5faf5bb70ce90",
+    "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data/pg_hba.conf": "e065812033bb130439bf661555c1507e370efc0b1d8dd206c02cfd06447bb023"
+  },
+  "timestamp": "2026-09-30T19:30:17.191301+00:00"
+}

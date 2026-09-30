@@ -1,0 +1,306 @@
+[
+  {
+    "label": "actual-partial-source",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py"
+    ],
+    "expected_exit": 0,
+    "external_bound_seconds": 5,
+    "exit": 0,
+    "stdout": "{\"full_book_sources\": \"unacquired\", \"page_count\": 364, \"result\": \"verified\", \"scope\": \"partial_srd_contents_only\", \"sha256\": \"8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87\", \"size_bytes\": 6031375, \"version\": \"5.2.1\"}\n",
+    "stderr": "",
+    "pass_expected": true,
+    "seconds": 0.5119
+  },
+  {
+    "label": "actual-missing-required-full-book-bytes",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--require-full-book-sources"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: full-source check refused: 2024 Player's Handbook bytes are unavailable\n",
+    "pass_expected": true,
+    "seconds": 0.0346
+  },
+  {
+    "label": "empty-attribution",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/empty-attribution/manifest.json"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: required attribution must exactly match the pinned statement\n",
+    "pass_expected": true,
+    "seconds": 0.2112
+  },
+  {
+    "label": "short-attribution",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/short-attribution/manifest.json"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: required attribution must exactly match the pinned statement\n",
+    "pass_expected": true,
+    "seconds": 0.2104
+  },
+  {
+    "label": "malformed-attribution-type",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/malformed-attribution-type/manifest.json"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: required attribution must exactly match the pinned statement\n",
+    "pass_expected": true,
+    "seconds": 0.2072
+  },
+  {
+    "label": "corrupted-bytes",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/corrupted-bytes/manifest.json"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: source SHA-256 does not match manifest\n",
+    "pass_expected": true,
+    "seconds": 0.0346
+  },
+  {
+    "label": "missing-language",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/missing-language/manifest.json"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: pinned metadata mismatch for language\n",
+    "pass_expected": true,
+    "seconds": 0.0313
+  },
+  {
+    "label": "mixed-edition",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/mixed-edition/manifest.json"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: pinned metadata mismatch for version\n",
+    "pass_expected": true,
+    "seconds": 0.0305
+  },
+  {
+    "label": "omitted-required-book-record",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/omitted-required-book-record/manifest.json"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: pinned metadata mismatch for book_titles\n",
+    "pass_expected": true,
+    "seconds": 0.0308
+  },
+  {
+    "label": "malformed-json",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/malformed-json/manifest.json"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: cannot read valid JSON manifest: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)\n",
+    "pass_expected": true,
+    "seconds": 0.0308
+  },
+  {
+    "label": "oversized-manifest",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/oversized-manifest/manifest.json"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: manifest exceeds 1 MiB\n",
+    "pass_expected": true,
+    "seconds": 0.0318
+  },
+  {
+    "label": "false-full-coverage",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/false-full-coverage/manifest.json"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: full 2024 rules coverage cannot be claimed\n",
+    "pass_expected": true,
+    "seconds": 0.0315
+  },
+  {
+    "label": "fabricated-ruleset",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/fabricated-ruleset/manifest.json"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: this task cannot assign a production RulesetId\n",
+    "pass_expected": true,
+    "seconds": 0.0309
+  },
+  {
+    "label": "claimed-acquired-but-no-book-bytes",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/claimed-acquired-but-no-book-bytes/manifest.json",
+      "--require-full-book-sources"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: full-source check refused: 2024 Player's Handbook bytes are unavailable\n",
+    "pass_expected": true,
+    "seconds": 0.0335
+  },
+  {
+    "label": "fifo-manifest",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review/manifest-fifo"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: manifest must be a regular file\n",
+    "pass_expected": true,
+    "seconds": 0.0294
+  },
+  {
+    "label": "directory-manifest",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--manifest",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/PIN-G07-SRD-001-a2-review"
+    ],
+    "expected_exit": 1,
+    "external_bound_seconds": 5,
+    "exit": 1,
+    "stdout": "",
+    "stderr": "source check failed: manifest must be a regular file\n",
+    "pass_expected": true,
+    "seconds": 0.0308
+  },
+  {
+    "label": "help",
+    "command": [
+      "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07/development/check-rule-source.py",
+      "--help"
+    ],
+    "expected_exit": 0,
+    "external_bound_seconds": 5,
+    "exit": 0,
+    "stdout": "usage: check-rule-source.py [-h] [--manifest MANIFEST]\n                            [--require-full-book-sources]\n\nBounded integrity check for the retained public SRD source pin.\n\noptions:\n  -h, --help            show this help message and exit\n  --manifest MANIFEST\n  --require-full-book-sources\n                        require byte- and revision-pinned PHB, DMG, and\n                        Monster Manual sources\n",
+    "stderr": "",
+    "pass_expected": true,
+    "seconds": 0.0321
+  },
+  {
+    "label": "diff-check",
+    "command": [
+      "git",
+      "-C",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07",
+      "diff",
+      "0df797256ae35350521fa9dc0d4ece8d5b85b4a0..HEAD",
+      "--check"
+    ],
+    "expected_exit": 0,
+    "external_bound_seconds": 5,
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_expected": true,
+    "seconds": 0.0185
+  },
+  {
+    "label": "clean-status",
+    "command": [
+      "git",
+      "-C",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/pin-srd-g07",
+      "status",
+      "--porcelain"
+    ],
+    "expected_exit": 0,
+    "external_bound_seconds": 5,
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_expected": true,
+    "seconds": 0.0194
+  }
+]

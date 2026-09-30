@@ -1,0 +1,8 @@
+11379
+/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/data-suffix-a3
+1790795127
+55440
+/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/s3
+
+  6922902   3538945
+ready   

@@ -1,0 +1,8 @@
+1726
+/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data
+1790793727
+55439
+/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/socket
+
+  6743886   2621441
+ready   

@@ -1,0 +1,58 @@
+{
+  "development/evidence/srd-g07/review-evidence/devlog-entry.json": {
+    "bytes": 1236,
+    "sha256": "44ff55b17a134999b0ac3620e5431797bba64f5f665600216ebbc736e2070fa5"
+  },
+  "development/evidence/srd-g07/review-evidence/final-evidence.py": {
+    "bytes": 2706,
+    "sha256": "0125f5627336b7bbd1a83e7f7865447aaca4e44eb23b6eca45d6bd969dd89230"
+  },
+  "development/evidence/srd-g07/review-evidence/identity.json": {
+    "bytes": 938,
+    "sha256": "5587878a58b6a244c9641079d0d1e694841b052693c6b942c7c7d2501cfb4370"
+  },
+  "development/evidence/srd-g07/review-evidence/independent-check-plan.json": {
+    "bytes": 2000,
+    "sha256": "0ffbd4d71037751543590237bee5cf7a9ee27b479e039f56ffded78fadde24df"
+  },
+  "development/evidence/srd-g07/review-evidence/page-001.png": {
+    "bytes": 97605,
+    "sha256": "1765f352f0255cb29f26f1798bc6965c21e3a9b2c62b768f10b9161918edd410"
+  },
+  "development/evidence/srd-g07/review-evidence/page-002.png": {
+    "bytes": 425862,
+    "sha256": "5c6151aa68af51a59491fa197e2bd6a80f9c6d8d24f4fe39814025b13532201d"
+  },
+  "development/evidence/srd-g07/review-evidence/page-003.png": {
+    "bytes": 364178,
+    "sha256": "65b75202a852b4747327d8be4b2dea6ffdc67a92370dfee5ecdd414c99c0c33b"
+  },
+  "development/evidence/srd-g07/review-evidence/page-004.png": {
+    "bytes": 247745,
+    "sha256": "d403cba5fd87b967f8ddcc57d8367d97a3098b0eeea11248db11c4cdd51c9f33"
+  },
+  "development/evidence/srd-g07/review-evidence/pdf-observations.json": {
+    "bytes": 14409,
+    "sha256": "e637cf19cfccda5a07f538a3352889761f259bf8bc0c5fd6156ee9f622866800"
+  },
+  "development/evidence/srd-g07/review-evidence/publisher-download.headers": {
+    "bytes": 550,
+    "sha256": "2755b8d61b14a8bbd3b4a4846d0e40e8134e0b025aa5a2b7615a3b76dc1178b8"
+  },
+  "development/evidence/srd-g07/review-evidence/publisher-sources.json": {
+    "bytes": 1173,
+    "sha256": "acfe39643ba15b8f82ce8512192c76c3f7f1d40760ed18bdaaf0b53382840e83"
+  },
+  "development/evidence/srd-g07/review-evidence/publisher-verification.json": {
+    "bytes": 987,
+    "sha256": "d760e1b2329ac7d3af032bb929ec76b974d13c0921a5b23e05011d9f3b949dd0"
+  },
+  "development/evidence/srd-g07/review-evidence/run-independent.py": {
+    "bytes": 3395,
+    "sha256": "df1ceab777314f5ab6a43ed0afe717e6de084ddadf4968b383c6e54a34cf8d08"
+  },
+  "development/evidence/srd-g07/review-evidence/verification-results.json": {
+    "bytes": 9434,
+    "sha256": "bc9fbd415237375d1cc742bcd34f2b0a95f4c2a42171bd6e0f4ab8f634193539"
+  }
+}

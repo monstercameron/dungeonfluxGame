@@ -1,0 +1,10 @@
+{
+  "id": "srd-g07-a2-integrated-boundary-verified-20260930",
+  "kind": "resolution",
+  "summary": "Merged SRD source-pin boundary independently verified at dd63d194.",
+  "details": "All three actual root source files match approved candidate hashes and integrated Git blobs. Seven fresh bounded commands confirm partial integrity success, missing-full-book refusal, foreign-cwd default manifest resolution, empty-attribution and FIFO refusals, diff check and clean relevant source paths. Prior 19 candidate checks and unchanged PDF publisher/vision evidence remain applicable.",
+  "action": "Read-only integrated source verification; retained merged revision, actual hashes, command results and exact four-criterion applicability review. No source changes, queue mutation, rebuild or Chrome/process actions.",
+  "outcome": "Approve integrated PIN-G07-SRD-001-a2 at dd63d194a8e87ce575e861199abc28861ac2c28d only. Full G07 core-book revisions, errata, catalog and production rights remain unresolved.",
+  "related_entry_id": "srd-g07-a2-independent-regressions-resolved-20260930",
+  "evidence_ref": "development/evidence/srd-g07/a2/integration-review.json"
+}

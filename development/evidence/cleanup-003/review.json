@@ -1,0 +1,56 @@
+{
+  "task_id": "ACTIVE-CLEANUP-003",
+  "attempt_id": "ACTIVE-CLEANUP-003-a1",
+  "verdict": "approve",
+  "reviewed_at_utc": "2026-09-30T18:39:05.162973+00:00",
+  "evaluator": {
+    "agent_id": "/root/frontier_review",
+    "role": "evaluator",
+    "configured_model": "gpt-6-astra",
+    "actual_model_identity": "Codex based on GPT-6, as exposed by session instructions; exact backend model identifier is not independently exposed",
+    "capabilities_enabled": {
+      "computer_use": true,
+      "vision": true,
+      "shell": true,
+      "read_only_sqlite": true
+    },
+    "capabilities_used": [
+      "shell",
+      "read_only_sqlite",
+      "filesystem metadata",
+      "process/listener inspection"
+    ],
+    "capability_evidence": "Session exposes mcp__cua_repl UI automation and view_image/image understanding. No UI, vision, or audio criterion applies to this internal inventory task."
+  },
+  "input_revision": "f9343cb5ec17b33c76a03b20f6afec9168f9fb7a",
+  "tested_revision": "sha256:b083fa8aa99ee886335443e76a87443d1ce98a142c998611f75f4f8e0be481b0",
+  "inventory_script_sha256": "a4af00c5838b3b14fafa97e795744ce6bba2b5b32373cd9f2c02e63f33b4a004",
+  "independent_inventory_sha256": "1e69a62516f22e7c382a1e9f140ce741470b756036736934b253310df50f05dc",
+  "environment": "macOS; /Users/earlcameron/Desktop/dungeonflux; existing processes/builds preserved",
+  "acceptance": [
+    {
+      "criterion": "Inventory only artifacts/build and artifacts/tmp without following symlinks, rechecking live attempt/process ownership and preserving active/latest verified builds, shared caches, unknown files, durable state and evidence.",
+      "status": "pass",
+      "procedure": "Derived checks before reading worker report; inspected pinned inventory source, executed its read-only inventory boundary, independently traversed only build/tmp using fd-relative no-follow stat/open, queried active attempts read-only and inspected ps/lsof; lstat protected roots and hash protected executables.",
+      "expected": "Only approved inventory roots, no symlink traversal/deletion; active/latest/evidence/durable/unknown roots retained with live ownership evidence.",
+      "observed": "All 11 roots retained; 50 symlinks counted without traversal; no scan errors. Independent and submitted-script current totals agree. Baseline PID 67387/43180, G02 PID 96977/43181, PostgreSQL PID 80873 Unix socket 55439 and recorder PID 69190 remain live; all three executable hashes unchanged. Active G02/G05 attempts verified, cleanup correctly now submitted. Protected cache/worktrees/durable roots, SQLite/sidecars and e/p exist and remain outside recursive scan.",
+      "evidence_ref": "development/evidence/cleanup-003/independent-inventory.json"
+    },
+    {
+      "criterion": "Report truthful eligible/retained/deleted paths and bytes with deterministic retained evidence and devlog; no deletion without all ADR0002 conditions and an explicit coordinator allowlist.",
+      "status": "pass",
+      "procedure": "Verify exact report/script hashes, arithmetic and root-set equality; execute pinned source without replacing submitted report; compare historical/current per-root counts and inspect only changed active scratch entry; check scoped worker devlog correction against report hash and empty allowlist.",
+      "expected": "Truthful retained eligible/deleted/byte accounting, deterministic retained evidence plus devlog, and no deletion without complete authority.",
+      "observed": "Report hash b083fa8aa99ee886335443e76a87443d1ce98a142c998611f75f4f8e0be481b0 and script hash a4af00c5838b3b14fafa97e795744ce6bba2b5b32373cd9f2c02e63f33b4a004 match. Historical 6,983,123,538 logical regular-file bytes; current 6,983,125,058 differs solely by a 1,520-byte G05-a2 devlog payload created after the report. All other root bytes match. Empty allowlist, 0 eligible/deleted/reclaimed bytes, no mutation operations in source. Worker discovery and linked corrected hash are retained in scoped SQLite devlog.",
+      "evidence_ref": "development/evidence/cleanup-003/independent-inventory.json"
+    }
+  ],
+  "defects": [],
+  "limitations": [
+    "Review approves this specific inventory-only operational submission, not a reusable deletion service. Claim metadata/listener labels are embedded in the one-shot worker script and independently verified here.",
+    "No Rust implementation changed; Rust format/Clippy/rebuild gates not applicable and not run.",
+    "No filesystem-wide before/after audit exists; preservation evidence consists of retained root inventory, unchanged executable hashes, live processes/listeners and absence of deletion/write operations in the submitted inventory source."
+  ],
+  "devlog_entry_id": "active-cleanup-003-a1-independent-review-20260930",
+  "devlog_status": "appended via supplied evaluator-context; queue_state_changed=false"
+}

@@ -1,0 +1,22 @@
+{
+  "task_id": "QUALIFY-G02-001",
+  "attempt_id": "QUALIFY-G02-001-a1",
+  "candidate": "51d59602c16a7a705c7c224fc03abd21b24828ac",
+  "input_revision": "c68e168eeb2ab040ec1d6064765c647c4454a041",
+  "merged_revision": "ba0d3860fb27124be352b48766e99a955f746672",
+  "merged_at": "2026-09-30T19:45:01.560205+00:00",
+  "relevant_build_source_paths": [
+    "Cargo.toml",
+    "Cargo.lock",
+    ".cargo",
+    "rust-toolchain.toml",
+    "rustfmt.toml",
+    "crates",
+    "vendor",
+    "development/build-fixture.sh"
+  ],
+  "relevant_source_difference": "",
+  "status": "integration checks pending; task remains review",
+  "review_ref": "development/evidence/qualify-g02/browser-resume-review/review.json",
+  "preview_policy": "Retain root18905baseline and18907fixedcandidate unchanged; generate separate integrated build output."
+}

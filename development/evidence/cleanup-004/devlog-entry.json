@@ -1,0 +1,9 @@
+{
+  "id": "active-cleanup-004-a1-current-inventory-20260930",
+  "kind": "discovery",
+  "summary": "Fresh artifact inventory retained all candidates and found current PostgreSQL and recorder use.",
+  "details": "A sorted lstat-only inventory of artifacts/build and artifacts/tmp found 13 direct-child candidates, 40,755 regular files totaling 6,983,141,118 logical bytes, 2,750 directories, 50 symlinks not followed, and zero scan errors. The empty coordinator deletion allowlist made every candidate ineligible, and no path was deleted. Queue records show G02 attempt QUALIFY-G02-001-a1 remains inconclusive with submitted commit 51d59602c16a7a705c7c224fc03abd21b24828ac; its historical preview PID 96977 and ports 43180/43181 were absent from the live process/listener checks. G05 attempt a3 is active; PID 80873 currently executes the retained PostgreSQL build and has the runtime Unix socket open. Recorder PID 69190 has artifacts/tmp/journey/recorder.log open. The baseline and G02 fixture executables matched their recorded SHA-256 identities. The inventory includes this attempt's scratch directory, and its script byte count was verified.",
+  "action": "Queried workflow SQLite read-only; measured both artifact roots with sorted lstat recursion that never follows symlinks; checked targeted and dynamically matched process/listener/open-file state; hashed executable identities; retained all candidates.",
+  "outcome": "Report and inventory script are preserved with final SHA-256 identities. Zero paths deleted; queue state unchanged; no scan errors or unverified cleanup claims.",
+  "evidence_ref": "development/evidence/cleanup-004/current-interval-inventory.json sha256=8e3ea9eb101cca0b6795d323a92895f9e9cf6e8ffad6bd2d0ff7ccc8900434b4; artifacts/tmp/ACTIVE-CLEANUP-004-a1/inventory.py sha256=016de305699481a6c96dd65644a1f1e2b05797ea63043d33d77a3742fb636592"
+}

@@ -1,0 +1,26 @@
+{
+  "development/evidence/srd-g07/a2/review-evidence/devlog-entry.json": {
+    "sha256": "1587ca959339e8bcbf229b1b4669255391e96f4295fda61eb2ee92c8d3d5ce0b",
+    "bytes": 1263
+  },
+  "development/evidence/srd-g07/a2/review-evidence/identity.json": {
+    "sha256": "0769aa3a5d2d2d17345879e525d94926024d308da3606c28ae405224f47b4552",
+    "bytes": 912
+  },
+  "development/evidence/srd-g07/a2/review-evidence/independent-check-plan.json": {
+    "sha256": "ea4f12af6f6fb452713aa163d7252efd95805a1d407d195f6df30aa8017bafad",
+    "bytes": 1858
+  },
+  "development/evidence/srd-g07/a2/review-evidence/prior-evidence-reuse.json": {
+    "sha256": "67529c537fbe1b1c37b7fd52630ecda5400f4c14aa75ca091f2bae62ac1255c3",
+    "bytes": 1668
+  },
+  "development/evidence/srd-g07/a2/review-evidence/run-independent.py": {
+    "sha256": "4e7144d235821c3ef445d32c5fa86989edcc521442abc909f33be6109b653a93",
+    "bytes": 4449
+  },
+  "development/evidence/srd-g07/a2/review-evidence/verification-results.json": {
+    "sha256": "58d5d2e199c0ed960bf61c4e5c9ee02f1af21c2f9611dc22659a15de14392844",
+    "bytes": 12108
+  }
+}

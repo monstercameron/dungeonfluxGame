@@ -1,0 +1,87 @@
+{
+  "task_id": "SETUP-G05-001",
+  "attempt_id": "SETUP-G05-001-a3",
+  "verdict": "approve",
+  "timestamp_utc": "2026-09-30T19:35:27.428143+00:00",
+  "submitted_commit": "c68e168eeb2ab040ec1d6064765c647c4454a041",
+  "tested_commit": "c68e168eeb2ab040ec1d6064765c647c4454a041",
+  "tested_revision": "c68e168eeb2ab040ec1d6064765c647c4454a041",
+  "tested_script_sha256": "b69a566d6905ccf85ca63e8db695a7a4dbb84a163ead957c9ed4198562ee12da",
+  "evaluator_id": "/root/frontier_review",
+  "configured_model": "gpt-6-astra",
+  "actual_model_identity": "Codex based on GPT-6 as exposed by session instructions; exact serving variant not separately exposed",
+  "capabilities_enabled": {
+    "computer_use": "mcp__cua_repl available",
+    "vision": "image understanding/view_image available"
+  },
+  "capabilities_actually_used": [
+    "native shell/subprocess execution",
+    "real PostgreSQL psql, pg_ctl, initdb, pg_isready",
+    "OS process/listener/filesystem/hash inspection",
+    "bounded evaluator-owned fault injection",
+    "read-only SQLite attempt inspection"
+  ],
+  "output_type": "Internal native CLI prerequisite; no UI/audio acceptance applies. No Chrome interaction or visual acceptance claimed on locked Mac.",
+  "host": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83\n",
+  "architecture": "arm64",
+  "configuration": "Pinned PostgreSQL 18.6 native development build reused; private Unix socket; port 55439; max connections16 and worker limits8/8/2/3; original root/p/s clusters preserved. Tests in evaluator e clone only.",
+  "criteria_derivation_ref": "development/evidence/postgres-g05/a3/review-evidence/independent-check-plan.json",
+  "criteria": [
+    {
+      "criterion": "Reproducibly download, verify official SHA256, build and install pinned PostgreSQL 18.6 into owned project artifacts without global packages or shell/home changes.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Rehash official pinned archive and all five native tools; retrieve current official SHA256; inspect candidate setup build/install/bounds and reuse prior independently verified native compile/fresh synced initialization evidence. Execute current setup on retained evaluator data.",
+      "expected": "PostgreSQL 18.6 source checksum and installed build match pinned official provenance, remain within owned artifacts, and current setup preserves existing data.",
+      "observed": "Official SHA256 and evaluator cache both equal 983ee554ec53dbeb9b70797bef9fcf4e67e117e7e48ca1463cc80b3ff8e8ff3f. All five tools match the independently verified a1 build. Current setup verifies cached archive and preserves evaluator data. Fresh suffix initdb synced data to disk. No native recompile, global package, home or shell change; reuse explicitly authorized.",
+      "evidence_ref": "development/evidence/postgres-g05/a3/review-evidence/official-sha256-current.txt; development/evidence/postgres-g05/a3/review-evidence/identity-before.json; development/evidence/postgres-g05/a3/review-evidence/independent-boundaries.json; development/evidence/postgres-g05/review-evidence/fresh-setup.json"
+    },
+    {
+      "criterion": "Provide bounded setup/start/status/stop commands for an owned durable development cluster outside artifacts; deny TCP listening, protect socket/data permissions, and never replace existing data or stop an unrelated process.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Execute actual candidate lifecycle and isolated safe-refusal tests in e. Launch two identical-binary PostgreSQL servers in the same second, substitute suffix PID, redirect readiness SQL to wrong server, mutate PID file exactly at pg_ctl signal boundary, test symlinked log/ancestor, stale dummy/malformed PID/socket, missing live PID, foreign owner, unsafe mode, and stalled readiness tools with child cleanup.",
+      "expected": "Only the exact owned answering server may report ready or be stopped; errors are bounded and preserve other processes/data; private Unix socket and safe modes remain.",
+      "observed": "53 first-phase and 14 timeout-phase command records pass. Real PIDs 22471 and 22472 shared epoch 1790796747. Prefix substitution and wrong SQL backend refuse start/status/stop, leaving both servers live. PID-file race changed 22471 to 22472, but command was pg_ctl kill INT 22471; 22472 remained ready. Symlink log/ancestor refuse all four lifecycle commands; sentinel unchanged. Dummy received no signal. Missing-PID live server, stale socket, malformed PID, foreign owner and unsafe mode refuse. pg_isready/psql stalls returned errors in 10.284/10.778 seconds including prechecks/cleanup; injected parent and child PIDs were gone. No owned TCP listener. Durable data/socket directories are 0700. All evaluator-owned processes finally stopped.",
+      "evidence_ref": "development/evidence/postgres-g05/a3/review-evidence/independent-boundaries.json; development/evidence/postgres-g05/a3/review-evidence/same-second-identities.json; development/evidence/postgres-g05/a3/review-evidence/pidfile-race.json; development/evidence/postgres-g05/a3/review-evidence/independent-timeouts.json; development/evidence/postgres-g05/a3/review-evidence/identity-after.json"
+    },
+    {
+      "criterion": "Use real psql transactions to verify version, rollback/commit, restart persistence, parameter-safe diagnostic output and Pg readiness; preserve fsync/full_page_writes/synchronous_commit and explicit configured connection/process limits.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Use real psql -X fixed SQL for version and limits, rolled-back table absence, committed row, graceful stop/restart and persistence; observe readiness/private socket and use credential-looking environment sentinel to check output safety.",
+      "expected": "Version 18.6; rollback leaves no table, committed data survives restart; sync safety and selected connection/worker bounds remain on; output excludes environment secrets.",
+      "observed": "Actual PostgreSQL 18.6 returned max_connections 16, worker/parallel/gather/autovacuum limits 8/8/2/3, fsync/full_page_writes/synchronous_commit on, empty listen_addresses and inet_server_addr null. Rolled-back table absent; committed 186 survived graceful restart. Readiness recovered after timeout injection; output omitted sentinel. This establishes local development transaction/restart behavior, not disaster recovery or game schemas.",
+      "evidence_ref": "development/evidence/postgres-g05/a3/review-evidence/independent-boundaries.json; development/evidence/postgres-g05/a3/review-evidence/independent-timeouts.json; development/evidence/postgres-g05/a3/review-evidence/evaluation-server.log"
+    },
+    {
+      "criterion": "Retain source/runtime/build/configuration/ownership hashes, exact commands, error outcomes, startup and shutdown evidence and devlog; do not claim G05 persistence/schema/tenant/recovery/media or production readiness is complete.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Pin clean candidate commit, tested script hash, native archive/tool/config/owner identities, host, scoped attempt ownership, exact command outputs/durations and startup/shutdown logs. Inspect explicit setup-only documentation and append scoped evaluator devlog.",
+      "expected": "Reproducible retained identities/errors/outcomes and honest development-only scope, with original runtime/evidence protected.",
+      "observed": "Tested e script equals candidate SHA256 b69a566d6905ccf85ca63e8db695a7a4dbb84a163ead957c9ed4198562ee12da at clean c68e168eeb2ab040ec1d6064765c647c4454a041. Source/config/tool/owner hashes and all 67 command records retained. Original/p/s protected hashes unchanged; original PostgreSQL 80873, previews 18905/18907 and recorder 69190 live. e original config unchanged and prior script restored; evaluator data retained. Documentation explicitly keeps schemas, migrations, roles/tenant isolation, backup/restore, durable media, managed deployment and production qualification open.",
+      "evidence_ref": "development/evidence/postgres-g05/a3/review-evidence/identity-before.json; development/evidence/postgres-g05/a3/review-evidence/identity-after.json; development/evidence/postgres-g05/a3/review-evidence/independent-boundaries.json; development/evidence/postgres-g05/a3/review-evidence/independent-timeouts.json"
+    }
+  ],
+  "resolved_defects": [
+    "G05-EVAL-001",
+    "G05-EVAL-002",
+    "G05-EVAL-003",
+    "G05-EVAL-A2-001",
+    "G05-EVAL-A2-002"
+  ],
+  "defects": [],
+  "verification_limits": [
+    "Native compile not repeated; exact five-tool/archive identity and prior independent build/synced-initdb evidence reused as authorized.",
+    "900-second build, 1200-second total setup and 60-second outer deadline exhaustion are source-reviewed, not wall-clock fault-injected. Actual 10-second readiness stalls and descendant cleanup directly exercised.",
+    "Linux process identity branch not runtime-tested; evaluated host is macOS arm64.",
+    "Rust format/Clippy/native/WASM gates do not apply to this shell/document-only change; shell syntax and git diff --check passed.",
+    "No full G05 schema, tenant/RLS, migration, backup/disaster recovery, managed deployment, media or production-readiness approval."
+  ],
+  "devlog_ids": [
+    "g05-a3-independent-safety-resolution-20260930"
+  ],
+  "devlog_status": "appended via scoped context; queue_state_changed=false",
+  "protection_and_cleanup_ref": "development/evidence/postgres-g05/a3/review-evidence/identity-after.json"
+}

@@ -1,0 +1,169 @@
+{
+  "page_count": 364,
+  "rendered_and_vision_inspected_pages": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "method": "Bundled Poppler pdftoppm at maximum 1500 pixels; each PNG opened with view_image and visually inspected. No PDF changes.",
+  "observations": {
+    "1": "Legal Information page clearly identifies System Reference Document 5.2.1, Wizards of the Coast LLC, CC-BY-4.0 and complete required attribution. Footer page 1.",
+    "2": "Contents shows all section-start page numbers retained by manifest; legible beginning of monster index. Footer page 2.",
+    "3": "Index continues alphabetically from Ankheg through Phase Spider, consistent with A-P locator. Footer page 3.",
+    "4": "Index continues Piranha through Zombie, consistent with P-Z locator. Footer page 4."
+  },
+  "section_locators": [
+    {
+      "locator": {
+        "kind": "legal_information",
+        "pdf_page": 1,
+        "printed_page": 1,
+        "label": "Legal Information"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n1\nLegal Information\nThe System Reference Document 5.2.1 (\u201cSRD 5.2.1\u201d) is provided to you free of charge by Wizards of the \nCoast LLC (\u201cWizards\u201d) under the terms of the Creative Commons Attribution 4.0 International License  \n(\u201cCC-BY-4.0\u201d). You are free to use the content in this document in any manner permitted under CC-BY-4.0, pro -\nvided that you include the following attribution statement in any of your work:\n This work includes material from the System Reference Document 5.2.1 (\u201cSRD 5.2.1\u201d) by Wizards of the \nCoast LLC, available at https:/ /www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creativ",
+      "label_found": true
+    },
+    {
+      "locator": {
+        "kind": "contents",
+        "pdf_page": 2,
+        "printed_page": 2,
+        "label": "Contents"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n2\nContents\nLegal Information ...................................1\nPlaying the Game ....................................5\nRhythm of Play  ................................................5\nThe Six Abilities ...............................................5\nD20 Test s ............................................................6\nAbility Checks  .............................................6\nSaving Throws  ............................................7\nAttack Rolls ..................................................7\nAdvantage/Disadvantage  .....................7\nProficiency  ..........................................",
+      "label_found": true
+    },
+    {
+      "locator": {
+        "kind": "contents_index",
+        "pdf_page": 3,
+        "printed_page": 3,
+        "label": "Monster index A\u2013P"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n3\nAnkheg ...........................................................259\nAnkylosaurus  .............................................344\nApe ...................................................................344\nArchelon ........................................................344\nArchmage .....................................................305\nAssassin  .........................................................260\nAwakened Shrub .......................................260\nAwakened Tree ..........................................260\nAxe Beak........................................................260\nAzer Sentinel ..",
+      "label_found": false
+    },
+    {
+      "locator": {
+        "kind": "contents_index",
+        "pdf_page": 4,
+        "printed_page": 4,
+        "label": "Monster index P\u2013Z"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n4\nPiranha ..........................................................358\nPirate ...............................................................314\nPirate Captain  .............................................314\nPit Fiend .........................................................314\nPlanetar .........................................................315\nPlesiosaurus ................................................358\nPolar Bear .....................................................359\nPony .................................................................359\nPriest ....................................................",
+      "label_found": false
+    },
+    {
+      "locator": {
+        "kind": "section",
+        "pdf_page": 5,
+        "printed_page": 5,
+        "label": "Playing the Game"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n5\nExc Eptions  sup Ers Ed E GEn Eral  r ul Es\nGeneral rules govern each part of the game. For \nexample, the combat rules tell you that melee at -\ntacks use Strength and ranged attacks use Dexterity. \nThat\u2019s a general rule, and a general rule is in effect as \nlong as something in the game doesn\u2019t explicitly say \notherwise.\n The game also includes elements\u2014class features, \nfeats, weapon properties, spells, magic items, mon -\nster abilities, and the like\u2014that sometimes contra -\ndict a general rule. When an exception and a general \nrule disagree, the exception wins. For example, if a \nfeature says you can make mele",
+      "label_found": true
+    },
+    {
+      "locator": {
+        "kind": "section",
+        "pdf_page": 19,
+        "printed_page": 19,
+        "label": "Character Creation"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n19\nCharacter \nCreation\nChoose a Character Sheet\nYou\u2019ll record the main details of your character on \na character sheet. Throughout this chapter, we use \nthe term \u201ccharacter sheet\u201d to mean whatever you \nuse to track your character\u2019s details, whether it\u2019s a \nprinted character sheet, a digital character sheet, or \nplain paper. Choose whichever style of sheet works \nfor you, and then embark on creating a character!\nCreate Your Character\nHere are the steps to make a character; each step is \nexplored in detail:\n1:  Choose a Class. Every adventurer is a member \nof a class. A class broadly describes a character\u2019s \nvoca",
+      "label_found": true
+    },
+    {
+      "locator": {
+        "kind": "section",
+        "pdf_page": 28,
+        "printed_page": 28,
+        "label": "Classes"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n28\nClasses\nBarbarian\nCore Barbarian Traits\nPrimary Ability Strength\nHit Point Die D12 per Barbarian level\nSaving Throw \nProficiencies\nStrength and Constitution\nSkill Proficiencies Choose 2: Animal Handling, \nAthletics, Intimidation, Na -\nture, Perception, or Survival\nWeapon Proficiencies Simple and Martial weapons\nArmor Training Light and Medium armor and \nShields\nStarting Equipment Choose A or B: (A) Greataxe, \n4 Handaxes, Explorer\u2019s Pack, \nand 15 GP; or (B) 75 GP\nBecoming a Barbarian \u2026\nAs a Level 1 Character\n\u2022 Gain all the traits in the Core Barbarian Traits \ntable.\n\u2022 Gain the Barbarian\u2019s level 1 features, wh",
+      "label_found": true
+    },
+    {
+      "locator": {
+        "kind": "section",
+        "pdf_page": 83,
+        "printed_page": 83,
+        "label": "Character Origins"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n83\nCharacter Origins\nCharacter Backgrounds\nYour character\u2019s background is a collection of char -\nacteristics that represent the place and occupation \nthat were most formative before your character em -\nbarked on a life of adventure.\nParts of a Background\nA background includes the following parts.\nAbility Scores\nA background lists three of your character\u2019s ability \nscores. Increase one by 2 and another one by 1, or \nincrease all three by 1. None of these increases can \nraise a score above 20.\nFeat\nA background gives your character a specified Ori -\ngin feat (described in \u201cFeats\u201d).\nSkill Proficiencies\nA backgroun",
+      "label_found": true
+    },
+    {
+      "locator": {
+        "kind": "section",
+        "pdf_page": 87,
+        "printed_page": 87,
+        "label": "Feats"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n87\nFeats\nFeat Descriptions\nThe feats that follow are organized by category\u2014\nOrigin, General, Fighting Style, or Epic Boon\u2014and \nalphabetized in each category.\nParts of a Feat\nThe description of a feat contains the following \nparts, which are presented after the feat\u2019s name.\n Category.  A feat is a member of a category, which \nis noted in the feat. If you\u2019re instructed to choose \na feat from a specific category, such as the Origin \ncategory, that category must appear under the \nfeat\u2019s name. If you\u2019re instructed to choose a feat and \nno category is specified, you can choose from any \ncategory.\n Prerequisite.  To t",
+      "label_found": true
+    },
+    {
+      "locator": {
+        "kind": "section",
+        "pdf_page": 89,
+        "printed_page": 89,
+        "label": "Equipment"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n89\nsEllin G Equip MEnt\nEquipment fetches half its cost when sold. In con -\ntrast, trade goods and valuables\u2014like gems and art \nobjects\u2014retain their full value in the marketplace. \n\u201cMagic Items\u201d has prices for magic items.\nEquipment\nCoins\nCharacters often find coins on their adventures \nand can spend those coins in shops, inns, and other \nbusinesses. Coins come in different denominations \nbased on the relative worth of their material. The \nCoin Values table lists coins and how much they\u2019re \nworth relative to the Gold Piece, which is the game\u2019s \nmain coin. For example, 100 Copper Pieces are \nworth 1 Gold Piece.\n ",
+      "label_found": true
+    },
+    {
+      "locator": {
+        "kind": "section",
+        "pdf_page": 104,
+        "printed_page": 104,
+        "label": "Spells"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n104\nc astin G in a r Mor\nYou must have training with any armor you are wear -\ning to cast spells while wearing it. You are otherwise \ntoo hampered by the armor for spellcasting.\nSpells\nGaining Spells\nBefore you can cast a spell, you must have the spell \nprepared in your mind or have access to the spell \nfrom a magic item, such as a Spell Scroll . Your fea-\ntures specify which spells you have access to, if any; \nwhether you always have certain spells prepared; \nand whether you can change the list of spells you \nhave prepared.\nPreparing Spells\nIf you have a list of level 1+ spells you prepare, your \nspellcasting ",
+      "label_found": true
+    },
+    {
+      "locator": {
+        "kind": "section",
+        "pdf_page": 176,
+        "printed_page": 176,
+        "label": "Rules Glossary"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n176\nRules Glossary\nGlossary Conventions\nThe glossary uses the following conventions:\nTags in Brackets. Some entries have a tag in brack -\nets after the entry\u2019s name, as in \u201cAttack [Action].\u201d \nA tag\u2014Action, Area of Effect, Attitude, Condition, \nor Hazard\u2014indicates that a rule is part of a family \nof rules. The tags also have glossary entries.\n\u201cYou.\u201d The game\u2019s rules\u2014in this glossary and else -\nwhere\u2014often talk about something happening \nto you in the game world. That \u201cyou\u201d refers to \nthe creature or object that the rule applies to in a \nparticular moment of play. For example, the \u201cyou\u201d \nin the Prone condition is",
+      "label_found": true
+    },
+    {
+      "locator": {
+        "kind": "section",
+        "pdf_page": 192,
+        "printed_page": 192,
+        "label": "Gameplay Toolbox"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n192\nGameplay Toolbox\nTravel Pace\nA group of characters can travel overland at a Nor -\nmal, Fast, or Slow pace, as described in \u201cPlaying the \nGame.\u201d During any journey stage, the predominant \nterrain determines the characters\u2019 maximum travel \npace, as shown in the Maximum Pace column of the \nTravel Terrain table. Certain factors can affect a \ngroup\u2019s travel pace.\nGood Roads\nThe presence of a good road increases the group\u2019s \nmaximum pace by one step (from Slow to Normal or \nfrom Normal to Fast).\nSlower Travelers\nThe group must move at a Slow pace if any group \nmember\u2019s Speed is reduced to half or less of normal.\n",
+      "label_found": true
+    },
+    {
+      "locator": {
+        "kind": "section",
+        "pdf_page": 204,
+        "printed_page": 204,
+        "label": "Magic Items"
+      },
+      "page_text_prefix": "System Reference Document 5.2.1\n204\nMagic Items\nMagic items are gleaned from the hoards of felled \nmonsters or discovered in long-lost vaults. Such \nitems grant capabilities a character could rarely \nhave otherwise, or they complement their owner\u2019s \ncapabilities in wondrous ways.\nMagic Item Categories\nEvery magic item belongs to a category. The Magic \nItem Categories table lists the nine categories and \nprovides examples. Rules for the categories appear \nafter the table.\nMagic Item Categories\nCategory Examples\nArmor +1 Leather Armor, +1 Shield\nPotions Potion of Healing\nRings Ring of Invisibility\nRods Immovable Rod\nScrolls Spell Scroll\nStaffs ",
+      "label_found": true
+    },
+    {
+      "locator": {
+        "kind": "section",
+        "pdf_page": 254,
+        "printed_page": 254,
+        "label": "Monsters"
+      },
+      "page_text_prefix": "254\nSystem Reference Document 5.2.1\nMonsters\nStat Block Overview\nA monster has a stat block that contains the rules \nnecessary to use it in the game. Stat blocks are di -\nvided into the following parts:\nName and General Details. The name of the mon-\nster is followed by its size, creature type (along \nwith any descriptive tags), and alignment.\nCombat Highlights.  Armor Class, Hit Points, Speed, \nand Initiative are provided here.\nAbility Scores.  A monster\u2019s ability scores, ability \nmodifiers, and saving throws are listed here.\nOther Details. The monster\u2019s Senses, Languages, \nand CR entries appear here. Additional details ap -\npear in some mons",
+      "label_found": true
+    }
+  ],
+  "full_book_gate": "SRD subset only; no required PHB/DMG/MM bytes, revisions, errata/catalog denominator or reviewed production RightsGrant."
+}

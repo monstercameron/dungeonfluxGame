@@ -1,0 +1,646 @@
+{
+  "task_id": "ACTIVE-CLEANUP-004",
+  "attempt_id": "ACTIVE-CLEANUP-004-a1",
+  "observed_at_utc": "2026-09-30T19:14:47.828535+00:00",
+  "method": "Independent fd-relative no-follow stat and O_NOFOLLOW directory opens; sorted recursive inventory confined to main artifacts/build and artifacts/tmp. Protected paths lstat-only.",
+  "report_sha256": "8e3ea9eb101cca0b6795d323a92895f9e9cf6e8ffad6bd2d0ff7ccc8900434b4",
+  "script_sha256": "016de305699481a6c96dd65644a1f1e2b05797ea63043d33d77a3742fb636592",
+  "candidates": [
+    {
+      "path": "artifacts/build/postgres-g05",
+      "device": 16777231,
+      "inode": 6673994,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 1655,
+      "regular_file_bytes": 30542989,
+      "directories": 83,
+      "symlinks_not_followed": 4,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 30542989,
+      "delta_bytes": 0
+    },
+    {
+      "path": "artifacts/build/qualify-g02",
+      "device": 16777231,
+      "inode": 6707656,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 14457,
+      "regular_file_bytes": 3247783571,
+      "directories": 766,
+      "symlinks_not_followed": 0,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 3247783571,
+      "delta_bytes": 0
+    },
+    {
+      "path": "artifacts/build/start-s00",
+      "device": 16777231,
+      "inode": 6463785,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 15379,
+      "regular_file_bytes": 3454519620,
+      "directories": 1123,
+      "symlinks_not_followed": 0,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 3454519620,
+      "delta_bytes": 0
+    },
+    {
+      "path": "artifacts/tmp/ACTIVE-CLEANUP-002-a1",
+      "device": 16777231,
+      "inode": 6715253,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 2,
+      "regular_file_bytes": 7465,
+      "directories": 1,
+      "symlinks_not_followed": 0,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 7465,
+      "delta_bytes": 0
+    },
+    {
+      "path": "artifacts/tmp/ACTIVE-CLEANUP-003-a1",
+      "device": 16777231,
+      "inode": 6853061,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 2,
+      "regular_file_bytes": 9723,
+      "directories": 1,
+      "symlinks_not_followed": 0,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 9723,
+      "delta_bytes": 0
+    },
+    {
+      "path": "artifacts/tmp/ACTIVE-CLEANUP-004-a1",
+      "device": 16777231,
+      "inode": 6936518,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 1,
+      "regular_file_bytes": 3914,
+      "directories": 1,
+      "symlinks_not_followed": 0,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 3914,
+      "delta_bytes": 0
+    },
+    {
+      "path": "artifacts/tmp/QUALIFY-G02-001-a1",
+      "device": 16777231,
+      "inode": 6669521,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 17,
+      "regular_file_bytes": 10245388,
+      "directories": 4,
+      "symlinks_not_followed": 0,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 10245388,
+      "delta_bytes": 0
+    },
+    {
+      "path": "artifacts/tmp/SETUP-G05-001-a1",
+      "device": 16777231,
+      "inode": 6673995,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 8892,
+      "regular_file_bytes": 201295036,
+      "directories": 661,
+      "symlinks_not_followed": 46,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 201295036,
+      "delta_bytes": 0
+    },
+    {
+      "path": "artifacts/tmp/SETUP-G05-001-a2",
+      "device": 16777231,
+      "inode": 6795432,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 2,
+      "regular_file_bytes": 10702,
+      "directories": 1,
+      "symlinks_not_followed": 0,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 10702,
+      "delta_bytes": 0
+    },
+    {
+      "path": "artifacts/tmp/SETUP-G05-001-a3",
+      "device": 16777231,
+      "inode": 6903926,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 3,
+      "regular_file_bytes": 16083,
+      "directories": 1,
+      "symlinks_not_followed": 0,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 11972,
+      "delta_bytes": 4111
+    },
+    {
+      "path": "artifacts/tmp/START-S00-001-a1",
+      "device": 16777231,
+      "inode": 6437059,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 3,
+      "regular_file_bytes": 12217773,
+      "directories": 1,
+      "symlinks_not_followed": 0,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 12217773,
+      "delta_bytes": 0
+    },
+    {
+      "path": "artifacts/tmp/coordinator-preview-recovery",
+      "device": 16777231,
+      "inode": 6941467,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 2,
+      "regular_file_bytes": 212,
+      "directories": 1,
+      "symlinks_not_followed": 0,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": null,
+      "delta_bytes": 212
+    },
+    {
+      "path": "artifacts/tmp/journey",
+      "device": 16777231,
+      "inode": 6018385,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 329,
+      "regular_file_bytes": 17107549,
+      "directories": 103,
+      "symlinks_not_followed": 0,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 17107549,
+      "delta_bytes": 0
+    },
+    {
+      "path": "artifacts/tmp/start-s00",
+      "device": 16777231,
+      "inode": 6431599,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false,
+      "regular_files": 14,
+      "regular_file_bytes": 9385416,
+      "directories": 4,
+      "symlinks_not_followed": 0,
+      "special_entries": 0,
+      "errors": [],
+      "historical_bytes": 9385416,
+      "delta_bytes": 0
+    }
+  ],
+  "totals": {
+    "regular_files": 40758,
+    "regular_file_bytes": 6983145441,
+    "directories": 2751,
+    "symlinks_not_followed": 50,
+    "special_entries": 0
+  },
+  "scan_errors": 0,
+  "historical_totals": {
+    "candidates": 13,
+    "deleted": 0,
+    "directories": 2750,
+    "eligible": 0,
+    "eligible_bytes": 0,
+    "errors": 0,
+    "reclaimed_bytes": 0,
+    "regular_file_bytes": 6983141118,
+    "regular_files": 40755,
+    "retained": 13,
+    "retained_bytes": 6983141118,
+    "special_entries": 0,
+    "symlinks_not_followed": 50
+  },
+  "file_deltas": [
+    {
+      "path": "artifacts/tmp/SETUP-G05-001-a3/run-additional.py",
+      "historical_bytes": null,
+      "bytes": 4111,
+      "mtime_utc": "2026-09-30T19:09:06.583609+00:00"
+    },
+    {
+      "path": "artifacts/tmp/coordinator-preview-recovery/baseline-20260930T191107Z.log",
+      "historical_bytes": null,
+      "bytes": 106,
+      "mtime_utc": "2026-09-30T19:11:07.868248+00:00"
+    },
+    {
+      "path": "artifacts/tmp/coordinator-preview-recovery/qualification-20260930T191107Z.log",
+      "historical_bytes": null,
+      "bytes": 106,
+      "mtime_utc": "2026-09-30T19:11:07.897370+00:00"
+    }
+  ],
+  "missing_historical_files": [],
+  "protected_roots": [
+    {
+      "path": "artifacts",
+      "device": 16777231,
+      "inode": 5968102,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false
+    },
+    {
+      "path": "artifacts/build",
+      "device": 16777231,
+      "inode": 6463784,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false
+    },
+    {
+      "path": "artifacts/tmp",
+      "device": 16777231,
+      "inode": 6018384,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false
+    },
+    {
+      "path": "artifacts/cache",
+      "device": 16777231,
+      "inode": 6437056,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false
+    },
+    {
+      "path": "artifacts/worktrees",
+      "device": 16777231,
+      "inode": 6431607,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false
+    },
+    {
+      "path": "development/evidence",
+      "device": 16777231,
+      "inode": 5974852,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false
+    },
+    {
+      "path": "development/runtime",
+      "device": 16777231,
+      "inode": 6699825,
+      "uid": 501,
+      "mode": "0o40700",
+      "symlink": false
+    },
+    {
+      "path": "development/runtime/postgres-g05/data",
+      "device": 16777231,
+      "inode": 6699829,
+      "uid": 501,
+      "mode": "0o40700",
+      "symlink": false
+    },
+    {
+      "path": "development/runtime/postgres-g05/socket",
+      "device": 16777231,
+      "inode": 6699831,
+      "uid": 501,
+      "mode": "0o40700",
+      "symlink": false
+    },
+    {
+      "path": "development/evidence/journey",
+      "device": 16777231,
+      "inode": 6018378,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false
+    },
+    {
+      "path": ".git",
+      "device": 16777231,
+      "inode": 6017583,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false
+    },
+    {
+      "path": "e",
+      "device": 16777231,
+      "inode": 6741211,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false
+    },
+    {
+      "path": "p",
+      "device": 16777231,
+      "inode": 6784721,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false
+    },
+    {
+      "path": "s",
+      "device": 16777231,
+      "inode": 6899419,
+      "uid": 501,
+      "mode": "0o40755",
+      "symlink": false
+    },
+    {
+      "path": "development/workflow.sqlite3-shm",
+      "device": 16777231,
+      "inode": 5974860,
+      "uid": 501,
+      "mode": "0o100644",
+      "symlink": false
+    },
+    {
+      "path": "development/quality.sqlite3",
+      "device": 16777231,
+      "inode": 5974612,
+      "uid": 501,
+      "mode": "0o100644",
+      "symlink": false
+    },
+    {
+      "path": "development/workflow.sqlite3-wal",
+      "device": 16777231,
+      "inode": 5974859,
+      "uid": 501,
+      "mode": "0o100644",
+      "symlink": false
+    },
+    {
+      "path": "development/quality.sqlite3-shm",
+      "device": 16777231,
+      "inode": 5974616,
+      "uid": 501,
+      "mode": "0o100644",
+      "symlink": false
+    },
+    {
+      "path": "development/quality.sqlite3-wal",
+      "device": 16777231,
+      "inode": 5974615,
+      "uid": 501,
+      "mode": "0o100644",
+      "symlink": false
+    },
+    {
+      "path": "development/workflow.snapshot.sqlite3",
+      "device": 16777231,
+      "inode": 5983725,
+      "uid": 501,
+      "mode": "0o100644",
+      "symlink": false
+    },
+    {
+      "path": "development/workflow.pre-schema-v2.sqlite3",
+      "device": 16777231,
+      "inode": 5976420,
+      "uid": 501,
+      "mode": "0o100644",
+      "symlink": false
+    },
+    {
+      "path": "development/workflow.snapshot.sqlite3-wal",
+      "device": 16777231,
+      "inode": 5985274,
+      "uid": 501,
+      "mode": "0o100644",
+      "symlink": false
+    },
+    {
+      "path": "development/workflow.snapshot.sqlite3-shm",
+      "device": 16777231,
+      "inode": 5985275,
+      "uid": 501,
+      "mode": "0o100644",
+      "symlink": false
+    },
+    {
+      "path": "development/workflow.sqlite3",
+      "device": 16777231,
+      "inode": 5976422,
+      "uid": 501,
+      "mode": "0o100644",
+      "symlink": false
+    }
+  ],
+  "build_identities": {
+    "active_postgres_server": {
+      "path": "artifacts/build/postgres-g05/install/bin/postgres",
+      "pid": 80873,
+      "sha256": "fdb263f367f30e248021c9f74441c9120c2091aceaed0957bdb7a13efca7f8d9",
+      "observed_sha256": "fdb263f367f30e248021c9f74441c9120c2091aceaed0957bdb7a13efca7f8d9"
+    },
+    "latest_verified_baseline": {
+      "path": "artifacts/build/start-s00/debug/df-transport-fixture",
+      "sha256": "b2a3a7d058afdb9735672b90ec9623d55ccd2bc1f53f537e6c2c363ddd6913e1",
+      "observed_sha256": "b2a3a7d058afdb9735672b90ec9623d55ccd2bc1f53f537e6c2c363ddd6913e1"
+    },
+    "retained_g02_submission": {
+      "path": "artifacts/build/qualify-g02/debug/df-transport-fixture",
+      "sha256": "7840d2ea80898025a72887fc7de7b9ee23c6ebee747627ac4ee3138520cc86be",
+      "submitted_commit": "51d59602c16a7a705c7c224fc03abd21b24828ac",
+      "observed_sha256": "7840d2ea80898025a72887fc7de7b9ee23c6ebee747627ac4ee3138520cc86be"
+    }
+  },
+  "attempts": [
+    {
+      "id": "ACTIVE-CLEANUP-004-a1",
+      "worker": "/root/cleanup_004",
+      "status": "submitted",
+      "phase": "review",
+      "lease_expires_at": "2026-09-30T19:33:57.052652+00:00",
+      "evaluator_id": "/root/frontier_review"
+    },
+    {
+      "id": "QUALIFY-G02-001-a1",
+      "worker": "/root/start_s00",
+      "status": "inconclusive",
+      "phase": "review",
+      "lease_expires_at": "2026-09-30T20:25:20.465066+00:00",
+      "evaluator_id": "/root/frontier_review"
+    },
+    {
+      "id": "SETUP-G05-001-a3",
+      "worker": "/root/postgres_g05_sol",
+      "status": "active",
+      "phase": "implementation",
+      "lease_expires_at": "2026-09-30T20:46:36.474542+00:00",
+      "evaluator_id": null
+    }
+  ],
+  "devlog": [
+    {
+      "id": "active-cleanup-004-a1-current-inventory-20260930",
+      "agent_id": "/root/cleanup_004",
+      "role": "cleanup",
+      "summary": "Fresh artifact inventory retained all candidates and found current PostgreSQL and recorder use.",
+      "evidence_ref": "development/evidence/cleanup-004/current-interval-inventory.json sha256=8e3ea9eb101cca0b6795d323a92895f9e9cf6e8ffad6bd2d0ff7ccc8900434b4; artifacts/tmp/ACTIVE-CLEANUP-004-a1/inventory.py sha256=016de305699481a6c96dd65644a1f1e2b05797ea63043d33d77a3742fb636592"
+    }
+  ],
+  "processes": {
+    "command": [
+      "ps",
+      "-p",
+      "67387,96977,18905,18907,80873,69190",
+      "-o",
+      "pid=,ppid=,lstart=,command="
+    ],
+    "returncode": 0,
+    "stdout": "18905     1 Wed Sep 30 15:11:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/web\n18907     1 Wed Sep 30 15:11:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web 43181\n69190     1 Wed Sep 30 13:25:20 2026     /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python /Users/earlcameron/Desktop/dungeonflux/development/screenshot_journey.py run-loop\n80873     1 Wed Sep 30 13:46:12 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install/bin/postgres -D /Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/data -c listen_addresses= -c unix_socket_directories=/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/socket -c unix_socket_permissions=0700 -c port=55439 -c max_connections=16 -c fsync=on -c full_page_writes=on -c synchronous_commit=on",
+    "stderr": ""
+  },
+  "listeners": {
+    "command": [
+      "lsof",
+      "-nP",
+      "-a",
+      "-p",
+      "18905,18907,80873",
+      "-iTCP",
+      "-sTCP:LISTEN"
+    ],
+    "returncode": 0,
+    "stdout": "COMMAND     PID        USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\ndf-transp 18905 earlcameron    9u  IPv4 0xe87a1a03193049be      0t0  TCP 127.0.0.1:43180 (LISTEN)\ndf-transp 18907 earlcameron    9u  IPv4 0x61c6184ad234bcc0      0t0  TCP 127.0.0.1:43181 (LISTEN)",
+    "stderr": ""
+  },
+  "postgres_socket": {
+    "command": [
+      "lsof",
+      "-nP",
+      "-a",
+      "-p",
+      "80873",
+      "-U"
+    ],
+    "returncode": 0,
+    "stdout": "COMMAND    PID        USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\npostgres 80873 earlcameron    5u  unix 0xd15b32cc17043c52      0t0      /Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/socket/.s.PGSQL.55439",
+    "stderr": ""
+  },
+  "recorder_open_files": {
+    "command": [
+      "lsof",
+      "-nP",
+      "-a",
+      "-p",
+      "69190",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/journey/recorder.log"
+    ],
+    "returncode": 0,
+    "stdout": "COMMAND   PID        USER   FD   TYPE DEVICE SIZE/OFF    NODE NAME\nPython  69190 earlcameron    1w   REG   1,15      648 6018386 /Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/journey/recorder.log\nPython  69190 earlcameron    2w   REG   1,15      648 6018386 /Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/journey/recorder.log",
+    "stderr": ""
+  },
+  "recovery_receipts": {
+    "baseline": {
+      "project_root": "/Users/earlcameron/Desktop/dungeonflux",
+      "url": "http://127.0.0.1:43180",
+      "owner_pid": 18905,
+      "public_safe": true,
+      "read_only": true,
+      "synthetic_public": true,
+      "no_load_effects": true,
+      "source_commit": "4cac7647d4b2aa8e62f2c5c264d8561878383124",
+      "owner": "/root",
+      "note": "Coordinator recovered exact retained native/WASM build after authoritative PID/listener absence; no rebuild. Passive load mounts synthetic UI; checks require explicit button.",
+      "recovered_at": "2026-09-30T19:11:07.876894+00:00",
+      "binary_sha256": "b2a3a7d058afdb9735672b90ec9623d55ccd2bc1f53f537e6c2c363ddd6913e1",
+      "argv": [
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/debug/df-transport-fixture",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/web"
+      ],
+      "log": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/coordinator-preview-recovery/baseline-20260930T191107Z.log",
+      "initial_health": "S00 experimental; active=0; completed=0; cancelled=0; otel_spans=0; durable_export=false; dropped_spans=0; deadline_headers=0",
+      "process": "18905 18904 Wed Sep 30 15:11:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/web",
+      "prior_pid": 67387
+    },
+    "qualification": {
+      "project_root": "/Users/earlcameron/Desktop/dungeonflux",
+      "url": "http://127.0.0.1:43181",
+      "owner_pid": 18907,
+      "public_safe": true,
+      "read_only": true,
+      "synthetic_public": true,
+      "no_load_effects": true,
+      "source_commit": "51d59602c16a7a705c7c224fc03abd21b24828ac",
+      "owner": "/root",
+      "note": "Coordinator recovered exact retained native/WASM build after authoritative PID/listener absence; no rebuild. Passive load mounts synthetic UI; checks require explicit button.",
+      "recovered_at": "2026-09-30T19:11:08.003257+00:00",
+      "binary_sha256": "7840d2ea80898025a72887fc7de7b9ee23c6ebee747627ac4ee3138520cc86be",
+      "argv": [
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture",
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web",
+        "43181"
+      ],
+      "log": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/coordinator-preview-recovery/qualification-20260930T191107Z.log",
+      "initial_health": "S00 experimental; active=0; completed=0; cancelled=0; otel_spans=0; durable_export=false; dropped_spans=0; deadline_headers=0",
+      "process": "18907 18904 Wed Sep 30 15:11:07 2026     /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web 43181",
+      "prior_pid": 96977
+    }
+  },
+  "submitted_script_execution": {
+    "exit_code": 0,
+    "stderr": "",
+    "totals": {
+      "candidates": 14,
+      "deleted": 0,
+      "directories": 2751,
+      "eligible": 0,
+      "eligible_bytes": 0,
+      "errors": 0,
+      "reclaimed_bytes": 0,
+      "regular_file_bytes": 6983145441,
+      "regular_files": 40758,
+      "retained": 14,
+      "retained_bytes": 6983145441,
+      "special_entries": 0,
+      "symlinks_not_followed": 50
+    },
+    "stdout_sha256": "5fe00e9ebcff7f4c75bfb89002a226ad80cbd319213ccbb8938fca6b9d38c48c",
+    "mode": "stdout only; no report overwrite/deletion"
+  }
+}

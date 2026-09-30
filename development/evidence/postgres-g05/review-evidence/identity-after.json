@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-09-30T17:59:41.050476+00:00",
+  "sha256": {
+    "candidate_script": "5a9810276a952d68e1116b46a27c292099956b3e1579ae919b7d8088b8ef4307",
+    "original_owner": "8d531bef812ac541bb3f54be78556885ef0550855300e58abdf427f4e83e3141",
+    "original_config": "618ee97b55881ce33a39487c32df565130b10c25520cc0e2f0b00c08c5b1759b",
+    "evaluation_owner": "21f644d5f8e06976d4f26f10684a2a18816eb3fda40152952a973dc635f89700",
+    "evaluation_config": "9a9539ddef3920aaccf243150ac01118f09101923bd88a00fec5faf5bb70ce90",
+    "evaluation_pg_control": "7063e80f2d8caa769185b9db7985ecb5de94d29abb44b0313b5e160bc405749d"
+  },
+  "candidate_status": "",
+  "evaluation_status": "",
+  "original_processes": "67387 /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/web\n69190 /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python /Users/earlcameron/Desktop/dungeonflux/development/screenshot_journey.py run-loop\n80873 /Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install/bin/postgres -D /Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/data -c listen_addresses= -c unix_socket_directories=/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/socket -c unix_socket_permissions=0700 -c port=55439 -c max_connections=16 -c fsync=on -c full_page_writes=on -c synchronous_commit=on\n",
+  "evaluation_cluster": "retained stopped; committed evaluator row186 remains for later repair verification; no postmaster.pid"
+}

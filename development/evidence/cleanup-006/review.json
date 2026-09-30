@@ -1,0 +1,54 @@
+{
+  "task_id": "ACTIVE-CLEANUP-006",
+  "attempt_id": "ACTIVE-CLEANUP-006-a1",
+  "record_role": "operational",
+  "evaluator": "/root/frontier_review",
+  "configured_model": "gpt-6-astra",
+  "actual_model_identity": "Codex based on GPT-6; exact serving variant not independently exposed",
+  "capabilities_available": {
+    "computer_use": true,
+    "vision": true,
+    "audio": false
+  },
+  "capabilities_used": [
+    "read-only shell/process/listener inspection",
+    "independent Python lstat inventory",
+    "SHA256 runtime and evidence verification",
+    "read-only SQLite attempt/devlog inspection"
+  ],
+  "ui_applicability": "Internal filesystem/operational boundary; no UI or PDF vision required or claimed. Chrome untouched.",
+  "timestamp_utc": "2026-09-30T20:17:00.235097+00:00",
+  "submitted_revision": "sha256:1434894af7a3ee2173454aa6633ddf00959ce11430e80e26e139fc6d0b30da8d",
+  "tested_revision": "sha256:1434894af7a3ee2173454aa6633ddf00959ce11430e80e26e139fc6d0b30da8d",
+  "inventory_script_sha256": "016de305699481a6c96dd65644a1f1e2b05797ea63043d33d77a3742fb636592",
+  "source_input_revision": "dd63d194a8e87ce575e861199abc28861ac2c28d",
+  "observed_current_head": "dd63d194a8e87ce575e861199abc28861ac2c28d",
+  "criteria": [
+    {
+      "criterion": "Inventory only artifacts/build and artifacts/tmp without following symlinks, rechecking live attempt/process ownership and preserving active/latest verified builds, shared caches, unknown files, durable state and evidence.",
+      "result": "pass",
+      "procedure": "Read governing cleanup/protection rules, inspect exact worker script, independently walk only main artifacts/build and artifacts/tmp with lstat and no symlink traversal; compare every historical path; query current attempts and targeted processes/listeners/open files; rehash four runtime executables.",
+      "expected": "Approved roots only, symlinks and FIFOs not traversed/opened, protected active/latest builds and unknown/durable state retained; current ownership accurately rechecked.",
+      "observed": "Current 22 roots contain 56,285 regular files and 10,657,294,234 logical bytes, 3,580 directories, 50 untraversed symlinks, 5 FIFOs and 0 errors. All historical paths remain; only recorder.log gained 108 bytes. Protected root directories outside scan exist and were untouched. Three previews and PostgreSQL remain live with exact retained executable hashes. Old recorder 69190 absent; newly reported recorder 26743 now intentionally stopped by coordinator, with active=false registration and same session. Current task phases preserve G02 integration and integrated G05/SRD claims.",
+      "evidence_ref": "development/evidence/cleanup-006/independent-inventory.json; development/evidence/cleanup-006/independent-check.py"
+    },
+    {
+      "criterion": "Report truthful eligible/retained/deleted paths and bytes with deterministic retained evidence and devlog; no deletion without all ADR0002 conditions and an explicit coordinator allowlist.",
+      "result": "pass",
+      "procedure": "Recompute report/script SHA256; independently flatten nested report and sum counts/bytes; compare immutable historical snapshot with fresh scan; inspect script mutation surface and empty allowlist; verify worker scoped devlog exact identity references and append evaluator transition finding.",
+      "expected": "Truthful deterministic historical inventory, eligible/retained/deleted/reclaimed accounting, no deletion absent explicit allowlist and all ADR0002 conditions, meaningful retained devlog.",
+      "observed": "Report SHA 1434894af7a3ee2173454aa6633ddf00959ce11430e80e26e139fc6d0b30da8d and script SHA 016de305699481a6c96dd65644a1f1e2b05797ea63043d33d77a3742fb636592 match. Historical 22 roots/56285 files/10657294126 logical bytes/3580 directories/50 symlinks/5 specials/0 errors recompute exactly. Every root marked retained; eligible/deleted/reclaimed all 0 and allowlist empty. Script only inventories/writes report, with no deletion path. Worker scoped devlog contains exact report/script references. Current differences and coordinator stop are recorded without altering historical snapshot.",
+      "evidence_ref": "development/evidence/cleanup-006/current-interval-inventory.json; development/evidence/cleanup-006/independent-inventory.json; development/evidence/cleanup-006/evaluator-devlog-entry.json"
+    }
+  ],
+  "defects": [],
+  "known_gaps": [
+    "Counts are logical regular-file bytes, not allocated disk usage or reclaimed space.",
+    "Immutable historical process snapshot differs from current recorder state due to explicit coordinator end-of-session stop; no live-recorder claim retained for current time.",
+    "G02 integrated browser reload remains pending manual Mac unlock; cleanup approval does not close that acceptance gate."
+  ],
+  "verdict": "approve",
+  "verdict_reason": "Both exact operational criteria independently proven. Every inventoried path retained, no deletion eligibility or reclaimed bytes, and dynamic ownership transitions explicitly reconciled.",
+  "devlog_entry_id": "active-cleanup-006-independent-preservation-20260930",
+  "evidence_ref": "development/evidence/cleanup-006/independent-inventory.json"
+}

@@ -1,0 +1,37 @@
+{
+  "source_commit": "51d59602c16a7a705c7c224fc03abd21b24828ac",
+  "source_tree_clean": true,
+  "web_revision": "51d59602c16a7a705c7c224fc03abd21b24828ac",
+  "artifacts": [
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/debug/df-transport-fixture",
+      "bytes": 19177464,
+      "sha256": "7840d2ea80898025a72887fc7de7b9ee23c6ebee747627ac4ee3138520cc86be"
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web/df_tools.d.ts",
+      "bytes": 2643,
+      "sha256": "0c27b2a8acf16590835744c77cbd349979e39717bb9b73c8679759b890d1525c"
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web/df_tools.js",
+      "bytes": 26155,
+      "sha256": "08bdbf4b57d2034666b6652916e694f03f1512a22eede60ef3cccc5dc5a40d16"
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web/df_tools_bg.wasm",
+      "bytes": 3401877,
+      "sha256": "c0fc263be0b9f408cd59cfef8c942f5d840060ab846f1e1781cc495ee6b771ec"
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web/df_tools_bg.wasm.d.ts",
+      "bytes": 1626,
+      "sha256": "b90fafa416dfc4f21df6ddff77a8f3ce44c43f57e5a98db3b1b4adcbb0f4c9a2"
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02/web/source-revision.txt",
+      "bytes": 41,
+      "sha256": "ce5d85bc59a5e2e9261e1b12fa58ea2ac3681eb60879de222e9bb3b47a45d4ec"
+    }
+  ]
+}

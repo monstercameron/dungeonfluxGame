@@ -1,0 +1,15 @@
+{
+  "task_id": "ACTIVE-CLEANUP-005",
+  "attempt_id": "ACTIVE-CLEANUP-005-a1",
+  "integrated_at": "2026-09-30T19:52:02.153920+00:00",
+  "tested_revision": "sha256:20e5edf52ea59beb8232d67e320f09995698caf64afaa023906d692706ff9c8a",
+  "integrated_revision": "sha256:20e5edf52ea59beb8232d67e320f09995698caf64afaa023906d692706ff9c8a",
+  "checks": [
+    {
+      "result": "pass",
+      "tested_revision": "sha256:20e5edf52ea59beb8232d67e320f09995698caf64afaa023906d692706ff9c8a",
+      "procedure": "Rehashed historical inventory, verified exact independent criteria and protected roots; later integrated-build growth/new43182ownedpreview retained, no deletion.",
+      "evidence_ref": "development/evidence/cleanup-005/review.json"
+    }
+  ]
+}

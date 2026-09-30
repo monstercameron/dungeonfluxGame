@@ -1,0 +1,9 @@
+{
+  "id": "qualify-g02-coordinator-previews-recovered",
+  "kind": "resolution",
+  "summary": "Missing retained preview processes recovered under coordinator ownership from exact unchanged build bytes.",
+  "details": "Cleanup reported prior67387/96977 absent. Coordinator ps and lsof confirmed both absent and ports43180/43181 unbound; recorder reported actual unavailable capture. Native/WASM/glue hashes matched accepted baseline and fixed candidate before restart.",
+  "action": "Started only the retained two loopback binaries with owned logs and detached named lifetime, observed bounded200health/readiness and exact process commands. Saved new ownership receipts18905/18907; registered same passivebaseline recorder with new proof and renewed one lease.",
+  "outcome": "Previews available without source rebuild. Historical evidence/capture outage retained. Qualification reports/counters restarted, so final browser visual criterion must use a new bounded run after unlock; no stale completion reuse or fullG02 claim.",
+  "evidence_ref": "development/evidence/preview-recovery/qualification-ownership.json"
+}

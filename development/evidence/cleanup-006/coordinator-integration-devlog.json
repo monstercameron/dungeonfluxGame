@@ -1,0 +1,9 @@
+{
+  "id": "active-cleanup-006-coordinator-integrated-20260930",
+  "kind": "resolution",
+  "summary": "Final interval inventory independently approved and integrated without deletions.",
+  "details": "{\"task_id\": \"ACTIVE-CLEANUP-006\", \"attempt_id\": \"ACTIVE-CLEANUP-006-a1\", \"completed_at\": \"2026-09-30T20:19:18.618500+00:00\", \"tested_revision\": \"sha256:1434894af7a3ee2173454aa6633ddf00959ce11430e80e26e139fc6d0b30da8d\", \"integrated_revision\": \"sha256:1434894af7a3ee2173454aa6633ddf00959ce11430e80e26e139fc6d0b30da8d\", \"checks\": [{\"result\": \"pass\", \"tested_revision\": \"sha256:1434894af7a3ee2173454aa6633ddf00959ce11430e80e26e139fc6d0b30da8d\", \"evidence_ref\": \"development/evidence/cleanup-006/review.json\", \"procedure\": \"Coordinator rehashed immutable inventory and verified exact independent criteria; protected roots present, owned recorder ending explicitly reconciled, no deletion.\"}]}",
+  "action": "Verified report identity/independent criteria/protected roots, recorded scoped operational integration and ending recorder ownership.",
+  "outcome": "Cleanup006 done; all retained source/build/evidence and preview/PostgreSQL processes preserved.",
+  "evidence_ref": "development/evidence/cleanup-006/integration.json"
+}

@@ -1,0 +1,6 @@
+{
+  "owner": "/root/postgres_review_a2",
+  "main": "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data",
+  "additional_owned_cluster": "/Users/earlcameron/Desktop/dungeonflux/e/development/runtime/postgres-g05/data-suffix-a2",
+  "purpose": "independent same-binary prefix-path process identity probe; preserve both clusters; only owned processes signaled"
+}

@@ -1,0 +1,58 @@
+{
+  "task_id": "ACTIVE-CLEANUP-004",
+  "attempt_id": "ACTIVE-CLEANUP-004-a1",
+  "verdict": "approve",
+  "reviewed_at_utc": "2026-09-30T19:15:39.806089+00:00",
+  "input_revision": "f9343cb5ec17b33c76a03b20f6afec9168f9fb7a",
+  "tested_revision": "sha256:8e3ea9eb101cca0b6795d323a92895f9e9cf6e8ffad6bd2d0ff7ccc8900434b4",
+  "inventory_script_sha256": "016de305699481a6c96dd65644a1f1e2b05797ea63043d33d77a3742fb636592",
+  "independent_inventory_sha256": "acef49fafd49bfd637c065d6a16ec20b822793c0765228bf54b9502f803bf1f4",
+  "evaluator": {
+    "agent_id": "/root/frontier_review",
+    "configured_model": "gpt-6-astra",
+    "actual_model_identity": "Codex based on GPT-6 as exposed in session instructions; exact backend model ID not independently exposed",
+    "enabled_capabilities": [
+      "computer_use",
+      "vision",
+      "shell",
+      "read_only_sqlite"
+    ],
+    "used_capabilities": [
+      "shell",
+      "filesystem no-follow inventory",
+      "read_only_sqlite",
+      "process/listener inspection"
+    ],
+    "capability_scope": "Internal operational inventory has no UI/vision/audio acceptance; Chrome untouched."
+  },
+  "environment": "macOS, main repository /Users/earlcameron/Desktop/dungeonflux; existing runtime and clones protected",
+  "acceptance": [
+    {
+      "criterion": "Inventory only artifacts/build and artifacts/tmp without following symlinks, rechecking live attempt/process ownership and preserving active/latest verified builds, shared caches, unknown files, durable state and evidence.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Derived checks before report inspection, reviewed pinned script, independently scanned main build/tmp using fd-relative no-follow stat and O_NOFOLLOW opens, reran submitted script to stdout only, queried scoped attempts read-only, lstat protected roots and verified executable/process/listener ownership against recovery receipts.",
+      "expected": "Only approved generated roots inventoried recursively, symlinks not followed; active/latest/unknown/caches/durable/evidence protected and live ownership rechecked.",
+      "observed": "Current independent and script runs agree:14retained roots,40,758files,6,983,145,441logical bytes,50symlinks skipped,0errors. All13historical roots/files remain. Baseline18905/43180 and qualification18907/43181 match documented coordinator recovery; prior67387/96977 absent. PostgreSQL80873 and Unix socket55439 plus recorder69190 remain live. All three executable hashes match submitted report. Caches/worktrees, Git/evidence/runtime/SQLite sidecars and whole e/p/s clones remain outside recursive scan and present. G02 inconclusive review and active G05-a3 claims verified.",
+      "evidence_ref": "development/evidence/cleanup-004/independent-inventory.json"
+    },
+    {
+      "criterion": "Report truthful eligible/retained/deleted paths and bytes with deterministic retained evidence and devlog; no deletion without all ADR0002 conditions and an explicit coordinator allowlist.",
+      "result": "pass",
+      "status": "pass",
+      "procedure": "Verify exact report/script hashes, per-file historical/current deltas, report arithmetic, empty allowlist/no deletion paths, stdout-only executable boundary and retained scoped worker devlog; retain independent evidence and evaluator devlog.",
+      "expected": "Truthful timestamped path/byte accounting and durable evidence/devlog; zero deletion unless all conditions and explicit coordinator allowlist exist.",
+      "observed": "Exact hashes match. Historical report13roots/40,755files/6,983,141,118bytes is consistent with current data: only new G05-a3 run-additional.py4,111bytes and two recovery logs106bytes each, all timestamped after report, add4,323bytes and one root. No historical file missing or changed in size. Empty allowlist,0eligible/deleted/reclaimed bytes. Script contains no deletion/process/queue operations; only optional report write, not used during evaluator rerun. Worker scoped devlog cites exact final hashes. Historical absent-preview finding is preserved; later recovery is reported separately.",
+      "evidence_ref": "development/evidence/cleanup-004/independent-inventory.json"
+    }
+  ],
+  "defects": [],
+  "limitations": [
+    "Approval applies only to this inventory-only snapshot, not a generic deletion facility.",
+    "Historical process absence is corroborated by coordinator recovery receipts; current process observations are independently retained.",
+    "No authored Rust implementation changed; format/Clippy/rebuild gates not applicable and not run."
+  ],
+  "devlog_entry_id": "active-cleanup-004-a1-independent-review-20260930",
+  "devlog_status": "appended via supplied evaluator-context; queue_state_changed=false",
+  "preservation": "No deletion, process stop/restart, source/build/queue mutation or Chrome interaction by evaluator."
+}

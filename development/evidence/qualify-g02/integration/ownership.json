@@ -1,0 +1,21 @@
+{
+  "project_root": "/Users/earlcameron/Desktop/dungeonflux",
+  "url": "http://127.0.0.1:43182",
+  "owner_pid": 25530,
+  "owner_agent": "/root",
+  "public_safe": true,
+  "read_only": true,
+  "synthetic_public": true,
+  "no_load_effects": true,
+  "source_commit": "ba0d3860fb27124be352b48766e99a955f746672",
+  "build_identity_ref": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/qualify-g02/integration/build-identity.json",
+  "argv": [
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/debug/df-transport-fixture",
+    "/Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/web",
+    "43182"
+  ],
+  "log": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/QUALIFY-G02-001-integration/preview.log",
+  "started_at": "2026-09-30T19:50:08.232952+00:00",
+  "initial_health": "S00 experimental; active=0; completed=0; cancelled=0; otel_spans=0; durable_export=false; dropped_spans=0; deadline_headers=0",
+  "process": "25530 /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/qualify-g02-integrated/web 43182\n"
+}

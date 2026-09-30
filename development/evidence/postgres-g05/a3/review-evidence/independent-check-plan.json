@@ -1,0 +1,21 @@
+{
+  "derived_before_worker_handoff": true,
+  "checks": [
+    {
+      "criterion": "Reproducibly download, verify official SHA256, build and install pinned PostgreSQL 18.6 into owned project artifacts without global packages or shell/home changes.",
+      "procedure": "Verify cached source/official checksum and pinned installed18.6 executable hashes/build manifests; reuse unchanged validated native build and fresh initialization evidence, no rebuild."
+    },
+    {
+      "criterion": "Provide bounded setup/start/status/stop commands for an owned durable development cluster outside artifacts; deny TCP listening, protect socket/data permissions, and never replace existing data or stop an unrelated process.",
+      "procedure": "Exercise candidate on evaluator-owned stopped e fixture: exact/prefix same-second real PostgreSQL PID substitution, wrong answering backend, mutable PID-file synchronization, stale dummy, symlink log/ancestors and bounded readiness failure; assert only verified owned PID can be signaled and all data survives."
+    },
+    {
+      "criterion": "Use real psql transactions to verify version, rollback/commit, restart persistence, parameter-safe diagnostic output and Pg readiness; preserve fsync/full_page_writes/synchronous_commit and explicit configured connection/process limits.",
+      "procedure": "Use real psql in isolated e fixture to verify version/settings/noTCP/permissions, rollback and commit, graceful stop/restart persistence, readiness and safe output."
+    },
+    {
+      "criterion": "Retain source/runtime/build/configuration/ownership hashes, exact commands, error outcomes, startup and shutdown evidence and devlog; do not claim G05 persistence/schema/tenant/recovery/media or production readiness is complete.",
+      "procedure": "Pin candidate/worktree/install/host/config/ownership identities, retain commands/errors/outcomes and scoped devlog, ensure scope limits explicitly preserve remaining fullG05 requirements."
+    }
+  ]
+}

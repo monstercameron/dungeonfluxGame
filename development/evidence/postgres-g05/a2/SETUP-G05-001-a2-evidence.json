@@ -1,0 +1,61 @@
+{
+  "record_role": "candidate worker evidence",
+  "task_id": "SETUP-G05-001",
+  "attempt_id": "SETUP-G05-001-a2",
+  "input_revision": "25af2ecd54bfb2b918405d354972f7a652c05342",
+  "worktree": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/postgres-g05",
+  "branch": "codex/postgres-g05",
+  "candidate_commit": "db403a4ca58ee5f221fb53e7fc61929345618cfe",
+  "permitted_source_hashes": {
+    "development/postgres.sh": "56eb451b5b84de929f41f2f9f11fc0ce53114d09bb6d7bb945d36a3c64d13a76",
+    "development/postgres-g05.md": "e843794200d42b0006568191693cd114b7f27d9f4a84f8cab36aa9b49b2beeb7"
+  },
+  "shared_dependency_build": {
+    "archive_sha256": "983ee554ec53dbeb9b70797bef9fcf4e67e117e7e48ca1463cc80b3ff8e8ff3f",
+    "official_expected_sha256": "983ee554ec53dbeb9b70797bef9fcf4e67e117e7e48ca1463cc80b3ff8e8ff3f",
+    "built_tools_reused_from_a1": {
+      "postgres": "fdb263f367f30e248021c9f74441c9120c2091aceaed0957bdb7a13efca7f8d9",
+      "pg_ctl": "401d19cff0e8c98a76bb0965cb7ca0c7a66c27b3480796fcd03ddbfe4b24e0b4",
+      "pg_isready": "1d851244735169d4d0ceef5d472af935fac397bfb6cc90297b8391e5b623b994",
+      "psql": "572ac7789c613a4c066cdb4deaf1b4d5c18d1975000cb097c1ce764f828432a7",
+      "initdb": "b9dc5c551ca309f8d2500e78d815e1aae3f7745c92d22c180345cd7283b0f0f9"
+    },
+    "native_rebuild_performed": false
+  },
+  "isolated_evaluation_repo": "/Users/earlcameron/Desktop/dungeonflux/p",
+  "socket_path_bytes": 95,
+  "evaluation_cluster_retained": "stopped",
+  "evaluation_owner_sha256": "01466f8bddfb31a75cd70f04f7daf98f67ff169351c7de0d7952baf5130c159a",
+  "evaluation_postgresql_conf_sha256": "f5ea0c82cc35b797ef12683eac6374a64055ccfbce73e14072e46e2dc9c64322",
+  "protected_hashes_unchanged_across_safety_refusals": true,
+  "boundary_evidence": "development/evidence/postgres-g05/a2/boundary-a2.json",
+  "real_postgres_verification": {
+    "setup": "archive SHA256 verified, installed PostgreSQL 18.6 identity verified, existing owned cluster preserved",
+    "commands": [
+      "cd /Users/earlcameron/Desktop/dungeonflux/p && ./development/postgres.sh setup",
+      "./development/postgres.sh start",
+      "artifacts/build/postgres-g05/install/bin/pg_isready -h \"$PWD/development/runtime/postgres-g05/socket\" -p 55439 -t 5",
+      "psql BEGIN; CREATE TEMP TABLE; INSERT; ROLLBACK => rollback-ok",
+      "psql CREATE TABLE IF NOT EXISTS g05_a2_persistence_probe; INSERT 186 ON CONFLICT DO NOTHING => commit-ok|186",
+      "./development/postgres.sh stop",
+      "./development/postgres.sh start",
+      "psql SELECT restart-persistence-ok|186",
+      "./development/postgres.sh stop",
+      "./development/postgres.sh status => stopped"
+    ],
+    "actual_outputs": [
+      "accepting connections",
+      "rollback-ok",
+      "commit-ok | 186",
+      "restart-persistence-ok|186",
+      "stopped: owned cluster"
+    ],
+    "known_fixture_detail": "The isolated p cluster was initialized with synced initdb using the reused PostgreSQL build; after its first init, final bounded worker settings were appended to its config for evaluation. The worker source setup path writes those settings directly when it initializes a fresh cluster."
+  },
+  "protected_existing_servers": {
+    "pid67387": "67387 /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/debug/df-transport-fixture /Users/earlcameron/Desktop/dungeonflux/artifacts/build/start-s00/web",
+    "pid80873": "80873 /Users/earlcameron/Desktop/dungeonflux/artifacts/build/postgres-g05/install/bin/postgres -D /Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/data -c listen_addresses= -c unix_socket_directories=/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/socket -c unix_socket_permissions=0700 -c port=55439 -c max_connections=16 -c fsync=on -c full_page_writes=on -c synchronous_commit=on",
+    "mutated_or_stopped": false
+  },
+  "final_scope": "This is internal setup work only. SETUP-G05-001 is pending independent A2 frontier evaluation; full G05 and DungeonFlux TODO completion remain open."
+}

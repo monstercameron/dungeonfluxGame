@@ -1,0 +1,10 @@
+{
+  "id": "srd-g07-a1-independent-verifier-rejection-20260930",
+  "kind": "defect",
+  "summary": "Independent SRD review rejects verifier acceptance gaps while confirming unchanged official PDF.",
+  "details": "All four exact frozen criteria evaluated. Official publisher reacquisition byte-matches 6031375-byte/364-page SRD; four legal/contents PDF pages visually inspected. Criterion 3 fails: empty/truncated attribution accepted, actual unavailable full-book sources lack explicit failing gate, and FIFO manifest blocks until external bound. Missing metadata record is not equivalent to missing required source bytes.",
+  "action": "Ran committed Python verifier against independent owned fixtures; retained exact source and asset hashes, current publisher provenance, commands, results and screenshots. No source changes or queue mutations.",
+  "outcome": "Reject PIN-G07-SRD-001-a1; criteria 1, 2 and 4 pass, criterion 3 fails. Full 2024 source/catalog/errata/rights gates remain unresolved.",
+  "suggestion": "Fix verifier attribution and bounded input admission, add explicit full-source gate refusal with actual unavailable books, then resubmit exact new commit.",
+  "evidence_ref": "development/evidence/srd-g07/review.json"
+}

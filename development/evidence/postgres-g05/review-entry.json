@@ -1,0 +1,9 @@
+{
+  "id": "SETUP-G05-001-a1-independent-rejection",
+  "kind": "defect",
+  "summary": "Owned-runtime wrapper can signal recycled unrelated PID and accepts symlink ancestors",
+  "details": "Exact candidate25af2ecd evaluated in protected independent checkout/e. Fresh initialization synced to disk; real rollback/commit/restart passed. Stale postmaster.pid pointing to evaluator-owned Python dummy83480 made start report success without PostgreSQL. With stale socket inode, stop delivered SIGINT2 to dummy before failure. pg_ctl status checks PID liveness only. Status also accepted symlinked runtime ancestor; setup/readiness lack full script-level deadlines.",
+  "action": "Retained native probes, signal receipt, startup/shutdown log, exact source/binary/config/owner hashes and four-criterion review. Restored evaluator paths and left evaluator cluster stopped with data retained. Never signaled unrelated user processes or modified original cluster, preview, recorder, candidate source/Git or queue.",
+  "outcome": "Reject criterion2. Criteria1/3/4 pass within experimental setup scope. Return defectsG05-EVAL-001/002/003 to sole worker, then independently rerun repaired safety boundaries. FullG05 remains open.",
+  "evidence_ref": "development/evidence/postgres-g05/review.json"
+}

@@ -1,0 +1,7 @@
+{
+  "scope": "Coordinator metadata and durable review receipts",
+  "authored_diff_check": "pass",
+  "checked_paths": 227,
+  "raw_capture_exception": "Original PostgreSQL PID-file text preserves observed trailing spaces; HTTP response headers preserve CRLF; browser report text preserves captured terminal newlines. Immutable raw evidence was not rewritten for a whitespace gate. Authored Markdown/JSON/Python checked separately.",
+  "binary_database": "before-work.sqlite3 retained locally, explicitly unstaged and locally excluded; no SQLite/WAL/SHM, runtime, clone or artifact path staged."
+}
