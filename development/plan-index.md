@@ -14,7 +14,7 @@ The [service review](evidence/service-critic/README.md) retains its exact histor
 - Crates: **41**; game feature families: **47**; rules: **17**
 - Gates: **12**; delivery slices: **9**
 - RPC services/methods: **12/41**; governing sources: **44**
-- Dispatch-ready: **0**; original attempts preserved: **3**; devlogs: **87** in the [stopped-recorder portable export](evidence/workflow-history.json)
+- Dispatch-ready: **0**; original attempts preserved: **3**; devlogs: **94** in the [stopped-recorder portable export](evidence/workflow-history.json)
 
 ## Current service repair
 
@@ -191,3 +191,9 @@ F47disclosedcustom option preserve their full required designs.
 | X10 | crosscutting | Private campaign authoring and content lifecycle | 3 |
 | X11 | crosscutting | Conditional expansion decisions and honest degraded play | 2 |
 | X12 | crosscutting | Recoverable customer commerce and entitlement lifecycle | 3 |
+
+## Next executable proof, awaiting authorization
+
+Read the independent [G01/G02 decision packet](evidence/next-proof/brief.md).
+Existing306pending/1blocked plans and all sources are unchanged; the packet
+does not authorize prototype code, installation or a smaller game.

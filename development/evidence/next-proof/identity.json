@@ -1,0 +1,18 @@
+{
+  "reviewed_packet_sha256": "9744edb6c2bfc5b0095075364663e1206f4c2bf2476ac3124a73e8f056ca537e",
+  "current_packet_sha256": "d5a047fa42d0447a1e23dfffefbd63610bc9fbb2d198657a5765cd8e360cdac8",
+  "change_after_review": "Review status only; nextphase still unapproved.",
+  "source_fingerprint": "11b95cdca8377b33867e9991df2d0029d27697d0ee677c99a5fb132796b1c21c",
+  "manifest_sha256": "5a8c0c6a952c04b8e700bc6d5235f166a785d1702ca6cf59334ad3b2e0b858d9",
+  "counts": {
+    "features": 140,
+    "tasks": 307,
+    "dependencies": 1186,
+    "attempts": 3,
+    "devlog": 94
+  },
+  "status": "Independent completion/next-proof decision PASS; no app/prototype/tool installation approved",
+  "history_sha256": "0a92abaf9d1562657275cb6a80b122fb2c6564e5159fc9955e59815d39b2f53a",
+  "baseline_87_attempts_and_execution_fields": "Exact unchanged",
+  "recorder_active": false
+}

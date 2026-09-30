@@ -16,5 +16,7 @@
   "arithmetic_reviewed_report_sha256": "c810d438ced6182b04df28afa2d4a6cc665ec663080bde8d55cc6789097b010f",
   "current_report_sha256": "8a25087b16aa5ea4a302892daa8d2f0e86d1ecc44ebbeb98cdad2339316768ba",
   "report_changes_after_numeric_review": "Review-status and final integration metadata only; all numerical claims, assumptions and tables unchanged.",
-  "final_integration_review": "development/evidence/commercial-envelope/final-integration-review.json"
+  "final_integration_review": "development/evidence/commercial-envelope/final-integration-review.json",
+  "history_git_revision": "8ab15233bccb126d3afba5f9cbaff87e00dd6168",
+  "history_scope": "Historical87-row export at this revision; current mutable export includes later read-only next-proof audit journal."
 }

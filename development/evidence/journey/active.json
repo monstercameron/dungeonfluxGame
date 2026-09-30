@@ -1,13 +1,13 @@
 {
   "active": false,
-  "session_id": "0f1a2017d2e44f06",
-  "context": "/Users/earlcameron/Documents/Codex/2026-09-29/cr/dungeonflux/development/evidence/journey/recorder-contexts/0f1a2017d2e44f06.json",
+  "session_id": "b65758a9ac054f7b",
+  "context": "/Users/earlcameron/Documents/Codex/2026-09-29/cr/dungeonflux/development/evidence/journey/recorder-contexts/b65758a9ac054f7b.json",
   "observed_work_context": {
     "agent_id": "/root/gap_analysis_and_refinement",
     "task_id": "P00-REFINE",
     "attempt_id": null
   },
-  "started_at": "2026-09-30T07:01:54+00:00",
-  "expires_at_epoch": 1790753514.679287,
+  "started_at": "2026-09-30T07:21:34+00:00",
+  "expires_at_epoch": 1790753494.034969,
   "stop_reason": "coordinator_work_ended"
 }
