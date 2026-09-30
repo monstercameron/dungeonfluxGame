@@ -56,6 +56,13 @@ try:
         raise ValueError("cluster owner does not match current user")
     if owner.get("version") != version or owner.get("data_dir") != os.path.join(root, "data"):
         raise ValueError("owner manifest does not match this runtime")
+    for path in (root, os.path.join(root, "data"), os.path.join(root, "socket")):
+        item = os.stat(path, follow_symlinks=False)
+        if not os.path.isdir(path) or item.st_uid != os.getuid() or item.st_mode & 0o777 != 0o700:
+            raise ValueError(f"directory ownership or permissions are unsafe: {path}")
+    manifest_stat = os.stat(manifest, follow_symlinks=False)
+    if not os.path.isfile(manifest) or manifest_stat.st_uid != os.getuid() or manifest_stat.st_mode & 0o777 != 0o600:
+        raise ValueError("owner manifest ownership or permissions are unsafe")
 except Exception as exc:
     print(f"postgres-g05: ownership check failed: {exc}", file=sys.stderr)
     sys.exit(1)
