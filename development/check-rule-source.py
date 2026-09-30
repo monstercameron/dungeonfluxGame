@@ -6,12 +6,22 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import stat
 import sys
 from pathlib import Path
 from typing import Any
 
 MAX_SOURCE_BYTES = 64 * 1024 * 1024
+MAX_MANIFEST_BYTES = 1024 * 1024
+PINNED_ATTRIBUTION = (
+    'This work includes material from the System Reference Document 5.2.1 '
+    '("SRD 5.2.1") by Wizards of the Coast LLC, available at '
+    'https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the '
+    'Creative Commons Attribution 4.0 International License, available at '
+    'https://creativecommons.org/licenses/by/4.0/legalcode.'
+)
 EXPECTED = {
     "schema_version": 1,
     "source_kind": "public_srd_subset",
@@ -41,20 +51,71 @@ def require(condition: bool, message: str) -> None:
         raise VerificationError(message)
 
 
+def file_sha256(path: Path, failure_message: str) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as source_stream:
+            for chunk in iter(lambda: source_stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as error:
+        raise VerificationError(failure_message) from error
+    return digest.hexdigest()
+
+
 def normalized(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", text.lower())
 
 
 def read_manifest(path: Path) -> dict[str, Any]:
+    descriptor = None
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+        require(stat.S_ISREG(os.fstat(descriptor).st_mode), "manifest must be a regular file")
+        contents = bytearray()
+        while len(contents) <= MAX_MANIFEST_BYTES:
+            chunk = os.read(descriptor, min(65536, MAX_MANIFEST_BYTES + 1 - len(contents)))
+            if not chunk:
+                break
+            contents.extend(chunk)
+        require(len(contents) <= MAX_MANIFEST_BYTES, "manifest exceeds 1 MiB")
+        value = json.loads(contents.decode("utf-8"))
+    except VerificationError:
+        raise
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise VerificationError(f"cannot read valid JSON manifest: {error}") from error
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
     require(isinstance(value, dict), "manifest root must be an object")
     return value
 
 
-def verify(manifest_path: Path) -> dict[str, Any]:
+def verify_full_book_sources(manifest_dir: Path, books: list[Any]) -> None:
+    for book in books:
+        title = book.get("title")
+        require(book.get("status") == "acquired", f"full-source check refused: {title} bytes are unavailable")
+        revision = book.get("revision")
+        require(isinstance(revision, str) and revision.strip(), f"full-source check refused: {title} revision is unavailable")
+        filename = book.get("file")
+        require(isinstance(filename, str) and filename == Path(filename).name, f"full-source check refused: {title} file pin is unavailable")
+        try:
+            source_path = (manifest_dir / filename).resolve()
+        except (OSError, RuntimeError) as error:
+            raise VerificationError(f"full-source check refused: {title} file path is invalid") from error
+        require(source_path.parent == manifest_dir, f"full-source check refused: {title} file path escapes manifest directory")
+        try:
+            size = source_path.stat().st_size
+        except OSError as error:
+            raise VerificationError(f"full-source check refused: {title} bytes are unavailable") from error
+        require(0 < size <= MAX_SOURCE_BYTES, f"full-source check refused: {title} file is empty or exceeds 64 MiB")
+        require(book.get("size_bytes") == size, f"full-source check refused: {title} byte size does not match")
+        expected_digest = book.get("sha256")
+        require(isinstance(expected_digest, str) and re.fullmatch(r"[0-9a-f]{64}", expected_digest) is not None, f"full-source check refused: {title} SHA-256 pin is missing")
+        actual_digest = file_sha256(source_path, f"full-source check refused: {title} bytes are unreadable")
+        require(actual_digest == expected_digest, f"full-source check refused: {title} SHA-256 does not match")
+
+
+def verify(manifest_path: Path, require_full_book_sources: bool = False) -> dict[str, Any]:
     manifest = read_manifest(manifest_path)
     for key, expected in EXPECTED.items():
         if key == "license_name":
@@ -87,13 +148,20 @@ def verify(manifest_path: Path) -> dict[str, Any]:
     require(isinstance(books, list), "required full-book source list is missing")
     for book in books:
         require(isinstance(book, dict), "full-book source entry must be an object")
-        require(book.get("status") == "unacquired", f"required source is not marked unacquired: {book.get('title')}")
-        require(book.get("revision") is None, f"unacquired source has a fabricated revision: {book.get('title')}")
+        status = book.get("status")
+        require(status in ("unacquired", "acquired"), f"required source has an invalid acquisition status: {book.get('title')}")
+        if status == "unacquired":
+            require(book.get("revision") is None, f"unacquired source has a fabricated revision: {book.get('title')}")
+        else:
+            require(require_full_book_sources, f"acquired source requires --require-full-book-sources: {book.get('title')}")
 
     filename = manifest.get("file")
     require(isinstance(filename, str) and filename == Path(filename).name, "source file must be a basename")
-    manifest_dir = manifest_path.resolve().parent
-    source_path = (manifest_dir / filename).resolve()
+    try:
+        manifest_dir = manifest_path.resolve().parent
+        source_path = (manifest_dir / filename).resolve()
+    except (OSError, RuntimeError) as error:
+        raise VerificationError("source file path is invalid") from error
     require(source_path.parent == manifest_dir, "source path escapes manifest directory")
     try:
         source_size = source_path.stat().st_size
@@ -101,11 +169,10 @@ def verify(manifest_path: Path) -> dict[str, Any]:
         raise VerificationError(f"cannot stat source PDF: {error}") from error
     require(0 < source_size <= MAX_SOURCE_BYTES, "source PDF is empty or exceeds 64 MiB")
     require(manifest.get("size_bytes") == source_size, "source byte size does not match manifest")
-    digest = hashlib.sha256()
-    with source_path.open("rb") as source_stream:
-        for chunk in iter(lambda: source_stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    require(manifest.get("sha256") == digest.hexdigest(), "source SHA-256 does not match manifest")
+    digest = file_sha256(source_path, "cannot read source PDF")
+    require(manifest.get("sha256") == digest, "source SHA-256 does not match manifest")
+    if require_full_book_sources:
+        verify_full_book_sources(manifest_dir, books)
 
     try:
         from pypdf import PdfReader
@@ -118,8 +185,9 @@ def verify(manifest_path: Path) -> dict[str, Any]:
         legal = normalized(legal_text)
         require("systemreferencedocument521" in legal, "PDF title/version is absent from legal page")
         require("creativecommonsattribution40internationallicense" in legal, "CC-BY-4.0 notice is absent from legal page")
-        attribution = manifest["license"]["attribution"]
-        require(normalized(attribution) in legal, "required attribution does not match PDF legal page")
+        attribution = manifest["license"].get("attribution")
+        require(attribution == PINNED_ATTRIBUTION, "required attribution must exactly match the pinned statement")
+        require(normalized(PINNED_ATTRIBUTION) in legal, "pinned attribution does not match PDF legal page")
         contents_text = reader.pages[1].extract_text() or ""
         require("Contents" in contents_text and "Playing the Game" in contents_text, "PDF contents locator does not match page 2")
         locators = manifest.get("verified_locators")
@@ -140,15 +208,20 @@ def verify(manifest_path: Path) -> dict[str, Any]:
     except Exception as error:  # pypdf can raise several parser-specific exceptions.
         raise VerificationError(f"cannot parse source PDF: {error}") from error
 
-    return {"result": "verified", "version": EXPECTED["version"], "sha256": digest.hexdigest(), "size_bytes": source_size, "page_count": 364, "scope": "partial_srd_contents_only", "full_book_sources": "unacquired"}
+    return {"result": "verified", "version": EXPECTED["version"], "sha256": digest, "size_bytes": source_size, "page_count": 364, "scope": "partial_srd_contents_only", "full_book_sources": "unacquired"}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=Path(__file__).parent / "rules-sources" / "manifest.json")
+    parser.add_argument(
+        "--require-full-book-sources",
+        action="store_true",
+        help="require byte- and revision-pinned PHB, DMG, and Monster Manual sources",
+    )
     args = parser.parse_args()
     try:
-        print(json.dumps(verify(args.manifest), sort_keys=True))
+        print(json.dumps(verify(args.manifest, args.require_full_book_sources), sort_keys=True))
         return 0
     except VerificationError as error:
         print(f"source check failed: {error}", file=sys.stderr)
