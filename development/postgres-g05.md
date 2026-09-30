@@ -5,7 +5,9 @@ implement the game schema, tenant isolation, application credentials, migration
 ownership, backup/restore qualification, or production deployment.
 
 From the repository root, run `./development/postgres.sh setup` once, then use
-`start`, `status`, and `stop`. `setup` fetches the official PostgreSQL 18.6
+`start`, `status`, and `stop`. Normal commands are capped at 60 seconds; readiness
+is capped at 10 seconds. Setup is capped at 1200 seconds total, with native build
+commands capped at 900 seconds. `setup` fetches the official PostgreSQL 18.6
 source archive into `artifacts/cache/postgres-g05`, checks SHA256
 `983ee554ec53dbeb9b70797bef9fcf4e67e117e7e48ca1463cc80b3ff8e8ff3f`, builds
 with one make job, and installs into `artifacts/build/postgres-g05/install`.
@@ -20,11 +22,19 @@ under `development/runtime/postgres-g05`, outside `artifacts/`. The local
 superuser uses the current OS account; local socket authentication is trust, and
 host authentication is rejected. The server listens only on its private Unix
 socket at `development/runtime/postgres-g05/socket`, uses port 55439, and allows
-16 connections. `fsync`, `full_page_writes`, and `synchronous_commit` remain on.
-The data and socket directories are mode 0700. The script refuses symlinked
-paths, an unowned or malformed cluster, stale PID files, and replacing existing
-data. It only stops a server that `pg_ctl` verifies against this owned data
-folder. Never delete or reset this durable cluster as artifact cleanup.
+16 connections and caps PostgreSQL workers with `max_worker_processes=8`,
+`max_parallel_workers=8`, `max_parallel_workers_per_gather=2`, and
+`autovacuum_max_workers=3`. `fsync`, `full_page_writes`, and
+`synchronous_commit` remain on. The data and socket directories are mode 0700.
+The script rejects symlinks in every path component before reading or changing
+the runtime. It authenticates `postmaster.pid` against the live process executable,
+its `-D` argument, and a bounded SQL identity query over the private socket before
+reporting readiness or invoking graceful stop. A stale, reused, or ambiguous PID
+file fails closed and is left for operator inspection; it never causes a signal to
+be sent to an unverified process. Configure, native build, install, process probes,
+and readiness each have explicit deadlines, including a 1200-second setup total
+and 900-second native build cap. Never delete or reset this durable cluster as
+artifact cleanup.
 
 For transaction/restart verification after setup and start, use `psql` over the
 socket, create a temporary table in a transaction and roll it back, then create
@@ -37,11 +47,11 @@ A parameter-safe local readiness query is:
 
 ```sh
 artifacts/build/postgres-g05/install/bin/pg_isready \
-  -h development/runtime/postgres-g05/socket -p 55439 -t 5
+  -h "$(pwd)/development/runtime/postgres-g05/socket" -p 55439 -t 5
 artifacts/build/postgres-g05/install/bin/psql -X -v ON_ERROR_STOP=1 \
-  -h development/runtime/postgres-g05/socket -p 55439 \
+  -h "$(pwd)/development/runtime/postgres-g05/socket" -p 55439 \
   -U "$(id -un)" -d postgres \
-  -c "select version(), current_setting('listen_addresses'), current_setting('max_connections'), current_setting('fsync'), current_setting('full_page_writes'), current_setting('synchronous_commit')"
+  -c "select version(), current_setting('listen_addresses'), current_setting('max_connections'), current_setting('max_worker_processes'), current_setting('max_parallel_workers'), current_setting('max_parallel_workers_per_gather'), current_setting('autovacuum_max_workers'), current_setting('fsync'), current_setting('full_page_writes'), current_setting('synchronous_commit')"
 ```
 
 Use fixed SQL and `-X`; do not interpolate untrusted values into shell or SQL.
