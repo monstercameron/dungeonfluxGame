@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "source_kind": "public_srd_subset",
+  "publisher": "Wizards of the Coast LLC",
+  "title": "System Reference Document 5.2.1",
+  "version": "5.2.1",
+  "language": "English",
+  "publisher_page": "https://www.dndbeyond.com/srd",
+  "download_url": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf",
+  "acquired_utc_date": "2026-09-30",
+  "acquisition_method": "Unauthenticated HTTPS download from the English SRD v5.2.1 link on the publisher page",
+  "file": "srd-5.2.1-en.pdf",
+  "sha256": "8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87",
+  "size_bytes": 6031375,
+  "page_count": 364,
+  "license": {
+    "name": "Creative Commons Attribution 4.0 International",
+    "identifier": "CC-BY-4.0",
+    "url": "https://creativecommons.org/licenses/by/4.0/legalcode",
+    "attribution": "This work includes material from the System Reference Document 5.2.1 (\"SRD 5.2.1\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode."
+  },
+  "verified_locators": [
+    {"kind": "legal_information", "pdf_page": 1, "printed_page": 1, "label": "Legal Information"},
+    {"kind": "contents", "pdf_page": 2, "printed_page": 2, "label": "Contents"},
+    {"kind": "contents_index", "pdf_page": 3, "printed_page": 3, "label": "Monster index A–P"},
+    {"kind": "contents_index", "pdf_page": 4, "printed_page": 4, "label": "Monster index P–Z"},
+    {"kind": "section", "pdf_page": 5, "printed_page": 5, "label": "Playing the Game"},
+    {"kind": "section", "pdf_page": 19, "printed_page": 19, "label": "Character Creation"},
+    {"kind": "section", "pdf_page": 28, "printed_page": 28, "label": "Classes"},
+    {"kind": "section", "pdf_page": 83, "printed_page": 83, "label": "Character Origins"},
+    {"kind": "section", "pdf_page": 87, "printed_page": 87, "label": "Feats"},
+    {"kind": "section", "pdf_page": 89, "printed_page": 89, "label": "Equipment"},
+    {"kind": "section", "pdf_page": 104, "printed_page": 104, "label": "Spells"},
+    {"kind": "section", "pdf_page": 176, "printed_page": 176, "label": "Rules Glossary"},
+    {"kind": "section", "pdf_page": 192, "printed_page": 192, "label": "Gameplay Toolbox"},
+    {"kind": "section", "pdf_page": 204, "printed_page": 204, "label": "Magic Items"},
+    {"kind": "section", "pdf_page": 254, "printed_page": 254, "label": "Monsters"}
+  ],
+  "scope": {
+    "coverage_claim": "partial_srd_contents_only",
+    "full_2024_rules_coverage": false,
+    "required_full_book_sources": [
+      {"title": "2024 Player's Handbook", "status": "unacquired", "revision": null},
+      {"title": "2024 Dungeon Master's Guide", "status": "unacquired", "revision": null},
+      {"title": "2025 Monster Manual", "status": "unacquired", "revision": null}
+    ],
+    "full_catalog_denominator": "unresolved",
+    "non_srd_rights_grant_review": "unresolved",
+    "production_ruleset_id": null
+  }
+}
