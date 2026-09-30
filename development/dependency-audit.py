@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
+import os
 import stat
-import sys
 
-ROOT = Path(__file__).resolve().parent.parent
-AUDIT = ROOT / "development" / "dependency-audit"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 MAX_BYTES = 32 * 1024 * 1024
 EXPECTED_REPORT_SHA256 = "d569532d942bce4d22b7107f04b969e0a16addc9bc19fe4d59afd523d3fd478c"
 PINNED_INPUTS = (
@@ -27,22 +25,86 @@ PINNED_INPUTS = (
 )
 
 
+def open_root_directory() -> int:
+    required_flags = ("O_NOFOLLOW", "O_DIRECTORY", "O_NONBLOCK", "O_CLOEXEC")
+    if os.name != "posix" or os.open not in os.supports_dir_fd:
+        raise ValueError("anchored no-follow directory opens are unsupported")
+    if any(not hasattr(os, flag) for flag in required_flags):
+        raise ValueError("required no-follow open flags are unsupported")
+
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    owned_fds: set[int] = set()
+    try:
+        current_fd = os.open(os.path.sep, directory_flags)
+        owned_fds.add(current_fd)
+        for component in ROOT.split(os.path.sep):
+            if not component:
+                continue
+            child_fd = os.open(component, directory_flags, dir_fd=current_fd)
+            owned_fds.add(child_fd)
+            os.close(current_fd)
+            owned_fds.remove(current_fd)
+            current_fd = child_fd
+        if not stat.S_ISDIR(os.fstat(current_fd).st_mode):
+            raise ValueError("checkout root is not a directory")
+        owned_fds.remove(current_fd)
+        return current_fd
+    finally:
+        for descriptor in reversed(tuple(owned_fds)):
+            os.close(descriptor)
+
+
+def open_input_beneath_root(relative: str) -> int:
+    components = relative.split("/")
+    if not components or any(part in ("", ".", "..") for part in components):
+        raise ValueError(f"invalid pinned input name: {relative}")
+
+    owned_fds: set[int] = set()
+    leaf_fd = -1
+    try:
+        current_fd = open_root_directory()
+        owned_fds.add(current_fd)
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+        for component in components[:-1]:
+            child_fd = os.open(component, directory_flags, dir_fd=current_fd)
+            owned_fds.add(child_fd)
+            os.close(current_fd)
+            owned_fds.remove(current_fd)
+            current_fd = child_fd
+        leaf_flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+        leaf_fd = os.open(components[-1], leaf_flags, dir_fd=current_fd)
+        owned_fds.add(leaf_fd)
+        for descriptor in tuple(owned_fds):
+            if descriptor != leaf_fd:
+                os.close(descriptor)
+                owned_fds.remove(descriptor)
+        owned_fds.remove(leaf_fd)
+        return leaf_fd
+    finally:
+        for descriptor in reversed(tuple(owned_fds)):
+            os.close(descriptor)
+
+
 def read_regular(relative: str) -> bytes:
-    path = ROOT / relative
+    file_fd = -1
     try:
-        info = path.lstat()
-    except OSError as error:
-        raise ValueError(f"missing input: {relative}") from error
-    if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_BYTES:
-        raise ValueError(f"input is not a bounded regular file: {relative}")
-    try:
-        with path.open("rb") as source:
+        file_fd = open_input_beneath_root(relative)
+        info = os.fstat(file_fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_BYTES:
+            raise ValueError(f"input is not a bounded regular file: {relative}")
+        with os.fdopen(file_fd, "rb", closefd=True) as source:
+            file_fd = -1
             payload = source.read(MAX_BYTES + 1)
+        if len(payload) > MAX_BYTES:
+            raise ValueError(f"input exceeds byte bound: {relative}")
+        return payload
+    except FileNotFoundError as error:
+        raise ValueError(f"missing input: {relative}") from error
     except OSError as error:
-        raise ValueError(f"unreadable input: {relative}") from error
-    if len(payload) > MAX_BYTES:
-        raise ValueError(f"input exceeds byte bound: {relative}")
-    return payload
+        raise ValueError(f"unsafe or unavailable input: {relative}") from error
+    finally:
+        if file_fd >= 0:
+            os.close(file_fd)
 
 
 def sha256(payload: bytes) -> str:
