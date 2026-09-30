@@ -45,22 +45,34 @@ pub fn begin(context: &OperationContext, method: &'static str) -> OperationSpan 
     }
 }
 impl OperationSpan {
-    /// Finish exactly once with a safe transport classification and byte count.
+    /// Finish exactly once with a safe classification and actual observed byte count.
     pub fn finish(&mut self, status: &str, bytes: usize) {
+        self.end(status, Some(bytes));
+    }
+    /// Finish without inventing a byte count when measurement is unavailable.
+    pub fn finish_unmeasured(&mut self, status: &str) {
+        self.end(status, None);
+    }
+    fn end(&mut self, status: &str, bytes: Option<usize>) {
         if self.finished {
             return;
         }
         self.span
             .set_attribute(KeyValue::new("rpc.status", status.to_owned()));
         self.span
-            .set_attribute(KeyValue::new("rpc.bytes", bytes as i64));
+            .set_attribute(KeyValue::new("rpc.bytes.measured", bytes.is_some()));
+        if let Some(bytes) = bytes {
+            self.span
+                .set_attribute(KeyValue::new("rpc.bytes", bytes as i64));
+        }
         self.span.end();
         self.finished = true;
     }
 }
+
 impl Drop for OperationSpan {
     fn drop(&mut self) {
-        self.finish("abandoned", 0);
+        self.finish_unmeasured("abandoned");
     }
 }
 /// Record a bounded lifecycle event without recording payload bytes.

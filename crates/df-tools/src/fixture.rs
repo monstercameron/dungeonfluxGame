@@ -12,15 +12,16 @@ use df_protocol::transport_fixture::{
     transport_fixture_server::{TransportFixture, TransportFixtureServer},
 };
 use df_rpc_bridge::{
-    CONCURRENT_STREAMS, FRAME_BYTES, MESSAGE_BYTES, RPC_MESSAGE_BYTES, TunnelStream,
-    accept_websocket,
+    CONCURRENT_STREAMS, ConnectionMetrics, FRAME_BYTES, MESSAGE_BYTES, RPC_MESSAGE_BYTES,
+    TunnelStream, accept_websocket_measured,
 };
-use futures::Stream;
+use futures::{Stream, StreamExt};
 use std::{
+    collections::VecDeque,
     io,
     pin::Pin,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicU32, Ordering},
     },
 };
@@ -42,6 +43,7 @@ struct CallScope {
     span: df_observe::OperationSpan,
     status: Code,
     complete: bool,
+    payload_bytes: usize,
 }
 impl CallScope {
     fn finish(&mut self) {
@@ -65,7 +67,8 @@ impl Drop for CallScope {
             self.statistics.cancelled.fetch_add(1, Ordering::Relaxed);
             "cancelled"
         };
-        self.span.finish(&format!("{status}:{:?}", self.status), 0);
+        self.span
+            .finish(&format!("{status}:{:?}", self.status), self.payload_bytes);
     }
 }
 #[derive(Clone)]
@@ -95,6 +98,7 @@ impl FixtureService {
             ),
             status: Code::Cancelled,
             complete: false,
+            payload_bytes: 0,
         }
     }
 }
@@ -117,6 +121,7 @@ impl TransportFixture for FixtureService {
     async fn unary(&self, request: Request<Sample>) -> Result<Response<Sample>, Status> {
         let mut scope = self.scope(&request, "fixture.unary");
         let sample = request.into_inner();
+        scope.payload_bytes += sample.payload.len();
         if let Err(error) = check(&sample) {
             scope.finish_with(error.code());
             return Err(error);
@@ -135,6 +140,7 @@ impl TransportFixture for FixtureService {
         } else {
             sample
         };
+        scope.payload_bytes += sample.payload.len();
         let mut response = Response::new(sample);
         response.metadata_mut().insert(
             "fixture-server",
@@ -150,6 +156,7 @@ impl TransportFixture for FixtureService {
     ) -> Result<Response<Self::ServerStreamStream>, Status> {
         let mut scope = self.scope(&request, "fixture.server_stream");
         let sample = request.into_inner();
+        scope.payload_bytes += sample.payload.len();
         if let Err(status) = check(&sample) {
             scope.finish_with(status.code());
             return Err(status);
@@ -160,18 +167,35 @@ impl TransportFixture for FixtureService {
                 if sample.behavior == Behavior::Wait as i32 && sequence > 0 {
                     return futures::future::pending().await;
                 }
-                if sequence < 3 {
-                    return Some((
-                        Ok(Sample {
+                let pressure = sample.payload.starts_with(b"pressure:");
+                let limit = if pressure {
+                    sample.sequence.clamp(1, 128)
+                } else {
+                    3
+                };
+                if sequence < limit {
+                    let output = if pressure {
+                        let paced = sample.payload == b"pressure:paced";
+                        if paced {
+                            tokio::time::sleep(std::time::Duration::from_millis(8)).await;
+                        }
+                        Sample {
+                            sequence,
+                            payload: vec![0x5a; if paced { 8 * 1024 } else { 48 * 1024 }],
+                            ..Sample::default()
+                        }
+                    } else {
+                        Sample {
                             sequence,
                             ..sample.clone()
-                        }),
-                        (sequence + 1, sample, scope),
-                    ));
+                        }
+                    };
+                    scope.payload_bytes += output.payload.len();
+                    return Some((Ok(output), (sequence + 1, sample, scope)));
                 }
-                if sequence == 3 {
+                if sequence == limit {
                     scope.finish();
-                    return Some((Err(terminal(Code::Ok)), (4, sample, scope)));
+                    return Some((Err(terminal(Code::Ok)), (limit + 1, sample, scope)));
                 }
                 None
             },
@@ -186,6 +210,7 @@ impl TransportFixture for FixtureService {
         let mut incoming = request.into_inner();
         let mut count = 0;
         while let Some(sample) = incoming.message().await? {
+            scope.payload_bytes += sample.payload.len();
             if let Err(status) = check(&sample) {
                 scope.finish_with(status.code());
                 return Err(status);
@@ -196,6 +221,7 @@ impl TransportFixture for FixtureService {
                 return Err(terminal(Code::ResourceExhausted));
             }
         }
+        scope.payload_bytes += b"half-close observed".len();
         scope.finish();
         Ok(Response::new(Sample {
             sequence: count,
@@ -218,7 +244,11 @@ impl TransportFixture for FixtureService {
                 }
                 match incoming.message().await {
                     Ok(Some(sample)) if count < 16 => {
-                        let result = check(&sample).map(|()| sample);
+                        scope.payload_bytes += sample.payload.len();
+                        let result = check(&sample).map(|()| {
+                            scope.payload_bytes += sample.payload.len();
+                            sample
+                        });
                         let finished = result.is_err();
                         if let Err(status) = &result {
                             scope.finish_with(status.code());
@@ -249,14 +279,16 @@ struct PreviewState {
     telemetry: Arc<FixtureTelemetry>,
     statistics: Arc<Statistics>,
     connections: Arc<Semaphore>,
+    resources: Arc<Mutex<VecDeque<Arc<ConnectionMetrics>>>>,
+    origin: Arc<str>,
+    reports: Arc<Mutex<[String; 2]>>,
 }
 async fn websocket(
     State(state): State<PreviewState>,
     headers: HeaderMap,
     upgrade: WebSocketUpgrade,
 ) -> axum::response::Response {
-    if headers.get("origin").and_then(|value| value.to_str().ok()) != Some("http://127.0.0.1:43180")
-    {
+    if headers.get("origin").and_then(|value| value.to_str().ok()) != Some(state.origin.as_ref()) {
         return (
             axum::http::StatusCode::FORBIDDEN,
             "synthetic loopback origin required",
@@ -270,22 +302,55 @@ async fn websocket(
         )
             .into_response();
     };
+    let metrics = Arc::new(ConnectionMetrics::new(false));
+    match state.resources.lock() {
+        Ok(mut resources) => {
+            if resources.len() >= 20 {
+                if let Some(index) = resources.iter().position(|value| {
+                    value
+                        .snapshot()
+                        .is_ok_and(|value| value.closed && value.pipe_owners == 0)
+                }) {
+                    resources.remove(index);
+                } else {
+                    return (
+                        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                        "metrics owner capacity reached",
+                    )
+                        .into_response();
+                }
+            }
+            resources.push_back(metrics.clone());
+        }
+        Err(_) => {
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "metrics unavailable",
+            )
+                .into_response();
+        }
+    }
     upgrade
+        .read_buffer_size(FRAME_BYTES)
+        .write_buffer_size(FRAME_BYTES)
+        .max_write_buffer_size(MESSAGE_BYTES)
         .max_message_size(MESSAGE_BYTES)
         .max_frame_size(MESSAGE_BYTES)
         .on_upgrade(move |socket| async move {
             let context = OperationContext {
                 trace_parent: String::new(),
-                build: "S00-experimental".to_owned(),
+                build: crate::BUILD_ID.to_owned(),
             };
-            let result = accept_websocket(socket, state.incoming).await;
+            let result = accept_websocket_measured(socket, state.incoming, metrics.clone()).await;
             drop(permit);
-            df_observe::record(
-                &context,
-                "bridge.connection",
-                if result.is_ok() { "closed" } else { "failed" },
-                0,
-            );
+            let mut span = df_observe::begin(&context, "bridge.connection");
+            match metrics.snapshot() {
+                Ok(value) => span.finish(
+                    if result.is_ok() { "closed" } else { "failed" },
+                    value.received_bytes + value.sent_bytes,
+                ),
+                Err(_) => span.finish_unmeasured("measurement_failed"),
+            }
         })
 }
 async fn health(State(state): State<PreviewState>) -> impl IntoResponse {
@@ -307,13 +372,145 @@ async fn fixture_telemetry(State(state): State<PreviewState>) -> impl IntoRespon
         Err(error) => format!("telemetry export failure: {error}"),
     }
 }
-const HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DungeonFlux S00 transport laboratory</title><style>body{margin:0;background:#10141c;color:#e6eaf3;font:17px system-ui,sans-serif}main{max-width:880px;margin:64px auto;padding:0 24px}h1{font-size:38px;line-height:1.1}p{color:#b7c3d4;line-height:1.5}button{background:#88dfb5;color:#10141c;border:0;border-radius:8px;font:600 17px system-ui;padding:14px 22px;cursor:pointer}button:disabled{opacity:.5}pre{white-space:pre-wrap;padding:20px;background:#1a2331;line-height:1.7;border-radius:10px}.tag{color:#88dfb5;letter-spacing:2px;font-size:13px}a{color:#88dfb5}</style></head><body><main><div class="tag">DUNGEONFLUX / EXPERIMENTAL S00</div><h1>Rust transport laboratory</h1><p>Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly.</p><p>This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.</p><button id="run" disabled>Loading Rust/WASM…</button><pre id="results" role="status" aria-live="polite">Loading generated WebAssembly bindings…</pre><p><a href="/fixture-health">Native fixture diagnostics</a></p><p id="build"></p></main><script type="module">import init from '/pkg/df_tools.js';await init();</script></body></html>"#;
+async fn fixture_resources(State(state): State<PreviewState>) -> impl IntoResponse {
+    match state.resources.lock() {
+        Ok(resources) => resources
+            .iter()
+            .map(|metrics| format!("{:?}", metrics.snapshot()))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        Err(error) => format!("resource snapshot failure: {error}"),
+    }
+}
+fn report_index(kind: &str) -> Option<usize> {
+    match kind {
+        "semantics" => Some(0),
+        "qualification" => Some(1),
+        _ => None,
+    }
+}
+async fn read_report(
+    State(state): State<PreviewState>,
+    axum::extract::Path(kind): axum::extract::Path<String>,
+) -> axum::response::Response {
+    let Some(index) = report_index(&kind) else {
+        return axum::http::StatusCode::NOT_FOUND.into_response();
+    };
+    match state.reports.lock() {
+        Ok(reports) => reports[index].clone().into_response(),
+        Err(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+async fn write_report(
+    State(state): State<PreviewState>,
+    axum::extract::Path(kind): axum::extract::Path<String>,
+    headers: HeaderMap,
+    report: String,
+) -> axum::response::Response {
+    if headers.get("origin").and_then(|value| value.to_str().ok()) != Some(state.origin.as_ref()) {
+        return axum::http::StatusCode::FORBIDDEN.into_response();
+    }
+    let Some(index) = report_index(&kind) else {
+        return axum::http::StatusCode::NOT_FOUND.into_response();
+    };
+    if report.len() > 64 * 1024 || report.is_empty() {
+        return axum::http::StatusCode::PAYLOAD_TOO_LARGE.into_response();
+    }
+    match state.reports.lock() {
+        Ok(mut reports) => {
+            reports[index] = report;
+            axum::http::StatusCode::NO_CONTENT.into_response()
+        }
+        Err(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+// Finite synthetic malicious server inputs. No user/provider data or unbounded sender.
+async fn malicious(
+    State(state): State<PreviewState>,
+    axum::extract::Path(kind): axum::extract::Path<String>,
+    headers: HeaderMap,
+    upgrade: WebSocketUpgrade,
+) -> axum::response::Response {
+    if headers.get("origin").and_then(|value| value.to_str().ok()) != Some(state.origin.as_ref()) {
+        return axum::http::StatusCode::FORBIDDEN.into_response();
+    }
+    let Ok(permit) = state.connections.clone().try_acquire_owned() else {
+        return axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    upgrade
+        .read_buffer_size(FRAME_BYTES)
+        .write_buffer_size(FRAME_BYTES)
+        .max_write_buffer_size(MESSAGE_BYTES * 2)
+        .max_message_size(MESSAGE_BYTES)
+        .max_frame_size(MESSAGE_BYTES)
+        .on_upgrade(move |mut socket| async move {
+            let _permit = permit;
+            // Wait for the real h2 client's preface before emitting valid SETTINGS followed by abuse.
+            if tokio::time::timeout(std::time::Duration::from_secs(1), socket.next())
+                .await
+                .is_err()
+            {
+                return;
+            }
+            let mut wire = vec![0, 0, 0, 4, 0, 0, 0, 0, 0];
+            match kind.as_str() {
+                "websocket" => {
+                    wire.resize(MESSAGE_BYTES + 1, 0);
+                }
+                "frame" => {
+                    wire.extend([0, 0x40, 1, 1, 4, 0, 0, 0, 1]);
+                    wire.resize(wire.len() + FRAME_BYTES + 1, 0);
+                }
+                "header" => {
+                    // Small HPACK block, decoded list exceeds the advertised 16KiB limit.
+                    let mut block = vec![0x88];
+                    for _ in 0..300 {
+                        block.extend([0, 1, b'x', 32]);
+                        block.extend([b'a'; 32]);
+                    }
+                    let length = block.len();
+                    wire.extend([0, (length >> 8) as u8, length as u8, 1, 4, 0, 0, 0, 1]);
+                    wire.extend(block);
+                }
+                "continuation" => {
+                    wire.extend([0, 0, 1, 1, 0, 0, 0, 0, 1, 0x82]);
+                    for _ in 0..128 {
+                        wire.extend([0, 0, 1, 9, 0, 0, 0, 0, 1, 0x82]);
+                    }
+                }
+                "flood" => {
+                    for _ in 0..2049 {
+                        wire.extend([0, 0, 0, 4, 0, 0, 0, 0, 0]);
+                    }
+                }
+                _ => return,
+            }
+            if socket
+                .send(axum::extract::ws::Message::Binary(wire.into()))
+                .await
+                .is_ok()
+            {
+                let _ = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                    while socket.next().await.is_some() {}
+                })
+                .await;
+            }
+        })
+}
+const HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DungeonFlux S00 transport laboratory</title><style>body{margin:0;background:#10141c;color:#e6eaf3;font:17px system-ui,sans-serif}main{max-width:880px;margin:64px auto;padding:0 24px}h1{font-size:38px;line-height:1.1}p{color:#b7c3d4;line-height:1.5}button{background:#88dfb5;color:#10141c;border:0;border-radius:8px;font:600 17px system-ui;padding:14px 22px;cursor:pointer}button:disabled{opacity:.5}pre{white-space:pre-wrap;padding:20px;background:#1a2331;line-height:1.7;border-radius:10px}.tag{color:#88dfb5;letter-spacing:2px;font-size:13px}a{color:#88dfb5}</style></head><body><main><div class="tag">DUNGEONFLUX / EXPERIMENTAL S00</div><h1>Rust transport laboratory</h1><p>Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly.</p><p>This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.</p><button id="run" disabled>Loading Rust/WASM…</button><button id="qualify" disabled>Loading qualification…</button><pre id="qualification" role="status" aria-live="polite">Desktop pressure qualification has not run.</pre><pre id="results" role="status" aria-live="polite">Loading generated WebAssembly bindings…</pre><p><a href="/fixture-health">Native fixture diagnostics</a></p><p id="build"></p></main><script type="module">import init from '/pkg/df_tools.js';await init();</script></body></html>"#;
 
 /// Start only a synthetic loopback preview. The caller owns process and output directory.
 pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let web_root = std::env::args()
         .nth(1)
         .ok_or("generated web directory argument required")?;
+    let port: u16 = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| "43180".to_owned())
+        .parse()?;
+    if port == 0 {
+        return Err("explicit nonzero preview port required".into());
+    }
     let telemetry = Arc::new(FixtureTelemetry::default());
     let statistics = Arc::new(Statistics::default());
     let (sender, receiver) = mpsc::channel(4);
@@ -335,17 +532,27 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         telemetry: telemetry.clone(),
         statistics,
         connections: Arc::new(Semaphore::new(4)),
+        resources: Arc::new(Mutex::new(VecDeque::new())),
+        reports: Arc::new(Mutex::new([String::new(), String::new()])),
+        origin: format!("http://127.0.0.1:{port}").into(),
     };
     let router = Router::new()
         .route("/", get(|| async { Html(HTML) }))
         .route("/tunnel", get(websocket))
         .route("/fixture-health", get(health))
         .route("/fixture-telemetry", get(fixture_telemetry))
+        .route("/fixture-resources", get(fixture_resources))
+        .route(
+            "/fixture-report/{kind}",
+            get(read_report).post(write_report),
+        )
+        .layer(axum::extract::DefaultBodyLimit::max(64 * 1024))
+        .route("/malicious/{kind}", get(malicious))
         .nest_service("/pkg", ServeDir::new(web_root))
         .with_state(state);
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:43180").await?;
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
     println!(
-        "DungeonFlux S00 fixture ready at http://127.0.0.1:43180 · build {}",
+        "DungeonFlux S00 fixture ready at http://127.0.0.1:{port} · build {}",
         crate::BUILD_ID
     );
     tokio::select! { result = grpc => result?, result = axum::serve(listener, router) => result?, result = tokio::signal::ctrl_c() => result? }

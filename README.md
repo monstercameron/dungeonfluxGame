@@ -15,6 +15,8 @@ all four HTTP/2 gRPC modes over a binary WebSocket in a Rust/WASM browser.
 
 Run `./development/build-fixture.sh build` then `./development/build-fixture.sh serve`
 and open <http://127.0.0.1:43180>. See [fixture setup, checks and qualification gaps](development/start-s00.md).
+The fixture also includes a separate [desktop pressure/resource qualification](development/qualify-g02.md) with real buffer/credit snapshots, latency samples and malicious-peer checks. Physical-device and whole-process resource evidence still block full G02 approval.
+
 The game server, player/display application, rules and PostgreSQL deployment remain
 unimplemented. The transport fixture is synthetic; it does not approve production
 G02 device/resource qualification or G06 telemetry durability.
