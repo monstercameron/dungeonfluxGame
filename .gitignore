@@ -75,3 +75,6 @@ htmlcov/
 
 # Ephemeral screenshot journal mutex; retained evidence lives beside it
 development/evidence/journey/journal.lock
+
+# Durable local PostgreSQL runtime; never include in disposable artifact cleanup
+/development/runtime/postgres-g05/
