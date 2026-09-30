@@ -29,9 +29,14 @@ socket at `development/runtime/postgres-g05/socket`, uses port 55439, and allows
 The script rejects symlinks in every path component before reading or changing
 the runtime. It authenticates `postmaster.pid` against the live process executable,
 its `-D` argument, and a bounded SQL identity query over the private socket before
-reporting readiness or invoking graceful stop. A stale, reused, or ambiguous PID
-file fails closed and is left for operator inspection; it never causes a signal to
-be sent to an unverified process. Configure, native build, install, process probes,
+reporting readiness or invoking graceful stop. The data argument is checked as an
+exact OS argument, and the live SQL backend's OS parent must be that postmaster
+PID; a matching start timestamp alone is insufficient. Runtime logs, configuration,
+PID/socket files, directory components and tool paths reject symlinks before use.
+A stale, reused, or ambiguous PID file fails closed and is left for operator
+inspection. Graceful fast shutdown signals the verified PID directly, avoiding a
+second PID-file lookup, then waits up to 30 seconds for its PID file/socket removal.
+Configure, native build, install, process probes,
 and readiness each have explicit deadlines, including a 1200-second setup total
 and 900-second native build cap. Never delete or reset this durable cluster as
 artifact cleanup.

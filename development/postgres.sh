@@ -45,7 +45,7 @@ no_symlink_path "$REPO_ROOT"
 ARTIFACT_ROOT="$REPO_ROOT/artifacts"
 CACHE="$ARTIFACT_ROOT/cache/postgres-g05"
 BUILD="$ARTIFACT_ROOT/build/postgres-g05"
-SCRATCH="$ARTIFACT_ROOT/tmp/SETUP-G05-001-a2"
+SCRATCH="$ARTIFACT_ROOT/tmp/SETUP-G05-001-a3"
 DURABLE="$REPO_ROOT/development/runtime/postgres-g05"
 OWNER="$DURABLE/owner.json"
 DATA="$DURABLE/data"
@@ -59,7 +59,12 @@ fail() { printf 'postgres-g05: %s\n' "$*" >&2; exit 1; }
 
 guard_runtime_path() {
   no_symlink_path "$REPO_ROOT/development/runtime"
-  no_symlink_path "$DURABLE"
+  for path in "$DURABLE" "$DATA" "$SOCKET_DIR" "$LOG" "$OWNER" \
+    "$DATA/PG_VERSION" "$DATA/postmaster.pid" "$DATA/postmaster.opts" \
+    "$DATA/postgresql.conf" "$DATA/postgresql.auto.conf" "$DATA/pg_hba.conf" \
+    "$DATA/pg_ident.conf" "$DATA/pg_wal" "$SOCKET" "$SOCKET.lock"; do
+    no_symlink_path "$path"
+  done
 }
 
 run_bounded() {
@@ -161,7 +166,7 @@ PY
 verify_running() {
   local identity
   identity=$(run_bounded 10 python3 - "$DATA" "$SOCKET_DIR" "$SOCKET" "$BIN/postgres" "$BIN/pg_isready" "$BIN/psql" "$PORT" "$MAX_CONNECTIONS" "$MAX_WORKER_PROCESSES" "$MAX_PARALLEL_WORKERS" "$MAX_PARALLEL_WORKERS_PER_GATHER" "$MAX_AUTOVACUUM_WORKERS" <<'PY'
-import ctypes, os, pwd, signal, stat, subprocess, sys, time
+import ctypes, os, pwd, select, signal, stat, subprocess, sys, time
 from pathlib import Path
 
 data, socket_dir, socket_path, postgres_bin, ready_bin, psql_bin, port, max_connections, max_workers, parallel_workers, parallel_gather, autovacuum_workers = sys.argv[1:]
@@ -226,25 +231,61 @@ try:
         reject("process identity checks are unsupported on this operating system")
     if executable != expected:
         reject("PID executable does not match the owned PostgreSQL binary")
-    ps = subprocess.run(["ps", "-ww", "-p", str(pid), "-o", "command="], capture_output=True, text=True, timeout=2, check=True)
-    if f"-D {data}" not in ps.stdout.strip():
+    if sys.platform == "darwin":
+        # KERN_PROCARGS2 returns NUL-delimited argv; ps loses argument boundaries.
+        libc = ctypes.CDLL(None, use_errno=True)
+        mib = (ctypes.c_int * 3)(1, 49, pid)
+        size = ctypes.c_size_t()
+        if libc.sysctl(mib, 3, None, ctypes.byref(size), None, 0) != 0:
+            reject("PID arguments are unreadable")
+        args_buffer = ctypes.create_string_buffer(size.value)
+        if libc.sysctl(mib, 3, args_buffer, ctypes.byref(size), None, 0) != 0:
+            reject("PID arguments are unreadable")
+        raw = args_buffer.raw[:size.value]
+        argc = int.from_bytes(raw[:4], sys.byteorder)
+        argument_start = raw.index(b"\0", 4)
+        while argument_start < len(raw) and raw[argument_start] == 0:
+            argument_start += 1
+        arguments = [os.fsdecode(arg) for arg in raw[argument_start:].split(b"\0")[:argc]]
+    else:
+        arguments = [os.fsdecode(arg) for arg in Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")[:-1]]
+    if len(arguments) < 3 or arguments[1:3] != ["-D", data]:
         reject("PID command line does not name the owned data directory")
     deadline = time.monotonic() + 9.0
     ready = capture([ready_bin, "-h", socket_dir, "-p", str(port), "-t", "8"], max(.1, deadline-time.monotonic()))
     if ready.returncode != 0:
         reject("private Unix socket did not become ready within 10 seconds")
-    query = "SELECT current_setting('data_directory'), floor(extract(epoch FROM pg_postmaster_start_time()))::bigint, current_setting('port'), current_setting('unix_socket_directories'), current_setting('listen_addresses'), current_setting('max_connections'), current_setting('max_worker_processes'), current_setting('max_parallel_workers'), current_setting('max_parallel_workers_per_gather'), current_setting('autovacuum_max_workers'), current_setting('fsync'), current_setting('full_page_writes'), current_setting('synchronous_commit'), (inet_server_addr() IS NULL), current_setting('server_version_num')"
+    query = "SELECT current_setting('data_directory'), floor(extract(epoch FROM pg_postmaster_start_time()))::bigint, current_setting('port'), current_setting('unix_socket_directories'), current_setting('listen_addresses'), current_setting('max_connections'), current_setting('max_worker_processes'), current_setting('max_parallel_workers'), current_setting('max_parallel_workers_per_gather'), current_setting('autovacuum_max_workers'), current_setting('fsync'), current_setting('full_page_writes'), current_setting('synchronous_commit'), (inet_server_addr() IS NULL), current_setting('server_version_num'), pg_backend_pid();"
     env = os.environ.copy()
     env["PGOPTIONS"] = "-c statement_timeout=4000"
     env.pop("PGPASSWORD", None)
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         reject("readiness deadline expired before diagnostic query")
-    sql = capture([psql_bin, "-XAtq", "-F", "|", "-v", "ON_ERROR_STOP=1", "-w", "-h", socket_dir, "-p", str(port), "-U", pwd.getpwuid(os.getuid()).pw_name, "-d", "postgres", "-c", query], remaining, env=env)
-    if sql.returncode != 0:
-        reject(f"owned psql readiness query failed with exit {sql.returncode}")
-    fields = sql.stdout.strip().split("|")
-    if len(fields) != 15:
+    sql = subprocess.Popen([psql_bin, "-XAtq", "-F", "|", "-v", "ON_ERROR_STOP=1", "-w", "-h", socket_dir, "-p", str(port), "-U", pwd.getpwuid(os.getuid()).pw_name, "-d", "postgres"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, start_new_session=True)
+    active_children.append(sql)
+    try:
+        # Hold this SQL connection open while checking its backend's OS parent.
+        sql.stdin.write(query + "\n")
+        sql.stdin.flush()
+        if not select.select([sql.stdout], [], [], remaining)[0]:
+            raise subprocess.TimeoutExpired(psql_bin, remaining)
+        fields = sql.stdout.readline().strip().split("|")
+        if len(fields) != 16:
+            reject("diagnostic query returned an incomplete identity")
+        parent = capture(["ps", "-p", str(int(fields[15])), "-o", "ppid="], max(.1, deadline-time.monotonic()))
+        if parent.returncode != 0 or parent.stdout.strip() != str(pid):
+            reject("SQL backend does not belong to the verified postmaster PID")
+        sql.stdin.close()
+        sql.stdin = None
+        _, stderr = sql.communicate(timeout=max(.1, deadline-time.monotonic()))
+        if sql.returncode != 0:
+            reject(f"owned psql readiness query failed with exit {sql.returncode}")
+    finally:
+        if sql.poll() is None:
+            stop_group(sql)
+        active_children.remove(sql)
+    if len(fields) != 16:
         reject("diagnostic query returned an incomplete identity")
     real_data = os.path.realpath(data)
     expected_values = [real_data, str(port), socket_dir, "", str(max_connections), str(max_workers), str(parallel_workers), str(parallel_gather), str(autovacuum_workers), "on", "on", "on", "t"]
@@ -272,13 +313,13 @@ PY
 RUNTIME_DETAILS=
 find_orphan_data_process() {
   run_bounded 5 python3 - "$DATA" <<'PY'
-import subprocess, sys
+import re, subprocess, sys
 data = sys.argv[1]
 try:
     listing = subprocess.run(["ps", "-Aww", "-o", "pid=,command="], capture_output=True, text=True, timeout=3, check=True).stdout
     for line in listing.splitlines():
         parts = line.strip().split(None, 1)
-        if len(parts) != 2 or f"-D {data}" not in parts[1]:
+        if len(parts) != 2 or not re.search(r"(?:^|\s)-D\s+" + re.escape(data) + r"(?:\s|$)", parts[1]):
             continue
         print(parts[0])
 except Exception as exc:
@@ -409,7 +450,13 @@ stop() {
   runtime_state || { printf 'already stopped\n'; return; }
   details=$RUNTIME_DETAILS
   pid=${details#pid=}; pid=${pid%% *}
-  run_bounded 60 "$BIN/pg_ctl" -D "$DATA" -m fast -w -t 30 stop
+  # Signal the verified PID directly; pg_ctl stop would reread a mutable PID file.
+  run_bounded 5 "$BIN/pg_ctl" kill INT "$pid"
+  run_bounded 30 python3 - "$DATA/postmaster.pid" "$SOCKET" <<'PY'
+import os, sys, time
+while any(os.path.lexists(path) for path in sys.argv[1:]):
+    time.sleep(.1)
+PY
   [[ ! -e "$DATA/postmaster.pid" && ! -e "$SOCKET" ]] || fail 'owned server did not remove its PID file/socket after graceful stop'
   printf 'stopped owned PostgreSQL pid=%s\n' "$pid"
 }
