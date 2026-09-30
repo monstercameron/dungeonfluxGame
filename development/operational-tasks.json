@@ -37,11 +37,11 @@
           "coordinator-selected site operations worker",
           "independent frontier output evaluator"
         ],
-        "input_revision": "98b4badc06df2254a0032fd9ecfae373c82359e92602a45c01a10f42c126fd4c",
+        "input_revision": "fd6b565296da2ae9fb5b50aaa3f6cd6236402556d203c03c3d5b60bb8144cb49",
         "governing_sources": [
           {
             "path": "AGENTS.md",
-            "sha256": "4fffd5d4aae51199c1e8635275f3deac38c9a560d8666f11c77291cd58c3d824",
+            "sha256": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182",
             "sections": [
               "1. Think Before Coding",
               "2. Simplicity First",
@@ -55,7 +55,8 @@
               "Agent devlog",
               "Generated files and artifacts",
               "Changelog",
-              "Hosted-service authority"
+              "Hosted-service authority",
+              "Visual development journey"
             ]
           },
           {
@@ -139,7 +140,7 @@
         "mandatory_workflow_sources": [
           {
             "path": "AGENTS.md",
-            "sha256": "4fffd5d4aae51199c1e8635275f3deac38c9a560d8666f11c77291cd58c3d824",
+            "sha256": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182",
             "sections": [
               "1. Think Before Coding",
               "2. Simplicity First",
@@ -153,7 +154,8 @@
               "Agent devlog",
               "Generated files and artifacts",
               "Changelog",
-              "Hosted-service authority"
+              "Hosted-service authority",
+              "Visual development journey"
             ]
           },
           {
@@ -220,9 +222,9 @@
       "blocking_reason": "Dispatch guard: selected repository/Pages target, domain verification and authoritative DNS are not yet verified.",
       "originating_task_id": null,
       "priority": 55,
-      "source_fingerprint": "98b4badc06df2254a0032fd9ecfae373c82359e92602a45c01a10f42c126fd4c",
+      "source_fingerprint": "fd6b565296da2ae9fb5b50aaa3f6cd6236402556d203c03c3d5b60bb8144cb49",
       "created_at": "2026-09-30T02:34:35.952560+00:00",
-      "updated_at": "2026-09-30T05:05:04+00:00"
+      "updated_at": "2026-09-30T05:39:42+00:00"
     }
   ],
   "dependencies": []

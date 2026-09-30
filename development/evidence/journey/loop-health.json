@@ -1,0 +1,7 @@
+{
+  "pid": 41211,
+  "observed_at": "2026-09-30T05:40:01+00:00",
+  "minute_bucket": 29845780,
+  "result_code": 0,
+  "result": "{\"result\": \"captured\", \"id\": \"c4a47358dba34249-29845780\", \"image\": \"development/evidence/journey/shots/c4a47358dba34249-29845780.png\", \"devlog_status\": \"appended_or_existing\", \"action_required\": false}"
+}

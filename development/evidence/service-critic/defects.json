@@ -1,0 +1,357 @@
+[
+  {
+    "id": "ASR-01",
+    "priority": "P0 paid launch",
+    "title": "Recoverable payer identity and subscription entitlements",
+    "artifacts": {
+      "planning/rpc-api.md": "Protocol and access; IdentityService currently BeginGuest/Renew/Revoke",
+      "planning/subsystem-interfaces.md": "Identity and session ownership; AI/provider/media ports",
+      "planning/pricing-and-costs.md": "Required billing and acceptance work; X09/G04"
+    },
+    "owners": [
+      "df-auth",
+      "df-api",
+      "df-provider-api",
+      "df-persistence",
+      "df-ui",
+      "coordinator"
+    ],
+    "existing_coverage": "Scoped guests, payer grants, wallet, quotes and webhook IDs exist as planned boundaries.",
+    "design_gap": "Guest credentials plus a campaign wallet do not specify recoverable paid-account ownership, subscription lifecycle, allowance renewal, downgrade/cancel/dunning or independent entitlement admission.",
+    "failure_scenario": "A payer loses browser storage and cannot recover their paid campaigns; old paid webhook grants generation after cancellation, or a checkout redirect grants access before final payment. Host transfer may silently transfer spend authority.",
+    "required_repair": "Define recoverable payer/account-link and audited ownership-transfer contracts distinct from free guest seats and host capabilities; subscription/entitlement version and effective intervals, paid confirmation source, allowance grant identity, upgrade/downgrade/proration/cancel/grace/refund/dispute transitions. Select a payment-hosted boundary and keep card data out of game stores. Retain explicit read/export policy when paid generation ends; exact public API changes need G03 owner approval.",
+    "observable_acceptance": [
+      "Duplicate, delayed, reordered and forged webhook fixture cannot double-credit or resurrect revoked entitlements; raw-body signatures checked before durable event admission; event acknowledgement only after durable acceptance.",
+      "Loss/recovery and host/payer transfer verify campaign ownership and spend permission; cancellation stops new paid admission at selected boundary while settled decisions and permitted read/export remain usable.",
+      "Reconciliation resolves local/provider subscription drift; consented account UI test before launch."
+    ],
+    "external_evidence_gate": "Payment platform/account, jurisdictions, authentication method, real sandbox integration and authorized customer checkout remain unselected/unperformed.",
+    "status": "open_initial_review",
+    "scope": "Planning defect/risk; no observed application incident and no implementation authorization"
+  },
+  {
+    "id": "ASR-02",
+    "priority": "P0 paid launch",
+    "title": "Hierarchical aggregate spend and capacity admission",
+    "artifacts": {
+      "planning/subsystem-interfaces.md": "AI/provider/media ports: BudgetStore",
+      "planning/asset-engine.md": "Prediction, fairness and spend",
+      "planning/pricing-and-costs.md": "Required billing and acceptance work; F26/F28/G08/X09"
+    },
+    "owners": [
+      "df-provider-api",
+      "df-media",
+      "df-persistence",
+      "df-server"
+    ],
+    "existing_coverage": "Per-campaign/provider queues and exact per-started-branch reservation/reconciliation are already required.",
+    "design_gap": "The global authority, atomic hierarchy and fail-closed policy for platform/provider-account currency limits and concurrency across independent campaigns/instances are not defined.",
+    "failure_scenario": "Each of 1,000 campaigns is within its own approved wallet, but aggregate hedges/prefetch consume supplier credit or cash runway; process-local concurrency counters admit too many jobs after scale-out.",
+    "required_repair": "Define one admission record linking campaign allowance, payer wallet and platform/provider-account outstanding reservation/consumed/unknown obligations, with atomic hierarchy and expiry semantics. Separate money from concurrency and request/token rate limits. Add fair priority, protected speech capacity, circuit/open/degraded behavior, reconciled overage and unknown-outcome aging without invented refunds. Set policy versions and operator override audit.",
+    "observable_acceptance": [
+      "Race multiple campaigns/nodes against same last aggregate unit: only permitted jobs start; campaign caps and supplier/platform bound hold under concurrency/crash/price expiry.",
+      "Unknown outcomes remain financial liabilities after worker lease expiration; unstarted expiry releases only provably unspent funds; actual overbilling stops new work and stays visible.",
+      "Prepared/replay paths consume zero live generation allowance; supplier outage and one noisy campaign do not starve required input/rules/publication."
+    ],
+    "external_evidence_gate": "Actual provider limits/settlement latency and cash budget must be selected; no cap value or production capacity proven.",
+    "status": "open_initial_review",
+    "scope": "Planning defect/risk; no observed application incident and no implementation authorization"
+  },
+  {
+    "id": "ASR-03",
+    "priority": "P0 paid launch",
+    "title": "Fenced external-effect dispatch and ownership transfer",
+    "artifacts": {
+      "planning/subsystem-interfaces.md": "Identity and session ownership: SessionRepository/EffectExecutor and commit path",
+      "planning/runtime-reliability.md": "Asynchronous work and timers",
+      "planning/storage-architecture.md": "Runtime director state and replay; F23/F24/G05/X02"
+    },
+    "owners": [
+      "df-session",
+      "df-persistence",
+      "df-server",
+      "df-provider-api",
+      "df-assets"
+    ],
+    "existing_coverage": "Gameplay commits have a PostgreSQL owner fence; effect claims and non-idempotent unknown-outcome rules are mentioned.",
+    "design_gap": "Claim/dispatch/publication authority is not specified tightly enough to distinguish a durable job surviving disconnect from a stale session process continuing new external work after losing its fence.",
+    "failure_scenario": "Owner A is partitioned after committing an intent; owner B recovers it. Both dispatch paid jobs, or A sends a stale private view before noticing ownership transfer. A provider call may continue even when its result cannot commit.",
+    "required_repair": "Define effect claim generation/owner token, persisted dispatch-intent/request identity and reservation before call; validate at controlled dispatch boundaries, generation-fence publication, revoke old publication leases, and transfer only undelivered work safely. Document irreducible dispatch/ack uncertainty: losing a claim never proves no supplier call and cannot trigger automatic non-idempotent repeat. Recovery process generation, distributed lease clock authority, permitted timer catch-up and fail-closed DB-loss behavior belong to the same protocol.",
+    "observable_acceptance": [
+      "Deterministic two-owner pause at claim, persisted dispatch, socket send, provider receipt and result commit: no unauthorized publication or duplicate logical outcome.",
+      "Provider with idempotency reuses stable key; provider without it leaves ambiguous dispatch unknown for reconciliation, not auto-repeat. Charged orphaned call is accounted for.",
+      "Owner lease expiry/clock skew/run reset/DB outage rejects stale admissions and timer results while committed work remains discoverable."
+    ],
+    "external_evidence_gate": "Actual Pg transaction/isolation/clock and provider adapter behavior require executable fault injection after implementation; no exactly-once external-call guarantee.",
+    "status": "open_initial_review",
+    "scope": "Planning defect/risk; no observed application incident and no implementation authorization"
+  },
+  {
+    "id": "ASR-04",
+    "priority": "P0 paid launch",
+    "title": "Concrete hosted-service isolation and untrusted-input threat model",
+    "artifacts": {
+      "planning/rpc-api.md": "Protocol and access; Voice/audio/assets; Reports/history/host controls",
+      "planning/campaign-authoring.md": "Pure validation and scoped publication",
+      "planning/subsystem-interfaces.md": "PostgreSQL persistence and durable media; df-providers",
+      "development/plan-manifest.json": "X01-RESOLVE/X01-ACCEPT/G04"
+    },
+    "owners": [
+      "df-auth",
+      "df-api",
+      "df-persistence",
+      "df-providers",
+      "df-assets",
+      "df-telemetry",
+      "df-server"
+    ],
+    "existing_coverage": "Audience checks, bounded imports, archive-bomb/traversal rejection, no external import fetching, separate admin surfaces and active revocation already exist.",
+    "design_gap": "X01 remains a broad instruction without repository-level campaign/tenant scoping, concrete payment/provider egress trust boundaries, resource-amplification abuse controls and operator support access model.",
+    "failure_scenario": "A wrong-session ID reaches a repository/cache or an output URL redirects to metadata/private services; a hostile media blob or client telemetry batch exhausts decoder/log disk. Authorized but noisy guests deny other paying campaigns.",
+    "required_repair": "Define trusted account/campaign/audience authorization passed to every repository/cache/asset/ledger query and negative isolation matrix. Choose RLS or enforced scoped adapters with DB-role/pooled-context safeguards, not a name-only tenant field. Preserve ban on arbitrary import URLs; provider result/reference fetch is separate allowlisted egress with DNS/address/redirect/credential/deadline/byte rules. Isolate media decoding/transcode process limits; validate MIME/bytes/archive paths. Add connection/bootstrap/invite/text/capture/telemetry quotas, origin/cookie/ticket/session controls, secret rotation and audited least-privilege support access.",
+    "observable_acceptance": [
+      "Swap IDs across account/campaign/member/asset/job/wallet/cursor/evidence in each surface: no disclosure, spend or mutation; cache remains scope-bound.",
+      "Provider URL/redirect/IP/DNS/oversized/decompression/decoder failures produce bounded classified rejection; no credentials sent cross-origin.",
+      "Flood one authorized guest/producer while another campaign plays: finite queue/disk/CPU and effective admission rejection, unaffected entitled clients within selected budgets."
+    ],
+    "external_evidence_gate": "Selected threat matrix, DB roles, deployment boundary and browser auth mechanism require integration/security acceptance; no penetration test performed.",
+    "status": "open_initial_review",
+    "scope": "Planning defect/risk; no observed application incident and no implementation authorization"
+  },
+  {
+    "id": "ASR-05",
+    "priority": "P0 commercial viability",
+    "title": "Acquisition, retention and fully loaded service economics",
+    "artifacts": {
+      "planning/pricing-and-costs.md": "Editable economics; Population/duration/reuse",
+      "planning/competitive-research.md": "Focused wedge and falsifiable tests; COMP-OFFER",
+      "development/plan-manifest.json": "X09"
+    },
+    "owners": [
+      "coordinator",
+      "commercial owner",
+      "df-tools",
+      "df-observe"
+    ],
+    "existing_coverage": "Price hypothesis, cost sensitivity, comparator offers and four-week reuse experiment are honest; contribution excludes several operating costs explicitly.",
+    "design_gap": "There is no customer segment/channel funnel, activation/cohort retention denominator, CAC/payback/operating burn model, accountable support workload or bound for expensive usage tail. Stated contribution cannot yet answer income viability.",
+    "failure_scenario": "Groups enjoy one free cinematic demo but fail to schedule repeat sessions; CAC exceeds contribution lifetime. A small number of private-voice/high-context users consume the plan allowance or flood support. High MRR still produces operating loss.",
+    "required_repair": "Define primary purchaser/group and channels, consented attribution/funnel events, time-to-first-valid-group-session, second-session/renewal cohorts and voluntary referral. Model measured gross versus net revenue, credit liability, refunds/disputes/payment/tax handling, support labor, licenses, infrastructure growth, acquisition and fixed operating burn. Give p50/p95/p99 workload envelopes, quota UX and sensitivity/rejection rules. Register bounded future customer/offer experiments with sample sufficiency and exact evidence fields; no contacts or sales by this review.",
+    "observable_acceptance": [
+      "Recomputable scenario separates customer price, included allowance, supplier usage, unknown liabilities, fully loaded contribution and operating cash; worst-case admitted allowance cannot silently lose money.",
+      "Each channel/cohort reports invited/activated/paying/renewed groups and spend denominators, support tickets/minutes, COGS tail and voluntary return; uncertainty remains explicit with too few samples.",
+      "Growth scenario reports required active paying campaigns and replacement demand under selected churn, then CAC/payback and burn sensitivity; reject infeasible offer instead of declaring profitable."
+    ],
+    "external_evidence_gate": "Revenue target unspecified; USD50,000 MRR is only coordinator scenario. Real acquisition, paid conversion, retention, provider quality and support evidence absent.",
+    "status": "open_initial_review",
+    "scope": "Planning defect/risk; no observed application incident and no implementation authorization"
+  },
+  {
+    "id": "ASR-06",
+    "priority": "P0 commercial rights",
+    "title": "Full required catalog rights feasibility and commercial release gate",
+    "artifacts": {
+      "planning/rules-support.md": "Source/content constraints",
+      "planning/rules-coverage.md": "Scope and source gate; R01-R17",
+      "planning/implementation-roadmap.md": "G07/S06; final acceptance",
+      "planning/campaign-authoring.md": "Immutable package and rights lifetime"
+    },
+    "owners": [
+      "source/rights owner",
+      "df-content",
+      "df-rules",
+      "coordinator"
+    ],
+    "existing_coverage": "SRD-only completion explicitly cannot close full required 2024 support; non-SRD book access and permitted use are open prerequisites.",
+    "design_gap": "The proposed full core-book dependency has no bounded commercial feasibility decision, separable rights manifest for mechanics/expression/art/trademarks/distribution/provider processing, negotiation outcome evidence or stop condition. Access to a book is not itself proof of hosted reproduction rights.",
+    "failure_scenario": "Large engineering spend assumes all PHB/DMG/MM entries can be commercially distributed/generated; later rights denial prevents the intended full service launch. Private imports or LLM paraphrase are mistakenly treated as blanket licensing.",
+    "required_repair": "Create required source-entry/category rights ledger with exact authorized uses, license/attribution/expiry/AI-processing/distribution scope and owner evidence. Separate legally available SRD/reference work from complete required scope; keep all requested 2024 coverage open until rights and behavior satisfy it. Define go/no-go escalation/cost decision for unavailable rights before irreversible full-catalog spend, plus truthful external product claims; do not silently substitute SRD/custom.",
+    "observable_acceptance": [
+      "Each required entry links immutable primary source, permitted commercial use evidence and coverage/fixtures; missing rights block affected distribution, not erase requirement.",
+      "Prohibited/unprovided source text/art cannot enter packs/prompts/share/export; rights withdrawal handling preserves lawful minimum provenance without new distribution.",
+      "Published supported-subset versus full-support labels and trademark/attribution are reviewed against actual selected manifest."
+    ],
+    "external_evidence_gate": "Official SRD release licenses that document, not an inferred blanket grant for every core-book asset. Non-SRD permissions and jurisdiction-specific interpretation require qualified evidence; no licensing approval claimed.",
+    "status": "open_initial_review",
+    "scope": "Planning defect/risk; no observed application incident and no implementation authorization"
+  },
+  {
+    "id": "ASR-07",
+    "priority": "P0 hosted release",
+    "title": "Deployment topology, recovery envelope and support operations",
+    "artifacts": {
+      "planning/storage-architecture.md": "Database roles; PostgreSQL planning requirements; SQLite telemetry/workflow",
+      "planning/observability.md": "Ingestion reliability; Agent review access",
+      "development/plan-manifest.json": "X02/G05/G06/S08"
+    },
+    "owners": [
+      "df-server",
+      "df-session",
+      "df-persistence",
+      "df-assets",
+      "df-telemetry",
+      "operations owner"
+    ],
+    "existing_coverage": "Backups/restore, WAL-local filesystem, retention/spool bounds, readiness and aggregate resource tests are required but unselected.",
+    "design_gap": "No single coherent topology/recovery contract joins actor routing, durable local asset availability, PostgreSQL failover/restore, telemetry collector placement and rolling-build compatibility. No selected RPO/RTO/error-budget/on-call incident/customer recovery policy.",
+    "failure_scenario": "API node B owns a recovered campaign but cannot open assets on node A local disk; collector host loss leaves an incomplete corpus. Database restored before a customer deletion/payment adjustment resurrects content or spend. A logical dump is misrepresented as PITR.",
+    "required_repair": "Select initial topology with explicit capacity/failure envelope and upgrade path. Keep durable asset references available to all admitted owners or constrain routing/HA honestly. Specify ownership routing/transfer, graceful stream drain/resync, backward-compatible migration/client deployment and rollback-with-new-data constraints. Define chosen game/asset/ledger/telemetry backup consistency, restore order, RPO/RTO and off-host verification; local WAL not network mount. Add actionable paging, incident/runbook/status/support access, cost-to-SLO model, volume isolation and bounded review/checkpoint scheduling.",
+    "observable_acceptance": [
+      "Restore existing Pg state, asset hashes and monetary obligations in an isolated environment; retained receipts/rewards do not duplicate and deletion/rights tombstones reapply.",
+      "Lose owner/asset/collector host independently; resulting availability/loss matches declared envelope, no fictional HA or complete logs.",
+      "Rolling compatible upgrade and rejected incompatible rollback preserve active sessions; alerts and operator recovery paths exercised, measured restored time/data loss recorded."
+    ],
+    "external_evidence_gate": "Hosting region/topology, actual Pg/asset/SQLite recovery, operational support labor and customer-facing SLO remain unproven.",
+    "status": "open_initial_review",
+    "scope": "Planning defect/risk; no observed application incident and no implementation authorization"
+  },
+  {
+    "id": "ASR-08",
+    "priority": "P0 privacy release",
+    "title": "Erasure/export versus immutable replay and backup retention",
+    "artifacts": {
+      "planning/long-horizon-state.md": "Retrieval and contradiction semantics",
+      "planning/campaign-authoring.md": "Immutable package and rights lifetime",
+      "planning/storage-architecture.md": "Runtime director state/replay; X01/G05",
+      "planning/observability.md": "Agent review access and pinned evidence"
+    },
+    "owners": [
+      "df-auth",
+      "df-persistence",
+      "df-content",
+      "df-assets",
+      "df-telemetry",
+      "privacy owner"
+    ],
+    "existing_coverage": "Deletion/export is an owned X01/G05 decision; source/access revocation and prospective limits for downloaded media are explicit.",
+    "design_gap": "No concrete lifecycle protocol covers personal facts/claims, recordings/prompts/provider retention, summaries/vectors/caches, pinned diagnostic exports, backups and minimal replay provenance together. Immutable record text and required exact replay cannot both remain unconditional promises after erasure.",
+    "failure_scenario": "Account deletion removes an index but source episodes or a restore rebuild it; private material remains in agent exports/pinned evidence. Replay silently reconstructs removed identity details or treats redacted history as intact.",
+    "required_repair": "Specify DataLifecycleRequest/result, scope/authority, suppression generation/tombstone, deletion/redaction/anonymization/legal-hold classes and cascading index/cache/asset/telemetry/export invalidation. Record provider deletion ability/limits and backup expiry/reapplication. Separate minimum nonpersonal source/action provenance from deletable payloads; redacted replay reports scoped gap and never regenerates deleted text. Define shared-campaign contributor conflicts and lawful retained source denominator without promising universal immediate erasure.",
+    "observable_acceptance": [
+      "Delete consented private episode/voice/backstory; authorized queries, summaries, rebuilt indexes and cache outputs cannot redisclose it after restart/restore.",
+      "Pinned evidence/exports and provider copies have explicit retention/access treatment; operation reports fulfilled/retained/unsupported portions with safe reasons.",
+      "Replay of redacted range shows declared gap while durable source-required progression/ledger invariants remain correct; never paid regenerate deleted content."
+    ],
+    "external_evidence_gate": "Jurisdiction, lawful retention/legal holds/provider terms and real deletion interfaces require review; no legal compliance certification or recall of downloaded files.",
+    "status": "open_initial_review",
+    "scope": "Planning defect/risk; no observed application incident and no implementation authorization"
+  },
+  {
+    "id": "ASR-09",
+    "priority": "P1 before dependent client implementation",
+    "title": "Browser tunnel resource bounds and explicit feasibility stop",
+    "artifacts": {
+      "planning/rpc-transport.md": "Rust feasibility gate; Low latency/backpressure",
+      "planning/rpc-api.md": "Voice/audio/assets streams",
+      "development/plan-manifest.json": "G02/S00"
+    },
+    "owners": [
+      "df-rpc-bridge",
+      "df-protocol",
+      "df-client",
+      "df-audio",
+      "df-server"
+    ],
+    "existing_coverage": "Real WASM all-four-mode feasibility, safe executor, HTTP/2 flow control, finite queue/message limits and concurrent traffic are already mandatory.",
+    "design_gap": "WebSocket receive buffering is outside the application queue; the gate lacks exact mechanism/measurement limiting messages/in-flight window before callbacks and an explicit failure decision path. A normal Tonic client cannot be assumed browser-compatible.",
+    "failure_scenario": "Suspended/slow browser accumulates native WebSocket buffers even though Rust channel is bounded; a large data message is allocated before rejection. Bulk asset/tunnel traffic increases action tail latency; unsafe Send patch conceals runtime mismatch.",
+    "required_repair": "Add tunnel/HTTP2 negotiated maximum frame/header/message and credit/window/in-flight accounting, low-priority bulk scheduling, receive/native-buffer observation and malicious peer termination. Specify bound across browser WebSocket delivery, Rust adapter, HTTP2 driver and gRPC messages, half-close/trailers/cancel states. All required four modes/Rust-only source stay; G02 PASS/FAIL/INCONCLUSIVE with exact device/build and owner redesign decision blocks dependent work if infeasible, no silent grpc-web/envelope substitute.",
+    "observable_acceptance": [
+      "Actual single-threaded WASM in selected browsers runs all four modes with errors/trailers/deadlines/half-close/cancel under slow/suspended consumers and mixed input/audio/assets.",
+      "Oversized binary messages, header flood, tiny-frame flood, sender ignoring flow control and reconnect show bounded declared memory/CPU or deliberate closure; native buffering evidence retained.",
+      "p95/p99 action/audio latency versus bulk baseline meets selected budgets; no unsafe Send/Sync compatibility workaround."
+    ],
+    "external_evidence_gate": "Library/runtime/device stack is unselected; no Rust transport fixture exists. MDN explicitly notes WebSocket API lacks receive backpressure.",
+    "status": "open_initial_review",
+    "scope": "Planning defect/risk; no observed application incident and no implementation authorization"
+  },
+  {
+    "id": "ASR-10",
+    "priority": "P1 before live AI speech",
+    "title": "Grounded speech contract and adversarial model boundary",
+    "artifacts": {
+      "planning/subsystem-interfaces.md": "AI/provider/media ports: AiService::run",
+      "planning/asset-engine.md": "Control plane and latency classes; stable clause validation",
+      "planning/interaction-engine.md": "Persistent social/epistemic model; Reaction/schedules",
+      "development/plan-manifest.json": "F08/F16/F36/F38/G08/G11/G12"
+    },
+    "owners": [
+      "df-ai",
+      "df-intent",
+      "df-interaction",
+      "df-knowledge",
+      "df-content",
+      "df-media"
+    ],
+    "existing_coverage": "Pure NPC policy, audience filtering, validated full response/stable clauses, tentative-only intent and no canonical LLM mutation are strong existing rules.",
+    "design_gap": "Validation promises semantic truth/secret/source compliance without a defined claim-bearing output envelope, assurance tier or residual limits. NPC knowledge versus listener-authorized generation context is ambiguous; a second model/schema checker cannot be assumed a sound semantic proof.",
+    "failure_scenario": "NPC LLM sees a secret for private reasoning and says it publicly; an apparently grammatical paraphrase changes a negation, resource amount or source outcome. Imported/player text instructs generation to ignore policy, or novel lore is mistaken for established world fact.",
+    "required_repair": "Define context projection separating NPC-private decision basis from utterance audience; only authorized claim IDs/approved deceit policy and permissible flavor enter expression context. Structured claim/outcome/name/number slots and deterministic validations for authoritative statements; optional noncanonical flavor and attribution/uncertainty explicitly classified. Rejected/uncertain output uses approved matching caption/audio fallback. Treat all player/import/retrieval text as untrusted data; no model-created tools/URLs/permissions. Freeze stable-clause acceptance only with no-later-retraction contract and evidence, otherwise full buffering; document empirically remaining semantic-error risk.",
+    "observable_acceptance": [
+      "Frozen multilingual names/numbers/negation, false-belief/secret, adversarial instruction/retrieval and stale basis corpus; no raw token/action publication and no unsupported canonical claims.",
+      "Paired unauthorized hidden-state context cannot enter public expression/provider context or affect cues; claimed correctness includes exact denominator/error outcomes rather than critic confidence.",
+      "Model version changes invalidate qualification; failures use source-safe fallback without claiming zero semantic errors."
+    ],
+    "external_evidence_gate": "Actual candidate model quality, groundedness, speech delay and human fairness/secret review are unperformed; no formal natural-language validator completeness claim.",
+    "status": "open_initial_review",
+    "scope": "Planning defect/risk; no observed application incident and no implementation authorization"
+  },
+  {
+    "id": "ASR-11",
+    "priority": "P1 product acceptance",
+    "title": "No-human-DM promise versus explicit tabletop rulings",
+    "artifacts": {
+      "planning/competitive-research.md": "Focused wedge: no-human-DM",
+      "planning/rules-coverage.md": "Resolution and tabletop ambiguity",
+      "planning/rpc-api.md": "Host controls: resolve_ruling",
+      "planning/implementation-roadmap.md": "First-slice failure envelope"
+    },
+    "owners": [
+      "df-rules",
+      "df-engine",
+      "df-content",
+      "df-ui",
+      "df-player",
+      "df-session"
+    ],
+    "existing_coverage": "NeedsRuling is typed/source-grounded; authorized host cannot force arbitrary standard mechanics, and absent ruling flow is an explicit gap.",
+    "design_gap": "The user-facing adjudication path and product expectation are not defined for an inexperienced/unavailable host. Autonomous-GM positioning must not conceal mandatory human judgment or solve it with fake generic mechanics.",
+    "failure_scenario": "Novel interaction stalls because host has no source explanation or is disconnected; model fabricates a DC/outcome to avoid dead air. Paying group needs a human DM despite autonomous marketing.",
+    "required_repair": "Define source question/explanation, bounded permitted choices, actor authority, explicit pending/decline/await/resume outcomes and pause/cancellation policy; no default invented ruling on timeout. Pre-author source-valid common cases where possible, preserve remaining honest tabletop judgment boundary. Test novice host and unavailable-host recovery and make product claims match actual capabilities; no reduction of full required rules scope.",
+    "observable_acceptance": [
+      "Real player/display flow explains why ruling needed, allows permitted authorized response/decline, preserves operation identity/reaction/resources and resumes once.",
+      "Unauthorized/disconnected host cannot decide; waiting does not auto-spend, advance logical time or force NPC choice.",
+      "Consented novice-group pilot records intervention frequency/minutes, source fairness and whether autonomous experience meets disclosed promise."
+    ],
+    "external_evidence_gate": "Real novelty/ruling frequency and autonomous-play preference require user evidence; open-ended tabletop judgment cannot be declared solved by catalog counts.",
+    "status": "open_initial_review",
+    "scope": "Planning defect/risk; no observed application incident and no implementation authorization"
+  },
+  {
+    "id": "ASR-12",
+    "priority": "P1 before commercial release planning closes",
+    "title": "Service release gates, uncertainty register and execution critical path",
+    "artifacts": {
+      "planning/implementation-roadmap.md": "Delivery slices; Optimization/release completion",
+      "development/plan-manifest.json": "P01; X01/X02/X09; all pending dispatch guards",
+      "planning/plan-database.md": "Coverage versus dispatch"
+    },
+    "owners": [
+      "coordinator",
+      "df-workflow",
+      "integration owner"
+    ],
+    "existing_coverage": "Required full40-crate optimization, F01-F47/R01-R17 integrated checks and honest non-dispatchable blueprints are present.",
+    "design_gap": "Final gameplay acceptance does not clearly distinguish design-ready, executable-ready, private pilot and paid service release. Existing service tasks have generic acceptance, no explicit dependency closure for commercial blockers or effort/cost/critical-path estimate against runway.",
+    "failure_scenario": "All node counts/green planning verification are interpreted as launch readiness or a 9/10 business; service ships without account/billing/isolation/rights/recovery/retention evidence. Planning endlessly expands while missing the earliest falsifiable expensive prerequisite.",
+    "required_repair": "Add source-bound weighted review ledger and phase-specific release criteria with hard safety/rights/money blockers, exact evidence/owner/expiry and evidence sufficiency. Keep complete intended scope mandatory; staging experiments does not redefine final game. Map ASR repairs to existing canonical tasks/owners or bounded new service contracts, update dependencies/model ledger/API if needed and diagram together. Estimate next dependency-ready slice effort/expense, critical-path uncertainty and proof budget; no thousands of speculative atomic tasks. Separate design score from validation/commercial score and revenue achieved.",
+    "observable_acceptance": [
+      "Each blocker maps concrete contract, implementation hook, owned task/dependencies and observable future evidence; missing actual external proof stays open.",
+      "Reviewer cannot close paid-release gate solely with docs/node counts; current design assessment uses exact source identity and independent repair review.",
+      "Full original features/rules/directors/remote/cinema/observability/crate scope preserved, no duplicate implementing delegation or self-approval; expenses/estimates explicitly hypothetical."
+    ],
+    "external_evidence_gate": "Implementation, paid deployment/customer studies/licensing/purchased tests remain unauthorized by this planning review; actual revenue unknown.",
+    "status": "open_initial_review",
+    "scope": "Planning defect/risk; no observed application incident and no implementation authorization"
+  }
+]

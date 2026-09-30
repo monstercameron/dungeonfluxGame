@@ -120,3 +120,21 @@ role or changing who approves work.
 The devlog table now exists in the authorized planning database described in
 [Plan database](../planning/plan-database.md). Planning refinement observations use
 it; the trusted scoped write command and Rust agent runner remain future work.
+
+## Requested minute screenshot journey
+
+The user explicitly requested routine minute screenshots to show development
+history. The working [Screenshot journey](../development/screenshot-journey.md)
+uses one coordinator-leased recorder and a minute thread heartbeat for health and
+recovery. Each actual public project-preview image has immutable bytes, UTC time,
+source/task/recorder identity and a scoped append-only devlog entry. This requested
+photo evidence is an exception to skipping routine narration, not an independent
+approval gate or gameplay telemetry. Failed captures remain honest records without
+images; missed minutes are never reconstructed. Idle/expired leases stop capture.
+
+Retained images/metadata/entry payloads live outside disposable artifacts. The
+512 MiB cap stops and records the condition without deleting history. Temporary
+browser profiles remain under project artifacts. Public passive/synthetic preview
+registration forbids desktop/unrelated/private/credential and load-side-effect
+capture. Scheduler timing is best effort; the owned minute process also works
+while agent turns are busy. No additional table or workflow state authority is added.

@@ -57,3 +57,13 @@ A dependency-ready blueprint is not dispatch-ready. Freeze the next bounded task
 scope, paths, actual checks, contracts, limits and required tool capabilities before
 claiming it. Feature/slice expansions share one canonical implementation child;
 slice composition owns wiring only. See `../planning/plan-database.md`.
+
+## Minute screenshot journal
+
+See [Screenshot journey](screenshot-journey.md) for the working public-preview
+recorder, active start/renew/stop lifecycle and heartbeat recovery. Actual images,
+source/time/task metadata and devlog payloads are protected in `evidence/journey/`.
+The first baseline captures the static project site, not a playable game. The
+user-facing timeline lives at `../../outputs/dungeonflux-visual-journey.html`.
+Keep browser caches/profiles in `../artifacts/tmp/journey/`, preserve retained
+history, and stop the recorder at the end of an active development run.

@@ -1,0 +1,12 @@
+{
+  "kind": "static-site",
+  "label": "DungeonFlux public project-site preview (planned Rust game)",
+  "url": null,
+  "public_safe": true,
+  "ownership_proof": null,
+  "source_paths": [],
+  "disk_cap_bytes": 536870912,
+  "node_executable": "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node",
+  "playwright_module": "/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
+  "browser_executable": "/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta"
+}

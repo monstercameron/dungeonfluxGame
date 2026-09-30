@@ -1,0 +1,636 @@
+{
+  "checked_at": "2026-09-30T05:15:37.236984+00:00",
+  "scope": "Independent read-only actual corpus parity, history, source coverage and meaningful12repair model/task hooks; no runtime application proof",
+  "source_fingerprint": "6ee4c76abe342e06cfad33e5c2273c85d1594819ad11483dcc88e4056f54a9d5",
+  "manifest_sha256": "8beaa286a846ee117bcadbe28e9d763ee0036ca09de9fb5ac8492ce23d3f175b",
+  "schema_sha256": "b3bd366f90e650fe23f384aedfa57cce785a6f98a6b6f723a1cda2d99f441475",
+  "counts": {
+    "features": 140,
+    "tasks": 307,
+    "dependencies": 1186,
+    "attempts": 3,
+    "devlog": 48
+  },
+  "history": {
+    "attempts": {
+      "baseline_rows": 3,
+      "current_rows": 3,
+      "baseline_sha256": "3fc7149a023a6149a8d562eb26141672a1186926894408ca0b07564d297a337f",
+      "preserved_exact": true
+    },
+    "devlog": {
+      "baseline_rows": 42,
+      "current_rows": 48,
+      "baseline_sha256": "6cf3093c8f3c7a2d7491cc5a1e4030630b823348ccd68c636b4cc83526829aa6",
+      "preserved_exact": true
+    },
+    "features": {
+      "baseline_rows": 138,
+      "creation_state_preserved": true
+    },
+    "tasks": {
+      "baseline_rows": 297,
+      "creation_state_preserved": true
+    }
+  },
+  "source_documents": {
+    "ADR/0001-sqlite-agent-workflow.md": {
+      "sha256": "91c0dde1a830bf68abeaa4947a9d15b466fb7136340f34876fa08a3f8196366c",
+      "match": true
+    },
+    "ADR/0002-resource-scheduling-and-cleanup.md": {
+      "sha256": "a6476cfef449e089639109cc6d3cf5f0800b792b57a32696258d5ac0b9511966",
+      "match": true
+    },
+    "ADR/0003-agent-devlog.md": {
+      "sha256": "1e221af85d096913d2cff50135f1b3cd64833ffb53307ec32a0aa689c6d61423",
+      "match": true
+    },
+    "ADR/0004-development-reliability.md": {
+      "sha256": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae",
+      "match": true
+    },
+    "ADR/0005-frontier-output-evaluation.md": {
+      "sha256": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c",
+      "match": true
+    },
+    "AGENTS.md": {
+      "sha256": "4fffd5d4aae51199c1e8635275f3deac38c9a560d8666f11c77291cd58c3d824",
+      "match": true
+    },
+    "planning/README.md": {
+      "sha256": "750b2d32571652bd3093bccc691b4a42f56cc8e1bda76a49f533fb6a19158c6f",
+      "match": true
+    },
+    "planning/asset-engine.md": {
+      "sha256": "89b3d692353ee82210cbe9f501f62b6d12bde89ec35b17ba57a0df3711ab8342",
+      "match": true
+    },
+    "planning/asset-provider-research.md": {
+      "sha256": "fd51980b26705f556665420d621f424a933fd672238f2df1b737bb5d07ddf6b6",
+      "match": true
+    },
+    "planning/campaign-authoring.md": {
+      "sha256": "f183aaf7f42779733e4e4a03a588fe0ce04db9f3deabddbd86ef951058848e31",
+      "match": true
+    },
+    "planning/campaign-cinematics.md": {
+      "sha256": "3ccdaa9a920a7ee588525ef33d009c79fe73ff519a6c8382c3fdfcb6aa72d5f4",
+      "match": true
+    },
+    "planning/client-architecture.md": {
+      "sha256": "d629add05e38bcdb4b224053ab40174dc96d219abc2f6e924119d1fa67be8f89",
+      "match": true
+    },
+    "planning/client-presentation.md": {
+      "sha256": "ce020b212e9d10b13e7588125396633ab37a549b317ca7aa74b98df1a5a29dcb",
+      "match": true
+    },
+    "planning/coding-style.md": {
+      "sha256": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb",
+      "match": true
+    },
+    "planning/commerce-service.md": {
+      "sha256": "bf56a48d8055639cb3634ba6fa32d72b19fb64ea3fc8df0cb649e5f7ad768b5e",
+      "match": true
+    },
+    "planning/commercial-validation.md": {
+      "sha256": "d878f3f2fd6b15bbf7b0d67f200f12f6c333aa0ce43745afb5baa5a663b8cc57",
+      "match": true
+    },
+    "planning/competitive-research.md": {
+      "sha256": "caeb6ce864c8487c8c44d9238ec4436e6c887b6c8fa28ff6cf7f0c68e2ed6bd9",
+      "match": true
+    },
+    "planning/development-quality.md": {
+      "sha256": "e4f494ac8955ef91f2337fce2459595965dd0f2ead91cbdf2de572051c218a63",
+      "match": true
+    },
+    "planning/expansion-boundaries.md": {
+      "sha256": "788a1ca834314d0245b711d454deb45c0dd4269a8990714621e2139871783ee3",
+      "match": true
+    },
+    "planning/feature-inventory.md": {
+      "sha256": "7ec51855f94b6dd4f569c39fd6fde71c0ed60f629240e2ee2e1d52005f4779d6",
+      "match": true
+    },
+    "planning/feature-refinement.md": {
+      "sha256": "9c4fdeec6ff22fd145bc392178fc898bb286d733c49ba72a7d61bc8ec98594ef",
+      "match": true
+    },
+    "planning/gap-analysis.md": {
+      "sha256": "b5ae8c5d89831d006f78073ac757b72aeb84f69c2e286022fa7aa3bc96cd8a4d",
+      "match": true
+    },
+    "planning/generated-content.md": {
+      "sha256": "0b252a24a8911108660f3276d8359d9df825a3398c7c7a4033c62e2279007ac0",
+      "match": true
+    },
+    "planning/implementation-roadmap.md": {
+      "sha256": "55bdc01fcb09918650845fd849af2a088330cdb4440c92703266ad766d914529",
+      "match": true
+    },
+    "planning/interaction-engine.md": {
+      "sha256": "1bad7c28609ac5e5a51a3ea0b3c1fae17ebeb6380dbdb8fce582085a8ede354f",
+      "match": true
+    },
+    "planning/long-horizon-state.md": {
+      "sha256": "977b5a346190a55c119242fdb7009a645e6d76aa2946d0684c46571d846e96ff",
+      "match": true
+    },
+    "planning/narrative-engine.md": {
+      "sha256": "370ca7352aa195467baeca921c0d016284b16619f6f3e65087d6be8831e93d47",
+      "match": true
+    },
+    "planning/observability.md": {
+      "sha256": "30860fcd071abe3664487a796e424748f40622fafbaf15d56dd18dd0328cbbf2",
+      "match": true
+    },
+    "planning/optimization.md": {
+      "sha256": "7de2ec91c89c7afaf3d1c047eddd00135f1a24fde934a49eec6c4d930aae8ce8",
+      "match": true
+    },
+    "planning/plan-database.md": {
+      "sha256": "292987dd40b78e3c9c625a8903d7c4c512532f3c99a5494df4917e899635957c",
+      "match": true
+    },
+    "planning/pricing-and-costs.md": {
+      "sha256": "28b68d5ec0757887f5b5f8dad708520950692d014c50b2faebb39cf3d5b16a7b",
+      "match": true
+    },
+    "planning/remote-play.md": {
+      "sha256": "ddd81d0d427c3bd09c8ced551f60e65f360f0469b1b186033bf8b16874f9aacc",
+      "match": true
+    },
+    "planning/rpc-api.md": {
+      "sha256": "b1606a657a81248b460c2b3f5c12dd8a40725aaa35b5010ecb4cbf02ffe86f1e",
+      "match": true
+    },
+    "planning/rpc-transport.md": {
+      "sha256": "841ba2500a426e6bacf62017d60e106cae402eb62b0e171eccab26dfb9c31c79",
+      "match": true
+    },
+    "planning/rules-coverage.md": {
+      "sha256": "87a61156b1594c93c235a5815e209fbfb6ba5679e9d625bbacfb500d48d684d5",
+      "match": true
+    },
+    "planning/rules-effect-model.md": {
+      "sha256": "6075c2e05dbc8fe895f7fc49f421f377e22d0b1791aa0988d90d6c5ab5e44d6a",
+      "match": true
+    },
+    "planning/rules-support.md": {
+      "sha256": "a9b38b632d6ff669217da6e2e19be756c00925042afb79966e081581ec09eba4",
+      "match": true
+    },
+    "planning/runtime-directors.md": {
+      "sha256": "ed8944f316d912498107ee550431e560795ba8114cb63a181b6aadeca70b48ca",
+      "match": true
+    },
+    "planning/runtime-reliability.md": {
+      "sha256": "176e5a8fb04e1d9cb2402225c9eb1bb4ffd110abf353f226a302e10e780acf05",
+      "match": true
+    },
+    "planning/service-operations.md": {
+      "sha256": "780360bcff243a96f5fc9a39a88b47efc1402e563623c134229f56579eb714df",
+      "match": true
+    },
+    "planning/storage-architecture.md": {
+      "sha256": "69c6ef1ec2ce02b0ecc33c361e83ef9a027f669df1abe49199605552466a1da6",
+      "match": true
+    },
+    "planning/subsystem-architecture.md": {
+      "sha256": "cf549f4f046f76713c881228d82c6a7111d8ccc84db208cb9d9db67bb192d9f6",
+      "match": true
+    },
+    "planning/subsystem-interfaces.md": {
+      "sha256": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a",
+      "match": true
+    },
+    "planning/tempo-engine.md": {
+      "sha256": "e227dda990685f5771b577529652c44d59704a23db8ad206e3e59be41f4c81d6",
+      "match": true
+    }
+  },
+  "manifest_db_semantic_parity": true,
+  "task_dag_nodes": 307,
+  "api_services": 12,
+  "rpc_methods": 41,
+  "crates": 41,
+  "F01_F47_and_R01_R17_preserved": true,
+  "new_task_ids": [
+    "C-df-commerce-BOUNDARY",
+    "C-df-commerce-OPT",
+    "EFFECT-FENCE-ACCEPT",
+    "RULING-NOVICE-ACCEPT",
+    "SPEECH-GROUNDING-ACCEPT",
+    "SPEND-HIERARCHY-ACCEPT",
+    "TENANT-LIFECYCLE-ACCEPT",
+    "X12-ACCEPT",
+    "X12-DELIVER",
+    "X12-RESOLVE"
+  ],
+  "defect_contract_task_hooks": [
+    {
+      "id": "ASR-01",
+      "contract": "planning/commerce-service.md",
+      "tasks": [
+        {
+          "task": "X12-RESOLVE",
+          "status": "pending",
+          "owners": [
+            "df-commerce",
+            "df-auth",
+            "df-api",
+            "df-persistence",
+            "df-providers",
+            "df-server",
+            "df-client",
+            "df-ui",
+            "df-web"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "X12-DELIVER",
+          "status": "pending",
+          "owners": [
+            "df-commerce",
+            "df-auth",
+            "df-api",
+            "df-persistence",
+            "df-providers",
+            "df-server",
+            "df-client",
+            "df-ui",
+            "df-web"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "X12-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "df-commerce",
+            "df-auth",
+            "df-api",
+            "df-persistence",
+            "df-providers",
+            "df-server",
+            "df-client",
+            "df-ui",
+            "df-web"
+          ],
+          "direct_candidate_contract": true
+        }
+      ]
+    },
+    {
+      "id": "ASR-02",
+      "contract": "planning/commerce-service.md",
+      "tasks": [
+        {
+          "task": "SPEND-HIERARCHY-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "X09-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "F28-DELIVER",
+          "status": "pending",
+          "owners": [
+            "df-persistence",
+            "df-provider-api"
+          ],
+          "direct_candidate_contract": true
+        }
+      ]
+    },
+    {
+      "id": "ASR-03",
+      "contract": "planning/service-operations.md",
+      "tasks": [
+        {
+          "task": "EFFECT-FENCE-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "df-persistence"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "F24-DELIVER",
+          "status": "pending",
+          "owners": [
+            "df-persistence"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "G05-RESOLVE",
+          "status": "pending",
+          "owners": [
+            "df-persistence",
+            "df-assets"
+          ],
+          "direct_candidate_contract": true
+        }
+      ]
+    },
+    {
+      "id": "ASR-04",
+      "contract": "planning/service-operations.md",
+      "tasks": [
+        {
+          "task": "TENANT-LIFECYCLE-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "X01-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        }
+      ]
+    },
+    {
+      "id": "ASR-05",
+      "contract": "planning/commercial-validation.md",
+      "tasks": [
+        {
+          "task": "X09-RESOLVE",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "X09-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "COMP-OFFER",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "COMP-PLAYTEST",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        }
+      ]
+    },
+    {
+      "id": "ASR-06",
+      "contract": "planning/commercial-validation.md",
+      "tasks": [
+        {
+          "task": "G07-RESOLVE",
+          "status": "pending",
+          "owners": [
+            "df-content",
+            "df-rules"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "S06-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "df-content",
+            "df-rules"
+          ],
+          "direct_candidate_contract": false
+        },
+        {
+          "task": "X09-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        }
+      ]
+    },
+    {
+      "id": "ASR-07",
+      "contract": "planning/service-operations.md",
+      "tasks": [
+        {
+          "task": "X02-RESOLVE",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "X02-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "G05-RESOLVE",
+          "status": "pending",
+          "owners": [
+            "df-persistence",
+            "df-assets"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "G06-RESOLVE",
+          "status": "pending",
+          "owners": [
+            "df-observe",
+            "df-telemetry"
+          ],
+          "direct_candidate_contract": true
+        }
+      ]
+    },
+    {
+      "id": "ASR-08",
+      "contract": "planning/service-operations.md",
+      "tasks": [
+        {
+          "task": "TENANT-LIFECYCLE-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "X01-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "G05-RESOLVE",
+          "status": "pending",
+          "owners": [
+            "df-persistence",
+            "df-assets"
+          ],
+          "direct_candidate_contract": true
+        }
+      ]
+    },
+    {
+      "id": "ASR-09",
+      "contract": "planning/rpc-transport.md",
+      "tasks": [
+        {
+          "task": "G02-RESOLVE",
+          "status": "pending",
+          "owners": [
+            "df-rpc-bridge",
+            "df-protocol"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "S00-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "df-observe",
+            "df-protocol",
+            "df-rpc-bridge",
+            "df-server",
+            "df-testkit",
+            "df-tools",
+            "df-types"
+          ],
+          "direct_candidate_contract": true
+        }
+      ]
+    },
+    {
+      "id": "ASR-10",
+      "contract": "planning/interaction-engine.md",
+      "tasks": [
+        {
+          "task": "SPEECH-GROUNDING-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "df-interaction"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "G11-RESOLVE",
+          "status": "pending",
+          "owners": [
+            "df-world",
+            "df-knowledge",
+            "df-intent",
+            "df-interaction",
+            "df-narrative",
+            "df-encounter",
+            "df-combat"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "G12-RESOLVE",
+          "status": "pending",
+          "owners": [
+            "df-experience",
+            "df-tempo",
+            "df-presentation",
+            "df-media"
+          ],
+          "direct_candidate_contract": true
+        }
+      ]
+    },
+    {
+      "id": "ASR-11",
+      "contract": "planning/interaction-engine.md",
+      "tasks": [
+        {
+          "task": "RULING-NOVICE-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "df-encounter",
+            "df-engine",
+            "df-interaction",
+            "df-rules"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "R14-DELIVER",
+          "status": "pending",
+          "owners": [
+            "df-encounter",
+            "df-engine",
+            "df-interaction",
+            "df-rules"
+          ],
+          "direct_candidate_contract": true
+        }
+      ]
+    },
+    {
+      "id": "ASR-12",
+      "contract": "planning/implementation-roadmap.md",
+      "tasks": [
+        {
+          "task": "P00-REFINE",
+          "status": "pending",
+          "owners": [
+            "development/",
+            "planning/",
+            "ADR/",
+            "AGENTS.md"
+          ],
+          "direct_candidate_contract": true
+        },
+        {
+          "task": "P01-ACCEPT",
+          "status": "pending",
+          "owners": [
+            "coordinator"
+          ],
+          "direct_candidate_contract": true
+        }
+      ]
+    }
+  ],
+  "DNS_blocked_non_dispatchable": true,
+  "pass": true
+}

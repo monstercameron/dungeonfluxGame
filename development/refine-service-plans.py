@@ -91,6 +91,16 @@ def refine(m, docs, ref, fingerprint, now, edges):
         criterion='Qualify exact HTTP2 DATA/window/header/control/message bounds and browser native allocation/receive observations under slow/suspended/malicious mixed traffic; record PASS/FAIL/INCONCLUSIVE with device/build/driver identity, blocking dependent admissions on FAIL or unresolved critical receive bound, no grpc-web/unsafe Send substitute.'
         row['acceptance_json']=list(dict.fromkeys(row['acceptance_json']+[criterion]));row['brief_json']['outputs']=row['acceptance_json']
         feature=features[row['feature_id']];feature['plan_json']['governing_sources']=[v for v in feature['plan_json']['governing_sources'] if v['path']!=path]+[ref(path)]
+    for tid in ['G03-RESOLVE','G05-RESOLVE','X02-ACCEPT']:
+        row=tasks[tid];path='planning/service-operations.md'
+        row['brief_json']['governing_sources']=[v for v in row['brief_json']['governing_sources'] if v['path']!=path]+[ref(path)]
+        criterion='Freeze and test lexicographic SessionRevision=(verified monotonic RecoveryEpoch,in_epoch_sequence); old Pg restore issues protected strictly newer epoch/full snapshot with declared lost game range, retires old revision/operation/allocation namespaces, missing head fails closed, no per-game journal or gameRPO0 claim.'
+        row['acceptance_json']=list(dict.fromkeys(row['acceptance_json']+[criterion]));row['brief_json']['outputs']=row['acceptance_json']
+    for crate in ['df-types','df-model','df-protocol','df-session','df-client','df-persistence']:
+        marker=' Recovery revision: ';m['model_ledger'][crate]=m['model_ledger'][crate].split(marker,1)[0]+marker+'SessionRevision uses lexicographic verified monotonic RecoveryEpoch and in_epoch_sequence; typed/wire comparison frozen G03, lost-game-range snapshot and retired old namespaces on disaster restore, no false gameRPO0.'
+        features['C-'+crate]['plan_json']['models']=m['model_ledger'][crate]
+        for row in tasks.values():
+            if row['feature_id']=='C-'+crate:row['brief_json']['inputs']=m['model_ledger'][crate]
     m['features']=list(features.values());m['tasks']=list(tasks.values())
     note='Service refinement: ASR-01..12 concrete contracts, one df-commerce crate/X12 family, four CustomerService RPCs; full F01-F47/R01-R17 preserved. Independent design and actual validation/revenue remain separate.'
     if note not in m['notes']:m['notes'].append(note)

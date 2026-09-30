@@ -1,0 +1,60 @@
+{
+  "scope": "Independent exact toy cash/recognition cases; asserted expected values are derived from transactions below, not copied from model formula. Bind output fields and candidate source hash only after freeze.",
+  "cases": [
+    {
+      "id": "SUBSCRIPTION_ONLY",
+      "transactions": "One campaign pays USD100 exclusive of no tax; no fees, loss or costs. Income-tax assumption20%.",
+      "overrides": {"price":"100","active_campaigns":"1","income_tax_rate":"0.20"},
+      "expected": {"subscription_net_revenue":"100","consolidated_operating_pre_tax":"100","income_tax":"20","bank_cash_change":"80","closing_credit_liability":"0"}
+    },
+    {
+      "id": "CREDIT_RECOGNITION_CONSOLIDATED",
+      "transactions": "SubscriptionUSD100; new prepaid creditUSD1000; recognized credit consumptionUSD400; paid supplier costUSD250. Each payment has3% fee plusUSD0.30 (two transactions total). Earned revenueUSD500 minus feesUSD33.60 and supplierUSD250 givesUSD216.40 pretax;20% income taxUSD43.28. Bank inflowUSD1100 minus fees33.60, supplier250 and tax43.28 is773.12; unused credit liability600. Refunds/bad debt/sales tax zero.",
+      "overrides": {"price":"100","active_campaigns":"1","income_tax_rate":"0.20","payment_pct":"0.03","payment_fixed":"0.30","credit_topups":"1000","credit_consumed":"400","credit_supplier_cost":"250","credit_transactions":"1"},
+      "expected": {"subscription_net_revenue":"100","consolidated_operating_pre_tax":"216.40","income_tax":"43.28","bank_cash_change":"773.12","closing_credit_liability":"600"}
+    },
+    {
+      "id": "UNUSED_CREDIT_NOT_EARNINGS",
+      "transactions": "SubscriptionUSD100; prepaid creditUSD1000 unconsumed. Two successful transactions incurUSD3.30+30.30 fees. OnlyUSD100 earned lessUSD33.60 fees=USD66.40 operating;20% taxUSD13.28. Cash1100-33.60-13.28=1053.12, deferred liability1000. Prepay must not create recognized profit1000.",
+      "overrides": {"price":"100","active_campaigns":"1","income_tax_rate":"0.20","payment_pct":"0.03","payment_fixed":"0.30","credit_topups":"1000","credit_transactions":"1"},
+      "expected": {"consolidated_operating_pre_tax":"66.40","income_tax":"13.28","bank_cash_change":"1053.12","closing_credit_liability":"1000"}
+    },
+    {
+      "id": "REFUND_TAX_EXCLUSIVE",
+      "transactions": "Invoice base100, unpaid base20: collect80+8salestax. Refund10+1tax; nettaxremittance7, netearned70. Fees3%oforiginalcollected88+0.30=2.94 retained afterrefund. Pretax67.06;20%tax13.412; bank88-11-7-2.94-13.412=53.648. Refund and bad debt are disjoint fractions of gross invoice base. One successful collection transaction assumed explicitly.",
+      "overrides": {"price":"100","active_campaigns":"1","refund_rate":"0.10","bad_debt_rate":"0.20","sales_tax_rate":"0.10","income_tax_rate":"0.20","payment_pct":"0.03","payment_fixed":"0.30"},
+      "expected": {"subscription_net_revenue":"70","sales_tax_payable":"7","consolidated_operating_pre_tax":"67.06","income_tax":"13.412","bank_cash_change":"53.648"}
+    },
+    {
+      "id": "REFUND_TAX_INCLUSIVE_EQUIVALENT",
+      "transactions": "Same base/cash transactions as exclusive case but advertised total110 includes10%tax. All results must equal exclusive case exactly, not tax twice or omit refundtax.",
+      "overrides": {"price":"110","tax_inclusive":"1","active_campaigns":"1","refund_rate":"0.10","bad_debt_rate":"0.20","sales_tax_rate":"0.10","income_tax_rate":"0.20","payment_pct":"0.03","payment_fixed":"0.30"},
+      "expected": {"subscription_net_revenue":"70","sales_tax_payable":"7","consolidated_operating_pre_tax":"67.06","income_tax":"13.412","bank_cash_change":"53.648"}
+    },
+    {
+      "id": "UNKNOWN_HOLD_NOT_EXPENSE",
+      "transactions": "Subscription100 no fees/cost, income tax20. Unknown future supplier risk50 is withheld; no evidence it is paid cost. Operating100, bankcashchange80, withheld50, available increment30 (before any separately selected reserve). Risk must not reduce recognized revenue/profit or masquerade as bank payment.",
+      "overrides": {"price":"100","active_campaigns":"1","income_tax_rate":"0.20","unknown_liability_added":"50"},
+      "expected": {"consolidated_operating_pre_tax":"100","income_tax":"20","bank_cash_change":"80","unknown_risk_held":"50","available_cash_increment_after_unknown":"30"}
+    },
+    {
+      "id": "OPENING_CREDIT_REFUND_CASH_NOT_REVENUE",
+      "transactions": "Subscription100; opening prepaid liability100 refunded100 (not current-period earned revenue). Nofees/cost; tax20oncurrent subscriptionprofit100. Bank monthly change100-100-20=-20; closing credit liability0. Refund of previously deferred funds cannot reduce current revenue again.",
+      "overrides": {"price":"100","active_campaigns":"1","income_tax_rate":"0.20","credit_opening_balance":"100","credit_refunds":"100","opening_cash":"100"},
+      "expected": {"subscription_net_revenue":"100","consolidated_operating_pre_tax":"100","income_tax":"20","bank_cash_change":"-20","closing_credit_liability":"0"}
+    }
+  ],
+  "negative_inputs": [
+    {"field":"price","value":"NaN"},
+    {"field":"credit_topups","value":"Infinity"},
+    {"field":"unknown_liability_added","value":"-Infinity"},
+    {"field":"active_campaigns","value":"0.5"},
+    {"field":"credit_transactions","value":"1.5"},
+    {"field":"tax_inclusive","value":"0.5"},
+    {"field":"tax_inclusive","value":"2"},
+    {"field":"monthly_churn","value":"1"},
+    {"field":"price","value":"0"},
+    {"field":"credit_consumed","value":"1","note":"All credit balances/topups zero"}
+  ],
+  "pending_freeze_checks": ["Pin model fileSHA and inputSHA before importing/evaluating without bytecode writes.", "Map exact result keys explicitly to semantic oracle names; do not dynamically accept any candidate field with a matching value.", "Ensure successfulsubscriptiontransaction count is explicitly one in these toy cases after its final field is selected.", "Dispute-principal fixture depends on selected explicit nonoverlapping net-loss contract; refuse silentfeeonlyaccounting.", "Compare declared refundtax policy, cash/netflow field meanings and unknown/deferred reserve policy to both docs and output; adapt fixture only for explicit reviewed intended transaction semantics, never to get green."]
+}

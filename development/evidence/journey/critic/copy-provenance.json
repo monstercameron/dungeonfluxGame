@@ -1,0 +1,12 @@
+{
+  "scope": "Independent recorder behavior, automation/history, final integrated source parity and exact one-line chronology delta; no private screenshots/profiles copied.",
+  "files": {
+    "checks.json": "38f7223c664ddd1647f39a3278ca454543b802751d6b3532b10b449cf41b09a9",
+    "history-automation-audit.json": "a30f23271cc1dd6d06e3a5d6942512fb86cb1a50b34867ed176cd6303d802c8d",
+    "integration-export-audit.json": "bc7f7e9877e597d2535fc8cf7e289fa8d6adef25010b9b0b42b2611b281e02d4",
+    "final-corpus-audit.json": "368985d421a2b749e85ed4207ea141460c6fb2d096b9efce1737f6e47b679664",
+    "timeline-delta-audit.json": "59538fa654bda257d5c3aa5511bf32eddad9a7a119b2a853e94db4437034c48f",
+    "portable-money-check.json": "1d477518120ba0c35268b5cfc8b9d1acb00d55b22987dd2c5b8285ad6177a101",
+    "final-review.json": "579a3a136f3ce1f27dad816fca7fe379238c58564d40c13ff6626b264a5c88ae"
+  }
+}

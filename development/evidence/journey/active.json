@@ -1,0 +1,13 @@
+{
+  "active": false,
+  "session_id": "c4a47358dba34249",
+  "context": "/Users/earlcameron/Documents/Codex/2026-09-29/cr/dungeonflux/development/evidence/journey/recorder-contexts/c4a47358dba34249.json",
+  "observed_work_context": {
+    "agent_id": "/root/plan_database_refinement",
+    "task_id": "P00-REFINE",
+    "attempt_id": null
+  },
+  "started_at": "2026-09-30T05:38:04+00:00",
+  "expires_at_epoch": 1790748484.4086862,
+  "stop_reason": "coordinator_work_ended"
+}

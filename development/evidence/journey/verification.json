@@ -1,0 +1,92 @@
+{
+  "schema_sha256": "b3bd366f90e650fe23f384aedfa57cce785a6f98a6b6f723a1cda2d99f441475",
+  "helper_sha256": "4536f1330e043d963d2141e03333bb9868323badabe3bbc9b3d6a734140cb131",
+  "browser_helper_sha256": "0427d4dce5aebb8872b22eea72f034fb77be8509b05593757ffdd136e8a53f40",
+  "cases": [
+    {
+      "case": "external_url",
+      "result": "pass"
+    },
+    {
+      "case": "credentials",
+      "result": "pass"
+    },
+    {
+      "case": "query",
+      "result": "pass"
+    },
+    {
+      "case": "fragment",
+      "result": "pass"
+    },
+    {
+      "case": "inactive_has_no_capture",
+      "result": "pass"
+    },
+    {
+      "case": "expired_has_no_capture",
+      "result": "pass"
+    },
+    {
+      "case": "inactive_recovery_does_not_restart",
+      "result": "pass"
+    },
+    {
+      "case": "passive_synthetic_proof_required",
+      "result": "pass"
+    },
+    {
+      "case": "unowned_profile_cleanup_denied",
+      "result": "pass"
+    },
+    {
+      "case": "cap_stops_preserves_history_appends_only_devlog",
+      "result": "pass"
+    },
+    {
+      "case": "same_minute_capture_coalesces",
+      "result": "pass"
+    },
+    {
+      "case": "devlog_retry_idempotent_no_second_capture",
+      "result": "pass"
+    },
+    {
+      "case": "missing_target_records_failure_without_image",
+      "result": "pass"
+    },
+    {
+      "case": "unapproved_public_scope_records_failure_without_image",
+      "result": "pass"
+    },
+    {
+      "case": "older_pending_ingestion_drains_without_recapture",
+      "result": "pass"
+    },
+    {
+      "case": "file_symlink_cannot_open_private_target",
+      "result": "pass"
+    },
+    {
+      "case": "directory_symlink_cannot_open_private_target",
+      "result": "pass"
+    },
+    {
+      "case": "assigned_attempt_observed_not_impersonated_and_context_switch_immutable",
+      "result": "pass"
+    },
+    {
+      "case": "actual_headless_external_POST_WebSocket_blocking",
+      "result": "pass",
+      "observed_network_blocks": {
+        "external_origin": 1,
+        "write_method": 1,
+        "websocket": 1
+      },
+      "receiver_requests": 0,
+      "same_origin_posts": 0
+    }
+  ],
+  "passed": 19,
+  "scope": "Isolated guard/devlog fixture and actual isolated browser network boundaries; no fake live journal captures or queue mutations."
+}

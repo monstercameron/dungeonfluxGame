@@ -1,8 +1,8 @@
 {
-  "date": "2026-09-30T05:05:32.567501+00:00",
-  "candidate_manifest_sha256": "e9370eccceaa34350c1c679c81da174dae8026fa2d5c5f3571beb734d670b6de",
+  "date": "2026-09-30T05:40:16.656322+00:00",
+  "candidate_manifest_sha256": "003c51bb54cd407b991594a92973b36a671cb07faebe203809ce1834aa3afc1e",
   "schema_sha256": "b3bd366f90e650fe23f384aedfa57cce785a6f98a6b6f723a1cda2d99f441475",
-  "source_fingerprint": "98b4badc06df2254a0032fd9ecfae373c82359e92602a45c01a10f42c126fd4c",
+  "source_fingerprint": "fd6b565296da2ae9fb5b50aaa3f6cd6236402556d203c03c3d5b60bb8144cb49",
   "checks": {
     "integrity": "ok",
     "foreign_keys": [],
@@ -28,7 +28,7 @@
     "rpc_services": 12,
     "rpc_methods": 41,
     "crate_dag_and_server_free_browser": true,
-    "local_markdown_links": 378,
+    "local_markdown_links": 380,
     "archive_devlog_ids": 36,
     "archive_evidence_paths": 92,
     "dispatch_ready": 0,

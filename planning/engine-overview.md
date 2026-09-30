@@ -428,7 +428,8 @@ sequenceDiagram
   C->>A: Report actual playback/render/control acknowledgment
   Note over C,A: Remote AudioTopology grants public room and private listener outputs explicitly and prevents local duplicates.
   Note over A,D: Owner restart loads compatible snapshot and exact committed decisions/draws/intents and new process fence/generation.
-  Note over S,D: Restore forks recovery epoch and retires old namespaces and verified journal overlays possible sends, credit and deletion.
+  Note over S,D: Restore issues verified newer RecoveryEpoch and composite revision and retires old namespaces.
+  Note over S,D: Full snapshot declares lost game range and journal overlays possible sends, credit and deletion.
   Note over S,D: Missing protected journal closes paid/private admissions. No LLM or paid regeneration to replay decisions.
   Note over C,S: Revocation fences publication/admission server-side and a client notice alone is not enforcement.
 ```

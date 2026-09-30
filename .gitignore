@@ -72,3 +72,6 @@ htmlcov/
 *.temp
 *.pid
 *.pid.lock
+
+# Ephemeral screenshot journal mutex; retained evidence lives beside it
+development/evidence/journey/journal.lock

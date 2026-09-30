@@ -218,8 +218,10 @@ After an ambiguous commit timeout, reload/lookup the operation rather than blind
 applying or retrying it. A crash after commit/before publication recovers from the
 persisted state/intents; a failure before commit publishes no success. A durable
 decision may include pending AI/media jobs: receipt distinguishes acceptance from
-their later completion. SessionRevision increases across reset/restore; new runs
-have new RunIds. Callback fencing also uses a new process generation on recovery.
+their later completion. SessionRevision is ordered lexicographically as (verified monotonic RecoveryEpoch,
+in_epoch_sequence). Reset/new runs retain epoch and increase sequence; restoring
+older disaster data allocates a strictly newer protected epoch before reopening.
+New runs have new RunIds. Callback fencing also uses a new process generation on recovery.
 
 ## PostgreSQL persistence and durable media
 

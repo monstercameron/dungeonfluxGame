@@ -1,0 +1,101 @@
+{
+  "observed_at": "2026-09-30T05:42:52.732950+00:00",
+  "candidate_files_sha256": {
+    "AGENTS.md": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182",
+    "ADR/0003-agent-devlog.md": "ee293673b01391c3a39577bd116a60abb3edfa662a7a8d1315556d6fe537d912",
+    "development/README.md": "ef626386722cf490d5af468f2359e6f863cdbba97957080d5f895076b283348f",
+    "development/screenshot_journey.py": "4536f1330e043d963d2141e03333bb9868323badabe3bbc9b3d6a734140cb131",
+    "development/capture_preview.mjs": "0427d4dce5aebb8872b22eea72f034fb77be8509b05593757ffdd136e8a53f40",
+    "development/screenshot-journey.md": "de11922f62020ee42a5c02bab414b51e8a2c8f5961a7898dc885b6bf0953bb86"
+  },
+  "automation": {
+    "id": "dungeonflux-visual-journey",
+    "kind": "heartbeat",
+    "status": "ACTIVE",
+    "rrule": "RRULE:FREQ=MINUTELY;INTERVAL=1",
+    "notification_policy": "failed_runs_only",
+    "config_sha256": "bbf8207de8d968e964d60cec0e2a276b7229a72cff5b4969b48cef477f37b827",
+    "target_thread_id": "01a0efa3-00f6-7653-9e8a-41c7bab18828",
+    "runtime_tick_proof": "Configured native heartbeat; actual minute series produced by owned recorder, not proof every scheduled heartbeat fired."
+  },
+  "history": {
+    "attempts": {
+      "baseline_rows": 3,
+      "current_rows": 3,
+      "preserved_exact": true
+    },
+    "devlog": {
+      "baseline_rows": 69,
+      "current_rows": 73,
+      "preserved_exact": true
+    },
+    "features": {
+      "count": 140,
+      "states_unchanged": true
+    },
+    "tasks": {
+      "count": 307,
+      "states_unchanged": true
+    }
+  },
+  "retained_records": 27,
+  "actual_pngs": 25,
+  "honest_unavailable": 2,
+  "current_helper_captures": [
+    {
+      "id": "c4a47358dba34249-29845778",
+      "observed_at": "2026-09-30T05:38:04+00:00",
+      "image_sha256": "edc8d3a72d540297857e70a04c40b96287455bd9c5925842be5bb55f727965fa",
+      "source_before_sha256": "4429f5955945a97a986081ad8c0619dec38f85f438a4ec3ed8c69501adc4b3fa",
+      "source_after_sha256": "4429f5955945a97a986081ad8c0619dec38f85f438a4ec3ed8c69501adc4b3fa",
+      "browser_helper_sha256": "0427d4dce5aebb8872b22eea72f034fb77be8509b05593757ffdd136e8a53f40"
+    },
+    {
+      "id": "c4a47358dba34249-29845779",
+      "observed_at": "2026-09-30T05:39:00+00:00",
+      "image_sha256": "cb75fde7379ef09efe174044511ce36893305392d34af60c4ae054fe9db4bc9c",
+      "source_before_sha256": "4429f5955945a97a986081ad8c0619dec38f85f438a4ec3ed8c69501adc4b3fa",
+      "source_after_sha256": "4429f5955945a97a986081ad8c0619dec38f85f438a4ec3ed8c69501adc4b3fa",
+      "browser_helper_sha256": "0427d4dce5aebb8872b22eea72f034fb77be8509b05593757ffdd136e8a53f40"
+    },
+    {
+      "id": "c4a47358dba34249-29845780",
+      "observed_at": "2026-09-30T05:40:00+00:00",
+      "image_sha256": "ee166e69db58ea56e4898c0bdebf29cb9b079f2af1847cb568fa1d4a6460a005",
+      "source_before_sha256": "4429f5955945a97a986081ad8c0619dec38f85f438a4ec3ed8c69501adc4b3fa",
+      "source_after_sha256": "4429f5955945a97a986081ad8c0619dec38f85f438a4ec3ed8c69501adc4b3fa",
+      "browser_helper_sha256": "0427d4dce5aebb8872b22eea72f034fb77be8509b05593757ffdd136e8a53f40"
+    },
+    {
+      "id": "e59ca1f866044938-29845775",
+      "observed_at": "2026-09-30T05:35:00+00:00",
+      "image_sha256": "cb75fde7379ef09efe174044511ce36893305392d34af60c4ae054fe9db4bc9c",
+      "source_before_sha256": "4429f5955945a97a986081ad8c0619dec38f85f438a4ec3ed8c69501adc4b3fa",
+      "source_after_sha256": "4429f5955945a97a986081ad8c0619dec38f85f438a4ec3ed8c69501adc4b3fa",
+      "browser_helper_sha256": "0427d4dce5aebb8872b22eea72f034fb77be8509b05593757ffdd136e8a53f40"
+    },
+    {
+      "id": "e59ca1f866044938-29845776",
+      "observed_at": "2026-09-30T05:36:00+00:00",
+      "image_sha256": "cb75fde7379ef09efe174044511ce36893305392d34af60c4ae054fe9db4bc9c",
+      "source_before_sha256": "4429f5955945a97a986081ad8c0619dec38f85f438a4ec3ed8c69501adc4b3fa",
+      "source_after_sha256": "4429f5955945a97a986081ad8c0619dec38f85f438a4ec3ed8c69501adc4b3fa",
+      "browser_helper_sha256": "0427d4dce5aebb8872b22eea72f034fb77be8509b05593757ffdd136e8a53f40"
+    }
+  ],
+  "pre_review_records_and_immutable_files_preserved": true,
+  "task_states_unchanged": true,
+  "vision": {
+    "first_output_sha256": "658fc7c5b07da13098539782f70db4c51958c749d5bc9729e1b62ba8d852d950",
+    "current_site_capture": "c4a47358dba34249-29845778",
+    "fixture_sha256": "d40825b6437dce38e679349f3376e0e27d01e1a39125a29732a47ec51f94cfba",
+    "observed": "Actual1280x800 public concept-site viewport and independent privacy fixture PNG; no private desktop/game execution."
+  },
+  "portable_money_replay": {
+    "positive": 8,
+    "negative": 13,
+    "pass": true,
+    "two_reserve_cases": "retained historical evidence only"
+  },
+  "pass": true
+}

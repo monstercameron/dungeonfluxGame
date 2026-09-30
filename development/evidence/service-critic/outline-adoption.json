@@ -1,0 +1,68 @@
+{
+  "verdict": "PASS planning adoption only, runtime/service evidence unperformed",
+  "attachment_sha256": "54e5f27bcf098ad60badb921f50252a578338b1a049507ce20e38e94b8e40918",
+  "numbered_ideas_exact": 15,
+  "priority_rows_exact": 15,
+  "table_stakes_exact": 10,
+  "phases": 3,
+  "phase_items": [
+    6,
+    6,
+    8
+  ],
+  "actual_SQL_pending_non_dispatchable_plans": {
+    "F45-MODEL": {
+      "feature_id": "F45",
+      "status": "pending"
+    },
+    "F45-DELIVER": {
+      "feature_id": "F45",
+      "status": "pending"
+    },
+    "F45-ACCEPT": {
+      "feature_id": "F45",
+      "status": "pending"
+    },
+    "F46-MODEL": {
+      "feature_id": "F46",
+      "status": "pending"
+    },
+    "F46-DELIVER": {
+      "feature_id": "F46",
+      "status": "pending"
+    },
+    "F46-ACCEPT": {
+      "feature_id": "F46",
+      "status": "pending"
+    },
+    "F47-MODEL": {
+      "feature_id": "F47",
+      "status": "pending"
+    },
+    "F47-DELIVER": {
+      "feature_id": "F47",
+      "status": "pending"
+    },
+    "F47-ACCEPT": {
+      "feature_id": "F47",
+      "status": "pending"
+    },
+    "F03-PRIVATE-ACCEPT": {
+      "feature_id": "F03",
+      "status": "pending"
+    },
+    "F15-CRITICAL-ACCEPT": {
+      "feature_id": "F15",
+      "status": "pending"
+    },
+    "F42-SPOTLIGHT-ACCEPT": {
+      "feature_id": "F42",
+      "status": "pending"
+    },
+    "F35-CONTINUITY-ACCEPT": {
+      "feature_id": "F35",
+      "status": "pending"
+    }
+  },
+  "semantic_read": "Read original outline and current focused contracts: private channels, consented spotlight, logical campaign time, committed source-critical events, speculative known-thread trailers, source-compatible/explicit custom handlers, prepared fallback and optional paid video. Raw sample numeric mechanics/forced pauses/timers/instant forecasts remain guarded examples, not assumed standard rules or guarantees."
+}

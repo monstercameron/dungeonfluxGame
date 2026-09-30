@@ -1,9 +1,10 @@
 # Project plan index
 
-Current source-backed **service-repair candidate**, independent re-review pending.
+Current source-backed service design independently reviewed **9.05/10**; runtime/commercial evidence **0.75/10**. Recorder extension behavior and final integrated parity independently passed.
 No application runtime, payment/customers or rights clearance exists.
 
-Source `98b4badc06df2254a0032fd9ecfae373c82359e92602a45c01a10f42c126fd4c`; manifest `e9370eccceaa34350c1c679c81da174dae8026fa2d5c5f3571beb734d670b6de`.
+Integrated source `fd6b565296da2ae9fb5b50aaa3f6cd6236402556d203c03c3d5b60bb8144cb49`; manifest `003c51bb54cd407b991594a92973b36a671cb07faebe203809ce1834aa3afc1e`.
+The [service review](evidence/service-critic/README.md) retains its exact historical source/manifest identity; the later recorder policy extension has [separate independent evidence](evidence/journey/critic/README.md).
 
 ## Current counts
 
@@ -13,7 +14,7 @@ Source `98b4badc06df2254a0032fd9ecfae373c82359e92602a45c01a10f42c126fd4c`; manif
 - Crates: **41**; game feature families: **47**; rules: **17**
 - Gates: **12**; delivery slices: **9**
 - RPC services/methods: **12/41**; governing sources: **44**
-- Dispatch-ready: **0**; original attempts preserved: **3**; devlogs: **45**
+- Dispatch-ready: **0**; original attempts preserved: **3**; devlogs: **74** in the [stopped-recorder portable export](evidence/workflow-history.json)
 
 ## Current service repair
 

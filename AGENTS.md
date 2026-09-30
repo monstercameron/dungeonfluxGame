@@ -319,3 +319,23 @@ and native egress; never release Unknown spend because a lease expired. Respect
 redaction/backup tombstones and reviewed RightsGrant. Canonical speech slots and
 listener-safe context cannot be replaced by a model critic's assurance. Design
 scores, planning PASS and assumed cash scenarios are not runtime/customer evidence.
+
+## Visual development journey
+
+The coordinator maintains one screenshot recorder during active development.
+Read [Screenshot journey](development/screenshot-journey.md), register only the
+current passive public/synthetic DungeonFlux preview, and start/renew its bounded
+active lease when actual work starts or continues. Stop it when the development
+run ends. Scheduled minute ticks must never renew activity; agents must not start
+competing timers. Report preview/source/task changes so the coordinator can update
+its registration. No game preview exists yet; the initial static site capture is
+explicitly a project-site baseline.
+
+Retain an actual browser screenshot and timestamp/source/task metadata each active
+minute, even when unchanged. The recorder appends scoped devlog entries; routine
+photo evidence is explicitly requested and does not imply approval or game progress.
+Never capture the user's desktop, unrelated tabs, credentials, private player views
+or a page that auto-joins, purchases or invokes providers. Missing/late captures
+remain explicit outcomes. Protect `development/evidence/journey/` from cleanup;
+the disk cap stops capture instead of deleting history. Browser profiles/staging
+belong in `artifacts/tmp/journey/`; captures use an isolated owned headless browser.

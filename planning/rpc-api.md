@@ -449,3 +449,15 @@ numbering/version freeze and public bootstrap registration. Native bounded HTTPS
 payment webhook is the vendor ingress exception, isolated from game endpoints;
 verify raw-body signature, durably admit then acknowledge. Provider/admin secrets
 never enter browser payloads. See commerce/service-operations state machines.
+
+## Recovery revision ordering
+
+SessionRevision is the composite (RecoveryEpoch, in_epoch_sequence), compared
+lexicographically on server and Rust clients. G03 freezes typed/protobuf encoding
+and compatibility fixtures; it cannot be treated as an ambiguous old scalar.
+Regular run reset increments sequence in the same epoch; disaster recovery from
+older Pg state uses a verified strictly increasing protected epoch before serving
+a new full snapshot, with declared lost game-revision range. Old strict expected
+revisions and operation/allocation namespaces are expired/indeterminate lookup-only,
+never fresh writes. Game RPO remains up to the declared five-minute range; monotonic
+version ordering does not claim missing game facts were recovered.

@@ -116,3 +116,19 @@ The reference90aggregate submitted minutes/campaign/session,360per four-session
 scenario period, is workload data only and never an implicit per-person free quota
 or promised subscription allowance. Capture abuse limits are independently adjustable
 with measured noise/continuous-voice evidence and do not bypass aggregate spend.
+
+## Composite revision after disaster restore
+
+Allocate a strictly greater RecoveryEpoch from the authenticated nonregressing
+protected head using conditional compare-and-swap and persisted identity, before
+reopening any restored session. Missing/unverified head blocks allocation/serving.
+SessionRevision=(RecoveryEpoch,in_epoch_sequence) orders lexicographically; ordinary
+run resets/owner restart without rollback continue sequence, disaster restore starts
+a new epoch. G03 freezes native/WASM/protobuf compare encoding and G05/X02 qualify
+restore. Publish a full permitted snapshot declaring the lost game-revision range,
+retire old expected revisions/operation/allocation namespaces, and return old receipt
+lookup as known retained or expired/indeterminate, never reaccept old commands.
+The protected journal records epoch issuance and irreversible liabilities/suppression,
+not each game action; gameplay retains honest RPO5min instead of fictional RPO0.
+Concurrent recovery head updates, stale writer and missing latest head fixtures
+ensure epoch cannot regress or fork valid ownership.
