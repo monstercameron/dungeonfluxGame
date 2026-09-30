@@ -1,0 +1,23 @@
+{
+  "verdict": "PASS",
+  "checked_at": "2026-09-30T07:08:57.345807+00:00",
+  "scope": "Exact frozen commercial numeric artifact + independent26 baseline-boundary probes; not market viability approval",
+  "artifact_sha256": {
+    "markdown": "c810d438ced6182b04df28afa2d4a6cc665ec663080bde8d55cc6789097b010f",
+    "json": "4561004ca70299bb236c67ad17f5b50f22cc8ce3df0e642b7fc8cbf2240fd239"
+  },
+  "calculator_sha256": "408c68cdb11fc22ab34952257a187f590726579c034e776eb51c663c5f04b67a",
+  "inputs_sha256": "bc1f60f642205e3791ca54aa37009c2ab1593daffea79775169a750852faf1c1",
+  "independent_boundary_checks": 26,
+  "grid_rows_independently_checked": 30,
+  "markdown_grid_rows_checked": 10,
+  "offer_boundaries_checked": 2,
+  "operating_CAC_support_boundary_sides_checked": 8,
+  "income_integer_minima_checked": 4,
+  "source_or_assumptions_changed": false,
+  "material_numeric_defects": [],
+  "meaningful_current_gap": "Existing proposed70pct gate lacks explicit jointly measured generation plus loaded support qualification; targeted existing X12 criteria/source refinement justified, no new subsystem/backlog.",
+  "next_authorized_planning_proof": "Integrate measured joint-budget tuple + cohort mean/onboarding/tails in existing X12-RESOLVE/ACCEPT; preserve explicit FAIL or separately approved alternate target.",
+  "external_evidence_remaining": "No actual working qualified product, cohort/support/provider costs, rights, paid adoption/retention/CAC; arithmetic cannot establish9commercial/profit.",
+  "interpretation": "49/59 retain unchanged failing margins;78.48 is zero-tax sensitivity boundary only; income counts exclude growth/credits and capacity qualification."
+}

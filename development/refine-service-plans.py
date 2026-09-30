@@ -60,6 +60,11 @@ def refine(m, docs, ref, fingerprint, now, edges):
                     row['brief_json']['governing_sources']=[v for v in row['brief_json']['governing_sources'] if v['path']!=path]+[ref(path)]
                     row['acceptance_json']=list(dict.fromkeys(row['acceptance_json']+['Apply governing service normal/failure/rights/privacy/recovery criteria from '+path+'.']))
                     row['brief_json']['outputs']=row['acceptance_json']
+    qualification={
+      'X12-RESOLVE':'Bind versioned matched-allowance offer qualification to net-revenue margin, joint measured generation and loaded support cost, source/provider/cohort identity, onboarding-vs-recurring mean/tails/uncertainty and explicit commercial-owner target/risk decision; no inferred willingness or capacity.',
+      'X12-ACCEPT':'Evaluate measured cohort joint mean support/generation costs against the chosen offer budget with PASS/FAIL/INCONCLUSIVE and uncertainty; unmeasured stays INCONCLUSIVE, missed target stays FAIL until measured remediation or explicit alternative risk/target decision, no support denial, full-game/rules/group shrink or credit-profit masking.'}
+    for tid,criterion in qualification.items():
+        row=tasks[tid];row['acceptance_json']=list(dict.fromkeys(row['acceptance_json']+[criterion]));row['brief_json']['outputs']=row['acceptance_json']
     model_updates={
       'df-auth':'Trusted TenantScope, EntitlementReader/versioned campaign capabilities and recoverable account/guest-link/ownership permission without duplicate commerce state.',
       'df-provider-api':'Existing BudgetStore consumer port delegates one exact commerce SpendAdmission/Reservation authority; supplier/platform/payer/campaign/job spend/concurrency/rate counters atomic, UnknownLiability retained.',

@@ -1,0 +1,170 @@
+{
+  "observed_at": "2026-09-30T07:05:21.240746+00:00",
+  "scope": "Independent exact linear-margin algebra and boundary execution against frozen offline calculator, not worker artifact acceptance or market evidence",
+  "source_sha256": "408c68cdb11fc22ab34952257a187f590726579c034e776eb51c663c5f04b67a",
+  "inputs_sha256": "bc1f60f642205e3791ca54aa37009c2ab1593daffea79775169a750852faf1c1",
+  "checks": [
+    {
+      "case": "49_contribution",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "49_support_bound_-0.00001",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "49_support_bound_0.00001",
+      "actual": false,
+      "expected": false,
+      "pass": true
+    },
+    {
+      "case": "49_CAC_exact_boundary",
+      "actual": "6",
+      "expected": "6",
+      "pass": true
+    },
+    {
+      "case": "49_CAC_above_boundary",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "49_integer_min_for_0",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "49_integer_min_for_10000",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "49_integer_min_for_50000",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "49_combining_two_independent_maxima_fails",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "59_contribution",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "59_support_bound_-0.00001",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "59_support_bound_0.00001",
+      "actual": false,
+      "expected": false,
+      "pass": true
+    },
+    {
+      "case": "59_CAC_exact_boundary",
+      "actual": "6",
+      "expected": "6",
+      "pass": true
+    },
+    {
+      "case": "59_CAC_above_boundary",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "59_integer_min_for_0",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "59_integer_min_for_10000",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "59_integer_min_for_50000",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "59_combining_two_independent_maxima_fails",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "49_even_zero_generation_cannot_meet70_at20min",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "price_cent_boundary_78.47",
+      "actual": false,
+      "expected": false,
+      "pass": true
+    },
+    {
+      "case": "price_cent_boundary_78.48",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "tax8_0_threshold_cent_pass",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "tax8_0_onecent_below_fails",
+      "actual": true,
+      "expected": true,
+      "pass": true,
+      "independent_exact_threshold": "79.36454817520341916299348867",
+      "next_cent": "79.37"
+    },
+    {
+      "case": "tax8_1_threshold_cent_pass",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "case": "tax8_1_onecent_below_fails",
+      "actual": true,
+      "expected": true,
+      "pass": true,
+      "independent_exact_threshold": "85.71371202921969269603296775",
+      "next_cent": "85.72"
+    },
+    {
+      "case": "payback6_does_not_imply_operating_profit",
+      "actual": true,
+      "expected": true,
+      "pass": true
+    }
+  ],
+  "passed": 26,
+  "pass": true
+}

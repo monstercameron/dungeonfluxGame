@@ -5,7 +5,7 @@
     "AGENTS.md": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182",
     "ADR/0003-agent-devlog.md": "ee293673b01391c3a39577bd116a60abb3edfa662a7a8d1315556d6fe537d912",
     "development/README.md": "ef626386722cf490d5af468f2359e6f863cdbba97957080d5f895076b283348f",
-    "development/screenshot_journey.py": "4536f1330e043d963d2141e03333bb9868323badabe3bbc9b3d6a734140cb131",
+    "development/screenshot_journey.py": "2b12f10aa53f2cd3ac776119de3b724a69a1f1ef13d728e770e6724a1022a2e1",
     "development/capture_preview.mjs": "0427d4dce5aebb8872b22eea72f034fb77be8509b05593757ffdd136e8a53f40",
     "development/screenshot-journey.md": "de11922f62020ee42a5c02bab414b51e8a2c8f5961a7898dc885b6bf0953bb86"
   },
@@ -78,7 +78,9 @@
   "first_image": "outputs/dungeonflux-journey-first.png",
   "timeline": "outputs/dungeonflux-visual-journey.html",
   "verification": "development/evidence/journey/verification.json",
-  "independent_review": "pending frozen-candidate review",
+  "independent_review": "Historical recorder and chronology review PASS; exact final helper/browser evidence in development/evidence/journey/critic/final-review.json. Later bounded commercial analysis reused this unchanged recorder.",
   "disk_cap_bytes": 536870912,
-  "retention": "No automatic age deletion; stop on cap; caches/profiles artifacts/tmp/journey"
+  "retention": "No automatic age deletion; stop on cap; caches/profiles artifacts/tmp/journey",
+  "active_recorder_stopped": true,
+  "final_summary": "development/evidence/journey/final-summary.json"
 }

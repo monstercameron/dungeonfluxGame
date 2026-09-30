@@ -1,9 +1,9 @@
 # Project plan index
 
-Current source-backed service design independently reviewed **9.05/10**; runtime/commercial evidence **0.75/10**. Recorder extension behavior and final integrated parity independently passed.
+Current source-backed planning includes bounded joint offer-cost qualification. Independent arithmetic and candidate semantics passed; final actual parity passed. Historical service design **9.05/10** and runtime/commercial evidence **0.75/10** retain their reviewed scope.
 No application runtime, payment/customers or rights clearance exists.
 
-Integrated source `fd6b565296da2ae9fb5b50aaa3f6cd6236402556d203c03c3d5b60bb8144cb49`; manifest `003c51bb54cd407b991594a92973b36a671cb07faebe203809ce1834aa3afc1e`.
+Integrated source `11b95cdca8377b33867e9991df2d0029d27697d0ee677c99a5fb132796b1c21c`; manifest `5a8c0c6a952c04b8e700bc6d5235f166a785d1702ca6cf59334ad3b2e0b858d9`.
 The [service review](evidence/service-critic/README.md) retains its exact historical source/manifest identity; the later recorder policy extension has [separate independent evidence](evidence/journey/critic/README.md).
 
 ## Current counts
@@ -14,7 +14,7 @@ The [service review](evidence/service-critic/README.md) retains its exact histor
 - Crates: **41**; game feature families: **47**; rules: **17**
 - Gates: **12**; delivery slices: **9**
 - RPC services/methods: **12/41**; governing sources: **44**
-- Dispatch-ready: **0**; original attempts preserved: **3**; devlogs: **74** in the [stopped-recorder portable export](evidence/workflow-history.json)
+- Dispatch-ready: **0**; original attempts preserved: **3**; devlogs: **87** in the [stopped-recorder portable export](evidence/workflow-history.json)
 
 ## Current service repair
 
@@ -26,6 +26,16 @@ and [commercial evidence](../planning/commercial-validation.md) are governing re
 Exactly C-df-commerce/X12 and ten pending plans were added; no schema or game scope changed.
 Current offline [model](evidence/service-economics.json) and
 [exact checks](evidence/service-economics-checks.json) do not prove profit/demand/capacity.
+
+## Joint commercial qualification
+
+No new plans/edges/crates/APIs. X12-RESOLVE/ACCEPT now require matched aggregate
+measured generation and loaded support costs, mean/tail uncertainty, explicit
+PASS/FAIL/INCONCLUSIVE and owner-approved margin/risk decisions. The $49/$59
+baselines fail the proposed 70% net-revenue target; population growth cannot repair
+that ratio. [Decision/evidence](evidence/commercial-envelope/decision.md) retains
+exact current assumptions, 30 grid cells and independent boundary checks. This is
+not customer/income/capacity proof.
 
 ## Historical adoption reviews
 

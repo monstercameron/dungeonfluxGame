@@ -1,0 +1,23 @@
+{
+  "verdict": "PASS",
+  "scope": "Read-only prepared governing candidate semantic gate, not actual DB integration approval",
+  "candidate_source_fingerprint": "11b95cdca8377b33867e9991df2d0029d27697d0ee677c99a5fb132796b1c21c",
+  "candidate_manifest_sha256": "d667edf18a36820db5c1f1834226ccd71a7a4b16e4e27d327ae51bf169c8f0a7",
+  "candidate_contract_sha256": "98c08b66ba87e67a1c190de4f0f0d1a603d9c0c64db8b4da21f7ccd092a0ec6a",
+  "candidate_refiner_sha256": "02f5c2d531504c274553b939212bb4b2fe6aed7b6d8853b98f079a4802981029",
+  "changed_governing_sources": [
+    "planning/commercial-validation.md"
+  ],
+  "changed_acceptance_tasks": [
+    "X12-RESOLVE",
+    "X12-ACCEPT"
+  ],
+  "families": 140,
+  "main_manifest_tasks": 306,
+  "operational_task_not_duplicated": "SITE-GODADDY-DNS stays separate operational manifest",
+  "dependencies": 1186,
+  "no_rows_edges_RPCS_models_added": true,
+  "ownership_preserved": true,
+  "all_existing_acceptance_retained": true,
+  "interpretation": "Joint budget measured cohort evidence within existing owned X12 prerequisite/acceptance, not user support denial or baseline tuning. Unmeasured remains INCONCLUSIVE; alternate target/risk requires explicit commercial owner decision; full47/rules/flexiblegroups preserved."
+}

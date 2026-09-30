@@ -56,3 +56,49 @@ cannot extrapolate finite opening credits indefinitely. Report opening/ending
 available cash and its change/shortfall separately; negative available cash blocks
 new paid admissions even if bank receipts rose. Future growth/cash forecasts need
 a month-by-month cohort/liability schedule before any actual runway promise.
+
+
+## Joint offer-cost qualification
+
+The proposed70% contribution target is over net recognized subscription revenue,
+after separate refunds/bad debt/chargeback principal and before acquisition/fixed
+operations. It is an explicit product-owner target, not a universal business law.
+At the unchanged zero-sales-tax assumptions, per campaign-month price P, loaded
+support minutes M and modeled session-equivalents S satisfy the target only when
+`1.8678*S + 0.50*M <= 0.25386*P - 2.45`. Thus49/59 offer joint generation/support
+budgets9.98914/12.52774; four modeled sessions leave5.03588/10.11308support minutes.
+At20support minutes49fails even zero generation;59allows1.353324767...session-
+equivalents. Keeping four sessions/20minutes gives exact minimum pretax price
+78.4731741904987..., rounded up78.48. These are hypothetical frontiers, not prices,
+service promises or support limits. Taxes/rights/workload/rates change the equation.
+
+X12-RESOLVE's commercial owner binds one versioned qualification record to actual
+PriceVersion, matched aggregate allowance/feature and source/model/provider versions,
+measurement cohort/time window, loaded support/generation/delivery/rights costs,
+refund/chargeback/fee definitions, target and approved risk decision. Optional
+video-credit economics and liabilities stay separate; credit profit cannot silently
+mask an unqualified base offer. The qualification includes cost mean, uncertainty,
+first/onboarding versus recurring month, usage/support distributions and correlation,
+failed/denied joins, novice ruling help and billed failed attempts. A cost p95 is an
+operational tail, never a substitute for the realized cohort mean. No new registry,
+crate or runtime human-support admission counter is implied by this evidence record.
+
+X12-ACCEPT checks measured joint mean cost against the selected offer budget and
+reports PASS/FAIL/INCONCLUSIVE with samples and uncertainty. No measured cohort means
+INCONCLUSIVE, not a planning-only PASS. An offer that misses the chosen target retains
+FAIL until measured remediation or an explicit commercial-owner alternative target/
+risk decision; changing the assumption alone never establishes viability. Preserve
+full47features/full2024rules/flexible groups, source-required outcomes and disclosed
+quoted optional video. Support budgets are release/offer economics, not online denial
+of needed human help; actual support labor is counted even when it exceeds estimates.
+
+CAC payback and company operating income are separate: six-month CAC payback admits
+`CAC <= 6*per_campaign_contribution`, while stationary subscription-only income
+requires positive `contribution - churn*CAC` and count
+`ceil((fixed_cost + desired_after_tax_operating_result/(1-tax_rate)) /
+(contribution - churn*CAC))`. Fixed operations may grow at higher counts; acquisition,
+credit liabilities/earnings, actual tax/owner compensation and measured capacity need
+separate qualification. More campaigns cannot repair a failing contribution margin.
+The next external evidence is an authorized working-game cohort measuring useful play,
+loaded support and generation together, plus actual price/retention choices; no
+customer contact, paid calls or experiment has been performed by this refinement.

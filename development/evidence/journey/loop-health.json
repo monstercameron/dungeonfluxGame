@@ -1,7 +1,7 @@
 {
-  "pid": 41211,
-  "observed_at": "2026-09-30T05:40:01+00:00",
-  "minute_bucket": 29845780,
+  "pid": 41975,
+  "observed_at": "2026-09-30T07:12:02+00:00",
+  "minute_bucket": 29845872,
   "result_code": 0,
-  "result": "{\"result\": \"captured\", \"id\": \"c4a47358dba34249-29845780\", \"image\": \"development/evidence/journey/shots/c4a47358dba34249-29845780.png\", \"devlog_status\": \"appended_or_existing\", \"action_required\": false}"
+  "result": "{\"result\": \"captured\", \"id\": \"0f1a2017d2e44f06-29845872\", \"image\": \"development/evidence/journey/shots/0f1a2017d2e44f06-29845872.png\", \"devlog_status\": \"appended_or_existing\", \"action_required\": false}"
 }

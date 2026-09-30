@@ -1,8 +1,8 @@
 {
-  "date": "2026-09-30T05:40:16.656322+00:00",
-  "candidate_manifest_sha256": "003c51bb54cd407b991594a92973b36a671cb07faebe203809ce1834aa3afc1e",
+  "date": "2026-09-30T07:12:33.970549+00:00",
+  "candidate_manifest_sha256": "5a8c0c6a952c04b8e700bc6d5235f166a785d1702ca6cf59334ad3b2e0b858d9",
   "schema_sha256": "b3bd366f90e650fe23f384aedfa57cce785a6f98a6b6f723a1cda2d99f441475",
-  "source_fingerprint": "fd6b565296da2ae9fb5b50aaa3f6cd6236402556d203c03c3d5b60bb8144cb49",
+  "source_fingerprint": "11b95cdca8377b33867e9991df2d0029d27697d0ee677c99a5fb132796b1c21c",
   "checks": {
     "integrity": "ok",
     "foreign_keys": [],

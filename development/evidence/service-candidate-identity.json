@@ -38,8 +38,11 @@
       },
       "exported_at": "2026-09-30T06:57:45+00:00",
       "original_42_devlogs_3_attempts": "Exact rowwise preserved",
-      "recorder_active": false
+      "recorder_active": false,
+      "git_revision": "aaf44f5bc93501b3fce4059d31dd17a10927c77e",
+      "scope": "Historical stopped-recorder74-row export at this Git revision; mutable current workflow-history path now carries later commercial qualification history."
     },
     "independent_review": "development/evidence/journey/critic/README.md"
-  }
+  },
+  "later_commercial_qualification": "development/evidence/commercial-envelope/integrated-identity.json"
 }

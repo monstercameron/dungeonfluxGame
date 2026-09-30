@@ -1,0 +1,51 @@
+{
+  "verdict": "PASS",
+  "scope": "Final narrow actual main/SQLite/portable-history integration; no repeated commercial/runtime review",
+  "checked_at": "2026-09-30T07:16:08.857311+00:00",
+  "source_fingerprint": "11b95cdca8377b33867e9991df2d0029d27697d0ee677c99a5fb132796b1c21c",
+  "manifest_sha256": "5a8c0c6a952c04b8e700bc6d5235f166a785d1702ca6cf59334ad3b2e0b858d9",
+  "candidate_match": "All447 differences are expected generation/updated_at timestamps only; source/criteria/models/API/rows/edges match independently reviewed candidate.",
+  "counts_before_final_verdict_append": {
+    "features": 140,
+    "tasks": 307,
+    "dependencies": 1186,
+    "attempts": 3,
+    "devlog": 86
+  },
+  "history": {
+    "attempts": {
+      "baseline_rows": 3,
+      "preserved_exact": true
+    },
+    "devlog": {
+      "baseline_rows": 74,
+      "preserved_exact": true
+    },
+    "features": {
+      "rows": 140,
+      "execution_fields_preserved": [
+        "id",
+        "status",
+        "created_at"
+      ]
+    },
+    "tasks": {
+      "rows": 307,
+      "execution_fields_preserved": [
+        "id",
+        "status",
+        "created_at",
+        "blocking_reason",
+        "originating_task_id"
+      ]
+    }
+  },
+  "actual_SQL_manifest_parity": true,
+  "portable_export_sha256_before_verdict": "84f39fd90928371ea468e2585232353b04993893843b93224eeb6f0ca92bdec7",
+  "portable_export_actual_row_parity": true,
+  "recorder_active": false,
+  "owned_recorder_pid": 41975,
+  "owned_pid_absent": true,
+  "no_task_transition_or_history_loss": true,
+  "final_export_note": "Append one final critic verdict next, then coordinator refresh export; expected87devlogs if no other writer."
+}
