@@ -14,6 +14,17 @@ commit into the next block: keep the recorded ending revision as the next
 baseline and capture baseline..HEAD, which includes the bookkeeping commit.
 Do not invent a self-hash or silently discard metadata commits.
 
+## 2026-09-30T08:22:00-04:00 to 2026-09-30T10:05:41-04:00
+
+Range: b64e8990b62178751380d511ffbb76435b6122dc..0a2c281a02402493636fde9d93873055bf8a3e28
+
+- 47fd0fa — Record next-proof audit commit block (carried prior bookkeeping commit)
+- 0a2c281 — Expand reviewed backlog to 3145 scoped planning records
+
+Next block baseline: `0a2c281a02402493636fde9d93873055bf8a3e28`. The bookkeeping commit writing this block
+is captured in that next block. This closing active work-session block is shorter than six hours;
+the prior bookkeeping commit is included by revision range rather than time filtering.
+
 ## 2026-09-30T03:18:40-04:00 to 2026-09-30T03:31:24-04:00
 
 Range: fcbd3898cd8858945b3e6dbd3c8fda3f8b3f2b63..b64e8990b62178751380d511ffbb76435b6122dc
