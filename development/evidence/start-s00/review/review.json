@@ -1,0 +1,138 @@
+{
+  "task_id": "START-S00-001",
+  "attempt_id": "START-S00-001-a1",
+  "evaluator_id": "/root/evaluate_s00",
+  "configured_model": "GPT-6 frontier evaluator; exact serving variant unavailable in session metadata",
+  "tested_revision": "4cac7647d4b2aa8e62f2c5c264d8561878383124",
+  "timestamp_utc": "2026-09-30T16:34:07.805252+00:00",
+  "worktree": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/start-s00",
+  "build_hashes": {
+    "artifacts/build/start-s00/debug/df-transport-fixture": "b2a3a7d058afdb9735672b90ec9623d55ccd2bc1f53f537e6c2c363ddd6913e1",
+    "artifacts/build/start-s00/web/df_tools_bg.wasm": "cbb0f4428de5ef81e16c8e8cf6c6983dbfcf6c0bc1669b5f71bba10035623539",
+    "artifacts/build/start-s00/web/df_tools.js": "1194730c60bb2b57d482732bca721d9103ad0af8f5feb1dfb45af0c8d602fef2"
+  },
+  "configuration": "Frozen synthetic loopback preview http://127.0.0.1:43180; debug native+single-threaded Rust/WASM; pinned Rust1.98.1, tonic0.14.6, h2 0.4.19 with attributed browser clock patch",
+  "asset_revision": "No game/media assets; generated JS/WASM hashes recorded",
+  "environment": "macOS-26.6.2-arm64-arm-64bit",
+  "verdict": "inconclusive",
+  "capabilities_actually_used": [
+    "shell and source inspection",
+    "native execution and WASM compile/lint",
+    "direct TCP WebSocket boundary probe",
+    "read-only runtime health/OTEL HTTP queries",
+    "image understanding of worker-supplied screenshot",
+    "CUA tool discovery and failed browser/native UI acquisition"
+  ],
+  "independent_browser_interaction": false,
+  "independent_screenshots": [],
+  "audio_required": false,
+  "criteria": [
+    {
+      "criterion": "Pinned stable Rust workspace builds with tracked lockfile and artifact-contained outputs.",
+      "result": "pass",
+      "procedure": "Read pinned toolchain/workspace/wrapper configuration; verify tracked Cargo.lock and clean submitted commit; run locked native tests/native Clippy/WASM compile and verify frozen runtime identity.",
+      "expected": "Pinned stable workspace and tracked dependency resolution, all build outputs under artifacts.",
+      "observed": "Rust 1.98.1 is pinned, Cargo.lock tracked, clean commit matches full requested revision. Native tests and WASM compile run successfully using artifact-contained tool/cache/target/tmp settings. Exact native/WASM/glue SHA256 values match worker manifest and remain unchanged.",
+      "evidence_ref": [
+        "development/evidence/start-s00/review/identity-before.json",
+        "development/evidence/start-s00/review/identity-after.json",
+        "development/evidence/start-s00/review/native-test.txt",
+        "development/evidence/start-s00/review/check-results.json",
+        "artifacts/worktrees/start-s00/development/build-fixture.sh"
+      ]
+    },
+    {
+      "criterion": "Real Rust/WASM desktop browser fixture exercises native HTTP2 gRPC over binary WebSocket for unary, server, client and bidirectional streaming.",
+      "result": "unverified",
+      "procedure": "Inspect generated schema/client plus local h2 and bounded WebSocket execution path; independently operate all four modes on real frozen Rust/WASM fixture.",
+      "expected": "Independent real browser interaction demonstrates native HTTP2 gRPC unary, server/client/bidi streams over binary WebSocket.",
+      "observed": "Source connects generated tonic/prost contracts through local h2 and native tonic, with no grpc-web/custom envelope. Existing worker screenshot and live native spans support all-mode success, but no independent browser interaction was possible: IAB unavailable, native Mac locked.",
+      "evidence_ref": [
+        "development/evidence/start-s00/review/capability-blocker.json",
+        "development/evidence/start-s00/review/fixture-telemetry-before.txt",
+        "development/evidence/start-s00/worker/browser-fixed-pass.jpg",
+        "artifacts/worktrees/start-s00/crates/df-tools/src/browser.rs"
+      ]
+    },
+    {
+      "criterion": "Fixture verifies trailers/status, half-close, deadline, cancellation and bounded message rejection without unsafe Send/Sync.",
+      "result": "unverified",
+      "procedure": "Run native behavior suite and direct live oversized WebSocket rejection; inspect safe local-future transport, trailers/body-credit/cancel/deadline code; independently run browser failure cases and cleanup twice.",
+      "expected": "All fixture semantics pass across the browser boundary; no unsafe Send/Sync workaround.",
+      "observed": "All 3 native tests pass, including actual 256KiB+1 WebSocket gateway rejection, typed rejection trailers and cancelled stream owner disposal. Additional live gateway probe closes 262145-byte binary message and refuses wrong Origin with 403; health remains active=0 and emits failure span. Authored transport contains no unsafe Send/Sync. Browser code tests OK/error trailers in all modes, bidi response before half-close, grpc-timeout metadata and local/native deadline distinction with owner cleanup. Those browser runtime checks remain independently unperformed.",
+      "evidence_ref": [
+        "development/evidence/start-s00/review/native-test.txt",
+        "development/evidence/start-s00/review/live-gateway-negative.json",
+        "development/evidence/start-s00/review/fixture-health-after.txt",
+        "development/evidence/start-s00/review/fixture-telemetry-after.txt",
+        "development/evidence/start-s00/review/h2-patch-review.json",
+        "development/evidence/start-s00/review/capability-blocker.json"
+      ]
+    },
+    {
+      "criterion": "Native and WASM fmt/Clippy/compile checks pass; documented commands reproduce the fixture.",
+      "result": "pass",
+      "procedure": "Independently rerun documented fmt/native Clippy/workspace test/bridge+tools WASM Clippy/bridge WASM build commands using artifact wrapper; inspect full build and serve reproduction instructions without replacing frozen served files.",
+      "expected": "All applicable format/lint/compile gates pass and documented fixture commands are complete.",
+      "observed": "All independently rerun commands exited 0; native tests passed 3/3. Reproduction docs include pinned official installer verification, matching wasm-bindgen CLI, build/serve commands, URL and scope limits. Full served binaries were not rebuilt during review; their hashes remain unchanged and running candidate is accessible at the documented URL.",
+      "evidence_ref": [
+        "development/evidence/start-s00/review/check-results.json",
+        "development/evidence/start-s00/review/fmt.txt",
+        "development/evidence/start-s00/review/native-clippy.txt",
+        "development/evidence/start-s00/review/wasm-bridge-clippy.txt",
+        "development/evidence/start-s00/review/wasm-tools-clippy.txt",
+        "development/evidence/start-s00/review/wasm-bridge-build.txt",
+        "development/evidence/start-s00/review/native-test.txt",
+        "artifacts/worktrees/start-s00/development/start-s00.md"
+      ]
+    },
+    {
+      "criterion": "Independent browser interaction and visual evidence identify candidate build; G02 device/pressure gaps and production readiness remain explicit.",
+      "result": "unverified",
+      "procedure": "Independently operate and capture initial/pass/repeated-run screen states identifying full candidate commit; inspect explicit G02/G06 and production gaps.",
+      "expected": "Evaluator-owned computer interaction and visual evidence on correct immutable candidate; experimental scope visibly distinguished from production qualification.",
+      "observed": "Source and build hashes identify the exact candidate; reviewed worker screenshot clearly shows full commit, readable results, run-again control and explicit G02 INCONCLUSIVE. Docs explicitly defer physical devices, malicious receive-memory proof, pressure/latency and G06 durability. Independent CUA interaction and screenshots are unavailable because exposed browser inventory is empty and native Mac locked. Worker evidence cannot substitute under ADR0005.",
+      "evidence_ref": [
+        "development/evidence/start-s00/review/capability-blocker.json",
+        "development/evidence/start-s00/review/identity-before.json",
+        "development/evidence/start-s00/review/identity-after.json",
+        "development/evidence/start-s00/worker/browser-fixed-pass.jpg",
+        "artifacts/worktrees/start-s00/development/start-s00.md"
+      ]
+    }
+  ],
+  "supporting_checks": [
+    {
+      "name": "h2 narrow attributed patch",
+      "result": "pass",
+      "observed": "All vendored Rust sources compared to cached h2-0.4.19 published archive. Archive SHA256 matches documented provenance; only recv.rs and stream.rs Instant imports differ.",
+      "evidence_ref": "development/evidence/start-s00/review/h2-patch-review.json"
+    },
+    {
+      "name": "Shared OTEL fixture propagation/bounds",
+      "result": "pass",
+      "observed": "Inspected 512-span VecDeque exporter with visible dropped counter. Read-only live records contain full candidate fixture.build on RPC spans, correct propagated synthetic trace111.../parent222..., typed status/byte attributes and operation duration. Independently induced live oversized tunnel produces new bridge.connection failed span. Browser local SDK noop and native nondurable fixture export are explicitly disclosed; full G06 remains pending. Byte attribute is zero placeholder, not measured traffic proof.",
+      "evidence_ref": [
+        "development/evidence/start-s00/review/fixture-telemetry-before.txt",
+        "development/evidence/start-s00/review/fixture-telemetry-after.txt",
+        "development/evidence/start-s00/review/fixture-health-after.txt",
+        "artifacts/worktrees/start-s00/crates/df-observe/src/lib.rs"
+      ]
+    }
+  ],
+  "defects": [],
+  "verification_gaps": [
+    {
+      "id": "EVAL-CUA-UNAVAILABLE",
+      "severity": "completion-blocking verification gap",
+      "details": "Independent mandatory CUA browser interaction and current evaluator screenshots unavailable. This is not a demonstrated implementation defect.",
+      "required_next_step": "Provide a functioning independent browser control surface or unlock Mac, then run transport checks twice, capture candidate identity and results, confirm fresh active-owner/timeout/OTEL diagnostics; preserve frozen artifacts."
+    }
+  ],
+  "production_gates": {
+    "G02": "INCONCLUSIVE; physical-device/resource/malicious-peer pressure evidence unperformed and required before dependent production transport work",
+    "G06": "pending; durable logs/SQLite/spool/browser upload/recovery/authenticated review not implemented"
+  },
+  "queue_mutated": false,
+  "source_git_mutated": false
+}

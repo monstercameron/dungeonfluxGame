@@ -1,0 +1,12 @@
+{
+  "timestamp_utc": "2026-09-30T16:37:21.670948+00:00",
+  "commit": "4cac7647d4b2aa8e62f2c5c264d8561878383124",
+  "status": "",
+  "build_root": "/Users/earlcameron/Desktop/dungeonflux",
+  "hashes": {
+    "artifacts/build/start-s00/debug/df-transport-fixture": "b2a3a7d058afdb9735672b90ec9623d55ccd2bc1f53f537e6c2c363ddd6913e1",
+    "artifacts/build/start-s00/web/df_tools_bg.wasm": "cbb0f4428de5ef81e16c8e8cf6c6983dbfcf6c0bc1669b5f71bba10035623539",
+    "artifacts/build/start-s00/web/df_tools.js": "1194730c60bb2b57d482732bca721d9103ad0af8f5feb1dfb45af0c8d602fef2"
+  },
+  "match_prior_independent_hashes": true
+}

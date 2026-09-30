@@ -1,0 +1,11 @@
+- main:
+  - generic: DUNGEONFLUX / EXPERIMENTAL S00
+  - heading "Rust transport laboratory" [level=1]
+  - paragraph: Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly.
+  - paragraph: This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.
+  - button "Run transport checks again"
+  - status: "CONNECTING · binary WebSocket / native HTTP/2 PASS · Unary + response metadata PASS · Server streaming + ordered DATA + OK trailers PASS · Client streaming + request half-close PASS · Bidirectional streaming + response before half-close PASS · INVALID_ARGUMENT + error trailers PASS · Error statuses + trailers in all four RPC modes PASS · Cancellation resets stream + server owner released PASS · Deadline (local browser deadline: DeadlineExceeded) + native grpc-timeout + cleanup PASS · Oversized protobuf rejected at native decoding boundary PASS · Simultaneous streams share the same connection COMPLETE · 10 transport checks passed G02 INCONCLUSIVE · physical devices / adversarial receive memory pending"
+  - paragraph:
+    - link "Native fixture diagnostics":
+      - /url: /fixture-health
+  - paragraph: "Candidate: START-S00-001-a1 · Rust 1.98.1 · tonic 0.14.6 · h2 0.4.19 + browser clock · build 4cac7647d4b2aa8e62f2c5c264d8561878383124"

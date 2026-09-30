@@ -1,0 +1,31 @@
+{
+  "record_role": "operational",
+  "scope_status": "frozen",
+  "dispatch_ready": true,
+  "objective": "Mandatory 30-active-minute stale artifact inventory; no deletion authorized in this first bootstrap pass.",
+  "edit_paths": [
+    "artifacts/build/",
+    "artifacts/tmp/"
+  ],
+  "acceptance": [
+    "Inventory eligible generated roots without following symlinks; retain all active, unknown and evidence paths.",
+    "Report removed paths and reclaimed bytes truthfully; this startup inventory performs no deletion."
+  ],
+  "required_capabilities": {
+    "computer_use": false,
+    "vision": false,
+    "audio": false
+  },
+  "required_sources": [
+    "AGENTS.md",
+    "ADR/0002-resource-scheduling-and-cleanup.md"
+  ],
+  "active_claims": [
+    "artifacts/cache/",
+    "artifacts/build/start-s00/",
+    "artifacts/tmp/start-s00/",
+    "artifacts/tmp/journey/",
+    "artifacts/worktrees/start-s00/"
+  ],
+  "protection": "All source, Git, development databases/sidecars, retained evidence and unknown ownership preserved."
+}

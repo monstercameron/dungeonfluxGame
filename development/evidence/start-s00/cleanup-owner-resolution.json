@@ -1,0 +1,10 @@
+{
+  "id": "start-s00-cleanup-owner-resolution",
+  "kind": "resolution",
+  "summary": "Retained installer staging ownership confirmed",
+  "details": "Cleanup retained artifacts/tmp/START-S00-001-a1 due missing explicit active path in its brief. Implementing worker confirmed rustup-init, rustup-init.sha256 and stable.toml are its setup provenance. Lower-case artifacts/tmp/start-s00 is separate wrapper build staging.",
+  "action": "Confirmed ownership with active worker; keep both roots protected during implementation, review and integration.",
+  "outcome": "No deletion; installer provenance and active build sets retained. Ownership uncertainty resolved.",
+  "related_entry_id": "START-CLEANUP-001-a1-ownership-uncertainty",
+  "evidence_ref": "development/evidence/start-s00/cleanup/report.json"
+}

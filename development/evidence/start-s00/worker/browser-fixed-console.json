@@ -1,0 +1,5 @@
+{
+  "since": "2026-09-30T16:25:00Z",
+  "errors": [],
+  "prior_errors": "browser-console.json retains the first unpatched h2 cancellation panic at16:09UTC; not fixed-build errors"
+}

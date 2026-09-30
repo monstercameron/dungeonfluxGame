@@ -1,0 +1,78 @@
+[
+  {
+    "check": "fmt",
+    "exit_code": 0,
+    "command": [
+      "./development/build-fixture.sh",
+      "cargo",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ]
+  },
+  {
+    "check": "native-clippy",
+    "exit_code": 0,
+    "command": [
+      "./development/build-fixture.sh",
+      "cargo",
+      "clippy",
+      "--locked",
+      "--workspace",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ]
+  },
+  {
+    "check": "wasm-bridge-clippy",
+    "exit_code": 0,
+    "command": [
+      "./development/build-fixture.sh",
+      "cargo",
+      "clippy",
+      "--locked",
+      "-p",
+      "df-rpc-bridge",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--",
+      "-D",
+      "warnings"
+    ]
+  },
+  {
+    "check": "wasm-tools-clippy",
+    "exit_code": 0,
+    "command": [
+      "./development/build-fixture.sh",
+      "cargo",
+      "clippy",
+      "--locked",
+      "-p",
+      "df-tools",
+      "--lib",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--",
+      "-D",
+      "warnings"
+    ]
+  },
+  {
+    "check": "wasm-bridge-build",
+    "exit_code": 0,
+    "command": [
+      "./development/build-fixture.sh",
+      "cargo",
+      "build",
+      "--locked",
+      "-p",
+      "df-rpc-bridge",
+      "--target",
+      "wasm32-unknown-unknown"
+    ]
+  }
+]

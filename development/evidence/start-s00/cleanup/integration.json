@@ -1,0 +1,6 @@
+{
+  "result": "pass",
+  "procedure": "Coordinator rechecked retained immutable report hash, protected roots and zero deletion result.",
+  "tested_revision": "sha256:163dc43696012132e4a16d44e70f9bdd8980a902db2ab58100228e52acfa7528",
+  "evidence_ref": "development/evidence/start-s00/cleanup/review.json"
+}

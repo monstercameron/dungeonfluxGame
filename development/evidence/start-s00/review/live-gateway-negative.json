@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-09-30T16:32:28.322370+00:00",
+  "url": "ws://127.0.0.1:43180/tunnel",
+  "method": "Direct independent RFC6455 TCP handshake and masked binary frame; no browser automation",
+  "wrong_origin_status": "HTTP/1.1 403 Forbidden",
+  "allowed_origin_status": "HTTP/1.1 101 Switching Protocols",
+  "oversized_binary_bytes": 262145,
+  "connection_closed": true,
+  "received_bytes_before_close": 35,
+  "timeout_seconds": 3
+}

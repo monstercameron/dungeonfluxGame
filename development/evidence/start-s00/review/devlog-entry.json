@@ -1,0 +1,9 @@
+{
+  "id": "START-S00-001-a1-independent-review-cua-blocked",
+  "kind": "blocker",
+  "summary": "Independent native gates pass; required browser review blocked by unavailable CUA surface",
+  "details": "Exact clean candidate and frozen hashes verified unchanged. Independent fmt/native Clippy/workspace tests/both WASM Clippy/bridge WASM compile all pass. Three native behavior tests and live oversized-message/wrong-Origin probes pass. CUA IAB unavailable, inventory empty; native Chrome access reports locked Mac. Opening Codex browser was queued and did not expose a browser. Worker screenshot viewed only as supporting evidence.",
+  "action": "Retained exact-criterion review, native/check logs, before/after identity and OTEL/health, direct live gateway probe and narrow vendor source comparison. No source/Git/queue writes; no frozen binaries replaced.",
+  "outcome": "INCONCLUSIVE: criteria2,3,5 have mandatory independent browser execution gaps. Restore evaluator browser UI then rerun these criteria on unchanged candidate. Full G02/G06 still pending by design.",
+  "evidence_ref": "development/evidence/start-s00/review/review.json"
+}

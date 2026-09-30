@@ -1,0 +1,58 @@
+{
+  "timestamp_utc": "2026-09-30T16:40:34.924114+00:00",
+  "commit": "4cac7647d4b2aa8e62f2c5c264d8561878383124",
+  "status": "",
+  "build_root": "/Users/earlcameron/Desktop/dungeonflux",
+  "hashes": {
+    "artifacts/build/start-s00/debug/df-transport-fixture": "b2a3a7d058afdb9735672b90ec9623d55ccd2bc1f53f537e6c2c363ddd6913e1",
+    "artifacts/build/start-s00/web/df_tools_bg.wasm": "cbb0f4428de5ef81e16c8e8cf6c6983dbfcf6c0bc1669b5f71bba10035623539",
+    "artifacts/build/start-s00/web/df_tools.js": "1194730c60bb2b57d482732bca721d9103ad0af8f5feb1dfb45af0c8d602fef2"
+  },
+  "match_prior_independent_hashes": true,
+  "governing_source_hashes": {
+    "AGENTS.md": {
+      "expected": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182",
+      "actual": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182"
+    },
+    "planning/coding-style.md": {
+      "expected": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb",
+      "actual": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb"
+    },
+    "planning/implementation-roadmap.md": {
+      "expected": "0160ad8e8ec38f768e2348209b9989e30e8f403d9b1a4ebf694f0801f7206932",
+      "actual": "0160ad8e8ec38f768e2348209b9989e30e8f403d9b1a4ebf694f0801f7206932"
+    },
+    "planning/rpc-transport.md": {
+      "expected": "841ba2500a426e6bacf62017d60e106cae402eb62b0e171eccab26dfb9c31c79",
+      "actual": "841ba2500a426e6bacf62017d60e106cae402eb62b0e171eccab26dfb9c31c79"
+    },
+    "planning/subsystem-architecture.md": {
+      "expected": "cf549f4f046f76713c881228d82c6a7111d8ccc84db208cb9d9db67bb192d9f6",
+      "actual": "cf549f4f046f76713c881228d82c6a7111d8ccc84db208cb9d9db67bb192d9f6"
+    },
+    "planning/subsystem-interfaces.md": {
+      "expected": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a",
+      "actual": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a"
+    },
+    "planning/observability.md": {
+      "expected": "30860fcd071abe3664487a796e424748f40622fafbaf15d56dd18dd0328cbbf2",
+      "actual": "30860fcd071abe3664487a796e424748f40622fafbaf15d56dd18dd0328cbbf2"
+    },
+    "planning/storage-architecture.md": {
+      "expected": "69c6ef1ec2ce02b0ecc33c361e83ef9a027f669df1abe49199605552466a1da6",
+      "actual": "69c6ef1ec2ce02b0ecc33c361e83ef9a027f669df1abe49199605552466a1da6"
+    },
+    "ADR/0001-sqlite-agent-workflow.md": {
+      "expected": "acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8",
+      "actual": "acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8"
+    },
+    "ADR/0004-development-reliability.md": {
+      "expected": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae",
+      "actual": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae"
+    },
+    "ADR/0005-frontier-output-evaluation.md": {
+      "expected": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c",
+      "actual": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c"
+    }
+  }
+}

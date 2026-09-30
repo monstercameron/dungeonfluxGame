@@ -1,0 +1,23 @@
+{
+  "evaluator": "/root/evaluate_browser_s00",
+  "tested_commit": "4cac7647d4b2aa8e62f2c5c264d8561878383124",
+  "initial": "Own tab at fixture URL; READY observed; initial full-page screenshot visually inspected.",
+  "run1": "Semantic CUA click Run transport checks; completed10 and full-page screenshot inspected.",
+  "run2": "Semantic CUA click Run transport checks again; AX reported no change because final content identical; full-page screenshot inspected; native counters prove fresh14 completions,2 cancellations,1 deadline metadata observation.",
+  "visual_findings": "Readable dark background fixture, green enabled button, wrapped monospace results, all ten lines and G02 gap clearly visible, full candidate commit present.",
+  "capability_recovery": "visible:true unavailable to subagent; omit visibility successfully opens own IAB. No native Mac unlock attempts.",
+  "screenshot_files": {
+    "initial.png": {
+      "sha256": "16c08455f7f26d88d94fd7ca1b4bbce8d568aecb8b0437b29b2587d7bf7f2b7f",
+      "saved_timestamp_utc": "2026-09-30T16:36:31.307967+00:00"
+    },
+    "run1.png": {
+      "sha256": "f90fc89246546f521eec03ce451cb95c18bb05e9e284889680cb9d22d7ff6505",
+      "saved_timestamp_utc": "2026-09-30T16:36:31.308189+00:00"
+    },
+    "run2.png": {
+      "sha256": "f90fc89246546f521eec03ce451cb95c18bb05e9e284889680cb9d22d7ff6505",
+      "saved_timestamp_utc": "2026-09-30T16:37:44.369439+00:00"
+    }
+  }
+}
