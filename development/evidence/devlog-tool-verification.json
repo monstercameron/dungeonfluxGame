@@ -1,0 +1,37 @@
+{
+  "tool_sha256": "b2a36eda47b69fb1ac272ddd272729fc765a8a527e8f528cd0b4f85e734227ba",
+  "checks": [
+    {
+      "case": "first valid append",
+      "success": true,
+      "result": "{\"id\": \"TEST-DEVLOG-TOOL\", \"result\": \"appended\", \"queue_state_changed\": false}"
+    },
+    {
+      "case": "same-ID same-payload retry",
+      "success": true,
+      "result": "{\"id\": \"TEST-DEVLOG-TOOL\", \"result\": \"existing\", \"queue_state_changed\": false}"
+    },
+    {
+      "case": "same-ID different-payload refused",
+      "success": false,
+      "result": "ID already has different immutable observation; append linked correction"
+    },
+    {
+      "case": "missing linked entry refused",
+      "success": false,
+      "result": "Traceback (most recent call last):\n  File \"/Users/earlcameron/Documents/Codex/2026-09-29/cr/dungeonflux/development/devlog.py\", line 36, in <module>\n    con.execute('INSERT INTO devlog('+','.join(row)+') VALUES('+','.join('?' for _ in row)+')',list(row.values()));result='appended'\nsqlite3.IntegrityError: FOREIGN KEY constraint failed"
+    },
+    {
+      "case": "entry identity injection refused",
+      "success": false,
+      "result": "Unsupported fields; identity/task references come from execution context"
+    },
+    {
+      "case": "unsupported kind refused",
+      "success": false,
+      "result": "Invalid observation kind"
+    }
+  ],
+  "live_database_mutated": false,
+  "queue_mutation": false
+}

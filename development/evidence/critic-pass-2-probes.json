@@ -1,0 +1,172 @@
+{
+  "manifest_sha256": "4dfe2801f284a225d521234b5712cf07ef458430cc8367ee3064cd9d3f77b630",
+  "schema_sha256": "8796fa9be1ea05fbee7de486cd0cd71bb4b240cbb34bc477b385460f8a5e98c5",
+  "source_fingerprint": "75e2bb7f366bca756a9e46faef82f6174918cb16ab83a1fa1e580c98be06241e",
+  "db_version": 2,
+  "integrity": "ok",
+  "fk": [],
+  "journal": "wal",
+  "probes": [
+    {
+      "case": "positive reviewed integrated task",
+      "expected": "ACCEPTED",
+      "result": "ACCEPTED",
+      "pass": true,
+      "detail": "operation completed"
+    },
+    {
+      "case": "terminal integrated insertion",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "implementation attempt must begin active and follow fenced phases"
+    },
+    {
+      "case": "NULL feature id",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "stable nonempty ID required"
+    },
+    {
+      "case": "empty task id",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "stable nonempty ID required"
+    },
+    {
+      "case": "postapproval evaluator worker mutation",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "approval needs independent frontier criterion evidence and tested identity"
+    },
+    {
+      "case": "postapproval worker mutation",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "attempt identity and preserved brief are immutable"
+    },
+    {
+      "case": "postapproval criterion removal",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "approval needs independent frontier criterion evidence and tested identity"
+    },
+    {
+      "case": "postapproval required capability removal",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "approval needs independent frontier criterion evidence and tested identity"
+    },
+    {
+      "case": "expired new submission",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "superseded or expired attempt cannot submit/integrate"
+    },
+    {
+      "case": "malformed expiry submission",
+      "expected": "REJECTED",
+      "result": "ACCEPTED",
+      "pass": false,
+      "detail": "operation completed"
+    },
+    {
+      "case": "empty token submission",
+      "expected": "REJECTED",
+      "result": "ACCEPTED",
+      "pass": false,
+      "detail": "operation completed"
+    },
+    {
+      "case": "NULL lease owner submission",
+      "expected": "REJECTED",
+      "result": "ACCEPTED",
+      "pass": false,
+      "detail": "operation completed"
+    },
+    {
+      "case": "review verdict outside phase",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "review verdict requires current unexpired tracked phase ownership"
+    },
+    {
+      "case": "integrating directly from approved review phase",
+      "expected": "REJECTED",
+      "result": "ACCEPTED",
+      "pass": false,
+      "detail": "operation completed"
+    },
+    {
+      "case": "terminal active allows second live worker",
+      "expected": "REJECTED",
+      "result": "ACCEPTED",
+      "pass": false,
+      "detail": "operation completed"
+    },
+    {
+      "case": "criteria changed after review then done",
+      "expected": "REJECTED",
+      "result": "ACCEPTED",
+      "pass": false,
+      "detail": "operation completed"
+    },
+    {
+      "case": "build mismatch done",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "done requires completed prerequisites and independent tested/integrated evidence"
+    },
+    {
+      "case": "selfapproval evidence done",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "approval needs independent frontier criterion evidence and tested identity"
+    },
+    {
+      "case": "no independent evidence taskdone",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "done requires completed prerequisites and independent tested/integrated evidence"
+    },
+    {
+      "case": "cycle edge",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "dependency cycle"
+    },
+    {
+      "case": "dangling edge",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "FOREIGN KEY constraint failed"
+    },
+    {
+      "case": "appendonly update",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "devlog is append only"
+    },
+    {
+      "case": "appendonly delete",
+      "expected": "REJECTED",
+      "result": "REJECTED",
+      "pass": true,
+      "detail": "devlog is append only"
+    }
+  ]
+}

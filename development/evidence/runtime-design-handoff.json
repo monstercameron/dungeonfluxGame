@@ -1,0 +1,584 @@
+{
+  "counts": {
+    "crates": 40,
+    "features": 44,
+    "rules_families": 17,
+    "gates": 12,
+    "slices": 9,
+    "rpc_services": 11
+  },
+  "new_features": {
+    "df-world": {
+      "feature_id": "F35",
+      "authority": "What changes through world causality and game time",
+      "models": "WorldState, WorldEntity, WorldTime, Schedule, TravelLeg, EnvironmentalState, ThreatClock, WorldDelta"
+    },
+    "df-knowledge": {
+      "feature_id": "F36",
+      "authority": "Who observed/knows/believes/remembers a claim",
+      "models": "CanonicalFact, KnowledgeGrant, Belief, EvidenceSource, WitnessRecord, Memory, RumorTransmission, KnowledgeDelta"
+    },
+    "df-intent": {
+      "feature_id": "F37",
+      "authority": "What input means and whether it proposes an action",
+      "models": "RawInputRef, IntentDisposition, IntentProposal, ActionPlan, PlanStep, IntentBasis"
+    },
+    "df-interaction": {
+      "feature_id": "F38",
+      "authority": "Motivated NPC/object/faction reactions",
+      "models": "NpcState, Relationship, ConversationState, TopicGraph, SecretPolicy, Obligation, InteractionProposal"
+    },
+    "df-narrative": {
+      "feature_id": "F39",
+      "authority": "Why events matter and which plausible opportunity to propose",
+      "models": "NarrativeState, Arc, PhaseCondition, StoryBeat, Thread, CharacterHook, NarrativeBudget, NarrativeProposal"
+    },
+    "df-encounter": {
+      "feature_id": "F40",
+      "authority": "Which valid challenge and objectives suit circumstances",
+      "models": "EncounterRequest, EncounterPlan, EncounterObjective, EscapeCondition, ChallengeBudget"
+    },
+    "df-combat": {
+      "feature_id": "F41",
+      "authority": "Legal NPC tactics and authored battlefield escalation",
+      "models": "CombatPolicyState, TacticalObservation, TacticalProposal, ReinforcementTrigger"
+    },
+    "df-experience": {
+      "feature_id": "F42",
+      "authority": "Macro pacing and fair voluntary participation opportunities",
+      "models": "ExperienceState, ActivityWindow, SpotlightOpportunity, PacingRecommendation"
+    },
+    "df-tempo": {
+      "feature_id": "F43",
+      "authority": "Moment-to-moment audiovisual intensity",
+      "models": "TempoState, TempoFrame, TempoPolicy, EffectFatigue, TempoCueIntent"
+    },
+    "df-presentation": {
+      "feature_id": "F44",
+      "authority": "How permitted events/profiles become audiovisual/UI plans",
+      "models": "PresentationPlan, AudiencePresentationBasis, TimelineCue, AssetDemand, ForecastCandidate"
+    }
+  },
+  "crates": [
+    {
+      "id": "df-types",
+      "ownership": "Native/WASM: small IDs, revisions, units and provenance",
+      "public_boundary": "SessionId, OperationId, AssetId, Revision, LocaleTag, BuildIdentity",
+      "dependencies": []
+    },
+    {
+      "id": "df-protocol",
+      "ownership": "Native/WASM: protobuf and generated RPC clients/services",
+      "public_boundary": "public/admin schemas; no gameplay implementation",
+      "dependencies": []
+    },
+    {
+      "id": "df-observe",
+      "ownership": "Native/WASM: common OTEL conventions/export hook",
+      "public_boundary": "OperationContext, instrumentation, bounded diagnostics",
+      "dependencies": [
+        "df-types"
+      ]
+    },
+    {
+      "id": "df-locale",
+      "ownership": "Native/WASM: catalogs/locale negotiation",
+      "public_boundary": "Catalog, TextKey, format/settle",
+      "dependencies": [
+        "df-types"
+      ]
+    },
+    {
+      "id": "df-rpc-bridge",
+      "ownership": "Native/WASM target modules: binary WebSocket byte adapter",
+      "public_boundary": "TunnelStream, limits/lifecycle, native accept/browser connect",
+      "dependencies": [
+        "df-types",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-model",
+      "ownership": "Domain state/inputs/effects and persisted document types",
+      "public_boundary": "GameState, GameCommand, Effect, GameFact, versioned checkpoint",
+      "dependencies": [
+        "df-types"
+      ]
+    },
+    {
+      "id": "df-content",
+      "ownership": "Versioned campaign/rules catalogs and asset references",
+      "public_boundary": "ContentPack, RulesCatalog, validate, NPC/context/scene definitions",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-locale"
+      ]
+    },
+    {
+      "id": "df-rules",
+      "ownership": "Pure D&D mechanics, legal choices and spatial rules",
+      "public_boundary": "Ruleset, ResolveRequest/Outcome, rolls, legal choices",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content"
+      ]
+    },
+    {
+      "id": "df-world",
+      "ownership": "Pure world causality, logical time, travel/weather/resources/faction movement",
+      "public_boundary": "WorldSimulator::advance/affordances; WorldDelta",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content",
+        "df-rules"
+      ]
+    },
+    {
+      "id": "df-knowledge",
+      "ownership": "Truth-linked knowledge/beliefs, witness provenance, memory/rumor policy",
+      "public_boundary": "KnowledgeSystem::perceive/query/propagate/decay; KnowledgeDelta",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content"
+      ]
+    },
+    {
+      "id": "df-intent",
+      "ownership": "Classify input and validate bounded semantic action plans",
+      "public_boundary": "IntentEngine::classify/validate; IntentDisposition, ActionPlan",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content",
+        "df-rules"
+      ]
+    },
+    {
+      "id": "df-interaction",
+      "ownership": "NPC cognition, social policy, relationships/conversations/obligations",
+      "public_boundary": "InteractionEngine::react/plan; InteractionProposal",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content",
+        "df-rules",
+        "df-knowledge"
+      ]
+    },
+    {
+      "id": "df-narrative",
+      "ownership": "Story arcs/beats/threads/hooks, gravity and convergence policy",
+      "public_boundary": "NarrativeDirector::evaluate; NarrativeProposal",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content",
+        "df-knowledge"
+      ]
+    },
+    {
+      "id": "df-encounter",
+      "ownership": "Combat/social/chase/hazard/puzzle/survival challenge preparation",
+      "public_boundary": "EncounterDirector::propose/validate; EncounterPlan",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content",
+        "df-rules"
+      ]
+    },
+    {
+      "id": "df-combat",
+      "ownership": "Legal NPC tactics, battlefield objectives/escalation policy",
+      "public_boundary": "CombatDirector::choose; TacticalProposal",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content",
+        "df-rules",
+        "df-knowledge"
+      ]
+    },
+    {
+      "id": "df-experience",
+      "ownership": "Macro pacing and voluntary spotlight opportunity policy",
+      "public_boundary": "ExperienceDirector::observe/recommend; PacingRecommendation",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content"
+      ]
+    },
+    {
+      "id": "df-tempo",
+      "ownership": "Continuous moment intensity, inertia/fatigue and bounded impulse policy",
+      "public_boundary": "TempoEngine::advance; TempoFrame, TempoCueIntent",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content"
+      ]
+    },
+    {
+      "id": "df-presentation",
+      "ownership": "Audience-safe audiovisual/UI plans and anticipatory asset demand",
+      "public_boundary": "PresentationDirector::compose/forecast; PresentationPlan",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content",
+        "df-knowledge"
+      ]
+    },
+    {
+      "id": "df-engine",
+      "ownership": "Pure composition of rules and directors; game modes and staged transitions",
+      "public_boundary": "Engine::decide/apply/read_model; typed effects/offers",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content",
+        "df-rules",
+        "df-world",
+        "df-knowledge",
+        "df-intent",
+        "df-interaction",
+        "df-narrative",
+        "df-encounter",
+        "df-combat",
+        "df-experience",
+        "df-tempo",
+        "df-presentation"
+      ]
+    },
+    {
+      "id": "df-auth",
+      "ownership": "Identity, membership access and role/capability policy",
+      "public_boundary": "Authenticator, CredentialStore port, Principal, AuthorizedAudience",
+      "dependencies": [
+        "df-types",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-session",
+      "ownership": "Actor/directory, durable decisions, timers/jobs/subscriptions",
+      "public_boundary": "SessionHandle, SessionRepository and EffectExecutor ports, ReadSnapshot",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-engine",
+        "df-auth",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-assets",
+      "ownership": "Immutable durable media bytes/manifests/access",
+      "public_boundary": "AssetStore and AssetMetadataStore ports, resolve/open/publish",
+      "dependencies": [
+        "df-types",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-provider-api",
+      "ownership": "Provider contracts, budgets and job context",
+      "public_boundary": "text/STT/TTS/image/video/sound ports, BudgetStore, RecordingStore",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-providers",
+      "ownership": "Actual vendor/native HTTP adapters; provider modules",
+      "public_boundary": "factories implementing provider ports",
+      "dependencies": [
+        "df-types",
+        "df-observe",
+        "df-provider-api"
+      ]
+    },
+    {
+      "id": "df-ai",
+      "ownership": "Validated narrative/intent/flavor, cache/replay/policy",
+      "public_boundary": "AiService::run; AiResult with permitted text/proposals",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content",
+        "df-observe",
+        "df-provider-api"
+      ]
+    },
+    {
+      "id": "df-media",
+      "ownership": "Asset Engine: predictive media, live speech, audio routing, visual/sound jobs",
+      "public_boundary": "AssetEngine::admit/status/cancel/complete/reconcile; MediaService streams",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content",
+        "df-assets",
+        "df-observe",
+        "df-provider-api"
+      ]
+    },
+    {
+      "id": "df-persistence",
+      "ownership": "PostgreSQL adapters and migrations",
+      "public_boundary": "implementations of repository/auth/asset/budget/recording ports",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-session",
+        "df-auth",
+        "df-assets",
+        "df-provider-api",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-api",
+      "ownership": "RPC handlers, audience projection and debug surfaces",
+      "public_boundary": "generated services; PublicServiceSet/AdminServiceSet",
+      "dependencies": [
+        "df-types",
+        "df-protocol",
+        "df-model",
+        "df-session",
+        "df-auth",
+        "df-assets",
+        "df-media",
+        "df-provider-api",
+        "df-locale",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-server",
+      "ownership": "Composition binary: config, listeners/wiring/readiness/shutdown",
+      "public_boundary": "startup/configuration; no reusable game logic",
+      "dependencies": [
+        "df-types",
+        "df-content",
+        "df-engine",
+        "df-session",
+        "df-auth",
+        "df-assets",
+        "df-provider-api",
+        "df-providers",
+        "df-ai",
+        "df-media",
+        "df-persistence",
+        "df-api",
+        "df-rpc-bridge",
+        "df-observe",
+        "df-telemetry"
+      ]
+    },
+    {
+      "id": "df-client",
+      "ownership": "RPC/connection, view freshness, bounded assets/reporting",
+      "public_boundary": "ClientSession, ViewStore, AssetCache",
+      "dependencies": [
+        "df-types",
+        "df-protocol",
+        "df-rpc-bridge",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-ui",
+      "ownership": "Shared Rust tokens/widgets, join/about/host panels/accessibility",
+      "public_boundary": "components, theme, presentation helpers",
+      "dependencies": [
+        "df-types",
+        "df-protocol",
+        "df-locale"
+      ]
+    },
+    {
+      "id": "df-render",
+      "ownership": "Flat/tactical scenes, tokens/animations and optional 3D",
+      "public_boundary": "SceneRenderer, RendererCapabilities, PresentationOutcome",
+      "dependencies": [
+        "df-types",
+        "df-protocol",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-audio",
+      "ownership": "Browser mixer/playback and microphone adapters",
+      "public_boundary": "AudioPlayer, CaptureSession, outcomes/cancel",
+      "dependencies": [
+        "df-types",
+        "df-protocol",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-player",
+      "ownership": "Personal responsive screens and interaction mapping",
+      "public_boundary": "PlayerScreen::mount/update",
+      "dependencies": [
+        "df-types",
+        "df-protocol",
+        "df-client",
+        "df-ui",
+        "df-render",
+        "df-audio",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-display",
+      "ownership": "Group scene, party/initiative/captions/dice/cinematics",
+      "public_boundary": "DisplayScreen::mount/update",
+      "dependencies": [
+        "df-types",
+        "df-protocol",
+        "df-client",
+        "df-ui",
+        "df-render",
+        "df-audio",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-web",
+      "ownership": "WASM boot/routes/composition; generated JS glue only",
+      "public_boundary": "startup and role/panel mounting",
+      "dependencies": [
+        "df-types",
+        "df-client",
+        "df-ui",
+        "df-player",
+        "df-display",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-telemetry",
+      "ownership": "Rust OTLP ingestion, spool/SQLite writer and read-only review",
+      "public_boundary": "ingest/query/pin/export, TelemetryService, retention/readiness",
+      "dependencies": [
+        "df-types",
+        "df-protocol",
+        "df-auth",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-testkit",
+      "ownership": "Test-only fixtures/fakes, clocks/dice/replays",
+      "public_boundary": "VirtualHarness, FixtureProviders, contract assertions",
+      "dependencies": [
+        "df-types",
+        "df-model",
+        "df-content",
+        "df-rules",
+        "df-engine",
+        "df-session",
+        "df-auth",
+        "df-assets",
+        "df-provider-api"
+      ]
+    },
+    {
+      "id": "df-tools",
+      "ownership": "Rust dfctl/xtask: build/preview/content/media/test tools",
+      "public_boundary": "CLI via RPC; owned process/build manifests",
+      "dependencies": [
+        "df-types",
+        "df-protocol",
+        "df-content",
+        "df-assets",
+        "df-provider-api",
+        "df-providers",
+        "df-ai",
+        "df-media",
+        "df-observe"
+      ]
+    },
+    {
+      "id": "df-workflow",
+      "ownership": "SQLite queue/devlog, dispatch/evaluation/escalation/cleanup",
+      "public_boundary": "scoped commands and coordinator loop",
+      "dependencies": [
+        "df-types",
+        "df-observe"
+      ]
+    }
+  ],
+  "model_ledger_additions_and_updates": {
+    "df-world": "WorldState, WorldEntity, WorldTime, Schedule, TravelLeg, EnvironmentalState, ThreatClock, WorldDelta; Pure contract authority: What changes through world causality and game time. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit.",
+    "df-knowledge": "CanonicalFact, KnowledgeGrant, Belief, EvidenceSource, WitnessRecord, Memory, RumorTransmission, KnowledgeDelta; Pure contract authority: Who observed/knows/believes/remembers a claim. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit.",
+    "df-intent": "RawInputRef, IntentDisposition, IntentProposal, ActionPlan, PlanStep, IntentBasis; Pure contract authority: What input means and whether it proposes an action. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit.",
+    "df-interaction": "NpcState, Relationship, ConversationState, TopicGraph, SecretPolicy, Obligation, InteractionProposal; Pure contract authority: Motivated NPC/object/faction reactions. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit.",
+    "df-narrative": "NarrativeState, Arc, PhaseCondition, StoryBeat, Thread, CharacterHook, NarrativeBudget, NarrativeProposal; Pure contract authority: Why events matter and which plausible opportunity to propose. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit.",
+    "df-encounter": "EncounterRequest, EncounterPlan, EncounterObjective, EscapeCondition, ChallengeBudget; Pure contract authority: Which valid challenge and objectives suit circumstances. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit.",
+    "df-combat": "CombatPolicyState, TacticalObservation, TacticalProposal, ReinforcementTrigger; Pure contract authority: Legal NPC tactics and authored battlefield escalation. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit.",
+    "df-experience": "ExperienceState, ActivityWindow, SpotlightOpportunity, PacingRecommendation; Pure contract authority: Macro pacing and fair voluntary participation opportunities. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit.",
+    "df-tempo": "TempoState, TempoFrame, TempoPolicy, EffectFatigue, TempoCueIntent; Pure contract authority: Moment-to-moment audiovisual intensity. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit.",
+    "df-presentation": "PresentationPlan, AudiencePresentationBasis, TimelineCue, AssetDemand, ForecastCandidate; Pure contract authority: How permitted events/profiles become audiovisual/UI plans. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit.",
+    "df-model": "Add world/time/schedules/threats; canonical truth vs scoped knowledge/belief/memory/rumor; NPC relationships/conversations/secrets/obligations; narrative beats/threads/hooks/budgets; encounter/tactics; activity/spotlight; tempo/fatigue; presentation demand and NarrativeMoment; chosen accepted semantic/draw/policy-version decision records; AssetJobState/AssetDependency/CanonicalPack/VisualBible/EntityIdentityRevision/ShotPlan/PerformanceHint/PrefetchPolicy.",
+    "df-content": "Add versioned CampaignStructure arcs/phases/beat prerequisite DAG/alternative delivery; source-based world/affordance/social/encounter/tactic policies; knowledge/memory/rumor bounds; experience/tempo/cue/accessibility policy; style/reference identity and acyclic asset dependency graph. Validate references/phase reachability/alternative feasibility/policy bounds, no silent retcon.",
+    "df-engine": "Compose rules and ten separate pure runtime crates through df-model proposals in bounded ordered staged decision pass; session commits; preserve pending choice/reaction/ruling/continuation and exact replay decisions.",
+    "df-media": "AssetEngine admit/status/cancel/complete/reconcile receives committed demand/context/reservation; live STT/TTS, validated stable clauses after proof else buffered; fair bounded required/likely/optional queues, dependency invalidation/stale/superseded, canonicalpack references, mode/cost/unknown reconciliation and cheap nonblocking fallbacks. Existing MediaService/provider ports retain generation, no newcrate.",
+    "df-api": "Existing11 services add versioned permitted intent/clarification/partial plan progress, discovered knowledge/thread/conversation/objective views, TempoProfile curve/anchors/clamps, stable cue IDs and authorized assetstatus/identity; semantic futures/secret NPC/hidden threat stages never leak in profile/preloads. G03 numbering freeze.",
+    "df-protocol": "Add existing-service DTO enums for IntentDisposition/ActionPlanProgress, audience-safe discovered knowledge/conversations/encounter objectives, versioned TempoProfile/curve/clamps, TimelineCue and AssetReadiness/CanonicalIdentity references. G03/G10/G12 freeze added tags; no newservice.",
+    "df-persistence": "Extend existing Postgres snapshot/decision/knowledge/narrative/director/asset groups, indexed adjacency rather than externalgraph DB, compatible replay applies committed versioned decisions and accepted semantics/draws without LLM/paidcalls; unknown versions explicitgap.",
+    "df-testkit": "Add controlled clock/dice/semantic fixtures for graph/alternatives/refusal/rumor/partialplans/legal tactics/replay-statehash/hiddenstate noninterference/tempo-fatigue/stems/clause/bargein/job fairness/actualspend tests; real browser vision/audio accepted separately."
+  },
+  "new_gates": [
+    {
+      "id": "G10",
+      "title": "Campaign authoring and replay",
+      "required_output": "df-model/df-content/df-engine + storage owner: versioned director state/authoring schemas, beat/asset DAG and references/alternative reachability, logical-time/pause rules, ordered decision/semantic/draw provenance, compatible deterministic reducer/migration and replay/hash contract; unsupported versions explicit"
+    },
+    {
+      "id": "G11",
+      "title": "Causal interaction and bounded directors",
+      "required_output": "df-world/df-knowledge/df-intent/df-interaction/df-narrative/df-encounter/df-combat owners: source-grounded social/physical rulings, epistemic privacy/witness/rumor/memory policy, actor decision/event/candidate/plan bounds, NPC perception/tactics, agency/refusal and compound-step cancellation/partial outcomes"
+    },
+    {
+      "id": "G12",
+      "title": "Experience, tempo and predictive assets",
+      "required_output": "df-experience/df-tempo/df-presentation/df-media + device/cost owner: permitted pacing observations/consent, versioned intensity/cue/asset-demand APIs, accessibility/audio/UI budgets, hidden-state noninterference, inertia/fatigue/stem timing, fair prefetch/expiry/reservations/waste and measured session/device/cost calibration; stable-clause/barge-in safety"
+    }
+  ],
+  "changed_design_sources": {
+    "AGENTS.md": "b8e701bf989feb7209bbf64f4bd1e9c5261a3fc2f0742b7c67e798e4cd7306fe",
+    "planning/README.md": "2a795c9020979fbd46fc613efc711789c5eab0d27d75e017ceba247280ebe462",
+    "planning/subsystem-architecture.md": "38a6590ec78f461d748f3f7ad53a685b00c9861cc305ba847c6941ff42ea19a7",
+    "planning/subsystem-interfaces.md": "a37e0b83016a271094cf2de0c4fa2d3e58b239c95958c72a3606c1f4244580a0",
+    "planning/runtime-directors.md": "33373d7ead29043800c9b45d5b249164876dd2ba810784b43937cfd150df6a80",
+    "planning/narrative-engine.md": "370ca7352aa195467baeca921c0d016284b16619f6f3e65087d6be8831e93d47",
+    "planning/interaction-engine.md": "6ba826a7ca0afe4b6ca3ecab1d2dc5c8794e6fe7b91e5d985c6854a44ca57d3e",
+    "planning/tempo-engine.md": "e227dda990685f5771b577529652c44d59704a23db8ad206e3e59be41f4c81d6",
+    "planning/asset-engine.md": "6d6d15f4cce1953434b1a19172f4babd6771a5a0a75eab54bb994d7f68ee1c58",
+    "planning/feature-inventory.md": "bdb293633d8a6c4fe87c6d8044082c0a8c2126c7c8d90a5102c84fe8355105f4",
+    "planning/implementation-roadmap.md": "c2f2a61d92664d0120b81f2580605cda39fef69cd339e0f5eaa6137f59bcbdde",
+    "planning/rpc-api.md": "2944647fddb144b820a58023e52067c46ac89f72e3ec8a0415ad2a0132ce5f30",
+    "planning/storage-architecture.md": "fc87e8c67df900a4f678d96de3ab93b80ee27dac236dc0b2992a22c2d1750920",
+    "planning/observability.md": "2ba0404c505c2e598d95bad38435668ea6f482c149401731b0869b8a76e3ada7",
+    "planning/runtime-reliability.md": "2501efc39bee608824b89190ebc47dfa8b0f2bffe6a6c4112b2e3d80d985ad08",
+    "planning/optimization.md": "7de2ec91c89c7afaf3d1c047eddd00135f1a24fde934a49eec6c4d930aae8ce8",
+    "planning/rules-support.md": "c70047a0cce874297e234fed2f00ef7542e2677fcc80b14b44d37ded51926fad",
+    "planning/rules-coverage.md": "f0709b003ef3a87b6ab57e1208d84addc2143170aa7d0d99d21a7e6baf450162"
+  },
+  "notes": [
+    "Keep full planning task states truthful, no runtime evidence; no game/workspace source created.",
+    "Expand F15/F16/F17/F24/F25/F26/F27/F28/F30/F31 plus F44 with predictive AssetEngine requirements; all five outlines included.",
+    "G10/G11/G12 only block affecteddirector work, initial transportidentity unaffected.",
+    "No newRPCservice, no new externalgraphDB/media provider boundaries; df-model shared persisted schemas avoid director dependencycycles."
+  ]
+}

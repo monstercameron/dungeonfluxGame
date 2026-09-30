@@ -1,0 +1,229 @@
+{
+  "format_version": 1,
+  "purpose": "Coordinator-authorized operational tasks outside seeded game blueprints; retain for reproducible fresh provisioning",
+  "tasks": [
+    {
+      "id": "SITE-GODADDY-DNS",
+      "feature_id": "F34",
+      "title": "Point dungeonfluxdnd.com and www to verified GitHub Pages through GoDaddy",
+      "objective": "Configure the verified authoritative DNS for dungeonfluxdnd.com and www to the verified GitHub Pages target through GoDaddy, preserving existing unrelated DNS and retaining rollback/evidence.",
+      "stage": "implementation",
+      "edit_areas_json": [
+        "GoDaddy DNS zone records for dungeonfluxdnd.com apex and www only",
+        "GitHub Pages domain verification/custom-domain setup for the already selected site only as prerequisites",
+        "durable private operational evidence outside docs/artifacts cleanup"
+      ],
+      "acceptance_json": [
+        "Verified selected GitHub owner/repository, publishing branch/docs source, domain ownership and actual Pages custom-domain configuration before DNS mutation.",
+        "GoDaddy authoritative DNS ownership and current apex/www records inspected; if nameservers delegate elsewhere, record the correct authoritative provider and stop rather than silently change nameservers.",
+        "Durable before-change record export, previous values/TTLs, exact approved record diff and rollback instructions retained; unrelated MX/TXT/mail/verification records unchanged.",
+        "Apex uses current GitHub-documented A/ALIAS/ANAME configuration and www CNAME targets the verified GitHub Pages account host; no guessed owner, project path in DNS target, wildcard, conflicting apex/www records or unrelated change.",
+        "Post-propagation authoritative/public resolver checks and actual browser apex/www HTTPS/canonical redirect/asset navigation pass; certificate pending is incomplete, not reported successful.",
+        "Independent frontier computer-use/vision evidence and coordinator integration/operational handoff recorded; no secrets in logs/evidence."
+      ],
+      "verification_json": [
+        "Current GitHub Pages publishing/custom-domain state and domain ownership evidence",
+        "Before/after exact DNS diff and unrelated-record parity",
+        "Authoritative and public-resolver apex/www answers after sufficient TTL propagation",
+        "Actual browser apex/www HTTPS/canonical redirect and image/style loading",
+        "Independent frontier evaluator with computer-use/vision and retained evidence"
+      ],
+      "brief_json": {
+        "dispatch_ready": false,
+        "why": "User explicitly requested a todo to use GoDaddy to point dungeonfluxdnd.com and www to the project GitHub Pages site, after local static-site preparation.",
+        "objective": "Configure the verified authoritative DNS for dungeonfluxdnd.com and www to the verified GitHub Pages target through GoDaddy, preserving existing unrelated DNS and retaining rollback/evidence.",
+        "current_scope": "This message creates the planning todo only; it does not authorize current browser login, DNS changes, deployment or repository initialization.",
+        "owners": [
+          "coordinator-selected site operations worker",
+          "independent frontier output evaluator"
+        ],
+        "input_revision": "98b4badc06df2254a0032fd9ecfae373c82359e92602a45c01a10f42c126fd4c",
+        "governing_sources": [
+          {
+            "path": "AGENTS.md",
+            "sha256": "4fffd5d4aae51199c1e8635275f3deac38c9a560d8666f11c77291cd58c3d824",
+            "sections": [
+              "1. Think Before Coding",
+              "2. Simplicity First",
+              "3. Surgical Changes",
+              "4. Goal-Driven Execution",
+              "Planning and project documentation",
+              "Mandatory coding style",
+              "Application architecture",
+              "Development strategies",
+              "Implementation and evaluation",
+              "Agent devlog",
+              "Generated files and artifacts",
+              "Changelog",
+              "Hosted-service authority"
+            ]
+          },
+          {
+            "path": "docs/README.md",
+            "sha256": "4b883be8dd8ed6393fd62af28835bb933a312388f8097d97e34695bd60663ba4"
+          },
+          {
+            "path": "docs/CNAME",
+            "sha256": "0a78e5eadc336122b7e61a4f3d1cc18c07e7745541183b03aeb39caf4aee5b0c"
+          },
+          {
+            "path": "ADR/0001-sqlite-agent-workflow.md",
+            "sha256": "91c0dde1a830bf68abeaa4947a9d15b466fb7136340f34876fa08a3f8196366c",
+            "sections": [
+              "Context",
+              "Decision",
+              "Consequences"
+            ]
+          },
+          {
+            "path": "ADR/0005-frontier-output-evaluation.md",
+            "sha256": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c",
+            "sections": [
+              "Context",
+              "Decision",
+              "Consequences"
+            ]
+          }
+        ],
+        "external_sources": [
+          {
+            "url": "https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site",
+            "checked_at": "2026-09-29",
+            "instruction": "Re-fetch current official records and custom-domain sequence at execution; do not rely on cached addresses."
+          },
+          {
+            "url": "https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site",
+            "checked_at": "2026-09-29"
+          }
+        ],
+        "preconditions": [
+          "Selected new Git repository/owner/branch and actual published Pages site are established; no new repository currently exists.",
+          "Verified GitHub domain ownership and custom-domain setting, plus the exact verified Pages account target.",
+          "Working authorized GoDaddy account access and authoritative nameserver ownership, existing record inventory and confirmed bounded DNS diff.",
+          "Coordinator freezes execution brief/identity/capability evidence before dispatch."
+        ],
+        "steps": [
+          "Open the authorized GoDaddy domain DNS UI; inspect nameservers to confirm where DNS is authoritative. Do not change nameservers.",
+          "Export/snapshot current records and TTLs, especially apex/www and MX/TXT/mail/verification entries; prepare exact minimal diff and rollback.",
+          "Verify actual GitHub owner/repository, branch/docs publishing source, domain verification and Pages custom-domain setting first.",
+          "Using current official GitHub documentation, configure apex A/ALIAS/ANAME as appropriate and www CNAME to the verified account Pages host. Resolve conflicting apex/www entries only within the recorded diff; never add a wildcard.",
+          "Verify authoritative and multiple public resolver answers across propagation, then browser HTTPS/apex/www canonical redirect and page/assets. Keep task pending when DNS/certificate is still propagating.",
+          "Retain changed-record diff, timestamps/TTL, rollback, resolver/browser evidence and independent evaluator result; coordinator records completion."
+        ],
+        "edit_areas": [
+          "GoDaddy DNS zone records for dungeonfluxdnd.com apex and www only",
+          "GitHub Pages domain verification/custom-domain setup for the already selected site only as prerequisites",
+          "durable private operational evidence outside docs/artifacts cleanup"
+        ],
+        "known_pitfalls": [
+          "Registrar is not necessarily authoritative DNS provider.",
+          "Never replace nameservers to force GoDaddy control; DNS-provider migration is separate scope.",
+          "CNAME file alone does not configure Pages settings or DNS.",
+          "Preserve existing mail/MX/TXT and unrelated records.",
+          "Do not infer GitHub account host from the archive repository name.",
+          "Do not expose secrets or account screenshots in public docs."
+        ],
+        "required_capabilities": {
+          "computer_use": true,
+          "vision": true,
+          "audio": false
+        },
+        "verification": [
+          "Current GitHub Pages publishing/custom-domain state and domain ownership evidence",
+          "Before/after exact DNS diff and unrelated-record parity",
+          "Authoritative and public-resolver apex/www answers after sufficient TTL propagation",
+          "Actual browser apex/www HTTPS/canonical redirect and image/style loading",
+          "Independent frontier evaluator with computer-use/vision and retained evidence"
+        ],
+        "handoff": "Task/attempt identity, verified GitHub target and DNS authority, before/after records/TTLs, rollback instructions, propagation/certificate/browser outcomes, changed scope and remaining gaps; no credential values.",
+        "mandatory_workflow_sources": [
+          {
+            "path": "AGENTS.md",
+            "sha256": "4fffd5d4aae51199c1e8635275f3deac38c9a560d8666f11c77291cd58c3d824",
+            "sections": [
+              "1. Think Before Coding",
+              "2. Simplicity First",
+              "3. Surgical Changes",
+              "4. Goal-Driven Execution",
+              "Planning and project documentation",
+              "Mandatory coding style",
+              "Application architecture",
+              "Development strategies",
+              "Implementation and evaluation",
+              "Agent devlog",
+              "Generated files and artifacts",
+              "Changelog",
+              "Hosted-service authority"
+            ]
+          },
+          {
+            "path": "ADR/0001-sqlite-agent-workflow.md",
+            "sha256": "91c0dde1a830bf68abeaa4947a9d15b466fb7136340f34876fa08a3f8196366c",
+            "sections": [
+              "Context",
+              "Decision",
+              "Consequences"
+            ]
+          },
+          {
+            "path": "ADR/0005-frontier-output-evaluation.md",
+            "sha256": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c",
+            "sections": [
+              "Context",
+              "Decision",
+              "Consequences"
+            ]
+          }
+        ],
+        "inputs": [
+          "Selected new Git repository/owner/branch and actual published Pages site are established; no new repository currently exists.",
+          "Verified GitHub domain ownership and custom-domain setting, plus the exact verified Pages account target.",
+          "Working authorized GoDaddy account access and authoritative nameserver ownership, existing record inventory and confirmed bounded DNS diff.",
+          "Coordinator freezes execution brief/identity/capability evidence before dispatch."
+        ],
+        "outputs": [
+          "Verified minimal apex/www DNS record diff, current authoritative and public DNS responses, Pages certificate/HTTPS/canonical redirect acceptance and durable rollback/evidence."
+        ],
+        "semantics": {
+          "authority": "Coordinator-only dispatch/completion; future worker uses authorized GoDaddy DNS UI. This queued task does not perform external writes.",
+          "privacy": "Keep credentials/account details private; public docs contain no private operational captures.",
+          "cancellation": "Stop before writes if target/authority unclear; preserve before-records and bounded rollback if partially changed.",
+          "versioning": "Re-fetch current official DNS instructions and verify actual deployed Pages target at execution.",
+          "error_semantics": "Propagation/certificate incomplete is pending; no fabricated DNS or HTTPS success.",
+          "observability": "Append scoped devlog evidence with task/attempt identity and exact record diff, without credentials."
+        },
+        "integration_hooks": [
+          {
+            "hook": "GitHub Pages verified target/custom-domain setup",
+            "owner": "coordinator-selected site operations owner"
+          },
+          {
+            "hook": "Minimal authoritative GoDaddy apex/www DNS diff",
+            "owner": "assigned DNS operations worker"
+          },
+          {
+            "hook": "Independent actual apex/www HTTPS browser acceptance",
+            "owner": "frontier evaluator"
+          }
+        ],
+        "verification_environment": "Currently local docs/CNAME exists; selected new Git repository, actual Pages target, account access and authoritative DNS remain unverified. No network mutation is performed by todo creation.",
+        "routing": {
+          "coordinator": "frontier",
+          "implementation": "verified computer-use capable worker, Sol when interface/account complexity requires it",
+          "review": "independent frontier with actual computer-use/vision"
+        },
+        "dispatch_guard": "Do not dispatch until actual selected repository/Pages site/custom-domain/domain ownership, authoritative DNS, account/tool availability and exact bounded DNS diff are verified and the coordinator freezes the brief.",
+        "granularity": "One bounded operational DNS work item; pending prerequisites prevent dispatch.",
+        "required_output_review": "Independent frontier operates actual apex/www site, observes HTTPS/canonical redirect and content/assets, plus verifies resolver/record diff evidence. No audio required."
+      },
+      "status": "blocked",
+      "blocking_reason": "Dispatch guard: selected repository/Pages target, domain verification and authoritative DNS are not yet verified.",
+      "originating_task_id": null,
+      "priority": 55,
+      "source_fingerprint": "98b4badc06df2254a0032fd9ecfae373c82359e92602a45c01a10f42c126fd4c",
+      "created_at": "2026-09-30T02:34:35.952560+00:00",
+      "updated_at": "2026-09-30T05:05:04+00:00"
+    }
+  ],
+  "dependencies": []
+}

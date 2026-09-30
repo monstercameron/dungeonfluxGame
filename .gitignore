@@ -1,0 +1,74 @@
+# Project-generated output, caches, and temporary staging files
+/artifacts/
+
+# Durable local operational databases (not disposable cleanup targets)
+/development/*.sqlite3
+/development/*.sqlite3-wal
+/development/*.sqlite3-shm
+/development/*.sqlite3-journal
+
+# Operating system junk
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Local editor state and swap files
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# Local environment files; keep reusable templates
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+
+# Dependencies and virtual environments
+node_modules/
+.venv/
+venv/
+.tox/
+.nox/
+
+# Tool and framework caches
+.cache/
+.npm/
+.pnpm-store/
+.yarn/cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.next/
+.nuxt/
+.svelte-kit/
+.turbo/
+.parcel-cache/
+.vite/
+*.tsbuildinfo
+
+# Build, test, and coverage output
+build/
+dist/
+target/
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+*.test
+*.prof
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.pid
+*.pid.lock

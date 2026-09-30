@@ -1,0 +1,84 @@
+{
+  "status": "2026-09-30 hypothetical planning assumptions; no customers/provider measurements",
+  "baseline": {
+    "price": "49",
+    "active_campaigns": "1021",
+    "target_monthly_gross": "50000",
+    "sessions": "4",
+    "raw_session_cost": "1.5565",
+    "billed_attempt_multiplier": "1.2",
+    "support_minutes": "20",
+    "support_hourly": "30",
+    "delivery_per_campaign": "1",
+    "rights_per_campaign": "1",
+    "fixed_operations": "8000",
+    "cac": "80",
+    "monthly_churn": "0.05",
+    "new_retained_campaigns": "0",
+    "refund_rate": "0.02",
+    "bad_debt_rate": "0.01",
+    "payment_pct": "0.036",
+    "payment_fixed": "0.30",
+    "dispute_rate": "0.005",
+    "dispute_fee": "30",
+    "sales_tax_rate": "0",
+    "tax_inclusive": "0",
+    "income_tax_rate": "0.20",
+    "credit_topups": "0",
+    "credit_opening_balance": "0",
+    "credit_consumed": "0",
+    "credit_refunds": "0",
+    "credit_transactions": "0",
+    "credit_supplier_cost": "0",
+    "unknown_liability_added": "0",
+    "opening_cash": "25000",
+    "subscription_charge_count": "1021",
+    "credit_reserve_fraction": "1"
+  },
+  "scenarios": {
+    "49_campaign_target": {},
+    "59_campaign_target": {
+      "price": "59",
+      "active_campaigns": "848",
+      "subscription_charge_count": "848"
+    },
+    "support_60min": {
+      "support_minutes": "60"
+    },
+    "usage_2x_waste_1_5": {
+      "sessions": "8",
+      "billed_attempt_multiplier": "1.5"
+    },
+    "churn_10percent_cac160": {
+      "monthly_churn": "0.10",
+      "cac": "160"
+    },
+    "rights_and_fixed_stress": {
+      "rights_per_campaign": "5",
+      "fixed_operations": "15000"
+    },
+    "tax_exclusive_8percent": {
+      "sales_tax_rate": "0.08"
+    },
+    "tax_inclusive_8percent": {
+      "sales_tax_rate": "0.08",
+      "tax_inclusive": "1"
+    },
+    "prepaid_unconsumed": {
+      "credit_topups": "10000",
+      "credit_transactions": "100"
+    },
+    "prepaid_consumed": {
+      "credit_topups": "10000",
+      "credit_consumed": "4000",
+      "credit_supplier_cost": "2500",
+      "credit_transactions": "100"
+    },
+    "unknown_dispatch_cash_hold": {
+      "unknown_liability_added": "5000"
+    },
+    "growth_100_retained": {
+      "new_retained_campaigns": "100"
+    }
+  }
+}

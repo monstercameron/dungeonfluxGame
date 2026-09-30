@@ -1,0 +1,81 @@
+{
+  "verdict": "PASS",
+  "scope": "Subsequent feature-outline planning/database refinement only",
+  "evaluator": "/root/gap_refinement_critic",
+  "source_fingerprint": "231a6f2cb589c04612ef325575c9c3a1a9ff20da298fb8058534f287cd4500a7",
+  "manifest_sha256": "a666a6a97b2f2d53da0b7bc5211f8326efa6350c462d0528913f36f071d0d87a",
+  "criteria": [
+    {
+      "criterion": "Whole supplied outline coverage",
+      "observed": "Exact15 numbered headings,15priority rows,10 table stakes and20items across three phases retained from attachment; current family/task references exist.",
+      "result": "pass"
+    },
+    {
+      "criterion": "Minimal coherent plan delta",
+      "observed": "Exactly F45/F46/F47 and13pending non-dispatchable task blueprints; forty crates/eleven services37methods/five-table workflow schema retained. Existing implementation families own private offers/critical cues/spotlight/continuity.",
+      "result": "pass"
+    },
+    {
+      "criterion": "Remote now required core",
+      "observed": "F45 and X11 actual goals/acceptance, existing gap/expansion/roadmap/API/interface docs agree. Same actor/fence/lease/operation lookup; exact public/private AudioTopology and real networked-device acceptance, no passive AFK takeover or offline authority.",
+      "result": "pass"
+    },
+    {
+      "criterion": "Recaps and trailers",
+      "observed": "Exact authorized committed history through session-owned MemoryCandidateStore/RecapHistory and persistence; pure plan_bookend. False beliefs attributed, new members scoped, speculative trailer clearly labeled and secret-free; optional quoted video skippable with fallback.",
+      "result": "pass"
+    },
+    {
+      "criterion": "Sharing and rights",
+      "observed": "ExportGrant requires explicit recipient/fact/media/contributor rights and consent, sharing disabled by default; already downloaded bytes cannot be recalled. No agent/provider/browser external publication authorized by plan.",
+      "result": "pass"
+    },
+    {
+      "criterion": "Critical effects and continuity",
+      "observed": "Committed source-valid eligibility only; natural20 source-specific, no universal success/retcon. Cosmetic slowdown does not pause game/reorder reactions/hide legal input. Scene identity/geometry follow committed world/source changes; late assets cannot revert state.",
+      "result": "pass"
+    },
+    {
+      "criterion": "Private offers and spotlight",
+      "observed": "Private scopes/grants/intentful reveal-to-party; public views/music/manifests paired-state tests. Opt-in voluntary opportunities, no covert mic/emotion/boredom inference, forced speech, source bonus, punishment or AFK spent action.",
+      "result": "pass"
+    },
+    {
+      "criterion": "Generated mechanics remain bounded",
+      "observed": "Closed approved deterministic templates/handlers; custom content is explicit disclosed opt-in distinct RulesetId/catalog, never standard2024 coverage or uploaded code. Unsupported handler stays gap despite host approval; replay records actual definitions/draws and makes no provider calls.",
+      "result": "pass"
+    },
+    {
+      "criterion": "Required rewards and real spend",
+      "observed": "Provider failure cannot revoke committed rewards or withhold source-required advancement/quest rewards. Only optional new generated offer can decline; rejection precedes gameplay resource spending but billed generation/waste remains reconciled. Transitive F47-DELIVER prerequisites include G08 provider qualification and df-ai boundary.",
+      "result": "pass"
+    },
+    {
+      "criterion": "Actual executable evidence/history",
+      "observed": "Readonly actual SQLite138families297tasks1143dependencies,37logs at check. Previous36logs/3attempts/284statuses preserved. Full actual manifest/source parity, integrity/FK, task/crate DAG, browser closures,346links,30negative in-memory probes+positive integration path passed. Zero dispatch-ready/game-done; source/device/provider/customer/runtime gates remain open.",
+      "result": "pass"
+    }
+  ],
+  "actual_counts": {
+    "features": 138,
+    "tasks": 297,
+    "dependencies": 1143,
+    "attempts": 3,
+    "devlog": 37
+  },
+  "history_preserved": {
+    "devlogs": 36,
+    "attempts": 3,
+    "task_statuses": 284
+  },
+  "evidence": [
+    "feature-audit.json",
+    "feature-independent-verification.json",
+    "feature-independent-verifier.py"
+  ],
+  "unperformed": [
+    "No Rust/game/native/WASM/browser gameplay/device/audio acceptance; no application exists.",
+    "Actual source/book access, provider rights/quotes/latency/cost, device/network capacity and customer/player tests remain owned future gates."
+  ],
+  "excluded_derived_overview": "Separate final artifact verdict, not implicitly approved by plan source fingerprint."
+}

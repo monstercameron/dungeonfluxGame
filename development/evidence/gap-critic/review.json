@@ -1,0 +1,77 @@
+{
+  "verdict": "PASS",
+  "scope": "Latest supplied gap brief planning/document/database refinement only",
+  "evaluator": "/root/gap_refinement_critic",
+  "capabilities_used": [
+    "independent document/contract review",
+    "actual readonly SQLite queries",
+    "isolated executable schema probes"
+  ],
+  "source_fingerprint": "110f2a58a41e61ce93cfffb72ce4163be2672a55b22c1df8247119eaa8ec4045",
+  "manifest_sha256": "c2092c5488a8ce1edf33fbf65e588c75f6eada9be1c9ef2d5d1991a358012acd",
+  "checks": [
+    {
+      "criterion": "Exact supplied research backlog coverage",
+      "observed": "76 verbatim items in original order, twelve subsystem groups, assessment dispositions and twelve product questions mapped; no missing original row."
+    },
+    {
+      "criterion": "Narrative/NPC/world ownership and coherent continuity",
+      "observed": "F35\u2013F39 plus long-horizon source define tiered world time/catch-up, scoped truth/belief/provenance and bounded summaries. MEMORY-LONGHORIZON-ACCEPT and WORLD-TIME-ACCEPT have actual pending rows and canonical implementation dependencies."
+    },
+    {
+      "criterion": "Pure directors versus native retrieval/index execution",
+      "observed": "Initial ambiguous df-knowledge I/O proposal repaired. df-session owns MemoryCandidateStore consumer port, df-persistence adapter loads bounded authorized candidates, MemoryCandidatesReady returns through fenced staged execution; pure rank_candidates reauthorizes current access/source. Ledger and crate briefs include new shapes."
+    },
+    {
+      "criterion": "Source faithful rules, combat and core progression",
+      "observed": "Rules effects use closed source-linked handlers with source exceptions and pending windows; no arbitrary DSL/universal ordering/custom bonuses. G07 source/catalog remains unresolved; R02/R10\u2013R13/R16 standard progression stays core S05/S06. RULE-EFFECT-CONTRACT is an actual design prerequisite for R09 delivery."
+    },
+    {
+      "criterion": "Tempo/predictive media/speech continuity and fallbacks",
+      "observed": "Existing concrete profiles/identity/ShotPlan/demand/job models remain bounded. Optional usable 3D is not a fallback prerequisite, video misses do not block legal input. SPEECH-ROOM-ACCEPT covers current capture leases, final validated intents, noisy room/negation/interruptions, scoped caches, real p50/p95/p99 and actual future audio observation."
+    },
+    {
+      "criterion": "Authoring/private pack lifecycle",
+      "observed": "X10 provides stable templates versus runtime IDs, draft/import/report/candidate/validated pack shapes, bounded imports and rights provenance. Publication and activation separate, immutable bytes/metadata and expected versions, lost receipt lookup, fenced explicit migration and nonexposure of private drafts. Graph editor/public publishing remain conditional."
+    },
+    {
+      "criterion": "Conditional scope and degraded authority",
+      "observed": "X11 is resolution/acceptance only. Remote/async/community/notification/homebrew/marketplace are selected/deferred/rejected gates. Offline views remain stale/read-only and typed drafts uncommitted; no local dice/resource/turn authority. No new public RPC methods."
+    },
+    {
+      "criterion": "Executable durable plan/tool boundary",
+      "observed": "Actual 135 families, 284 tasks, 1082 edges; integrity/FK/source and full manifest parity, DAG/browser closure, 280 links and 30 negative probes plus positive independent review/integration pass. Schema unchanged; 40 crates/44 features/17 rules/12 gates/nine slices and 11 services/37 RPC methods preserved."
+    },
+    {
+      "criterion": "Preserved history and honest evidence",
+      "observed": "All previous 26 devlogs, three audit attempts, 275 task statuses and previous feature statuses unchanged. DNS remains blocked/false. Zero dispatch-ready plans and zero completed game features. Exact source/books, vendor/device/performance/customer choices remain owned unresolved gates."
+    }
+  ],
+  "resolved_findings": [
+    {
+      "id": "GAP-CRIT-RETRIEVAL-OWNER",
+      "problem": "Pure df-knowledge retrieval appeared to query native indexes with no named I/O owner.",
+      "resolution": "Explicit session-owned native port and typed completion plus pure bounded authorization/ranking; current docs/ledger observed."
+    }
+  ],
+  "unperformed": [
+    "Game/native/WASM/browser/physical device/audio execution: no game exists.",
+    "Source/book access, runtime bound calibration, provider rights/quotes and actual market/player tests remain prerequisite work."
+  ],
+  "evidence": [
+    "audit.json",
+    "independent-verification.json",
+    "independent-verifier.py"
+  ],
+  "historical_baseline_not_reapproved": true,
+  "excluded_pending_derived_artifacts": [
+    "planning/engine-overview.md; independently reviewed after its own source freeze"
+  ],
+  "counts_at_latest_audit": {
+    "features": 135,
+    "tasks": 284,
+    "dependencies": 1082,
+    "attempts": 3,
+    "devlog": 32
+  }
+}

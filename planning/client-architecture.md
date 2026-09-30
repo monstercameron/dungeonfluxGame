@@ -1,0 +1,103 @@
+# Browser client architecture
+
+Date: 2026-09-29
+Status: Client roles and authority agreed; concrete interface/API plan added, implementation pending
+
+## Agreed direction
+
+DungeonFlux is a browser game with two primary client roles connected to the same
+game session:
+
+| Role | Device targets | Purpose |
+| --- | --- | --- |
+| Shared display | TV, laptop screen, or laptop connected to a TV | Present the game to the group |
+| Player client | Mobile phone, laptop, or tablet | Display the player's view and send player input |
+
+A client role is independent of device type. A laptop can provide the shared
+display or a player client. Player interfaces must accommodate different screen
+sizes and touch, mouse, and keyboard input as appropriate.
+
+## Implementation language
+
+The application is full-stack Rust: native Rust on the backend and Rust compiled
+to WebAssembly for browser clients. Do not introduce Go, JavaScript, or TypeScript
+application code. Frameworks and rendering libraries remain to be selected.
+
+Generated JavaScript glue for WebAssembly loading and browser API access is
+allowed. Application logic and UI source remain Rust; this exception does not
+permit handwritten JavaScript or TypeScript application code. See the
+[official wasm-bindgen browser example](https://wasm-bindgen.github.io/wasm-bindgen/examples/without-a-bundler.html).
+
+Subsystems are separate Rust crates as described in
+[Subsystem architecture](subsystem-architecture.md).
+[Subsystem interfaces](subsystem-interfaces.md) and [RPC API](rpc-api.md) now define
+the planned boundaries. Resolve applicable gates and freeze types before consumers.
+
+DungeonFlux must support the standard 2024 fifth-edition D&D rules. Precise
+source/catalog pinning remains a gate; see [Rules support](rules-support.md) and
+[Rules coverage](rules-coverage.md) for the planned families and completion criteria.
+
+Observability is a core design requirement across both client roles and backend
+subsystems. See [Observability](observability.md) for the shared ports, RPC/query
+shapes and remaining implementation gates.
+
+PostgreSQL stores durable gameplay data. OpenTelemetry runtime logs and correlated
+spans go to a separate SQLite database for agent review; the SQLite development
+queue/devlog remains separate. See [Storage architecture](storage-architecture.md).
+
+Structured client/server game communication uses RPC through the planned Rust
+port of the gRPC-over-WebSocket bridge. See [RPC transport](rpc-transport.md) for
+the full streaming requirement, latency goals, and browser feasibility gate.
+
+## Agreed division of responsibilities
+
+The server owns the game: authoritative session state, D&D rules resolution,
+dice outcomes, action validation, progression, and AI/media orchestration. It
+determines the appropriate view and audio for each connected client role.
+
+Clients are thin Rust/WebAssembly presentation applications. They render
+server-provided views and play server-provided audio. Player clients collect input
+and send action requests to the server; submitting an action does not resolve it
+locally. The shared display presents the group's view, while player clients show
+their permitted personal views. The server must filter private information before
+sending it, rather than relying on the client to hide it.
+
+Client state is limited to presentation and connection needs, such as focus,
+layout, view revisions, audio buffers, and loading indicators. Clients do not own
+game state or duplicate the rules engine. Local rendering and audio decoding are
+presentation work; game decisions remain server responsibilities.
+
+Both roles must stay mounted through ordinary updates, navigation and reconnect,
+without full-page reloads. Program presentation through reusable Rust components
+and typed, bounded server-provided presentation variants/timelines; preserve smooth
+interruptible motion, valid local focus/drafts and resource lifetimes. Read
+[Client presentation](client-presentation.md) for the programming model, update
+lifecycle, animation/recovery contract and measured browser acceptance gates.
+
+Reconnecting clients recover the current permitted view from the server. The new
+interface/API plan covers view shapes, ordering, audio timelines and async jobs;
+concrete protobuf types, browser transport/codec implementation and device budgets
+are prerequisites in [Implementation roadmap](implementation-roadmap.md).
+
+That planning must cover the [runtime reliability requirements](runtime-reliability.md):
+confirmed action results, initial/updated/reconnected views, timing, audio
+cancellation and playback, and private player projections. The first integrated
+slice must run through both client roles in a real browser, including a rejected
+action and reconnect. Choose a supported-device matrix before claiming compatibility;
+desktop automation alone does not prove phone sleep/network or audio behavior.
+
+## Decisions still open
+
+- Rust frontend/backend frameworks, rendering, and RPC bridge implementation.
+- Concrete credential bootstrap/persistence, configured player limits, and
+  deployment account policy; session/join/resume/binding semantics are now planned.
+- Detailed host-panel layout; host is a capability attached to an authorized
+  player/display client, not a mandatory third device role.
+- Supported browsers, including whether direct smart-TV browsing is required.
+- Shared-display layout, responsive player layouts, and server-controlled audio
+  routing and synchronization.
+- Exact rulebook/content catalog, launch campaign, PostgreSQL physical schemas,
+  and durable media deployment; interfaces/recovery semantics are now planned.
+
+Agents must reference this document for client roles and device targets. Proposals
+and open decisions above must not be treated as approved implementation contracts.

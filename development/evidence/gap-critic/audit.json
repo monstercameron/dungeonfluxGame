@@ -1,0 +1,248 @@
+{
+  "source_hashes": {
+    "AGENTS.md": "7aaf0f5ed634d0b582f7dc3f429128a77d00cf3b873fc16806773295ce42b058",
+    "README.md": "e537bbc21afbbd607a9ad3b164469907e5f172dd199e59f4495bc4821d44d174",
+    "ADR/0001-sqlite-agent-workflow.md": "91c0dde1a830bf68abeaa4947a9d15b466fb7136340f34876fa08a3f8196366c",
+    "ADR/0002-resource-scheduling-and-cleanup.md": "a6476cfef449e089639109cc6d3cf5f0800b792b57a32696258d5ac0b9511966",
+    "ADR/0003-agent-devlog.md": "1e221af85d096913d2cff50135f1b3cd64833ffb53307ec32a0aa689c6d61423",
+    "ADR/0004-development-reliability.md": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae",
+    "ADR/0005-frontier-output-evaluation.md": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c",
+    "planning/README.md": "ae5e034096d7609ebffd6ec32b1907dc088a2a71f3fd16d79b71141244e834c6",
+    "planning/asset-engine.md": "6d6d15f4cce1953434b1a19172f4babd6771a5a0a75eab54bb994d7f68ee1c58",
+    "planning/asset-provider-research.md": "fd51980b26705f556665420d621f424a933fd672238f2df1b737bb5d07ddf6b6",
+    "planning/campaign-authoring.md": "8716d159a151dc0da8cd3d2c0296ba4cda3f2c076ed8e2c7b0056147a1c23532",
+    "planning/client-architecture.md": "d629add05e38bcdb4b224053ab40174dc96d219abc2f6e924119d1fa67be8f89",
+    "planning/client-presentation.md": "ce020b212e9d10b13e7588125396633ab37a549b317ca7aa74b98df1a5a29dcb",
+    "planning/coding-style.md": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb",
+    "planning/competitive-research.md": "caeb6ce864c8487c8c44d9238ec4436e6c887b6c8fa28ff6cf7f0c68e2ed6bd9",
+    "planning/development-quality.md": "e4f494ac8955ef91f2337fce2459595965dd0f2ead91cbdf2de572051c218a63",
+    "planning/expansion-boundaries.md": "eb3b49cd65dec743c96da0f003e490d56faee344f1250ad0982aa26ded412497",
+    "planning/feature-inventory.md": "bdb293633d8a6c4fe87c6d8044082c0a8c2126c7c8d90a5102c84fe8355105f4",
+    "planning/gap-analysis.md": "e8679a37187df6e40805c395ff9d05bcc3174de3698426f6cf5028b0bb431b8d",
+    "planning/implementation-roadmap.md": "54324996e719fe2681ed8c81eff838742c6c7c6001589e0c3554a483c1329523",
+    "planning/interaction-engine.md": "6ba826a7ca0afe4b6ca3ecab1d2dc5c8794e6fe7b91e5d985c6854a44ca57d3e",
+    "planning/long-horizon-state.md": "a601440e986650a1a97a50da728922296aa13c4645ff5d6be0ef64a27397ea68",
+    "planning/narrative-engine.md": "370ca7352aa195467baeca921c0d016284b16619f6f3e65087d6be8831e93d47",
+    "planning/observability.md": "2ba0404c505c2e598d95bad38435668ea6f482c149401731b0869b8a76e3ada7",
+    "planning/optimization.md": "7de2ec91c89c7afaf3d1c047eddd00135f1a24fde934a49eec6c4d930aae8ce8",
+    "planning/plan-database.md": "bd561926db78bdef20c2ee61b5346ef2cb9b8de3e6c633be43b68bacfabcc4a5",
+    "planning/pricing-and-costs.md": "9a10c0618e8c6748033881c81ded307a03673af57f981d5ad281fcb32e3744f1",
+    "planning/rpc-api.md": "2944647fddb144b820a58023e52067c46ac89f72e3ec8a0415ad2a0132ce5f30",
+    "planning/rpc-transport.md": "ab60a74211df0c0b3a5a03d2cafbd471354bfa822448896c3e9ab0a0136dd2d9",
+    "planning/rules-coverage.md": "87a61156b1594c93c235a5815e209fbfb6ba5679e9d625bbacfb500d48d684d5",
+    "planning/rules-effect-model.md": "6075c2e05dbc8fe895f7fc49f421f377e22d0b1791aa0988d90d6c5ab5e44d6a",
+    "planning/rules-support.md": "c70047a0cce874297e234fed2f00ef7542e2677fcc80b14b44d37ded51926fad",
+    "planning/runtime-directors.md": "33373d7ead29043800c9b45d5b249164876dd2ba810784b43937cfd150df6a80",
+    "planning/runtime-reliability.md": "2501efc39bee608824b89190ebc47dfa8b0f2bffe6a6c4112b2e3d80d985ad08",
+    "planning/storage-architecture.md": "6e6924920143ae3a2c5680884b0b2598889c0ff1eb6899858106145a12d1e534",
+    "planning/subsystem-architecture.md": "38a6590ec78f461d748f3f7ad53a685b00c9861cc305ba847c6941ff42ea19a7",
+    "planning/subsystem-interfaces.md": "fdccd134b707abf1b7b0196acfb53d0dcaca2fd62081407ad22ab4c912527170",
+    "planning/tempo-engine.md": "e227dda990685f5771b577529652c44d59704a23db8ad206e3e59be41f4c81d6",
+    "development/schema.sql": "b3bd366f90e650fe23f384aedfa57cce785a6f98a6b6f723a1cda2d99f441475",
+    "development/plan-manifest.json": "c2092c5488a8ce1edf33fbf65e588c75f6eada9be1c9ef2d5d1991a358012acd",
+    "development/operational-tasks.json": "dcbf300ad44c26472d6500d21e424b1f2db01b73ccd916eed8763d8afdf5e539",
+    "development/provision.py": "984bf04cfd45f5faa9bc37dfc0c7763268f14d0bf3475a03908427c461b7e97e",
+    "development/verify-plans.py": "a3afd847f86f6b18c7fb8e9941fb8530c515d096d6c30b0733d31427acae8a5d"
+  },
+  "manifest_sha256": "c2092c5488a8ce1edf33fbf65e588c75f6eada9be1c9ef2d5d1991a358012acd",
+  "attachment_sha256": "de652e7ab97c367cc3f2b154a4d0c370f73938ddea4e5369d6352190d3971835",
+  "source_fingerprint": "110f2a58a41e61ce93cfffb72ce4163be2672a55b22c1df8247119eaa8ec4045",
+  "mapping_rows": 76,
+  "mapping_subsystems": {
+    "Narrative engine": 6,
+    "NPC & interaction engine": 6,
+    "Rules & combat": 7,
+    "World simulation": 6,
+    "Tempo engine": 7,
+    "Asset orchestration": 7,
+    "Speech": 6,
+    "Images / scenes": 6,
+    "Live cutscenes": 6,
+    "Persistence & memory": 6,
+    "Creator / worldbuilding tools": 6,
+    "Production systems": 7
+  },
+  "historical_devlogs_preserved": 26,
+  "historical_attempts_preserved": 3,
+  "historical_task_statuses_preserved": 275,
+  "schema_unchanged": true,
+  "new_tasks": {
+    "X10-RESOLVE": {
+      "feature": "X10",
+      "stage": "resolution",
+      "owners": [
+        "df-content",
+        "df-tools"
+      ],
+      "acceptance": [
+        "Pin minimum package/template/schema/import format, source/use-rights checks, namespace and byte/item/depth limits, draft expected version and diagnostic rules.",
+        "Freeze authorized publication/activation consumer ports and admin CLI versus RPC choice under G03/G05/G10; no invented public protobuf methods."
+      ],
+      "prerequisites": [
+        "G03-RESOLVE",
+        "G07-RESOLVE",
+        "G10-RESOLVE"
+      ]
+    },
+    "X10-AUTHOR": {
+      "feature": "X10",
+      "stage": "implementation",
+      "owners": [
+        "df-content",
+        "df-tools",
+        "df-persistence",
+        "df-session"
+      ],
+      "acceptance": [
+        "A bounded allowlist import/author/validate/package flow produces complete immutable source-compatible packs with retained provenance and template instance IDs.",
+        "Reject malformed/traversal/cyclic/private/rights-conflicting content; canceled/lost publication and stale activation use existing ownership and idempotency contracts."
+      ],
+      "prerequisites": [
+        "C-df-content-BOUNDARY",
+        "C-df-tools-BOUNDARY",
+        "G05-RESOLVE",
+        "X10-RESOLVE"
+      ]
+    },
+    "X10-ACCEPT": {
+      "feature": "X10",
+      "stage": "acceptance",
+      "owners": [
+        "df-tools",
+        "df-session",
+        "coordinator"
+      ],
+      "acceptance": [
+        "Author from templates and activate/resume a complete fixed campaign with alternate beats, private clues and prepared fallbacks through the actual tools and both browser roles.",
+        "Frontier computer-use/vision and audible observation verify output; invalid source, conflict, cancel, unpublished access and unsupported migration checks retained."
+      ],
+      "prerequisites": [
+        "S05-COMPOSE",
+        "X10-AUTHOR"
+      ]
+    },
+    "X11-RESOLVE": {
+      "feature": "X11",
+      "stage": "resolution",
+      "owners": [
+        "coordinator"
+      ],
+      "acceptance": [
+        "Record selected/deferred/rejected with owners and rationale for remote, async, notifications, publishing/discovery/remix/moderation, marketplace, broader imports/rules, outside-room UX and optional economy.",
+        "Selected work has actor/access/cost/rights/consent prerequisites; no unselected feature implementation is dispatched and no disconnected client commits offline game outcomes."
+      ],
+      "prerequisites": [
+        "G04-RESOLVE"
+      ]
+    },
+    "X11-ACCEPT": {
+      "feature": "X11",
+      "stage": "acceptance",
+      "owners": [
+        "coordinator"
+      ],
+      "acceptance": [
+        "Check every recorded decision against launch inventory, API/model/privacy/cost boundaries and explicit open gates; exclusions cannot be counted as implemented support.",
+        "Selected designs use same actor/durable outbox and operation lookup; notification duplicates/revocation, AFK/reaction/expiry and malicious rights/import risks have testable acceptance."
+      ],
+      "prerequisites": [
+        "X11-RESOLVE"
+      ]
+    },
+    "RULE-EFFECT-CONTRACT": {
+      "feature": "R09",
+      "stage": "design",
+      "owners": [
+        "df-rules",
+        "df-content",
+        "df-model",
+        "df-testkit"
+      ],
+      "acceptance": [
+        "Freeze closed source-linked effect/condition/trigger/pending shapes, exceptional stacking/order/duration and compatible migration/replay; no downloaded rules code or invented D&D bonus.",
+        "Goldens and legal-state properties link exact source/handler versions and draws; interaction denominator/gaps and shrinking retained failures are explicit."
+      ],
+      "prerequisites": [
+        "G03-RESOLVE",
+        "G07-RESOLVE",
+        "R05-MODEL",
+        "R09-MODEL"
+      ]
+    },
+    "MEMORY-LONGHORIZON-ACCEPT": {
+      "feature": "F36",
+      "stage": "acceptance",
+      "owners": [
+        "df-knowledge",
+        "df-interaction",
+        "df-persistence",
+        "coordinator"
+      ],
+      "acceptance": [
+        "Versioned multi-session fixture retains secret, false rumor, obligation, contradictory belief and relationship across decay/summary/restart with exact canonical provenance.",
+        "Bounded authorized retrieval, stale/quarantined summary/index, missing episodes and consolidation basis tested; paired private-state queries cannot leak; replay has zero provider calls."
+      ],
+      "prerequisites": [
+        "F36-DELIVER",
+        "F38-DELIVER",
+        "S05-COMPOSE"
+      ]
+    },
+    "WORLD-TIME-ACCEPT": {
+      "feature": "F35",
+      "stage": "acceptance",
+      "owners": [
+        "df-world",
+        "df-session",
+        "coordinator"
+      ],
+      "acceptance": [
+        "Pause overnight and resume source-valid travel/threat/faction schedules under controlled clocks; world time never advances silently from wall time.",
+        "Bounded deterministic continuation resumes exactly once after restart/fence/duplicate events; private consequences and free resources never appear."
+      ],
+      "prerequisites": [
+        "F35-DELIVER",
+        "S05-COMPOSE"
+      ]
+    },
+    "SPEECH-ROOM-ACCEPT": {
+      "feature": "F09",
+      "stage": "acceptance",
+      "owners": [
+        "df-audio",
+        "df-media",
+        "df-intent",
+        "coordinator"
+      ],
+      "acceptance": [
+        "Exercise crosstalk/background TV/names/numbers/negation/accents, denied mic/sleep/network and explicit barge-in using actual authorized capture leases and both browser roles.",
+        "Final validated input alone proposes action; ambiguity/jokes/questions clarify, private/current utterance cache scope is exact, obsolete buffers stop and captions match actual sound.",
+        "Retain final-input-to-intent/commit/approved-audio p50/p95/p99 with samples, noise/device/build/provider identity and actual cost; no raw private speech in default logs or guessed latency."
+      ],
+      "prerequisites": [
+        "F09-DELIVER",
+        "F16-DELIVER",
+        "G12-RESOLVE",
+        "S03-COMPOSE"
+      ]
+    }
+  },
+  "counts": {
+    "features": 135,
+    "tasks": 284,
+    "dependencies": 1082,
+    "attempts": 3,
+    "devlog": 32
+  },
+  "rpc_services": 11,
+  "rpc_methods": 37,
+  "dispatch_ready": 0,
+  "source_unchanged_during_checks": true,
+  "excluded_pending_derived_artifacts": [
+    "planning/engine-overview.md; independently reviewed after its own source freeze"
+  ],
+  "limits": [
+    "Planning and executable SQLite/tool boundaries only; no game application exists.",
+    "No Rust/native/WASM/browser/device/audio runtime acceptance performed."
+  ]
+}

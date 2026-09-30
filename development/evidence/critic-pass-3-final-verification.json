@@ -1,0 +1,20 @@
+{
+  "schema_objects_equal": true,
+  "schema_difference": [],
+  "probe_count": 35,
+  "failed": [],
+  "unchanged_source_fingerprint": "75e2bb7f366bca756a9e46faef82f6174918cb16ab83a1fa1e580c98be06241e",
+  "source_hash_mismatch": [],
+  "live_tables": [
+    "features",
+    "tasks",
+    "dependencies",
+    "attempts",
+    "devlog"
+  ],
+  "counts": {
+    "features": 133,
+    "tasks": 275,
+    "dependencies": 1052
+  }
+}
