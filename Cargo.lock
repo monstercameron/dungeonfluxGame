@@ -205,9 +205,12 @@ dependencies = [
  "df-observe",
  "df-protocol",
  "df-rpc-bridge",
+ "df-types",
  "futures",
  "gloo-timers",
  "js-sys",
+ "prost",
+ "prost-types",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -217,6 +220,10 @@ dependencies = [
  "web-sys",
  "web-time",
 ]
+
+[[package]]
+name = "df-types"
+version = "0.1.0"
 
 [[package]]
 name = "digest"

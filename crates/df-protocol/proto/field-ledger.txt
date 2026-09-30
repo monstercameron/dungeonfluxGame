@@ -1,0 +1,74 @@
+# Frozen allocations from actual protoc descriptors; retirement retains reserved names/numbers.
+enum dungeonflux.experimental.contract.v1.CapabilityKind
+enum dungeonflux.experimental.transport.v1.Sample.Behavior
+enum-value dungeonflux.experimental.contract.v1.CapabilityKind 0 CAPABILITY_KIND_UNSPECIFIED
+enum-value dungeonflux.experimental.contract.v1.CapabilityKind 1 COMPOSITE_RECOVERY
+enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 0 BEHAVIOR_UNSPECIFIED
+enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 1 ECHO
+enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 2 REJECT
+enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 3 WAIT
+field dungeonflux.experimental.contract.v1.Capability 1 kind type=14 label=1 presence=true target=.dungeonflux.experimental.contract.v1.CapabilityKind oneof=_kind
+field dungeonflux.experimental.contract.v1.Capability 2 required type=8 label=1 presence=true target=- oneof=_required
+field dungeonflux.experimental.contract.v1.CompatibilityFixture 1 protocol_revision type=13 label=1 presence=true target=- oneof=_protocol_revision
+field dungeonflux.experimental.contract.v1.CompatibilityFixture 2 capabilities type=11 label=3 presence=false target=.dungeonflux.experimental.contract.v1.Capability oneof=-
+field dungeonflux.experimental.contract.v1.CompatibilityFixture 3 revision type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionRevision oneof=payload
+field dungeonflux.experimental.contract.v1.CompatibilityFixture 4 build type=11 label=1 presence=false target=.dungeonflux.public.v1.BuildIdentity oneof=payload
+field dungeonflux.experimental.contract.v1.Identities 1 session type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionId oneof=-
+field dungeonflux.experimental.contract.v1.Identities 2 member type=11 label=1 presence=false target=.dungeonflux.public.v1.MemberId oneof=-
+field dungeonflux.experimental.contract.v1.Identities 3 client_binding type=11 label=1 presence=false target=.dungeonflux.public.v1.ClientBindingId oneof=-
+field dungeonflux.experimental.contract.v1.Identities 4 run type=11 label=1 presence=false target=.dungeonflux.public.v1.RunId oneof=-
+field dungeonflux.experimental.contract.v1.Identities 5 operation type=11 label=1 presence=false target=.dungeonflux.public.v1.OperationId oneof=-
+field dungeonflux.experimental.transport.v1.Sample 1 sequence type=13 label=1 presence=false target=- oneof=-
+field dungeonflux.experimental.transport.v1.Sample 2 payload type=12 label=1 presence=false target=- oneof=-
+field dungeonflux.experimental.transport.v1.Sample 3 behavior type=14 label=1 presence=false target=.dungeonflux.experimental.transport.v1.Sample.Behavior oneof=-
+field dungeonflux.experimental.transport.v1.Sample 4 active_calls type=13 label=1 presence=false target=- oneof=-
+field dungeonflux.experimental.transport.v1.Sample 5 deadline_calls type=13 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.BuildIdentity 1 source_revision type=9 label=1 presence=true target=- oneof=_source_revision
+field dungeonflux.public.v1.BuildIdentity 2 native_revision type=9 label=1 presence=true target=- oneof=_native_revision
+field dungeonflux.public.v1.BuildIdentity 3 wasm_revision type=9 label=1 presence=true target=- oneof=_wasm_revision
+field dungeonflux.public.v1.BuildIdentity 4 configuration_revision type=9 label=1 presence=true target=- oneof=_configuration_revision
+field dungeonflux.public.v1.BuildIdentity 5 content_revision type=9 label=1 presence=true target=- oneof=_content_revision
+field dungeonflux.public.v1.ClientBindingId 1 value type=12 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.MemberId 1 value type=12 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.OperationId 1 value type=12 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.RecoveryEpoch 1 value type=4 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.RunId 1 value type=12 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.SessionId 1 value type=12 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.SessionRevision 1 epoch type=11 label=1 presence=false target=.dungeonflux.public.v1.RecoveryEpoch oneof=-
+field dungeonflux.public.v1.SessionRevision 2 sequence type=4 label=1 presence=true target=- oneof=_sequence
+file common.proto dungeonflux.public.v1 proto3
+file contract_fixture.proto dungeonflux.experimental.contract.v1 proto3
+file transport_fixture.proto dungeonflux.experimental.transport.v1 proto3
+message dungeonflux.experimental.contract.v1.Capability
+message dungeonflux.experimental.contract.v1.CompatibilityFixture
+message dungeonflux.experimental.contract.v1.Identities
+message dungeonflux.experimental.transport.v1.Sample
+message dungeonflux.public.v1.BuildIdentity
+message dungeonflux.public.v1.ClientBindingId
+message dungeonflux.public.v1.MemberId
+message dungeonflux.public.v1.OperationId
+message dungeonflux.public.v1.RecoveryEpoch
+message dungeonflux.public.v1.RunId
+message dungeonflux.public.v1.SessionId
+message dungeonflux.public.v1.SessionRevision
+method dungeonflux.experimental.transport.v1.TransportFixture Bidi .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=true server-stream=true
+method dungeonflux.experimental.transport.v1.TransportFixture ClientStream .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=true server-stream=false
+method dungeonflux.experimental.transport.v1.TransportFixture ServerStream .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=false server-stream=true
+method dungeonflux.experimental.transport.v1.TransportFixture Unary .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=false server-stream=false
+oneof dungeonflux.experimental.contract.v1.Capability _kind
+oneof dungeonflux.experimental.contract.v1.Capability _required
+oneof dungeonflux.experimental.contract.v1.CompatibilityFixture _protocol_revision
+oneof dungeonflux.experimental.contract.v1.CompatibilityFixture payload
+oneof dungeonflux.public.v1.BuildIdentity _configuration_revision
+oneof dungeonflux.public.v1.BuildIdentity _content_revision
+oneof dungeonflux.public.v1.BuildIdentity _native_revision
+oneof dungeonflux.public.v1.BuildIdentity _source_revision
+oneof dungeonflux.public.v1.BuildIdentity _wasm_revision
+oneof dungeonflux.public.v1.ClientBindingId _value
+oneof dungeonflux.public.v1.MemberId _value
+oneof dungeonflux.public.v1.OperationId _value
+oneof dungeonflux.public.v1.RecoveryEpoch _value
+oneof dungeonflux.public.v1.RunId _value
+oneof dungeonflux.public.v1.SessionId _value
+oneof dungeonflux.public.v1.SessionRevision _sequence
+service dungeonflux.experimental.transport.v1.TransportFixture

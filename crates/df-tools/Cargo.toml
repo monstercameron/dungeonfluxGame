@@ -34,3 +34,8 @@ wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 gloo-timers = { version = "0.3", features = ["futures"] }
 web-sys = { workspace = true, features = ["Window", "Document", "Element", "HtmlElement", "HtmlButtonElement", "Event", "Location", "Performance", "Navigator", "Request", "RequestInit", "Response"] }
+
+[dev-dependencies]
+df-types = { path = "../df-types" }
+prost.workspace = true
+prost-types = "0.14"

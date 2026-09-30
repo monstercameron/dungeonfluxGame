@@ -1,0 +1,18 @@
+//! Pure caller-supplied identity, recovery ordering, and nonsecret provenance.
+//! Valid values confer no authentication, permissions, issuance, or build approval.
+//!
+//! Different identity kinds cannot be substituted:
+//! ```compile_fail
+//! use df_types::{MemberId, SessionId};
+//! fn session_only(_: SessionId) {}
+//! session_only(MemberId::from_bytes(&[1; 16]).unwrap());
+//! ```
+mod identity;
+mod provenance;
+mod revision;
+
+pub use identity::{ClientBindingId, IdentityError, MemberId, OperationId, RunId, SessionId};
+pub use provenance::{
+    BuildIdentity, BuildIdentityError, BuildRevision, RevisionLabel, RevisionLabelError,
+};
+pub use revision::{RecoveryEpoch, RevisionError, SessionRevision};
