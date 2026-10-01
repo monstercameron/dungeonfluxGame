@@ -14,6 +14,72 @@ commit into the next block: keep the recorded ending revision as the next
 baseline and capture baseline..HEAD, which includes the bookkeeping commit.
 Do not invent a self-hash or silently discard metadata commits.
 
+## 2026-09-30–2026-10-01 continued work — 22:38–04:38 EDT
+
+Six-hour boundaries: 2026-09-30T22:38:04-04:00 through 2026-10-01T04:38:04-04:00.
+
+Range: 2e263fdc475f886555f301c47e3628fe43abc775..deb0462a59b6346803e545ff3627c8b6b030423e
+
+- d2ae8f2 — Record completed ignore changes and reviewed development progress
+- c4814eb — docs: freeze experimental protobuf policy
+- ed55434 — Integrate reviewed B-G02-D02 policy decision
+- 92bea4f — docs: define protobuf field allocation policy
+- ebcebcf — Integrate reviewed B-G03-D02 policy decision
+- c9ac120 — Document recovery revision policy
+- 84b907e — Add executable recovery revision example
+- 65d0913 — Integrate reviewed B-G03-D03 policy decision
+- ec1bc08 — docs: define bootstrap cookie origin policy
+- d1eb4c3 — Integrate reviewed B-G04-D03 policy decision
+- 2c7c044 — Document protected journal durability boundary
+- 083ccb2 — Integrate reviewed B-G05-D02 policy decision
+- e4576ae — docs: define erasure retention overlay
+- 3559d7c — Integrate reviewed B-G05-D03 policy decision
+- be95c24 — Document per-instance telemetry topology
+- aac3d48 — Integrate reviewed B-G06-D01 policy decision
+- acbb2cf — audit: map native shared contract readiness gates
+- 2db3035 — Keep native readiness evidence local and ignored
+- fa22eea — Document task memory and lease admission policy
+- 7e2aa44 — Correct combined lease admission reserve provenance
+- c391041 — Integrate reviewed bounded task memory lease policy
+- 14681cb — docs: freeze typed recovery revision policy
+- 4bdc6ba — Integrate reviewed typed revision policy
+- 9b6881e — docs: decide typed identity policy
+- 26f1ea0 — Integrate reviewed typed identity policy
+- 0b79048 — docs: specify money usage and duration units
+- eef8bf5 — Integrate reviewed exact typed units policy
+- b30fef0 — docs: define typed build provenance policy
+- 5ebd415 — Integrate reviewed typed provenance policy
+- a2ccefe — Propose exact I01 applicability correction and execution boundary
+- 50fc0a3 — Repair I01 seed with mandatory accepted contract receipt
+- 502f294 — Integrate independently reviewed I01 prerequisite applicability repair
+- 8549d20 — docs: select dependency license admission policy
+- e36ab46 — Integrate independently reviewed dependency license route policy
+- cd06fcb — Add canonical hex constructors for identity types
+- e6d6921 — Integrate independently verified canonical identity text constructors
+- 1f80e77 — Propose exact I02 applicability and accepted source receipts
+- a6ed525 — Integrate I02 prerequisite applicability and canonical arithmetic scope
+- bab2bd1 — docs: select native HTTP2 transport fixture policy
+- 62a10c8 — Merge independently reviewed B-G02-D01
+- 998523d — test checked revision arithmetic boundaries
+- aa4ff51 — format revision boundary fixture
+- 1222e82 — Merge independently reviewed B-C-df-types-I02
+- fa6d2b3 — Bound screenshot journey devlog entries
+- da2f836 — Validate screenshot journey ingestion inputs
+- d7d3de2 — Reject incomplete screenshot journal records
+- 8321f08 — Fix bounded screenshot devlog ingestion with validated provenance
+- ccb452c — Enforce incoming HTTP2 control frame rate at tunnel boundary
+- 69dbde9 — Coalesce consumed browser h2 credit within fixed windows
+- 3c9f795 — Keep browser credit coordinator Send and recover poisoned cleanup
+- 921ae66 — Exercise poisoned credit cleanup against h2
+- 003578c — Preserve browser pressure traffic under rolling control-frame cap
+- c9a700b — Document reproducible fixture command registry
+- 18bb52e — Repair fixture registry command contract
+- 3531253 — Integrate reproducible command registry decision
+- c566e0b — Measure retained browser callback Vec capacity
+- deb0462 — Merge independently reviewed browser callback capacity observation
+
+Canonical identity text and revision arithmetic, dependency licensing policy, typed unit/provenance decisions, native transport fixture policy, rolling control-frame admission with consumed-credit coalescing, screenshot ingestion and reproducible command registry received independent integrated checks. Full G01/G02/G03 qualification remains pending. The callback-capacity candidate is merged at deb0462 and undergoing fresh resulting-build browser evaluation at this boundary; it does not establish total heap or pre-callback browser engine allocation. Phone and audio qualification are deferred to later testing. The rejected control-rate and ingestion drafts appear in history through their repaired descendants; their failed evidence remains retained. Cleanup performed read-only inventories and zero deletions; the cleanup024 initial ownership-registration gap remains recorded separately from its approved fresh retry.
+
 ## 2026-09-30 resumed work — 16:38–22:38 EDT
 
 First durable attempt: 2026-09-30T16:38:04-04:00; coordinator prerequisite reads preceded it.
