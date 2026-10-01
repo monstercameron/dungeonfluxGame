@@ -53,3 +53,85 @@ Original verification 2 (preserved): “Exact executable commands: TBD at G01 an
 At this source revision the bounded example is the canonical identity/recovery/build DTO mapping and revision/capability/payload fixture in `crates/df-tools/tests/shared_contracts.rs`; its descriptor source is `FILE_DESCRIPTOR_SET`, checked against `crates/df-protocol/proto/field-ledger.txt` by `crates/df-tools/tests/schema_ledger.rs`. The source-bound commands for this attempt are the focused native tests (including both named descriptor/consumer tests and `df-types` tests), workspace formatting, affected-package native and WASM Clippy, and affected-library WASM build. Capture the exact source/configuration identity, command, exit status, output, and artifact identity for each run. The build-fixture wrapper sets `CARGO_BUILD_JOBS=2`; it cannot be used for bounded builds without overriding its hardcoded setting, so invoke the cached Cargo toolchain directly with `--jobs 1`, offline mode, automatic rustup installation disabled, and the attempt-owned cache/build/scratch paths. No dependency downloads or paid calls are in scope.
 
 Native consumer/descriptor execution and WASM compilation are separate results. No full G03/game, production, browser, audio, physical-device, provider, full-workspace WASM, or full G01 audit claim follows from these checks.
+
+## B-C-df-types-I01 applicability and execution boundary
+
+The reviewed I01 prerequisite correction retains `B-C-df-types-D01` and adds
+`B-G03-D01` as its only new graph prerequisite. The accepted historical
+`CONTRACT-G03-001` remains a mandatory source receipt in I01's generated brief,
+because it is an existing coordinator-intake task outside the seed manifests.
+That receipt includes the exact original objective, acceptance, verification and
+frozen brief, accepted tested/integrated revision, canonical payload hash and
+retained proof hashes. Before dispatch, the root coordinator must reread the
+original task/attempt/review and proof files, compare the original contract and
+retained proof hashes to the accepted integration, verify current source reuse
+separately, and retain a dated verifier outcome.
+A missing, mismatched, revoked or unverifiable receipt blocks dispatch; the
+blueprint remains `dispatch_ready=false`. The original I01 acceptance and
+verification clauses remain verbatim, including empty, whitespace, and oversized
+rejection. This is an applicability decision, not I01 dispatch or completion.
+The five currently implemented, distinct byte kinds are `SessionId`, `MemberId`,
+`ClientBindingId`, `RunId`, and `OperationId` in `crates/df-types/src/identity.rs`.
+Their existing `from_bytes` accepts exactly 16 supplied bytes, rejects zero,
+preserves order, and has no issuance or authority semantics. I01's selected text
+ingress is exactly 32 lowercase ASCII hex characters representing those 16 bytes
+in order. Measure UTF-8 byte length first; reject wrong lengths as
+`InvalidLength { actual }`, any non-grammar byte at length 32 as `Malformed`,
+and decoded zero as `Zero`. No prefix, separator, whitespace, case folding, or
+Unicode normalization is admitted. The D01 parser is a decision model, not a
+production constructor; I01 must freeze the public method/error shape and all
+five kind mappings with its consumer before implementation. Distinct kinds must
+remain noninterchangeable.
+
+The original family also names client, job, utterance, and asset roles. A stable
+`ClientBindingId` does not identify a transient connection or tab. The future
+client connection/tab role belongs to the `B-C-df-client-D01` binding/freshness
+contract and `B-C-df-session-D02` allocation/identity contract. Job identity
+belongs to `B-C-df-session-D02`, `B-C-df-provider-api-D02`, and their later
+implementation/consumer work. Utterance identity belongs to
+`B-C-df-media-D02` and its speech/consumer work. Asset identity belongs to
+`B-C-df-assets-D01` and its publication/consumer work. Each owner must freeze
+its distinct semantic role and reuse canonical byte validation before introducing
+a type; none is predeclared or aliased here. Independent review of the I01 frozen
+brief must confirm that this mapping preserves the original task's full required
+scope. If that cannot be established, I01 stays pending with the contract gap
+explicit; the dependency correction alone cannot make it dispatchable.
+
+At this source revision the only actual consuming identity mapping is the
+test-only `crates/df-tools/tests/shared_contracts.rs`: it maps all five typed IDs
+to the five `dungeonflux.public.v1` DTOs in
+`crates/df-protocol/proto/common.proto`, and checks byte round trips, missing,
+empty, short, long, and zero inputs. `crates/df-tools/tests/schema_ledger.rs`
+checks the actual generated descriptor against the durable field ledger and
+mutation cases. `df-api`, `df-client`, and `df-persistence` have no production
+identity codec here. If I01 changes only the text constructor, the current wire
+bytes and descriptor must remain identical; if a future boundary needs a wire
+change, its owning protocol/API wave must admit and test that change separately.
+I01 must test all five text mappings, wrong length including empty and oversized,
+whitespace, uppercase, non-ASCII and malformed 32-byte inputs, zero, byte order,
+and cross-kind compile-time separation. The actual shared-contract round trip and
+descriptor ledger checks are the current compatibility probes, not production
+consumer evidence.
+
+For the later I01 implementation/review, pin the source revision, `Cargo.lock`,
+`rust-toolchain.toml` (Rust 1.98.1), `rustfmt.toml`, configuration and owned build
+root. Use the existing cached `RUSTUP_HOME=artifacts/cache/rustup` and
+`CARGO_HOME=artifacts/cache/cargo`, set `RUSTUP_AUTO_INSTALL=0`,
+`CARGO_NET_OFFLINE=true`, `CARGO_BUILD_JOBS=1`, and an attempt-owned
+`CARGO_TARGET_DIR` under `artifacts/build/`. From the repository root, retain
+commands, exit codes, output and artifact hashes for:
+
+```text
+cargo +1.98.1 fmt --all -- --check
+cargo +1.98.1 test --locked --offline -p df-types --jobs 1
+cargo +1.98.1 test --locked --offline -p df-tools --test shared_contracts --test schema_ledger --jobs 1
+cargo +1.98.1 clippy --locked --offline -p df-types -p df-protocol -p df-tools --all-targets --jobs 1 -- -D warnings
+cargo +1.98.1 clippy --locked --offline -p df-types -p df-protocol -p df-tools --all-targets --target wasm32-unknown-unknown --jobs 1 -- -D warnings
+cargo +1.98.1 build --locked --offline -p df-types -p df-protocol -p df-tools --lib --target wasm32-unknown-unknown --jobs 1
+```
+
+The `df-tools` tests execute the native mapping and descriptor checks; the WASM
+commands compile the affected dependency closure. These commands are pinned
+future checks, not results of this planning correction. Production caller mapping,
+future kind contracts, full G01/G02/G03 gates, browser/network/physical-device
+observations, and S00/S01 completion retain their separate owners and evidence.
