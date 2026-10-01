@@ -125,7 +125,7 @@ cannot disappear silently during that change.
 | SessionGrant | session_id, stable member_id/access role, display name, resolved preferences, supported capabilities, run/revision, refreshed scoped credential when required, binding instructions; only newly issued credentials are secret fields |
 | ClientBinding | client_id/binding_id, selected view role, granted permissions, explicit input/audio/capture lease identities/expiry, connection generation, build/protocol capabilities, idempotency window |
 | DecisionReceipt | operation_id, committed session/run/revision, typed accepted or rejected result, safe reason/detail, affected IDs, pending job/resolution IDs and resync instruction where needed |
-| Rejection | stable code such as stale_offer, wrong_turn, invalid_selection, paused, resource_missing or capability_unavailable; safe display text/key, current revision, relevant permitted correction |
+| Rejection | one of the closed public domain codes below; safe display key, current authorized revision and relevant permitted correction only |
 | OperationLookup | committed receipt, in_progress, not_recorded or expired/indeterminate; never invent an answer after retention loss |
 | SnapshotStamp | session_id, run_id, durable session_revision, presentation_epoch, view_sequence, content/rules/build revision, server clock anchor |
 | Page | bounded items, opaque next cursor, consistent/as-of revision and access scope; cursor cannot select another member's data |
@@ -172,6 +172,227 @@ mutation. Cancelling/deadlining an RPC does not undo a committed game decision.
 Accepted effects have session/run-owned deadlines/cancellation independent of the
 originating RPC. Caller cancellation stops a receipt wait or unaccepted admission;
 owner-authorized cancellation/reset governs durable jobs.
+
+### Public service error taxonomy
+
+For the currently specified service behavior, a completed domain decision is
+either accepted or rejected with exactly one of the following public `RejectionCode`
+variants. These are semantic names, not allocated protobuf values. The code, a
+localized display key, and a permitted correction are public only after the caller
+and audience are authorized; neither a code nor a revision proves permission. A
+rejection may include the current revision only when that caller may see it. It
+never includes another member's state, raw user text, credential, provider response,
+ledger detail, trace payload, or internal exception. Safe detail does not add a
+second machine-readable reason selected by parsing text.
+
+| Closed `RejectionCode` | Current meaning and permitted client response |
+| --- | --- |
+| `StaleOffer` | The submitted offer is no longer legal for the actor/run/current choice conditions; refresh the authorized view and select a current offer. Unrelated revision movement alone is insufficient. |
+| `WrongTurn` | The actor has no current turn or reaction window for this action; await the next authorized view. |
+| `InvalidSelection` | A typed selection, limit, target or choice combination fails the advertised offer; correct it from permitted options. This is a well-formed but illegal domain selection, not malformed protobuf. |
+| `Paused` | Session policy currently prevents this action; wait for an authorized resumed view. |
+| `ResourceMissing` | The actor lacks a required game resource for an otherwise understood action; revise the action. It does not disclose a hidden asset or member. |
+| `CapabilityUnavailable` | A planned game/presentation capability is unavailable in this admitted context; show the supplied fallback or disabled state, not a fabricated standard mechanic. |
+| `RecoveryRequired` | A validly identified membership cannot resume until the documented access recovery flow completes; offer that flow without revealing whether another identity exists. |
+| `RevisionConflict` | A strict host/debug mutation precondition failed; refresh permitted state before a new authorized command. It is distinct from ordinary observed revision context and `StaleOffer`. |
+| `OperationConflict` | The same operation key was presented with a different canonical request fingerprint; stop and resolve the caller's key use, never execute the changed payload. |
+| `OperationExpired` | The deduplication result expired or its namespace retired; reject reuse of that key and resolve the prior operation before a new intent. Absence of a receipt cannot authorize replay. |
+
+The set is closed at this design revision: producers and clients match every variant
+without an `Other` domain code or string-derived branch. The first six preserve the
+existing examples; the last four name the already required resume, strict revision,
+and operation-key outcomes. Applicability follows each method's actual response and
+authority, rather than a universal error envelope:
+
+| Existing method shape | Public outcome boundary |
+| --- | --- |
+| Session Leave/SetPreferences, Action Submit/SubmitText, Host Command and Debug Command/RestoreCheckpoint | A committed `DecisionReceipt` is accepted or carries an applicable typed rejection; strict revision applies only where required. |
+| Identity BeginGuest/Renew/Revoke and Session Create/Join/Resume/BindClient | Grant/revocation/binding responses keep their specified shape. Resume's required typed recovery result uses `RecoveryRequired` when its future response presence is frozen; the other methods must not fabricate a `DecisionReceipt`. |
+| Session GetOperation and Customer GetOperation | Return their own committed/in-progress/not-recorded/expired-or-indeterminate lookup states; absence of a receipt is never an accepted decision. |
+| Customer Command | `CustomerReceipt` distinguishes durable request acceptance and external `Pending`/`Unknown`; business-specific rejection presence and codes need the commerce-owning API wave. |
+| Voice Talk | An admitted stream may emit its specified typed rejection/error and terminal outcome; its transport status and half-close remain independent. |
+| Watch, Listen, Asset Get, Customer/Telemetry Export and other server streams; reads, pages and uploads | Return their documented data, acknowledgements or terminal stream events. Do not add `DecisionReceipt` to them to reuse this enum; failures at the RPC boundary keep status/trailers. |
+
+A method's future domain cases require its owning G03/API wave to admit exact typed
+variants and response presence before implementation. This decision does not assert
+that every planned method has a production error mapping today.
+
+Malformed or oversized requests, authentication and authorization failures,
+opaque missing resources, admission capacity, unavailable infrastructure,
+deadlines, cancellation, and safe internal faults are RPC failures. The native API
+boundary maps them to the existing qualified gRPC statuses in “Debug, telemetry and
+compatibility” and safe trailers; it does not convert a valid domain rejection into
+an RPC failure or parse status text for UI behavior. A private resource may use an
+opaque denial or absence according to the owning authorization policy; the taxonomy
+does not promise an existence oracle. Unexpected framework statuses receive a
+generic failure path, never a new domain code. Pure domain owners return typed
+facts; native consumers own status mapping, authorization, redaction and telemetry.
+
+An RPC status reports transport/framework handling, not whether a mutation
+committed. After submission, disconnect, `UNAVAILABLE`, `DEADLINE_EXCEEDED`,
+`CANCELLED`, or a lost trailer can leave the decision unknown. Keep the original
+operation ID and canonical fingerprint, resync or query the appropriate
+GetOperation; `in_progress`, `not_recorded` and `expired/indeterminate` are not
+accepted or rejected receipts. `not_recorded` is not by itself permission to
+allocate a new key or retry an uncertain mutation automatically. A known rejected
+receipt may lead to a corrected *new intent* under the method's policy. A known
+accepted receipt may still identify pending session-owned work; caller cancellation
+cannot retract it. Customer external `Pending`/`Unknown` likewise does not certify
+payment or release reserved liability. Four RPC modes retain metadata, status and
+trailers, deadlines, half-close and cancellation as specified by the transport.
+
+The following standalone Rust 2024 example documents the exhaustive client
+decision boundary. It is a design fixture, not a production crate, protobuf
+declaration or wire codec. Its fixed cases test only this decision boundary.
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RejectionCode {
+    StaleOffer,
+    WrongTurn,
+    InvalidSelection,
+    Paused,
+    ResourceMissing,
+    CapabilityUnavailable,
+    RecoveryRequired,
+    RevisionConflict,
+    OperationConflict,
+    OperationExpired,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Observation {
+    Accepted,
+    Rejected(RejectionCode),
+    InProgress,
+    NotRecorded,
+    ExpiredOrIndeterminate,
+    AmbiguousRpcFailure,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ClientDecision {
+    Continue,
+    Resync,
+    Wait,
+    CorrectSelection,
+    ShowUnavailable,
+    RecoverAccess,
+    ResolveOperation,
+    LookupSameOperation,
+}
+
+struct InternalRejection<'a> {
+    code: RejectionCode,
+    private_detail: &'a str,
+}
+
+fn public_rejection(internal: InternalRejection<'_>) -> Observation {
+    let InternalRejection {
+        code,
+        private_detail,
+    } = internal;
+    let _ = private_detail;
+    Observation::Rejected(code)
+}
+
+fn decide(observation: Observation) -> ClientDecision {
+    match observation {
+        Observation::Accepted => ClientDecision::Continue,
+        Observation::Rejected(code) => match code {
+            RejectionCode::StaleOffer | RejectionCode::RevisionConflict => ClientDecision::Resync,
+            RejectionCode::WrongTurn | RejectionCode::Paused => ClientDecision::Wait,
+            RejectionCode::InvalidSelection | RejectionCode::ResourceMissing => {
+                ClientDecision::CorrectSelection
+            }
+            RejectionCode::CapabilityUnavailable => ClientDecision::ShowUnavailable,
+            RejectionCode::RecoveryRequired => ClientDecision::RecoverAccess,
+            RejectionCode::OperationConflict | RejectionCode::OperationExpired => {
+                ClientDecision::ResolveOperation
+            }
+        },
+        Observation::InProgress | Observation::AmbiguousRpcFailure => {
+            ClientDecision::LookupSameOperation
+        }
+        Observation::NotRecorded | Observation::ExpiredOrIndeterminate => {
+            ClientDecision::ResolveOperation
+        }
+    }
+}
+
+#[test]
+fn all_current_rejections_have_a_typed_client_decision() {
+    let cases = [
+        (RejectionCode::StaleOffer, ClientDecision::Resync),
+        (RejectionCode::WrongTurn, ClientDecision::Wait),
+        (
+            RejectionCode::InvalidSelection,
+            ClientDecision::CorrectSelection,
+        ),
+        (RejectionCode::Paused, ClientDecision::Wait),
+        (
+            RejectionCode::ResourceMissing,
+            ClientDecision::CorrectSelection,
+        ),
+        (
+            RejectionCode::CapabilityUnavailable,
+            ClientDecision::ShowUnavailable,
+        ),
+        (
+            RejectionCode::RecoveryRequired,
+            ClientDecision::RecoverAccess,
+        ),
+        (RejectionCode::RevisionConflict, ClientDecision::Resync),
+        (
+            RejectionCode::OperationConflict,
+            ClientDecision::ResolveOperation,
+        ),
+        (
+            RejectionCode::OperationExpired,
+            ClientDecision::ResolveOperation,
+        ),
+    ];
+    for (code, expected) in cases {
+        assert_eq!(decide(Observation::Rejected(code)), expected);
+    }
+}
+
+#[test]
+fn uncertainty_never_becomes_success_or_an_automatic_mutation_retry() {
+    assert_eq!(decide(Observation::Accepted), ClientDecision::Continue);
+    assert_eq!(
+        decide(Observation::InProgress),
+        ClientDecision::LookupSameOperation
+    );
+    assert_eq!(
+        decide(Observation::AmbiguousRpcFailure),
+        ClientDecision::LookupSameOperation
+    );
+    assert_eq!(
+        decide(Observation::NotRecorded),
+        ClientDecision::ResolveOperation
+    );
+    assert_eq!(
+        decide(Observation::ExpiredOrIndeterminate),
+        ClientDecision::ResolveOperation
+    );
+}
+
+#[test]
+fn public_decision_shape_cannot_carry_private_or_provider_payloads() {
+    let internal = InternalRejection {
+        code: RejectionCode::ResourceMissing,
+        private_detail: "secret player state and provider response",
+    };
+    let public = public_rejection(internal);
+    assert_eq!(
+        public,
+        Observation::Rejected(RejectionCode::ResourceMissing)
+    );
+    assert!(!format!("{public:?}").contains("secret"));
+    assert!(!format!("{public:?}").contains("provider"));
+}
+```
 
 ## Session, action and text requests
 
