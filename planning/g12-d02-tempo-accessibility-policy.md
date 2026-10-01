@@ -173,7 +173,11 @@ fn advance(
         intensity,
         presentation_ms: now_ms,
         sequence,
-        last_shake_ms: if shake { Some(now_ms) } else { state.last_shake_ms },
+        last_shake_ms: if shake {
+            Some(now_ms)
+        } else {
+            state.last_shake_ms
+        },
     };
     let frame = Frame {
         intensity,
