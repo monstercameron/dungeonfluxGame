@@ -282,7 +282,7 @@ struct PreviewState {
     connections: Arc<Semaphore>,
     resources: Arc<Mutex<VecDeque<Arc<ConnectionMetrics>>>>,
     origin: Arc<str>,
-    reports: Arc<Mutex<[String; 3]>>,
+    reports: Arc<Mutex<[String; 4]>>,
 }
 async fn websocket(
     State(state): State<PreviewState>,
@@ -388,6 +388,7 @@ fn report_index(kind: &str) -> Option<usize> {
         "semantics" => Some(0),
         "qualification" => Some(1),
         "callback-capacity" => Some(2),
+        "connection-credit" => Some(3),
         _ => None,
     }
 }
@@ -508,7 +509,7 @@ async fn malicious(
             }
         })
 }
-const HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DungeonFlux S00 transport laboratory</title><style>body{margin:0;background:#10141c;color:#e6eaf3;font:17px system-ui,sans-serif}main{max-width:880px;margin:64px auto;padding:0 24px}h1{font-size:38px;line-height:1.1}p{color:#b7c3d4;line-height:1.5}button{background:#88dfb5;color:#10141c;border:0;border-radius:8px;font:600 17px system-ui;padding:14px 22px;cursor:pointer}button:disabled{opacity:.5}pre{white-space:pre-wrap;padding:20px;background:#1a2331;line-height:1.7;border-radius:10px}.tag{color:#88dfb5;letter-spacing:2px;font-size:13px}a{color:#88dfb5}</style></head><body><main><div class="tag">DUNGEONFLUX / EXPERIMENTAL S00</div><h1>Rust transport laboratory</h1><p>Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly.</p><p>This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.</p><button id="run" disabled>Loading Rust/WASM…</button><button id="qualify" disabled>Loading qualification…</button><button id="callback-capacity" disabled>Loading callback observation…</button><pre id="callback-capacity-report" role="status" aria-live="polite">Callback capacity observation has not run.</pre><pre id="qualification" role="status" aria-live="polite">Desktop pressure qualification has not run.</pre><pre id="results" role="status" aria-live="polite">Loading generated WebAssembly bindings…</pre><p><a href="/fixture-health">Native fixture diagnostics</a></p><p id="build"></p></main><script type="module">import init from '/pkg/df_tools.js';await init();</script></body></html>"#;
+const HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DungeonFlux S00 transport laboratory</title><style>body{margin:0;background:#10141c;color:#e6eaf3;font:17px system-ui,sans-serif}main{max-width:880px;margin:64px auto;padding:0 24px}h1{font-size:38px;line-height:1.1}p{color:#b7c3d4;line-height:1.5}button{background:#88dfb5;color:#10141c;border:0;border-radius:8px;font:600 17px system-ui;padding:14px 22px;cursor:pointer}button:disabled{opacity:.5}pre{white-space:pre-wrap;padding:20px;background:#1a2331;line-height:1.7;border-radius:10px}.tag{color:#88dfb5;letter-spacing:2px;font-size:13px}a{color:#88dfb5}</style></head><body><main><div class="tag">DUNGEONFLUX / EXPERIMENTAL S00</div><h1>Rust transport laboratory</h1><p>Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly.</p><p>This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.</p><button id="run" disabled>Loading Rust/WASM…</button><button id="qualify" disabled>Loading qualification…</button><button id="callback-capacity" disabled>Loading callback observation…</button><button id="connection-credit" disabled>Loading connection-credit observation…</button><pre id="connection-credit-report" role="status" aria-live="polite">Connection-credit stall observation has not run.</pre><pre id="callback-capacity-report" role="status" aria-live="polite">Callback capacity observation has not run.</pre><pre id="qualification" role="status" aria-live="polite">Desktop pressure qualification has not run.</pre><pre id="results" role="status" aria-live="polite">Loading generated WebAssembly bindings…</pre><p><a href="/fixture-health">Native fixture diagnostics</a></p><p id="build"></p></main><script type="module">import init from '/pkg/df_tools.js';await init();</script></body></html>"#;
 
 /// Start only a synthetic loopback preview. The caller owns process and output directory.
 pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
@@ -545,7 +546,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         statistics,
         connections: Arc::new(Semaphore::new(4)),
         resources: Arc::new(Mutex::new(VecDeque::new())),
-        reports: Arc::new(Mutex::new([String::new(), String::new(), String::new()])),
+        reports: Arc::new(Mutex::new(std::array::from_fn(|_| String::new()))),
         origin: format!("http://127.0.0.1:{port}").into(),
     };
     let router = Router::new()
