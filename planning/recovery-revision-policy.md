@@ -1,8 +1,8 @@
 # Recovery revision policy
 
-Task/attempt: `B-G03-D03/a1`
+Task/attempt: `B-G03-D03/a2`
 
-Input source: `4ba37943691f3a01a49b8238983e82527bec91bf`
+Input source: `c9ac1203b7709fed04f89e5a84e9e577ec27fa34`
 
 Owner boundary: `df-types`, `df-model`, `df-protocol`; this document specifies policy around the existing `df-types` primitive. It adds no issuer, journal authority, schema, or application implementation.
 
@@ -30,7 +30,65 @@ The existing pure type proves ordering and checked in-epoch increment only. It c
 
 ## Bounded executable evidence
 
-A small standalone Rust harness imports the exact current `crates/df-types/src/revision.rs` file by path, then exercises its public `RecoveryEpoch` and `SessionRevision` API with rustc 1.98.1. It checks zero rejection, valid sequence zero, lexicographic `(8, 0) > (7, u64::MAX)`, and checked sequence overflow. `Option` assertions model absent epoch message / absent epoch value / present zero epoch, and absent sequence / present zero sequence; these assertions are policy-model evidence only, not execution of prost-generated mappings. `u64::MAX.checked_add(1) == None` records the exhaustion boundary; the harness is not an epoch issuer. The existing `df-tools/tests/shared_contracts.rs` `read_revision`/`write_revision` mapping and `missing_and_zero_recovery_components_and_old_scalar_ambiguity_reject` fixture were source-compared for message/value/sequence presence, nonzero epoch validation, and legacy-scalar rejection; that generated-mapping fixture was not run. This direct-module harness is not a Cargo build or a build of the complete canonical `df-types` library. Its source, compiler identity, command, output, exit status and hashes are retained in the assigned attempt output. No Cargo, Clippy, WASM, protobuf generation, generated-mapping test, browser, persistence, or restore fixture was run.
+The following Rust example directly imports the existing `df-types` revision module from the current assigned worktree. Extract this literal fence, check formatting, compile, and run it with the exact commands below from the worktree root. The assertions cover valid sequence zero, epoch-first tuple ordering at the maximum old sequence, next-sequence advancement and overflow rejection, zero-epoch rejection, and checked arithmetic at epoch exhaustion. Its `Option` values illustrate required wire-presence distinctions only; they do not implement or call a Prost mapper. The example is not an epoch issuer, recovery journal, restore implementation, or production integration proof.
+
+```rust
+#[path = "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/recovery_policy_implementation/crates/df-types/src/revision.rs"]
+mod revision;
+
+use revision::{RecoveryEpoch, RevisionError, SessionRevision};
+
+fn main() {
+    assert_eq!(RecoveryEpoch::new(0), Err(RevisionError::ZeroEpoch));
+
+    let old_epoch = RecoveryEpoch::new(7).expect("nonzero old epoch");
+    let new_epoch = RecoveryEpoch::new(8).expect("nonzero new epoch");
+    let old_max = SessionRevision::new(old_epoch, u64::MAX);
+    let new_zero = SessionRevision::new(new_epoch, 0);
+    let new_one = new_zero.next_sequence().expect("sequence can advance");
+
+    assert_eq!(new_zero.sequence(), 0);
+    assert_eq!(new_one.sequence(), 1);
+    assert_eq!(new_one.epoch().get(), 8);
+    assert!(new_one > new_zero);
+    assert!(new_zero > old_max);
+    assert_eq!(
+        old_max.next_sequence(),
+        Err(RevisionError::SequenceOverflow)
+    );
+
+    // This is a checked-arithmetic boundary, not a recovery-epoch issuer.
+    assert_eq!(u64::MAX.checked_add(1), None);
+
+    // Illustrative presence values only; this is not a generated-Prost mapping.
+    let missing_epoch_message: Option<Option<u64>> = None;
+    let missing_epoch_value: Option<Option<u64>> = Some(None);
+    let zero_epoch_value: Option<Option<u64>> = Some(Some(0));
+    let missing_sequence: Option<u64> = None;
+    let present_zero_sequence: Option<u64> = Some(0);
+
+    assert_eq!(missing_epoch_message, None);
+    assert_eq!(missing_epoch_value, Some(None));
+    assert_eq!(zero_epoch_value, Some(Some(0)));
+    assert_eq!(missing_sequence, None);
+    assert_eq!(present_zero_sequence, Some(0));
+
+    println!(
+        "PASS: revision ordering, checked sequence, epoch-zero rejection, arithmetic exhaustion, and illustrative field presence"
+    );
+}
+```
+
+Run these commands from `/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/recovery_policy_implementation`; the output root is the durable a2 worker directory supplied in the brief and the binary stays in this attempt's scratch directory:
+
+```sh
+awk 'BEGIN { in_code = 0; found = 0 } /^```rust$/ && !found { in_code = 1; found = 1; next } in_code && /^```$/ { exit } in_code { print } END { if (!found) exit 1 }' planning/recovery-revision-policy.md > /Users/earlcameron/Desktop/dungeonflux/development/evidence/parallel-decisions/B-G03-D03/a2/worker/recovery-policy-example.rs
+/Users/earlcameron/Desktop/dungeonflux/artifacts/cache/rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustfmt --check --edition 2024 --config-path rustfmt.toml /Users/earlcameron/Desktop/dungeonflux/development/evidence/parallel-decisions/B-G03-D03/a2/worker/recovery-policy-example.rs
+/Users/earlcameron/Desktop/dungeonflux/artifacts/cache/rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustc --edition=2024 -C opt-level=0 /Users/earlcameron/Desktop/dungeonflux/development/evidence/parallel-decisions/B-G03-D03/a2/worker/recovery-policy-example.rs -o /Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/B-G03-D03-a2/recovery-policy-example
+/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/B-G03-D03-a2/recovery-policy-example
+```
+
+Retain the freshly extracted source under the durable a2 worker directory. Compare its optional-presence model with `common.proto` and `df-tools/tests/shared_contracts.rs`: the source mapping requires epoch message, epoch value, and sequence presence, validates nonzero epoch, and accepts present sequence zero. This attempt executes the literal document example and compares those protocol sources; it does not execute generated Prost mappings. Cargo, Clippy, WASM, browser, persistence, protected-head/CAS, and disaster-restore checks are outside this bounded repair and remain unperformed. The canonical `df-types` implementation itself still only proves caller-supplied nonzero epoch values, lexicographic ordering, and checked in-epoch advancement.
 
 ## Original acceptance criteria
 
