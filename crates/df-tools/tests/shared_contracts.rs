@@ -183,11 +183,11 @@ fn revision_fixture(epoch: u64, sequence: u64) -> fixture::CompatibilityFixture 
 #[test]
 fn distinct_supplied_ids_round_trip_canonical_bytes() {
     let value = Identities {
-        session: SessionId::from_bytes(&[1; 16]).unwrap(),
-        member: MemberId::from_bytes(&[2; 16]).unwrap(),
-        client_binding: ClientBindingId::from_bytes(&[3; 16]).unwrap(),
-        run: RunId::from_bytes(&[4; 16]).unwrap(),
-        operation: OperationId::from_bytes(&[5; 16]).unwrap(),
+        session: SessionId::from_hex("01010101010101010101010101010101").unwrap(),
+        member: MemberId::from_hex("02020202020202020202020202020202").unwrap(),
+        client_binding: ClientBindingId::from_hex("03030303030303030303030303030303").unwrap(),
+        run: RunId::from_hex("04040404040404040404040404040404").unwrap(),
+        operation: OperationId::from_hex("05050505050505050505050505050505").unwrap(),
     };
     let encoded = fixture::Identities::from(&value).encode_to_vec();
     assert_eq!(
