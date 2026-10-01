@@ -811,7 +811,7 @@ async fn run_connection_credit(document: &Document, generation: u64) -> Result<(
         .user_agent()
         .map_err(|_| "user agent unavailable")?;
     let report = format!(
-        "{status}\n{observations}Callback cleanup observed: {cleaned}\nPost-close snapshot: {closed:?}\nBrowser: {browser}\nBuild: {}\nReport generation: {generation}\nScope: connection wire DATA credit is not stream credit or memory allocation. WASM buffer length is the whole allocated linear memory, not live heap or browser-engine storage. Full G02/D03, total 8 MiB, pre-callback allocation, 128-frame/256 KiB control queue and fairness, physical phones, audio, gameplay and production remain pending.\n",
+        "{status}\n{observations}Callback cleanup observed: {cleaned}\nPost-close snapshot: {closed:?}\nBrowser: {browser}\nBuild: {}\nReport generation: {generation}\nScope: connection wire DATA credit is not stream credit or memory allocation. WASM buffer length is the whole allocated linear memory, not live heap or browser-engine storage. Hostile over-credit bursts, full G02/D03, total 8 MiB, pre-callback allocation, 128-frame/256 KiB control queue and fairness, physical phones, audio, gameplay and production remain pending.\n",
         crate::BUILD_ID,
     );
     display_connection_credit(document, &report);
@@ -961,7 +961,7 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
             };
             if let Err(error) = result {
                 let report = format!(
-                    "FAIL · {error}\nBuild: {}\nConnection-credit attribution and full G02 remain unverified. The run owner and its streams were dropped.\n",
+                    "FAIL · {error}\nBuild: {}\nConnection-credit attribution remains unverified. Hostile over-credit bursts, full G02/D03, total 8 MiB, pre-callback allocation, 128-frame/256 KiB control queue and fairness, physical phones, audio, gameplay and production remain pending. The run owner and its streams were dropped.\n",
                     crate::BUILD_ID,
                 );
                 display_connection_credit(&document, &report);

@@ -140,8 +140,9 @@ An oversized engine ArrayBuffer is observed only after allocation; rejection bef
 Rust copying does not bound that engine allocation.
 The connection-credit stall snapshot measures wire credit at the connection
 observer, not stream credit, live heap or browser engine/pre-callback storage.
-Even a zero-credit held phase does not prove the total8MiB allocation, reserved
-128-frame/256KiB control queue or fair scheduling. Those and D03/full G02,
+Even a zero-credit held phase does not prove hostile over-credit burst handling,
+the total8MiB allocation, reserved 128-frame/256KiB control queue or fair
+scheduling. Those and D03/full G02,
 physical phones, audio, production and gameplay stay pending.
 
 Shared OTEL counts now use actual application payload bytes at service scopes and
