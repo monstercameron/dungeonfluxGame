@@ -1,9 +1,0 @@
-{
-  "id": "audit-g01-a2-coordinator-integrated-20260930",
-  "kind": "resolution",
-  "summary": "Partial dependency/license audit integrated after independent parent-symlink repair and actual main verification.",
-  "details": "Main exactf79 approved allfivecriteria; independent actual merged helper positive fromforeigncwd and bounded ancestor/FIFO/leaf+FD checks pass. All sixsourceblobs matchcandidate; applicationCargo/crates/buildinputs unchanged from822/ba0. Descriptive150package identities and source/noticepins do not establish legalclearance or browser nativeI/O.",
-  "action": "Recorded tested=integratedf79, exact current criterion evidence and terminal approveda2; preserved rejecteda1/source/reproduction/devlogs.",
-  "outcome": "Scoped audit taskdone, fullG01/fullproject stillpending; existing fixedverifiedtransport builds unchanged.",
-  "evidence_ref": "development/evidence/dependency-g01/a2/integration.json"
-}

@@ -1,9 +1,0 @@
-{
-  "id": "g05-a2-eval-prefix-20260930",
-  "kind": "defect",
-  "summary": "Prefix-matching process arguments and unbound SQL identity can stop another PostgreSQL server",
-  "details": "Both status and start exited0 and claimed verified PID1747 for e/data while SQL came from PID1726. stop delivered a fast shutdown to suffix PID1747 (its server log confirms received fast shutdown request and shut down), returned1, and left intended PID1726 accepting connections. Both were evaluator-owned; protected original PID80873 was untouched. Servers happened to start the same second, demonstrating that timestamp equality is not unique process identity.",
-  "action": "Run the unchanged candidate in evaluator e. Start e/data plus evaluator-owned e/data-suffix-a2 with the identical postgres executable and distinct private socket/port. Preserve e/data/postmaster.pid, replace only its first line with the suffix server PID, then invoke status, start, stop. Restore the real PID file and stop the actual e/data server. The retained script documents every command.",
-  "outcome": "Independent actual native boundary failed; reject a2. Candidate unchanged; evaluator fixtures restored and retained stopped.",
-  "evidence_ref": "development/evidence/postgres-g05/a2/review-evidence/prefix-results.json"
-}

@@ -1,9 +1,0 @@
-{
-  "id": "g05-a3-short-fixture-root-clarification",
-  "kind": "resolution",
-  "summary": "Authorized short PostgreSQL fixture has its own artifact and durable roots.",
-  "details": "Bootstrap resolves Git common dir to fixture clone root. The authorized s clone therefore needs regular copied verified build/cache under s/artifacts, matching earlier independently owned e/p fixtures.",
-  "action": "Confirmed s/artifacts build/cache/tmp permitted and protected during active use; durable cluster remains s/development/runtime. Require copied hashes/provenance, no symlinks/global installation, main a3 scratch/evidence unchanged.",
-  "outcome": "Fixture setup prerequisite resolved without weakening ownership/deletion/retention rules or touching original runtime.",
-  "evidence_ref": "development/evidence/postgres-g05/a3/brief.json"
-}

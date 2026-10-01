@@ -1,9 +1,0 @@
-{
-  "task_id": "PIN-G07-SRD-001",
-  "attempt_id": "PIN-G07-SRD-001-a2",
-  "superseded_source": "384b76c5bbda08baa7ab95667cf50fd13fd0e122",
-  "frozen_source": "6856a7457ad335028ccbe787ef01867f6e07c156",
-  "sha256": "9e72681ee249e7855de17dbbf945a247ac3052404ead78074acb78c3a4aab1f3",
-  "recorded_at": "2026-09-30T19:57:54.462738+00:00",
-  "reason": "Worker amended source after initial message; evaluator caught mismatch before verdict. Final completed worker handoff/source now frozen, substantive read-error repairs require final-source checks."
-}

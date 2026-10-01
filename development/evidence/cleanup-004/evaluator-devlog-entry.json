@@ -1,9 +1,0 @@
-{
-  "id": "active-cleanup-004-a1-independent-review-20260930",
-  "kind": "discovery",
-  "summary": "Independent cleanup review proves retained historical inventory and explains later recovery additions.",
-  "details": "Exact submitted report/script hashes match. Independent no-follow inventory and stdout-only script execution agree on14roots,40,758files,6,983,145,441logical bytes and50skipped symlinks with no errors. Every historical file remains with unchanged size. New G05-a3 script4111bytes and two recovery logs106bytes each explain the4323byte growth and extra root after the report.",
-  "action": "Rechecked read-only attempt ownership, protected root metadata, ps/lsof listeners, PostgreSQL socket, recorder log and all three executable hashes; verified coordinator recovery receipts for new preview PIDs18905/18907. Preserved historical report.",
-  "outcome": "Both exact criteria pass; approve sha256:8e3ea9eb101cca0b6795d323a92895f9e9cf6e8ffad6bd2d0ff7ccc8900434b4. Zero deletion or queue/source/process mutations; G02 visual review remains separately inconclusive.",
-  "evidence_ref": "development/evidence/cleanup-004/review.json; development/evidence/cleanup-004/independent-inventory.json"
-}

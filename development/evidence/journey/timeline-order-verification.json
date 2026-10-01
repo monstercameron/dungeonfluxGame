@@ -1,7 +1,0 @@
-{
-  "helper_sha256": "2b12f10aa53f2cd3ac776119de3b724a69a1f1ef13d728e770e6724a1022a2e1",
-  "timeline_sha256": "61cdc197cb02fc9bf6e72b25dbaa5b4d414e61e8b4cc3adf161fd522d1ad3a90",
-  "actual_headers": 27,
-  "descending_utc_headers": true,
-  "scope": "Final chronological timeline correction only; recorder/camera/SQL functions unchanged from independently observed4536 revision. All19otherfixture results retained as that exact prior-source execution."
-}

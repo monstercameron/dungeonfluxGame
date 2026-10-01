@@ -1,8 +1,0 @@
-{
-  "id": "audit-g01-a1-devlog-database-location",
-  "kind": "discovery",
-  "summary": "Scoped devlog append required the main workflow database path",
-  "details": "The isolated audit worktree does not contain development/workflow.sqlite3, so the default devlog command could not open its database. The supplied scoped context and entry were then passed to the same development/devlog.py writer with the existing main development/workflow.sqlite3 path. The writer confirmed the append and queue_state_changed=false.",
-  "action": "Used the canonical main workflow database with the assigned worker context; no queue state operation was requested.",
-  "outcome": "The observation was appended as audit-g01-a1-cargo-tree-edge-flag."
-}

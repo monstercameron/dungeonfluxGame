@@ -1,6 +1,9 @@
 # Project-generated output, caches, and temporary staging files
 /artifacts/
 
+# User-directed: preserve local development evidence while excluding it from Git.
+/development/evidence/
+
 # Durable local operational databases (not disposable cleanup targets)
 /development/*.sqlite3
 /development/*.sqlite3-wal

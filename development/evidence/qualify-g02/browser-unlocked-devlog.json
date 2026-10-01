@@ -1,9 +1,0 @@
-{
-  "id": "qualify-g02-coordinator-cua-access-restored-20260930",
-  "kind": "resolution",
-  "summary": "Native Chrome app output accessible again; independent browser review reassigned while native PG review proceeds.",
-  "details": "Initial display-name selection returned no window; confirmed app inventory and bundle-ID selection produced current43181 transport fixture AX tree with retained prior results and candidate51d hash. No UI action or new pressure run performed by coordinator. Actual source artifacts remain fixed; native fixture counters are fresh after coordinator-owned process recovery.",
-  "action": "Bound separate frontier reviewer to current G02 review lease and retained its scoped execution context.",
-  "outcome": "New bounded pressure run, final visual/responsiveness and reload semantics can now be observed independently.",
-  "evidence_ref": "development/evidence/qualify-g02/browser-resume-evaluator-context.json"
-}

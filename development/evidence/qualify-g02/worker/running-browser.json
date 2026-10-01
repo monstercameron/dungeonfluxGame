@@ -1,7 +1,0 @@
-{
-  "chrome": "153.0.8010.12",
-  "revision": "971a7443b0c9b0a9b2860529b33331b76077ec62-refs/branch-heads/8010@{#343}",
-  "v8": "15.3.76.4",
-  "os": "macOS26.6.2(25G83)",
-  "source": "actual CUA chrome://version UI"
-}

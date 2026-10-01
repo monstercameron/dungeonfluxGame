@@ -1,9 +1,0 @@
-{
-  "id": "start-s00-coordinator-integrated",
-  "kind": "resolution",
-  "summary": "First Rust/WASM transport fixture independently approved and integrated",
-  "details": "Integrated unchanged reviewed commit 4cac7647d4b2aa8e62f2c5c264d8561878383124. Independent automated native/WASM checks and recovered evaluator CUA/vision passed. Native/main integration tests pass three boundary cases; coordinator browser smoke passed all ten checks and active call owners returned to zero.",
-  "action": "Fast-forwarded main, verified reviewed source/build identity, reran main fmt/native tests and real CUA browser flow, recorded evidence and task completion. Registered passive synthetic fixture for screenshot journey.",
-  "outcome": "START-S00-001 done; verified preview PID 67387 stays available. G02 physical/adversarial memory/resource qualification remains INCONCLUSIVE; G06 durable pipeline and gameplay remain pending.",
-  "evidence_ref": "development/evidence/start-s00/integration.json"
-}

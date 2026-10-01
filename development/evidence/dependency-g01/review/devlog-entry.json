@@ -1,9 +1,0 @@
-{
-  "id": "audit-g01-a1-evaluator-parent-symlink-20260930",
-  "kind": "defect",
-  "summary": "Current dependency verifier accepts an ancestor-directory symlink and reads metadata outside its checkout.",
-  "details": "Frozen2743 helper/report unchanged in controlledfixture. metadata directory symlink points to sibling evaluator-owned copied metadata; actualPython3.12.14 verifier exits0 oktrue. Leaflstat validates final regularfile while ancestors are followed. Current Cargo metadata/tree/provenance evidence passes; normal negativecases refuse. No private data or source changes.",
-  "action": "Retained independent CLI/Cargo/hash/provenance checks, fixture reproduction and exact5criterion review. No repair implemented.",
-  "outcome": "REJECT criterion4;criteria1/2/3/5pass. Worker must confine parent/leaf reads and preserve bounded refusal. FullG01/runtime/legal qualification remain pending.",
-  "evidence_ref": "development/evidence/dependency-g01/review/review.json; development/evidence/dependency-g01/review/independent-verifier.json"
-}
