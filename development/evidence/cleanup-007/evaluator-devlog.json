@@ -1,9 +1,0 @@
-{
-  "id": "active-cleanup-007-independent-inventory-20260930",
-  "kind": "discovery",
-  "summary": "Independent cleanup inventory matches immutable totals; live differences are confined to active G01 scratch.",
-  "details": "Pinned report/script hashes match. Every submitted directory sum and total recomputes exactly; current lstat scan skips50symlinks and5special entries, zeroerrors. +14files/+197513bytes only under active AUDIT-G01 scratch; all originalpaths retained. Four protectedbinary hashes match and threepreviews/PG/recorder alive.",
-  "action": "Executed independent filesystem scan, readonly SQLite ownership/devlog, ps/lsof and SHA256 checks. Relative SQLite URI initially failed; absolute readonly URI succeeded. No deletion, queue/source change or processsignal.",
-  "outcome": "APPROVE both exact cleanup criteria.24roots retained,eligible0,deleted0,reclaimed0.",
-  "evidence_ref": "development/evidence/cleanup-007/review.json; development/evidence/cleanup-007/independent-boundary.json"
-}

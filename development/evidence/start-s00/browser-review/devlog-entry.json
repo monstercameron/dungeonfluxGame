@@ -1,9 +1,0 @@
-{
-  "id": "START-S00-001-a1-browser-evaluator-recovered",
-  "kind": "resolution",
-  "summary": "Recovered own IAB computer-use/vision evaluation; all five experimental startup criteria pass.",
-  "details": "Subagent visible:true IAB option unsupported; omitted visibility successfully created own fixture tab. Twice clicked real Rust/WASM flow, visually inspected own screenshots: all10 checks passed twice. Source/served hashes match prior independent evaluator; source clean. Fresh health active0 and second-run completion/cancellation/deadline counters prove disposal and repeatability.",
-  "action": "Saved own screenshots, DOM snapshots, identity checks, health/OTEL and combined exact-five-criterion independent review. Reused only unchanged independent native/WASM/boundary evidence under ADR0005.",
-  "outcome": "Approve experimental START-S00-001-a1 only. G02 physical/resource qualification INCONCLUSIVE and G06 durable telemetry pending. No source/build/Git/queue changes.",
-  "evidence_ref": "development/evidence/start-s00/browser-review/review.json"
-}

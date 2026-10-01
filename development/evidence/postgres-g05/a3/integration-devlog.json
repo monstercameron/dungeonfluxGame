@@ -1,9 +1,0 @@
-{
-  "id": "g05-a3-coordinator-integrated-20260930",
-  "kind": "resolution",
-  "summary": "Independently approved PostgreSQL development setup integrated at exact reviewed commit.",
-  "details": "{\"task_id\": \"SETUP-G05-001\", \"attempt_id\": \"SETUP-G05-001-a3\", \"integrated_at\": \"2026-09-30T19:39:29.561356+00:00\", \"input_revision\": \"f9343cb5ec17b33c76a03b20f6afec9168f9fb7a\", \"integrated_revision\": \"c68e168eeb2ab040ec1d6064765c647c4454a041\", \"tested_revision\": \"c68e168eeb2ab040ec1d6064765c647c4454a041\", \"script_sha256\": \"b69a566d6905ccf85ca63e8db695a7a4dbb84a163ead957c9ed4198562ee12da\", \"review_ref\": \"development/evidence/postgres-g05/a3/review.json\", \"checks\": [{\"command\": [\"bash\", \"-n\", \"development/postgres.sh\"], \"returncode\": 0, \"stdout\": \"\", \"stderr\": \"\"}, {\"command\": [\"git\", \"diff\", \"--check\"], \"returncode\": 0, \"stdout\": \"\", \"stderr\": \"\"}, {\"command\": [\"./development/postgres.sh\", \"status\"], \"returncode\": 0, \"stdout\": \"ready pid=80873 version=18.6 data_directory=/Users/earlcameron/Desktop/dungeonflux/development/runtime/postgres-g05/data max_connections=16 max_worker_processes=8 max_parallel_workers=8 max_parallel_workers_per_gather=2 autovacuum_max_workers=3 fsync=on full_page_writes=on synchronous_commit=on listen_addresses='' tcp=false\\n\", \"stderr\": \"\"}], \"remaining_scope\": \"Local development prerequisite only; game schemas/tenant/RLS/backups/recovery/media/managed deployment/full G05 remain pending.\"}",
-  "action": "Fast-forwarded four source commits sequentially to c68e168, recorded integration identity, verified exact script hash, shell checks and real original server status.",
-  "outcome": "SETUP-G05-001 done; full G05 remains pending. No protected process stopped or runtime data replaced.",
-  "evidence_ref": "development/evidence/postgres-g05/a3/integration.json"
-}

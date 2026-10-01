@@ -1,2 +1,0 @@
-    Checking df-tools v0.1.0 (/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/contracts-g03/crates/df-tools)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.93s

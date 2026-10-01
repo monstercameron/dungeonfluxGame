@@ -1,9 +1,0 @@
-{
-  "id": "g05-a3-independent-safety-resolution-20260930",
-  "kind": "resolution",
-  "summary": "Independent a3 PostgreSQL review verifies prior ownership/symlink defects and bounded native lifecycle repair.",
-  "details": "Exact candidate c68e168eeb2ab040ec1d6064765c647c4454a041 passed 67 independently retained native command records in evaluator e. Same-second real postmasters22471/22472 were used: prefix PID substitution and wrong SQL backend refuse all lifecycle actions; a synchronized PID-file replacement still signaled only captured22471 and left22472 ready. Symlink log/ancestor refuse without sentinel changes.",
-  "action": "Reverified official archive and five reused native binary hashes; tested real rollback/commit/restart, no TCP, settings, stale/dummy/malformed/foreign ownership, live missing PID and readiness stalls. Both stalled tools and their child processes were gone after bounded failures. Restored temporary binaries and evaluator script, retained all durable fixture data and startup/shutdown evidence.",
-  "outcome": "All four unchanged acceptance criteria pass. Original root/p/s configuration hashes and protected processes remained unchanged. Approve development prerequisite only; full G05 schema/tenant/recovery/media/production gates remain open.",
-  "evidence_ref": "development/evidence/postgres-g05/a3/review.json; development/evidence/postgres-g05/a3/review-evidence/independent-boundaries.json; development/evidence/postgres-g05/a3/review-evidence/independent-timeouts.json; development/evidence/postgres-g05/a3/review-evidence/identity-after.json"
-}

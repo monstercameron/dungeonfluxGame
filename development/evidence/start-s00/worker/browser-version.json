@@ -1,5 +1,0 @@
-{
-  "browser": "Codex In-app Browser",
-  "engineVersion": "unavailable: raw CDP Browser.getVersion unsupported and read-only DOM scope does not expose navigator",
-  "tabId": "1"
-}

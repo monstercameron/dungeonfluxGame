@@ -1,8 +1,0 @@
-{
-  "id": "audit-g01-a1-cargo-tree-edge-flag",
-  "kind": "error",
-  "summary": "Cargo tree rejected proc-macro as an edge-kind value",
-  "details": "The first bounded Cargo tree invocation passed `-e normal,build,proc-macro,features`; Cargo 1.98.1 returned exit code 1 and listed supported edge kinds without `proc-macro`. No source or cache mutation resulted. The corrected locked offline trees used `--edges all` plus `--edges normal,build,features`; Cargo's output marks procedural macro packages and feature activation. Both target metadata commands and corrected trees completed within the command and aggregate time bounds.",
-  "action": "Retained the rejection output and exit code, corrected the Cargo tree arguments, and kept the successful output identities in the audit evidence.",
-  "outcome": "Native and wasm metadata and corrected tree evidence are available; the unsupported invocation remains an explicit failed command outcome."
-}

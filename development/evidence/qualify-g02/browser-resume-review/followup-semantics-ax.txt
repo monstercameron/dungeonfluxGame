@@ -1,2 +1,0 @@
-There has been no change in the accessibility tree for Window: "DungeonFlux S00 transport laboratory".
-The focused UI element is 15 HTML content DungeonFlux S00 transport laboratory, URL: 127.0.0.1:43181/

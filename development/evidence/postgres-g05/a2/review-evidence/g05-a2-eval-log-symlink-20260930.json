@@ -1,9 +1,0 @@
-{
-  "id": "g05-a2-eval-log-symlink-20260930",
-  "kind": "defect",
-  "summary": "Lifecycle start follows a symlinked server log and writes outside the runtime",
-  "details": "All three commands exited0. PostgreSQL startup and shutdown messages were appended through the symlink to the evaluator sentinel outside the runtime. Ancestor symlink guards pass their dedicated tests, but LOG is passed directly to pg_ctl without a symlink check. Only an evaluator-owned sentinel was modified.",
-  "action": "With evaluator cluster stopped, preserve e runtime/server.log, replace it with a symlink to evaluator-owned review-evidence/symlink-target.log containing a sentinel, then run candidate start/status/stop. Restore original log after all three actions.",
-  "outcome": "Independent actual native boundary failed; reject a2. Candidate unchanged; evaluator fixtures restored and retained stopped.",
-  "evidence_ref": "development/evidence/postgres-g05/a2/review-evidence/extra-boundaries.json"
-}

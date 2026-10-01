@@ -1,9 +1,0 @@
-{
-  "id": "active-cleanup-007-coordinator-complete-20260930",
-  "kind": "resolution",
-  "summary": "Cleanup007 inventory independently approved; no deletion.",
-  "details": "Exact report identity verified, all two criteria pass and active G01 scratch changes disclosed. All24roots retained; previews,PG,recorder, durable state and caches protected.",
-  "action": "Recorded sha256 operational tested=integrated identity and terminal approved attempt.",
-  "outcome": "Operational inventory done; zero paths/bytes reclaimed.",
-  "evidence_ref": "development/evidence/cleanup-007/integration.json"
-}

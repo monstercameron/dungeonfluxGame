@@ -1,9 +1,0 @@
-{
-  "id": "active-cleanup-003-a1-independent-review-20260930",
-  "kind": "discovery",
-  "summary": "Independent cleanup review verifies all retained roots and zero deletion; live G05 scratch accounts for byte drift.",
-  "details": "Pinned report and script hashes match. Independent no-follow inventory and execution of the submitted inventory script agree on 11 roots, 50 symlinks and 6,983,125,058 logical bytes. The 1,520-byte increase over the historical report is a G05-a2 devlog payload created after report time. Baseline/G02/PostgreSQL executable hashes and all four protected processes remain unchanged; preview listeners and PostgreSQL Unix socket independently verified.",
-  "action": "Read the contract before worker report, reviewed source, used fd-relative no-follow filesystem inventory, read-only SQLite queries and ps/lsof; no deletion, stops, rebuilds or queue mutation.",
-  "outcome": "Both exact acceptance criteria pass; approve the pinned inventory-only submission. Exact backend model ID is not independently exposed beyond session GPT-6 identity; configured evaluator is gpt-6-astra and computer-use/vision tools are enabled.",
-  "evidence_ref": "development/evidence/cleanup-003/review.json; development/evidence/cleanup-003/independent-inventory.json"
-}

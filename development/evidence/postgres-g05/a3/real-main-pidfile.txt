@@ -1,8 +1,0 @@
-11380
-/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/data
-1790795127
-55439
-/Users/earlcameron/Desktop/dungeonflux/s/development/runtime/postgres-g05/socket
-
-  6908088    458754
-ready   

@@ -1,9 +1,0 @@
-{
-  "id": "JOURNEY-ab091fb6bc2d484b-29846724",
-  "kind": "discovery",
-  "summary": "DungeonFlux visual journey captured",
-  "details": "{\"attempt_id\": null, \"image\": \"development/evidence/journey/shots/ab091fb6bc2d484b-29846724.png\", \"image_sha256\": \"426c3d8011719e07c9577a71b8534dc00d6e84c07dfc51bef8d066b13c9d5ad0\", \"minute_bucket\": 29846724, \"missed_minute_count\": 0, \"observed_at\": \"2026-09-30T21:24:00+00:00\", \"observed_work_context\": {\"agent_id\": \"/root\", \"attempt_id\": \"AUDIT-G01-CLOSURE-001-a2\", \"task_id\": \"AUDIT-G01-CLOSURE-001\"}, \"preview_kind\": \"owned-preview\", \"reason\": null, \"recorder_id\": \"screenshot-recorder:ab091fb6bc2d484b\", \"source_after\": {\"files\": {\"Cargo.lock\": \"9e31198cc295b4985dd6047101643c9f377d9fa9454116872dfefc3bc4e2f243\", \"rust-toolchain.toml\": \"9500030ccefd0bab631fb7f1763f79f4103eca3a344c36cf15be869e330683bb\"}, \"sha256\": \"c5056f241b1d32432f1e91dfc367bb4ac4db29b9f5127cd11873709f1f4ce00b\"}, \"source_before\": {\"files\": {\"Cargo.lock\": \"9e31198cc295b4985dd6047101643c9f377d9fa9454116872dfefc3bc4e2f243\", \"rust-toolchain.toml\": \"9500030ccefd0bab631fb7f1763f79f4103eca3a344c36cf15be869e330683bb\"}, \"sha256\": \"c5056f241b1d32432f1e91dfc367bb4ac4db29b9f5127cd11873709f1f4ce00b\"}, \"target\": \"DungeonFlux integrated experimental transport fixture (atomic pressure/reload verified; full G02 and gameplay pending)\", \"task_id\": \"AUDIT-G01-CLOSURE-001\"}",
-  "action": "Capture only admitted public project preview in isolated headless browser; preserve actual evidence without queue mutation.",
-  "outcome": "captured",
-  "evidence_ref": "development/evidence/journey/records/ab091fb6bc2d484b-29846724.json"
-}

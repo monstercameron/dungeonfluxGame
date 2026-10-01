@@ -1,9 +1,0 @@
-{
-  "id": "qualify-g02-a1-integrated-mac-locked-20260930",
-  "kind": "blocker",
-  "summary": "Integrated browser desktop/narrow pressure and follow-up pass; Mac locks before final reload verification.",
-  "details": "Exactba0merged source/currentnativeWASM hashes verified. CUA43182newtab completed ten semantics, one bounded pressure/fiveprobes,721px visual review and follow-up ten semantics. Nine current native tests independently pass. CUA finalCmd+R returned Mac locked/automatic unlock failure; no reload result observed.",
-  "action": "Retained direct screenshots/current reports/test identities; notified coordinator manual unlock needed. No bypass, browser restart, source/build or process mutation.",
-  "outcome": "Integrated review INCONCLUSIVE pending final dedicated-tab reload and ten-semantics observation. FullG02 physical/memory/audio/network/recovery gaps remain unchanged.",
-  "evidence_ref": "development/evidence/qualify-g02/integration/review.json"
-}

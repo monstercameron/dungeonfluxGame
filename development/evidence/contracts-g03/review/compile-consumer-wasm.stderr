@@ -1,3 +1,0 @@
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.16s
-  Executable tests/schema_ledger.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/schema_ledger-cbbc866e3ec1b7e4.wasm)
-  Executable tests/shared_contracts.rs (/Users/earlcameron/Desktop/dungeonflux/artifacts/build/contracts-g03/wasm32-unknown-unknown/debug/deps/shared_contracts-85fc7226712f19f5.wasm)
