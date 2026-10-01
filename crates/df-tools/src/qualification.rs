@@ -178,7 +178,9 @@ async fn stats(client: &mut FixtureClient) -> Result<Sample, String> {
         .map(|response| response.into_inner())
         .map_err(|error| error.to_string())
 }
-async fn probe(kind: &str) -> Result<(ConnectionSnapshot, tonic::Code, f64), String> {
+async fn probe(
+    kind: &str,
+) -> Result<(ConnectionSnapshot, ConnectionSnapshot, tonic::Code, f64), String> {
     let (connection, channel) =
         BrowserConnection::connect(&tunnel_url(&format!("/malicious/{kind}"))?)
             .await
@@ -222,8 +224,26 @@ async fn probe(kind: &str) -> Result<(ConnectionSnapshot, tonic::Code, f64), Str
             "header-list probe ended through server timeout rather than bounded stream rejection",
         )?;
     }
+    if kind == "control-rate" {
+        require(
+            snapshot.rejected
+                && snapshot.received_control_frames == 100
+                && snapshot.received_frames == 101
+                && snapshot.incoming_control_window.len() == 100
+                && snapshot
+                    .rejected_control
+                    .is_some_and(|frame| frame.kind == 4),
+            "exact 101st incoming control did not trigger adapter rate rejection",
+        )?;
+    }
     connection.close();
-    Ok((snapshot, status, elapsed_ms))
+    TimeoutFuture::new(20).await;
+    let closed = connection.snapshot().map_err(|error| error.to_string())?;
+    require(
+        closed.closed && closed.callback_bytes.current == 0 && closed.callback_items.current == 0,
+        "malicious probe left browser callback ownership after close",
+    )?;
+    Ok((snapshot, closed, status, elapsed_ms))
 }
 async fn run(document: &Document) -> Result<(), String> {
     display(
@@ -252,6 +272,33 @@ async fn run(document: &Document) -> Result<(), String> {
         result
     };
     let ((slow, paced, bulk, latencies), frames) = futures::join!(pressure, heartbeat(done));
+    if slow.is_err() || paced.is_err() || bulk.is_err() || latencies.is_err() || frames.is_err() {
+        let pressure_snapshot = connection.snapshot().map_err(|error| error.to_string())?;
+        connection.close();
+        TimeoutFuture::new(20).await;
+        let closed_snapshot = connection.snapshot().map_err(|error| error.to_string())?;
+        let report = format!(
+            "FAIL · unchanged simultaneous pressure workload\nSlow: {:?}; paced: {:?}; bulk: {:?}; unary: {:?}; animation: {:?}\nBuild: {}\nIncoming controls admitted: {}; outgoing controls observed: {}\nIncoming rolling frame type/stream/relative-ns observations: {:?}\nRejected incoming control: {:?}\nPressure snapshot: {:?}\nPost-close snapshot: {:?}\nThe five original malicious probes and new 101-control probe did not execute after pressure failure. G02 and control-rate repair remain unqualified.\n",
+            slow.as_ref().err(),
+            paced.as_ref().err(),
+            bulk.as_ref().err(),
+            latencies.as_ref().err(),
+            frames.as_ref().err(),
+            crate::BUILD_ID,
+            pressure_snapshot.received_control_frames,
+            pressure_snapshot.sent_control_frames,
+            pressure_snapshot.incoming_control_window,
+            pressure_snapshot.rejected_control,
+            pressure_snapshot,
+            closed_snapshot,
+        );
+        display(document, &report);
+        save_report("qualification", &report).await?;
+        return Err(
+            "unchanged simultaneous pressure workload failed; retained frame and cleanup evidence"
+                .to_owned(),
+        );
+    }
     let slow = slow?;
     let paced = paced?;
     let bulk = bulk?;
@@ -331,7 +378,14 @@ async fn run(document: &Document) -> Result<(), String> {
         paced.arrival_gaps_ms
     ));
     display(document, &text);
-    for kind in ["websocket", "frame", "header", "continuation", "flood"] {
+    for kind in [
+        "websocket",
+        "frame",
+        "header",
+        "continuation",
+        "flood",
+        "control-rate",
+    ] {
         let result = probe(kind).await?;
         text.push_str(&format!(
             "PASS · malicious {kind} controlled rejection: {result:?}\n"
@@ -379,10 +433,18 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
                 }
             };
             if let Err(error) = result {
-                display(
-                    &document,
-                    &format!("FAIL · {error}\nG02 INCONCLUSIVE · incomplete qualification"),
-                );
+                let retained_failure = document
+                    .get_element_by_id("qualification")
+                    .and_then(|element| element.text_content())
+                    .is_some_and(|text| {
+                        text.starts_with("FAIL · unchanged simultaneous pressure workload")
+                    });
+                if !retained_failure {
+                    display(
+                        &document,
+                        &format!("FAIL · {error}\nG02 INCONCLUSIVE · incomplete qualification"),
+                    );
+                }
             }
             button.set_disabled(false);
             active.set(false);

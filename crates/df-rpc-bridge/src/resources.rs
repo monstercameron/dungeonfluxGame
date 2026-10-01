@@ -1,6 +1,6 @@
 //! Passive wire accounting; h2 alone parses HTTP/2/HPACK and controls stream semantics.
 use crate::{CONCURRENT_STREAMS, FRAME_BYTES, MESSAGE_BYTES, RECEIVE_BYTES, RPC_MESSAGE_BYTES};
-use std::{io, sync::Mutex, time::Duration};
+use std::{collections::VecDeque, io, sync::Mutex, time::Duration};
 use web_time::Instant;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -90,6 +90,13 @@ pub struct ConnectionSnapshot {
     pub send_credit: CreditSnapshot,
     pub received_frames: usize,
     pub sent_frames: usize,
+    pub received_control_frames: usize,
+    pub sent_control_frames: usize,
+    /// Accepted incoming controls still in the rolling second, with time relative
+    /// to the connection's first observation. At most 100 entries are retained.
+    pub incoming_control_window: Vec<ControlFrameObservation>,
+    /// The frame refused by the control-rate guard, if any.
+    pub rejected_control: Option<ControlFrameObservation>,
     pub decode_yields: usize,
     pub rejected: bool,
     pub receive_reservation_bytes: usize,
@@ -100,6 +107,17 @@ impl ConnectionSnapshot {
     pub fn envelope_within_limit(&self) -> bool {
         self.receive_reservation_bytes <= 8 * 1024 * 1024
     }
+}
+#[derive(Clone, Copy, Debug)]
+pub struct ControlFrameObservation {
+    pub incoming: bool,
+    pub kind: u8,
+    pub stream: u32,
+    pub elapsed_ns: u64,
+}
+struct TimedControl {
+    at: Instant,
+    frame: ControlFrameObservation,
 }
 struct WireObserver {
     header: [u8; 9],
@@ -113,9 +131,14 @@ struct WireObserver {
     frames: usize,
     rate_frames: usize,
     rate_start: Instant,
+    origin: Instant,
+    enforce_control_rate: bool,
+    control_frames: usize,
+    control_window: VecDeque<TimedControl>,
+    rejected_control: Option<ControlFrameObservation>,
 }
 impl WireObserver {
-    fn new(preface: bool) -> Self {
+    fn new(preface: bool, enforce_control_rate: bool, now: Instant) -> Self {
         Self {
             header: [0; 9],
             header_used: 0,
@@ -127,7 +150,12 @@ impl WireObserver {
             preface_remaining: if preface { 24 } else { 0 },
             frames: 0,
             rate_frames: 0,
-            rate_start: Instant::now(),
+            rate_start: now,
+            origin: now,
+            enforce_control_rate,
+            control_frames: 0,
+            control_window: VecDeque::new(),
+            rejected_control: None,
         }
     }
     fn observe(
@@ -135,6 +163,7 @@ impl WireObserver {
         mut bytes: &[u8],
         consumed: &mut CreditSnapshot,
         granted: &mut CreditSnapshot,
+        now: Instant,
     ) -> io::Result<()> {
         let skip = self.preface_remaining.min(bytes.len());
         self.preface_remaining -= skip;
@@ -159,8 +188,8 @@ impl WireObserver {
                         "HTTP2 frame exceeds selected 16KiB bound",
                     ));
                 }
-                if self.rate_start.elapsed() >= Duration::from_millis(100) {
-                    self.rate_start = Instant::now();
+                if now.duration_since(self.rate_start) >= Duration::from_millis(100) {
+                    self.rate_start = now;
                     self.rate_frames = 0;
                 }
                 self.frames += 1;
@@ -178,6 +207,31 @@ impl WireObserver {
                     self.header[7],
                     self.header[8],
                 ]) & 0x7fff_ffff;
+                if !matches!(self.kind, 0 | 1 | 9) {
+                    let frame = ControlFrameObservation {
+                        incoming: self.enforce_control_rate,
+                        kind: self.kind,
+                        stream: self.stream,
+                        elapsed_ns: now.duration_since(self.origin).as_nanos() as u64,
+                    };
+                    if self.enforce_control_rate {
+                        while self.control_window.front().is_some_and(|oldest| {
+                            now.duration_since(oldest.at) >= Duration::from_secs(1)
+                        }) {
+                            self.control_window.pop_front();
+                        }
+                        if self.control_window.len() == 100 {
+                            self.rejected_control = Some(frame);
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "incoming HTTP2 control frame rate exceeded",
+                            ));
+                        }
+                        self.control_window
+                            .push_back(TimedControl { at: now, frame });
+                    }
+                    self.control_frames += 1;
+                }
                 self.update_used = 0;
                 self.remaining = length;
                 if self.kind == 0 {
@@ -234,6 +288,10 @@ impl ConnectionMetrics {
             send_credit: CreditSnapshot::default(),
             received_frames: 0,
             sent_frames: 0,
+            received_control_frames: 0,
+            sent_control_frames: 0,
+            incoming_control_window: Vec::new(),
+            rejected_control: None,
             decode_yields: 0,
             rejected: false,
             receive_reservation_bytes: RECEIVE_BYTES * if browser { 2 } else { 3 }
@@ -245,8 +303,8 @@ impl ConnectionMetrics {
         Self {
             state: Mutex::new(State {
                 snapshot,
-                incoming: WireObserver::new(!browser),
-                outgoing: WireObserver::new(browser),
+                incoming: WireObserver::new(!browser, true, Instant::now()),
+                outgoing: WireObserver::new(browser, false, Instant::now()),
             }),
         }
     }
@@ -257,6 +315,9 @@ impl ConnectionMetrics {
             .map_err(|_| io::Error::other("resource snapshot lock poisoned"))
     }
     pub(crate) fn observe(&self, incoming: bool, bytes: &[u8]) -> io::Result<()> {
+        self.observe_at(incoming, bytes, Instant::now())
+    }
+    fn observe_at(&self, incoming: bool, bytes: &[u8], now: Instant) -> io::Result<()> {
         let mut state = self
             .state
             .lock()
@@ -272,6 +333,7 @@ impl ConnectionMetrics {
                 bytes,
                 &mut snapshot.receive_credit,
                 &mut snapshot.send_credit,
+                now,
             )
         } else {
             snapshot.sent_bytes += bytes.len();
@@ -279,10 +341,19 @@ impl ConnectionMetrics {
                 bytes,
                 &mut snapshot.send_credit,
                 &mut snapshot.receive_credit,
+                now,
             )
         };
         snapshot.received_frames = receive.frames;
         snapshot.sent_frames = send.frames;
+        snapshot.received_control_frames = receive.control_frames;
+        snapshot.sent_control_frames = send.control_frames;
+        snapshot.incoming_control_window = receive
+            .control_window
+            .iter()
+            .map(|entry| entry.frame)
+            .collect();
+        snapshot.rejected_control = receive.rejected_control;
         if result.is_err() {
             snapshot.rejected = true;
         }
@@ -397,6 +468,10 @@ impl BufferSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn frame(kind: u8, flags: u8, stream: u32) -> [u8; 9] {
+        let id = stream.to_be_bytes();
+        [0, 0, 0, kind, flags, id[0], id[1], id[2], id[3]]
+    }
     #[test]
     fn partial_frame_boundaries_preserve_data_credit() {
         let metrics = ConnectionMetrics::new(true);
@@ -419,5 +494,103 @@ mod tests {
         }
         assert!(metrics.observe(true, &bytes).is_err());
         assert!(metrics.snapshot().unwrap().rejected);
+    }
+    #[test]
+    fn rolling_control_window_counts_mixed_streams_ack_and_split_headers() {
+        let metrics = ConnectionMetrics::new(true);
+        let start = Instant::now();
+        let kinds = [2, 3, 4, 5, 6, 7, 8, 10];
+        for index in 0..100 {
+            let wire = frame(
+                kinds[index % kinds.len()],
+                if index % 2 == 0 { 1 } else { 0 },
+                index as u32,
+            );
+            for byte in wire {
+                metrics.observe_at(true, &[byte], start).unwrap();
+            }
+        }
+        let snapshot = metrics.snapshot().unwrap();
+        assert_eq!(snapshot.received_control_frames, 100);
+        assert_eq!(snapshot.incoming_control_window.len(), 100);
+        assert!(!snapshot.rejected);
+        let error = metrics
+            .observe_at(true, &frame(8, 0, 0), start)
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        let snapshot = metrics.snapshot().unwrap();
+        assert_eq!(snapshot.received_control_frames, 100);
+        assert_eq!(snapshot.received_frames, 101);
+        assert_eq!(snapshot.rejected_control.unwrap().kind, 8);
+        assert!(snapshot.rejected);
+    }
+    #[test]
+    fn control_window_expires_at_exact_second_not_at_fixed_bucket_boundary() {
+        let metrics = ConnectionMetrics::new(true);
+        let start = Instant::now();
+        for _ in 0..99 {
+            metrics.observe_at(true, &frame(4, 1, 0), start).unwrap();
+        }
+        metrics
+            .observe_at(true, &frame(6, 1, 0), start + Duration::from_millis(500))
+            .unwrap();
+        metrics
+            .observe_at(true, &frame(8, 0, 1), start + Duration::from_secs(1))
+            .unwrap();
+        assert_eq!(metrics.snapshot().unwrap().incoming_control_window.len(), 2);
+        for _ in 0..98 {
+            metrics
+                .observe_at(true, &frame(4, 1, 0), start + Duration::from_secs(1))
+                .unwrap();
+        }
+        assert!(
+            metrics
+                .observe_at(true, &frame(4, 1, 0), start + Duration::from_secs(1))
+                .is_err()
+        );
+    }
+    #[test]
+    fn noncontrols_do_not_consume_quota_and_connections_are_independent() {
+        let first = ConnectionMetrics::new(true);
+        let second = ConnectionMetrics::new(true);
+        let now = Instant::now();
+        for kind in [0, 1, 9] {
+            for _ in 0..100 {
+                first.observe_at(true, &frame(kind, 0, 1), now).unwrap();
+            }
+        }
+        for _ in 0..100 {
+            first.observe_at(true, &frame(4, 1, 0), now).unwrap();
+        }
+        second.observe_at(true, &frame(4, 1, 0), now).unwrap();
+        assert_eq!(second.snapshot().unwrap().received_control_frames, 1);
+        assert!(first.observe_at(true, &frame(10, 0, 3), now).is_err());
+    }
+    #[test]
+    fn outgoing_controls_do_not_consume_incoming_quota() {
+        let metrics = ConnectionMetrics::new(false);
+        let now = Instant::now();
+        for _ in 0..101 {
+            metrics.observe_at(false, &frame(6, 1, 0), now).unwrap();
+        }
+        metrics
+            .observe_at(true, b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", now)
+            .unwrap();
+        metrics.observe_at(true, &frame(4, 0, 0), now).unwrap();
+        let snapshot = metrics.snapshot().unwrap();
+        assert_eq!(snapshot.sent_control_frames, 101);
+        assert_eq!(snapshot.received_control_frames, 1);
+        assert!(!snapshot.rejected);
+    }
+    #[test]
+    fn coarse_all_frame_guard_still_rejects_data_only_flood() {
+        let metrics = ConnectionMetrics::new(true);
+        let now = Instant::now();
+        for _ in 0..2048 {
+            metrics.observe_at(true, &frame(0, 0, 1), now).unwrap();
+        }
+        let error = metrics.observe_at(true, &frame(0, 0, 1), now).unwrap_err();
+        assert_eq!(error.to_string(), "HTTP2 frame flood bound exceeded");
+        assert_eq!(metrics.snapshot().unwrap().received_control_frames, 0);
     }
 }

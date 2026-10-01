@@ -58,6 +58,17 @@ initial65535 bytes. `available`, `peak_grant`, DATA/update totals and `peak_held
 wire credit observations, not heap measurements. Stream semantics, HPACK, reset
 retention and protocol validation remain entirely in established h2. Oversized
 frames and more than2048 HTTP/2 frames per100ms terminate explicitly. The browser
+and native adapters additionally reject the 101st peer-originating control frame
+in a rolling second per physical connection. The incoming count includes
+PRIORITY, RST_STREAM, SETTINGS (also ACK), PUSH_PROMISE, PING, GOAWAY,
+WINDOW_UPDATE (connection and stream), and unknown extension types. DATA,
+HEADERS and CONTINUATION remain under the existing DATA credit, header/protocol
+and coarse frame protections. The outgoing direction retains the coarse frame
+guard and separate control counts. The bounded incoming diagnostic retains at
+most100 admitted frame types, stream IDs and relative times plus the rejected
+frame, so a valid WINDOW_UPDATE pressure conflict remains visible rather than
+being silently exempted.
+The browser
 adapter hands h2 at most16KiB per read, yields through an owned cancellable timer
 at64KiB, and caps callback backlog at1MiB/256items. Native work yields each message
 and16KiB chunk, including empty/control messages. A finite run owns all wait timers,
@@ -106,6 +117,8 @@ to baseline. A post-close snapshot verifies browser queue/callback owner cleanup
 Finite malicious loopback server routes test browser receipt of256KiB+1 binary
 messages,16KiB+1 HTTP/2 frames, compressed small HPACK blocks with decoded lists
 above16KiB,128 unfinished continuation frames, and2049 tiny HTTP/2 control frames.
+An additional finite route sends exactly101 total SETTINGS controls including
+the initial SETTINGS and requires the 101st to be rejected by the adapter.
 Each probe requires an actual generated RPC error within2500ms. Header-list excess
 is a stream rejection; a healthy connection need not fail. Other probes require
 observed adapter rejection or h2 driver failure. Endpoint send/wait work is finite
@@ -113,6 +126,13 @@ and admission-bounded. These deliberate test servers do not weaken the normal tu
 Native synchronized tests exercise oversized WebSocket/frame boundaries, header-list
 rejection response plus pinned PROTOCOL_ERROR stream reset, h2 continuation cap,
 control flood termination, accounting and owner release with finite deadlines.
+Controlled-time bridge tests cover exactly100 admitted controls, the 101st
+rejection, exact one-second expiry, split headers, mixed streams/types,
+independent connections, outgoing isolation, and the unchanged 2048/100ms
+guard using DATA-only frames. If the unchanged simultaneous pressure run fails,
+its report retains bounded incoming frame type/stream/relative-time observations,
+the rejected frame, connection cleanup and tests not reached. Such a failure
+blocks this repair pending a contract decision; it is never labeled PASS.
 
 Local RPC p95/p99 and animation intervals are measurements, not approved production
 budgets. Synthetic paced bytes do not measure first audio, acoustic jitter, playback
