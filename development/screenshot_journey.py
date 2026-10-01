@@ -6,8 +6,6 @@ import shutil,signal,stat,subprocess,tempfile,threading,time,uuid
 from urllib.parse import urlsplit,unquote
 
 PROJECT=Path(__file__).resolve().parents[1]
-if PROJECT.name!='dungeonflux':
- PROJECT=Path('/Users/earlcameron/Documents/Codex/2026-09-29/cr/dungeonflux')
 JOURNEY=PROJECT/'development/evidence/journey'
 OUTPUTS=PROJECT.parent/'outputs'
 DEFAULT_NODE=Path('/Users/earlcameron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node')
@@ -50,14 +48,55 @@ def admitted_url(url):
  return url
 
 def journal_size():return sum(p.stat().st_size for p in JOURNEY.rglob('*') if p.is_file() and not p.is_symlink())
+
+def devlog_entry(record):
+ source_ref=str((JOURNEY/'records'/f"{record['id']}.json").relative_to(PROJECT))
+ def source_summary(source):
+  if not isinstance(source,dict) or not isinstance(source.get('files'),dict):
+   return None
+  return {'sha256':source.get('sha256'),'file_count':len(source['files'])}
+ details={
+  'observed_at':record.get('observed_at'),
+  'minute_bucket':record.get('minute_bucket'),
+  'target':record.get('target'),
+  'task_id':record.get('task_id'),
+  'attempt_id':record.get('attempt_id'),
+  'preview_kind':record.get('preview_kind'),
+  'recorder_id':record.get('recorder_id'),
+  'observed_work_context':record.get('observed_work_context'),
+  'missed_minute_count':record.get('missed_minute_count'),
+  'image':record.get('image'),
+  'image_sha256':record.get('image_sha256'),
+  'browser':record.get('browser'),
+  'source_before':source_summary(record.get('source_before')),
+  'source_after':source_summary(record.get('source_after')),
+  'source_changed_during_capture':record.get('source_changed_during_capture'),
+  'record_ref':source_ref,
+  'reason':record.get('reason'),
+ }
+ return {'id':'JOURNEY-'+record['id'],
+  'kind':'discovery' if record['outcome']=='captured' else 'challenge',
+  'summary':'DungeonFlux visual journey '+record['outcome'],
+  'details':json.dumps(details,sort_keys=True,separators=(',',':')),
+  'action':'Capture only admitted public project preview in isolated headless browser; preserve actual evidence without queue mutation.',
+  'outcome':record['outcome'],'evidence_ref':source_ref}
+
 def devlog(record,context):
- entry={'id':'JOURNEY-'+record['id'],'kind':'discovery' if record['outcome']=='captured' else 'challenge',
- 'summary':'DungeonFlux visual journey '+record['outcome'],
- 'details':json.dumps({k:record.get(k) for k in ('observed_at','minute_bucket','target','task_id','attempt_id','preview_kind','recorder_id','observed_work_context','missed_minute_count','image','image_sha256','source_before','source_after','reason')},sort_keys=True),
- 'action':'Capture only admitted public project preview in isolated headless browser; preserve actual evidence without queue mutation.',
- 'outcome':record['outcome'],'evidence_ref':str((JOURNEY/'records'/f"{record['id']}.json").relative_to(PROJECT))}
  entrypath=JOURNEY/'entries'/f"{record['id']}.json"
- if not entrypath.exists():write(entrypath,entry)
+ entry=devlog_entry(record)
+ if entrypath.exists():
+  original=load(entrypath)
+  if len(original.get('details',''))>16000:
+   entrypath=JOURNEY/'entries'/f"{record['id']}.bounded.json"
+   if entrypath.exists():
+    if load(entrypath)!=entry:return 'pending_ingestion'
+   else:write(entrypath,entry)
+  elif original!=entry:
+   # Accepted-size legacy entry bytes are immutable and remain the retry payload.
+   entry=original
+ else:
+  write(entrypath,entry)
+ if len(entry.get('details',''))>16000:return 'pending_ingestion'
  result=subprocess.run(['python3',str(PROJECT/'development/devlog.py'),'--context',str(context),'--entry',str(entrypath)],capture_output=True,text=True,timeout=15)
  return 'appended_or_existing' if result.returncode==0 else 'pending_ingestion'
 
