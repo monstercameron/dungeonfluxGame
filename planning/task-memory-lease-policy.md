@@ -1,8 +1,8 @@
 # Task admission and memory lease policy
 
-Date: 2026-09-30  
-Task/attempt: `B-G09-D02/a1`  
-Input revision: `4ba37943691f3a01a49b8238983e82527bec91bf`  
+Date: 2026-10-01  
+Task/attempt: `B-G09-D02/a2`  
+Input revision: `fa22eea8fbcd0102fa928aa6b3d409200889fa4b`  
 Status: bounded policy decision and executable contract example; production runner remains pending
 
 ## Decision
@@ -11,8 +11,8 @@ Status: bounded policy decision and executable contract example; production runn
 attempt phase, lease renewal, submission, evaluation, and sequential integration.
 Reuse its existing task/attempt rows and lease lifecycle. Do not create a second
 lease authority, lock service, table, or competing canonical implementation.
-The current planning database was queried through SQLite `mode=ro` at the input
-revision: it contains the five documented tables (`features`, `tasks`,
+This attempt inspected the current planning database through SQLite `mode=ro`:
+it contains the five documented tables (`features`, `tasks`,
 `dependencies`, `attempts`, `devlog`) and 29 triggers. That verifies the current
 planning database shape only. It does not establish a trusted Rust runner or
 prove that an external worker process has stopped.
@@ -24,8 +24,7 @@ from *currently available* memory, not installed physical RAM:
 worker_budget = max(0,
     available_memory
     - system_headroom
-    - frontier_review_reserve
-    - integration_build_reserve)
+    - coordinator_selected_review_build_reserve)
 memory_slots = floor(worker_budget / observed_worker_peak)
 admitted = min(memory_slots, ready_nonconflicting_tasks,
                configured_model_or_provider_concurrency)
@@ -40,19 +39,31 @@ that run before increasing concurrency. If its peak cannot fit while preserving
 reserves, admit zero. Never translate this rule into a fixed `128`-worker
 promise.
 
-Keep the reserves separate so concurrent review and integration remain possible.
-The current 16 GiB host evidence uses 3.2 GiB system headroom (the ADR 0002
-initial 20% setting), a 2 GiB frontier/review reserve, and a 2 GiB
-integration/build reserve. The latter two are starting estimates, not device
-guarantees. Existing evidence records a 0.3 GiB worker peak estimate for a
-bounded native planning/contract worker, but this is not a representative browser,
-vision, audio, local-model, or full-build measurement. Measure those separately
-before admitting them into the corresponding pool. `memory_pressure`, sustained
-swap, disk pressure, provider limits, ready work, edit-area conflicts, and review
-backlog can all further reduce admission to zero; more free RAM alone cannot
-override them. These settings and facts are retained in
-`development/evidence/dependency-g01/dispatch-resource-evidence.json` and
-`development/evidence/contracts-g03/dispatch-resource-evidence.json`.
+The current coordinator selection on the 16 GiB host is 3.2 GiB system headroom
+(the ADR 0002 initial 20% setting) plus one combined 2 GiB build/review reserve.
+That is the selected admission policy for this observation, not a measured peak
+for every workload. A previous `contracts-g03/dispatch-resource-evidence.json`
+records `build_peak_estimate_gib: 2`; that is a workload estimate, not evidence
+that a second 2 GiB reserve was separately selected. Do not add those values as
+two current 2 GiB reserves. The coordinator may change the combined reserve from
+new evidence; if a future policy chooses separate review and integration pools,
+that must be an explicit new selection and its arithmetic must count each pool
+once.
+
+The 2026-10-01 02:21 UTC resource observation records 45% free in the macOS
+`memory_pressure` summary and continuing swap-outs, and says no more native builds
+were admitted at that time. It explicitly warns that the percentage is not a
+guarantee of reclaimable bytes. Keep admission's `available_memory` as a current
+byte quantity supplied by the coordinator's real capacity source; do not convert
+that percentage or physical RAM into a fabricated availability number. Earlier
+evidence records a 0.3 GiB peak *estimate* for a bounded native planning/contract
+worker. Neither that estimate nor the present resource observation measures a
+representative aggregate process-tree peak for browser, vision, audio,
+local-model, or full-build workloads. Measure those classes before admitting
+them into the corresponding workload. `memory_pressure`, sustained swap, disk
+pressure, provider limits, ready work, edit-area conflicts, and review backlog
+can further reduce admission to zero; more free RAM alone cannot override them.
+The source observations and their hashes are retained in the a2 `verification.json`.
 
 The coordinator grants one task/attempt ownership claim for each overlapping edit
 area through implementation, review, and integration. Source work uses that
@@ -200,8 +211,7 @@ fn check_submission(
 fn memory_slots(
     available_bytes: u64,
     system_headroom_bytes: u64,
-    frontier_review_bytes: u64,
-    integration_build_bytes: u64,
+    coordinator_selected_review_build_reserve_bytes: u64,
     worker_peak_bytes: u64,
     ready_nonconflicting: usize,
     provider_limit: usize,
@@ -209,9 +219,8 @@ fn memory_slots(
     if worker_peak_bytes == 0 {
         return 0;
     }
-    let reserved_bytes = system_headroom_bytes
-        .saturating_add(frontier_review_bytes)
-        .saturating_add(integration_build_bytes);
+    let reserved_bytes =
+        system_headroom_bytes.saturating_add(coordinator_selected_review_build_reserve_bytes);
     let worker_budget = available_bytes.saturating_sub(reserved_bytes);
     let by_memory = (worker_budget / worker_peak_bytes) as usize;
     by_memory.min(ready_nonconflicting).min(provider_limit)
@@ -221,10 +230,10 @@ fn main() {
     let available = 12 * 1024 * 1024 * 1024_u64;
     let gib = 1024 * 1024 * 1024_u64;
     assert_eq!(
-        memory_slots(available, 3 * gib, 2 * gib, 2 * gib, gib, 8, 5),
+        memory_slots(available, 3 * gib + gib / 5, 2 * gib, gib, 8, 5),
         5
     );
-    assert_eq!(memory_slots(6 * gib, 4 * gib, 2 * gib, 1, gib, 8, 5), 0);
+    assert_eq!(memory_slots(6 * gib, 4 * gib, 2 * gib, gib, 8, 5), 0);
 
     let lease = LeaseFence {
         attempt_id: 41,
@@ -319,4 +328,4 @@ This attempt adds the specifically authorized bounded decision-policy example
 command in its retained worker evidence. Its compiler run does not replace the
 original planned application, browser, provider, actual runner, independent
 frontier, or integrated acceptance gates. Those remain pending/unperformed as
-listed in `development/evidence/parallel-decisions/B-G09-D02/a1/worker/`.
+listed in `development/evidence/parallel-decisions/B-G09-D02/a2/worker/`.
