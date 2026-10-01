@@ -74,6 +74,7 @@ impl Drop for CallScope {
 #[derive(Clone)]
 struct FixtureService {
     statistics: Arc<Statistics>,
+    telemetry: Arc<FixtureTelemetry>,
 }
 impl FixtureService {
     fn scope<T>(&self, request: &Request<T>, method: &'static str) -> CallScope {
@@ -89,7 +90,7 @@ impl FixtureService {
             .to_owned();
         CallScope {
             statistics: self.statistics.clone(),
-            span: df_observe::begin(
+            span: self.telemetry.begin(
                 &OperationContext {
                     trace_parent,
                     build: crate::BUILD_ID.to_owned(),
@@ -343,7 +344,7 @@ async fn websocket(
             };
             let result = accept_websocket_measured(socket, state.incoming, metrics.clone()).await;
             drop(permit);
-            let mut span = df_observe::begin(&context, "bridge.connection");
+            let mut span = state.telemetry.begin(&context, "bridge.connection");
             match metrics.snapshot() {
                 Ok(value) => span.finish(
                     if result.is_ok() { "closed" } else { "failed" },
@@ -516,6 +517,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let (sender, receiver) = mpsc::channel(4);
     let service = TransportFixtureServer::new(FixtureService {
         statistics: statistics.clone(),
+        telemetry: telemetry.clone(),
     })
     .max_decoding_message_size(RPC_MESSAGE_BYTES)
     .max_encoding_message_size(RPC_MESSAGE_BYTES);
@@ -563,11 +565,13 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use df_protocol::transport_fixture::transport_fixture_client::TransportFixtureClient;
     use futures::StreamExt;
     #[tokio::test]
     async fn rejected_unary_preserves_terminal_metadata() {
         let service = FixtureService {
             statistics: Arc::new(Statistics::default()),
+            telemetry: Arc::new(FixtureTelemetry::default()),
         };
         let error = service
             .unary(Request::new(Sample {
@@ -589,6 +593,7 @@ mod tests {
         let statistics = Arc::new(Statistics::default());
         let service = FixtureService {
             statistics: statistics.clone(),
+            telemetry: Arc::new(FixtureTelemetry::default()),
         };
         let mut stream = service
             .server_stream(Request::new(Sample {
@@ -604,5 +609,102 @@ mod tests {
         drop(stream);
         assert_eq!(statistics.active.load(Ordering::Relaxed), 0);
         assert_eq!(statistics.cancelled.load(Ordering::Relaxed), 1);
+    }
+
+    #[tokio::test]
+    async fn native_rpc_modes_record_on_the_service_owner() {
+        let telemetry = Arc::new(FixtureTelemetry::default());
+        let statistics = Arc::new(Statistics::default());
+        let service = TransportFixtureServer::new(FixtureService {
+            statistics: statistics.clone(),
+            telemetry: telemetry.clone(),
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        drop(listener);
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+        let server = tokio::spawn(async move {
+            tonic::transport::Server::builder()
+                .add_service(service)
+                .serve_with_shutdown(address, async {
+                    let _ = shutdown_rx.await;
+                })
+                .await
+                .unwrap();
+        });
+        let endpoint = format!("http://{address}");
+        let channel = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                match tonic::transport::Endpoint::from_shared(endpoint.clone())
+                    .unwrap()
+                    .connect()
+                    .await
+                {
+                    Ok(channel) => break channel,
+                    Err(_) => tokio::time::sleep(std::time::Duration::from_millis(10)).await,
+                }
+            }
+        })
+        .await
+        .unwrap();
+        let mut client = TransportFixtureClient::new(channel);
+        let sample = || Sample {
+            sequence: 0,
+            payload: b"owner".to_vec(),
+            behavior: Behavior::Echo as i32,
+            ..Sample::default()
+        };
+
+        client.unary(Request::new(sample())).await.unwrap();
+        let mut server_stream = client
+            .server_stream(Request::new(sample()))
+            .await
+            .unwrap()
+            .into_inner();
+        while server_stream.message().await.unwrap().is_some() {}
+        let client_input = futures::stream::iter([sample(), sample()]);
+        client
+            .client_stream(Request::new(client_input))
+            .await
+            .unwrap();
+        let bidi_input = futures::stream::iter([sample(), sample()]);
+        let mut bidi = client
+            .bidi(Request::new(bidi_input))
+            .await
+            .unwrap()
+            .into_inner();
+        while bidi.message().await.unwrap().is_some() {}
+
+        let mut cancelled = client
+            .server_stream(Request::new(Sample {
+                behavior: Behavior::Wait as i32,
+                ..sample()
+            }))
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(cancelled.message().await.unwrap().is_some());
+        drop(cancelled);
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while statistics.cancelled.load(Ordering::Relaxed) == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+
+        let spans = telemetry.snapshot().unwrap();
+        for name in [
+            "fixture.unary",
+            "fixture.server_stream",
+            "fixture.client_stream",
+            "fixture.bidi",
+        ] {
+            assert!(spans.contains(name), "missing {name}: {spans}");
+        }
+        assert!(spans.contains("cancelled"), "missing cancellation: {spans}");
+        assert_eq!(telemetry.count().unwrap(), 5);
+        let _ = shutdown_tx.send(());
+        server.await.unwrap();
     }
 }

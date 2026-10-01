@@ -36,8 +36,18 @@ pub struct OperationSpan {
 }
 /// Begin an operation using explicit correlation across asynchronous dispatch.
 pub fn begin(context: &OperationContext, method: &'static str) -> OperationSpan {
-    let mut span =
-        global::tracer("df-observe.transport-fixture").start_with_context(method, &parent(context));
+    begin_with_tracer(
+        &global::tracer("df-observe.transport-fixture"),
+        context,
+        method,
+    )
+}
+fn begin_with_tracer(
+    tracer: &global::BoxedTracer,
+    context: &OperationContext,
+    method: &'static str,
+) -> OperationSpan {
+    let mut span = tracer.start_with_context(method, &parent(context));
     span.set_attribute(KeyValue::new("fixture.build", context.build.clone()));
     OperationSpan {
         span,
@@ -86,6 +96,7 @@ pub use native::FixtureTelemetry;
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
     use opentelemetry::global;
+    use opentelemetry::trace::TracerProvider;
     use opentelemetry_sdk::{
         error::{OTelSdkError, OTelSdkResult},
         trace::{SdkTracerProvider, SpanData, SpanExporter},
@@ -129,11 +140,31 @@ mod native {
             let provider = SdkTracerProvider::builder()
                 .with_simple_exporter(exporter.clone())
                 .build();
-            global::set_tracer_provider(provider.clone());
             Self { provider, exporter }
         }
     }
     impl FixtureTelemetry {
+        /// Begin a span with this fixture's bounded, in-memory exporter.
+        pub fn begin(
+            &self,
+            context: &crate::OperationContext,
+            method: &'static str,
+        ) -> crate::OperationSpan {
+            let tracer = global::BoxedTracer::new(Box::new(
+                self.provider.tracer("df-observe.transport-fixture"),
+            ));
+            crate::begin_with_tracer(&tracer, context, method)
+        }
+        /// Record a lifecycle event in this fixture's bounded, in-memory exporter.
+        pub fn record(
+            &self,
+            context: &crate::OperationContext,
+            method: &'static str,
+            status: &str,
+            bytes: usize,
+        ) {
+            self.begin(context, method).finish(status, bytes);
+        }
         /// Return safe emitted span count; exporter failures remain visible.
         pub fn count(&self) -> Result<usize, String> {
             self.exporter
