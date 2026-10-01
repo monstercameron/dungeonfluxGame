@@ -1,6 +1,6 @@
 # Shared contract waves and compatibility policy
 
-Task/attempt: `B-G03-D01/a1`  
+Task/attempt: `B-G03-D01/a2`
 Decision input: `01c2ccf09545877d65ffe490975b4d9da267cd67`  
 Canonical reviewed contract: `CONTRACT-G03-001`  
 Owners: `df-types`, `df-model`, `df-protocol`
@@ -13,12 +13,14 @@ The first shared wave freezes only contracts already implemented and exercised a
 
 `df-protocol` owns the additive `dungeonflux.public.v1` common schema and depends on no project crate. Presence is explicit for scalar/bytes/string values and represented by message presence for composite values; generated DTO construction does not validate domain requirements. `df-tools` owns only the native/WASM-compatible consuming fixture and descriptor-ledger checks. Its explicit mapping validates generated DTOs and actual Prost encoding/decoding. The `dungeonflux.experimental.contract.v1` compatibility wrapper is test-only, has no service, and accepts protocol revision 1; it requires explicit capability kind and requiredness, rejects missing/zero/unsupported revision, unspecified enum values, unknown required capabilities, and missing/unknown-only payloads. Unknown optional capabilities and unknown wire fields beside a known payload remain additive. Unknown fields cannot safely express a future required meaning to an old reader: use a required capability or a protocol revision that the old reader rejects. Malformed wire data rejects during decode.
 
-| Contract concern | Owner | Current consumer / evidence boundary | Error or compatibility behavior |
-| --- | --- | --- | --- |
-| Typed supplied IDs, revisions, provenance | `df-types` | `df-protocol` DTO mapping consumed by `df-tools` | Distinct typed errors; absent fields, invalid lengths/zero IDs, zero recovery epoch, overflow, and invalid labels reject |
-| Public common wire DTOs | `df-protocol` | Native generated DTO encode/decode in `df-tools` | Additive optional presence; decoding alone is not validation; consumer performs explicit domain validation |
-| Version/capability/payload example | `df-tools` fixture | `shared_contracts` executable tests | Revision 1 only; unknown optional additions accepted, unknown required meaning rejected, no implicit payload |
-| Allocations and retirement | `df-protocol` descriptor + ledger; reviewed by `df-tools` | `schema_ledger` derives records from the actual generated descriptor | Duplicate, reserved, removed, renumbered, reused, or changed allocations fail; retired names and numbers remain reserved |
+| Contract concern | Owner | Current consumer / evidence boundary | Change compatibility rule | Executable check boundary |
+| --- | --- | --- | --- | --- |
+| Typed supplied IDs, revisions, provenance | `df-types` | `df-protocol` DTO mapping consumed by `df-tools` | Preserve distinct types and validation semantics; coordinated consumer review for semantic changes; never imply issuance or authority | `df-types` tests and mapping/round-trip cases in `shared_contracts` |
+| Public common wire DTOs | `df-protocol` | Native generated DTO encode/decode in `df-tools` | Add fresh optional fields/enums while preserving existing number, name, type, cardinality, presence, oneof, and meaning; required semantics need explicit admission | Actual Prost encode/decode and old-wire/additive cases in `shared_contracts` |
+| Version/capability/payload example | `df-tools` fixture | `shared_contracts` executable tests | Keep revision 1 behavior explicit; old readers may skip unknown optional capabilities but reject unknown required meanings and unsupported revisions | `shared_contracts` executable tests |
+| Allocations and retirement | `df-protocol` descriptor + ledger; reviewed by `df-tools` | `schema_ledger` derives records from the actual generated descriptor | Never reuse retired number/name; change descriptor and ledger together as a reviewed contract; reserved declarations are permanent | `schema_ledger` compares actual descriptor and exercises mutations |
+| Future feature-domain contracts | `df-model` with the named feature owner | No current consumer in this first wave; later waves admit only their named consumer boundary | Freeze exact state/offer/view/resolution needs after prerequisites are reviewed; coordinate all affected consumers and compatibility fixtures | Pending until the later wave names concrete source and checks |
+| Formatting and target gates | Each affected crate owner | Maintainers reviewing the wave | Any changed consumer or generated descriptor joins the same review boundary; do not infer runtime support from cross-compilation | Workspace format, affected native/WASM Clippy, affected library WASM build |
 
 These names identify current owners and consumers only. RPC service design, wire codecs at production API/client/persistence boundaries, identity issuance, authorization, durable recovery authority, and all full G03 game types remain pending. Pure shared/domain crates do not acquire clocks, SDKs, databases, providers, sockets, or runtime I/O. Error facts cross to native consumers; private payloads and credentials do not enter default diagnostics.
 
