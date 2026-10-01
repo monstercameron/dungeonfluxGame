@@ -261,6 +261,60 @@ I01_ACCEPTED_SOURCE_RECEIPT = json.loads(r'''
 }
 ''')
 
+# Accepted I01 adds reviewed source to the historical contract without rewriting it.
+I02_REVIEWED_SOURCE_EXTENSIONS = json.loads(r'''
+{
+  "accepted_i01": {
+    "accepted_source_sha256": {
+      "crates/df-protocol/proto/common.proto": "6cddc5db2102911b714ff707a7edc66ed137012e44dc58875e69756fc3ff27bc",
+      "crates/df-protocol/proto/field-ledger.txt": "ceb064777c63f90c3e19dcf0f7c530697769bce571735a5fca79e79d80c82c7b",
+      "crates/df-tools/tests/schema_ledger.rs": "bd916a9a97b499f4c8fddc7209138c4eaab41ca0dede114114c7e5864ef63640",
+      "crates/df-tools/tests/shared_contracts.rs": "e4b20c173f8631fd8b4d83491d2ad9611e6097334b48a43e9542b8739e805726",
+      "crates/df-types/src/identity.rs": "83af62cb63764d03af9e0834ffc8d6ab012da117d94cbe000f7c2643e26064e4",
+      "crates/df-types/src/lib.rs": "4e292019585d02eeed99f122afc9fc06a7944297e23febe9a4f20d2c500c1639",
+      "crates/df-types/src/revision.rs": "17d7ff394b33f231a9493d3026691934252989bf84a3bf756c3e2be5bc8ae71e"
+    },
+    "approved_candidate_commit": "cd06fcb4b17da1a61f250d5eef29ee6bfc23c87c",
+    "attempt_id": "B-C-df-types-I01-a1",
+    "evidence_sha256": {
+      "development/evidence/types-identity-implementation/a1/integration-reviewer/acceptance.json": "270533e8f682d7c9e764d8907c47c45c601649c04f70d6fb7ffdcf5e4a6d5249",
+      "development/evidence/types-identity-implementation/a1/integration-reviewer/property-lineage.json": "02783d8b1c918cb5de978b5c8b6cc1911c6c15fffa3126d092d76c8b6dedf350",
+      "development/evidence/types-identity-implementation/a1/integration-reviewer/review.json": "5d295f67e126824a4c7cd83633467f1e516de701cb07f73cb5981b3f105e24f2",
+      "development/evidence/types-identity-implementation/a1/integration-reviewer/source-after-and-artifacts.json": "39dc88fff750002eb6f446709e1d55a0d39539123195b324d58884beef8c47fe"
+    },
+    "integrated_revision": "e6d69216f02862677742198e14fcde4e0cec026d",
+    "live_brief_json_sha256_at_i02_plan": "f31ec0dbad35fd7d0c7a78f4a4ad71ed228e6d27713bba0766fbf12b70e74091",
+    "original_acceptance": [
+      "empty whitespace and oversized inputs reject",
+      "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+    ],
+    "original_objective": "Implement checked identifier constructors; expected: empty whitespace and oversized inputs reject.",
+    "original_verification": [
+      "Create the smallest owned implementation or use-case wiring for Implement checked identifier constructors; execute its deterministic normal and failure fixture; require empty whitespace and oversized inputs reject.",
+      "Exact executable commands: TBD at G01 and scoped prerequisite resolution; this planned procedure is not a claim that Rust/browser/provider checks ran."
+    ],
+    "required_attempt_status": "integrated",
+    "required_attempt_verdict": "approve",
+    "required_task_status": "done",
+    "review_verdict": "APPROVE",
+    "root_receipt_preflight_sha256": "eb871498a73d91b72978f6987176676ca5eedb24864c704399a1e63ee59c7e53",
+    "source_fingerprint": "3676e59e6316d9e4d77eab1f9dd812776041c2c9eb70f5dc2e396a13e50bf6b0",
+    "task_id": "B-C-df-types-I01",
+    "tested_revision": "e6d69216f02862677742198e14fcde4e0cec026d"
+  },
+  "historical_canonical": {
+    "contract_payload_sha256": "6b0ac8671ee8556f651e38de039a32bf8d5e930596ee3c81a58385ef8242973c",
+    "integrated_revision": "9898c70614a8555efa63d3cec47ba9adbc395bbb",
+    "lineage_note": "Historical 9898 contract proof hashes remain in required_accepted_source_receipt. Current e6d69 identity.rs/lib.rs/shared_contracts.rs extend those older files under separately approved I01; revision.rs and protobuf descriptor source are unchanged.",
+    "revision_rs_sha256": "17d7ff394b33f231a9493d3026691934252989bf84a3bf756c3e2be5bc8ae71e",
+    "task_id": "CONTRACT-G03-001"
+  },
+  "mandatory": true,
+  "on_missing_or_mismatch": "block I02 dispatch; keep its generated blueprint dispatch_ready=false",
+  "root_verification": "Before I02 dispatch, reread live I01 task/attempt/review and retained proof hashes, verify current source reuse against accepted e6d69216 extension and original 9898c706 canonical receipt, and retain dated root verification. Old I01 tests do not prove I02 arithmetic or consumers."
+}
+''')
+
 def expand(m,root,catalog):
  m=copy.deepcopy(m);families={f['id']:f for f in m['features']};baseline={t['id']:t for t in m['tasks'] if t['brief_json'].get('backlog_generated') is not True}
  assert set(catalog['families'])==set(families),'catalog family coverage'
@@ -314,6 +368,12 @@ def expand(m,root,catalog):
    for key in ['backlog_children','aggregation_requires','canonical_implementation_refs','backlog_role_reason']:b.pop(key,None)
    b.update(objective=item['objective'],why=family['goal'],owners=selected,input_revision=fingerprint,inputs={'family_models':family['plan_json'].get('models',[]),'case':row['action'],'prerequisite_contracts':'Exact reviewed children named in dependencies; later production types remain G03 wave-specific.'},outputs=criteria,dispatch_ready=False,record_role='atomic_blueprint',scope_status='planned',backlog_generated=True,canonical_key=row['canonical_key'],case_phase=phase,granularity='one independently reviewable explicit outcome; exact paths/limits frozen before execution',dispatch_guard='Planning only. Coordinator freezes exact source/tool/types/paths/limits and applicable rights/phase approvals before changing record_role to atomic, scope_status to frozen and dispatch_ready to true.',required_capabilities=capabilities,verification_environment='Planned authorized native/WASM environment; commands TBD by G01, production contracts by G03. No executable application currently exists.',required_output_review='Independent frontier review of this exact boundary; actual computer use/vision for user-facing cases, actual audible observation where audio is required. Logs alone do not prove output.',canonical_implementation_policy='Crate child owns the primitive; rules child owns source behavior; feature child owns this named use-case adapter; slice child owns this specific cross-system connection and end-to-end proof. Reuse canonical_task_refs, never create a second implementation.',completion_policy='Existing task/attempt independent review and integrated revision triggers; no automatic completion from dependencies or child counts.')
    if tid=='B-C-df-types-I01':b['required_accepted_source_receipt']=copy.deepcopy(I01_ACCEPTED_SOURCE_RECEIPT)
+   if tid=='B-C-df-types-I02':
+    receipt=copy.deepcopy(I01_ACCEPTED_SOURCE_RECEIPT)
+    receipt['on_missing_or_mismatch']='block I02 dispatch; preserve dispatch_ready=false'
+    receipt['root_verification']='Before I02 dispatch, root verifies the original CONTRACT-G03-001 task/attempt/review, historical accepted source and retained proof hashes, then checks current source reuse separately and retains a dated verifier outcome.'
+    b['required_accepted_source_receipt']=receipt
+    b['required_reviewed_source_extensions']=copy.deepcopy(I02_REVIEWED_SOURCE_EXTENSIONS)
    b['governing_sources'].append({'path':'development/backlog-catalog.json','sha256':sources['development/backlog-catalog.json']['sha256'],'sections':[fid,row['id']]})
    b['integration_hooks']=[{'hook':row['action']+' -> '+row['expected'],'owner':', '.join(selected)},{'hook':row['consumer_hook']['boundary'],'owner':', '.join(row['consumer_hook']['owner'])}]
    if any(o in PURE for o in selected):b['known_pitfalls'].append('Pure shared/domain owner has no SDK clock DB provider socket I/O; diagnostic facts handed to native consumer. Domain wire/serialization codecs belong to df-api/df-client/df-persistence consumers.')
@@ -335,7 +395,7 @@ def expand(m,root,catalog):
   if R:dep(R[-1],R[:-1])
   if fid.startswith('C-'):
    crate=fid[2:]
-   for t in I+W:dep(t,(['B-G03-D01'] if t=='B-C-df-types-I01' else [early('G01'),early('G03')])+['C-'+d+'-BOUNDARY' for d in family['plan_json'].get('direct_dependencies',[])]+[x for d in family['plan_json'].get('direct_dependencies',[]) for x in ids('C-'+d,'I') if not next(r for r in catalog['families']['C-'+d] if r['id']==x).get('implementation_delegate')])
+   for t in I+W:dep(t,(['B-G03-D01'] if t in {'B-C-df-types-I01','B-C-df-types-I02'} else [early('G01'),early('G03')])+['C-'+d+'-BOUNDARY' for d in family['plan_json'].get('direct_dependencies',[])]+[x for d in family['plan_json'].get('direct_dependencies',[]) for x in ids('C-'+d,'I') if not next(r for r in catalog['families']['C-'+d] if r['id']==x).get('implementation_delegate')])
    for t in W:
     for consumer in new[t]['brief_json']['owners']:
      if consumer!=crate and 'C-'+consumer in families:dep(t,ids('C-'+consumer,'I'))

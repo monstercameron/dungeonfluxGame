@@ -135,3 +135,81 @@ commands compile the affected dependency closure. These commands are pinned
 future checks, not results of this planning correction. Production caller mapping,
 future kind contracts, full G01/G02/G03 gates, browser/network/physical-device
 observations, and S00/S01 completion retain their separate owners and evidence.
+
+## B-C-df-types-I02 applicability and execution boundary
+
+I02 keeps all four `B-C-df-types-D01` through `D04` design prerequisites and adds
+`B-G03-D01` in place of its two broad `B-G01-R04` and `B-G03-R04` edges. The
+original objective is “Implement revision checked arithmetic; expected: overflow
+never wraps into an earlier revision.” Its two original acceptance clauses remain
+“overflow never wraps into an earlier revision” and “The named outcome has actual
+source/build-bound evidence; unsupported, pending, failed and unperformed checks
+remain explicit.” Its two original verification clauses remain verbatim in the
+manifest. This I02-only edge correction neither waives full G01/G02/G03 gates nor
+makes its generated blueprint dispatchable.
+
+I02 also requires two source receipts outside the graph. The first preserves the
+complete accepted historical `CONTRACT-G03-001` task contract, tested/integrated
+revision `9898c70614a8555efa63d3cec47ba9adbc395bbb`, canonical payload hash,
+and retained proof hashes. The second identifies the independently accepted I01
+source extension at integrated revision `e6d69216f02862677742198e14fcde4e0cec026d`:
+I01 is done, its attempt integrated with an approving review, and the reviewed
+identity, public export, and consumer-fixture hashes are distinct from the older
+historical contract. `revision.rs` and the common protobuf/descriptor source stay
+at their canonical hashes. The manifest's `required_accepted_source_receipt` and
+`required_reviewed_source_extensions` hold the exact identities and hashes. The
+root coordinator must freshly compare both receipts with task/attempt/review and
+retained proof records, confirm current source reuse, and retain a dated verifier
+outcome before I02 dispatch. Missing or mismatched evidence keeps
+`dispatch_ready=false`; previous I01 or contract tests are input evidence, not I02
+acceptance.
+
+The pure `df-types` owner must reuse its existing public `RecoveryEpoch::new/get`,
+`SessionRevision::new/epoch/sequence/next_sequence`, and typed
+`RevisionError::{ZeroEpoch, SequenceOverflow}` from `crates/df-types/src/revision.rs`.
+`RecoveryEpoch::new(0)` rejects; sequence zero is valid. `next_sequence` uses
+checked addition within the supplied epoch: `u64::MAX` returns
+`SequenceOverflow` without wrapping or issuing a new epoch. Ordering compares
+epoch before sequence, so `(8, 0)` sorts above `(7, u64::MAX)`. A supplied
+maximum epoch has no pure-type increment escape hatch. I02's bounded source work
+is to prove this public arithmetic and its real consumer boundary with focused
+normal and failure cases, extending owned `df-types` tests and the existing
+`df-tools/tests/shared_contracts.rs` fixture only as needed. Do not introduce a
+second revision/newtype, alternate parser, clock, provider, persistence action,
+or epoch-issuance authority.
+
+The actual current consumer is the test-only `df-tools` mapping: `read_revision`
+requires the generated `dungeonflux.public.v1.SessionRevision` epoch message,
+nonzero epoch value, and present sequence; `write_revision` preserves those
+values. Its Prost round trip and failure cases already exercise epoch-first
+ordering, zero/missing components, old scalar ambiguity, and max-sequence error.
+`crates/df-protocol/proto/common.proto` and its field ledger own the wire shape;
+`df-tools/tests/schema_ledger.rs` checks the generated descriptor and reuse
+mutations. No production API/client/persistence revision codec is implemented at
+this input revision. Future I02 evidence must exercise the public API at zero,
+one, near-max, and max sequence; verify same-epoch monotonicity, cross-epoch
+ordering, typed zero/overflow rejection, actual generated wire round trips, and
+descriptor compatibility. Caller mapping and production recovery authority remain
+separately owned work.
+
+For a later claimed I02 attempt, pin its source commit, `Cargo.lock`, Rust 1.98.1
+from `rust-toolchain.toml`, `rustfmt.toml`, configuration, and an owned build root.
+Use cached `RUSTUP_HOME=artifacts/cache/rustup` and
+`CARGO_HOME=artifacts/cache/cargo`; set `RUSTUP_AUTO_INSTALL=0`,
+`CARGO_NET_OFFLINE=true`, `CARGO_BUILD_JOBS=1`, and an attempt-owned
+`CARGO_TARGET_DIR` under `artifacts/build/`. Retain each command, exit status,
+output and native/WASM artifact hash:
+
+```text
+cargo +1.98.1 fmt --all -- --check
+cargo +1.98.1 test --locked --offline -p df-types --jobs 1
+cargo +1.98.1 test --locked --offline -p df-tools --test shared_contracts --test schema_ledger --jobs 1
+cargo +1.98.1 clippy --locked --offline -p df-types -p df-protocol -p df-tools -p df-observe -p df-telemetry --all-targets --jobs 1 -- -D warnings
+cargo +1.98.1 clippy --locked --offline -p df-types -p df-protocol -p df-tools -p df-observe --all-targets --target wasm32-unknown-unknown --jobs 1 -- -D warnings
+cargo +1.98.1 build --locked --offline -p df-types -p df-protocol -p df-tools -p df-observe --lib --target wasm32-unknown-unknown --jobs 1
+```
+
+These are future candidate gates, not checks run for this applicability plan.
+Native execution of the mapping and descriptor tests differs from WASM
+cross-compilation; neither supplies browser, physical-device, durable recovery,
+full G01/G02/G03, S00/S01, or production authority evidence.
