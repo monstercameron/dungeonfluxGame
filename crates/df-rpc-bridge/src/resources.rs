@@ -3,6 +3,158 @@ use crate::{CONCURRENT_STREAMS, FRAME_BYTES, MESSAGE_BYTES, RECEIVE_BYTES, RPC_M
 use std::{collections::VecDeque, io, sync::Mutex, time::Duration};
 use web_time::Instant;
 
+#[cfg(any(test, target_arch = "wasm32"))]
+use std::{cell::RefCell, rc::Rc, sync::Arc};
+
+/// Credit already consumed by browser response bodies on one physical connection.
+/// The coordinator owns no DATA and never changes the advertised receive windows.
+#[cfg(any(test, target_arch = "wasm32"))]
+#[derive(Clone)]
+pub(crate) struct ReceiveCredit {
+    slots: Rc<RefCell<Vec<CreditSlot>>>,
+    metrics: Arc<ConnectionMetrics>,
+}
+
+#[cfg(any(test, target_arch = "wasm32"))]
+struct CreditSlot {
+    id: h2::StreamId,
+    flow: h2::FlowControl,
+    pending: usize,
+}
+
+#[cfg(any(test, target_arch = "wasm32"))]
+impl ReceiveCredit {
+    pub(crate) fn new(metrics: Arc<ConnectionMetrics>) -> Self {
+        Self {
+            slots: Rc::new(RefCell::new(Vec::with_capacity(
+                CONCURRENT_STREAMS as usize,
+            ))),
+            metrics,
+        }
+    }
+
+    pub(crate) fn register(&self, flow: h2::FlowControl) -> Result<h2::StreamId, h2::Error> {
+        let id = flow.stream_id();
+        let mut slots = self.slots.borrow_mut();
+        if slots.len() == CONCURRENT_STREAMS as usize || slots.iter().any(|slot| slot.id == id) {
+            drop(slots);
+            self.metrics.reject();
+            return Err(h2::Reason::ENHANCE_YOUR_CALM.into());
+        }
+        slots.push(CreditSlot {
+            id,
+            flow,
+            pending: 0,
+        });
+        Ok(id)
+    }
+
+    /// Called only when the body is polled again after delivering a DATA frame.
+    pub(crate) fn consumed(&self, id: h2::StreamId, bytes: usize) -> Result<(), h2::Error> {
+        if bytes == 0 {
+            return Ok(());
+        }
+        let selection = {
+            let mut slots = self.slots.borrow_mut();
+            let Some(slot) = slots.iter_mut().find(|slot| slot.id == id) else {
+                self.metrics.reject();
+                return Err(h2::Reason::INTERNAL_ERROR.into());
+            };
+            let Some(pending) = slot.pending.checked_add(bytes) else {
+                self.metrics.reject();
+                return Err(h2::Reason::INTERNAL_ERROR.into());
+            };
+            slot.pending = pending;
+            if slot.pending >= MESSAGE_BYTES {
+                Some(vec![id])
+            } else if slots.iter().map(|slot| slot.pending).sum::<usize>() >= RECEIVE_BYTES / 2 {
+                Some(
+                    slots
+                        .iter()
+                        .filter(|slot| slot.pending != 0)
+                        .map(|slot| slot.id)
+                        .collect::<Vec<_>>(),
+                )
+            } else {
+                None
+            }
+        };
+        if let Some(ids) = selection {
+            self.release(&ids, false)?;
+        }
+        Ok(())
+    }
+
+    /// A real h2 receive Pending is a progress boundary even before a batch threshold.
+    pub(crate) fn pending(&self, id: h2::StreamId) -> Result<(), h2::Error> {
+        self.release(&[id], false)
+    }
+
+    /// Release consumed remainder and remove the cloned h2 handle before a body ends.
+    pub(crate) fn finish(&self, id: h2::StreamId) -> Result<(), h2::Error> {
+        self.release(&[id], true)
+    }
+
+    fn release(&self, ids: &[h2::StreamId], remove: bool) -> Result<(), h2::Error> {
+        // Take both accounting and handles out of RefCell before h2 can wake its driver.
+        let mut batch = Vec::with_capacity(ids.len());
+        let mut missing = false;
+        {
+            let mut slots = self.slots.borrow_mut();
+            for id in ids {
+                if let Some(index) = slots.iter().position(|slot| slot.id == *id) {
+                    if remove {
+                        let slot = slots.swap_remove(index);
+                        batch.push((slot.id, slot.flow, slot.pending));
+                    } else {
+                        let slot = &mut slots[index];
+                        if slot.pending != 0 {
+                            batch.push((
+                                slot.id,
+                                slot.flow.clone(),
+                                std::mem::take(&mut slot.pending),
+                            ));
+                        }
+                    }
+                } else {
+                    missing = true;
+                }
+            }
+        }
+        let mut first_error = missing.then(|| h2::Error::from(h2::Reason::INTERNAL_ERROR));
+        if missing {
+            self.metrics.reject();
+        }
+        for (id, mut flow, bytes) in batch {
+            if bytes == 0 {
+                continue;
+            }
+            if let Err(error) = flow.release_capacity(bytes) {
+                self.metrics.reject();
+                if !remove {
+                    let mut slots = self.slots.borrow_mut();
+                    if let Some(slot) = slots.iter_mut().find(|slot| slot.id == id) {
+                        if let Some(pending) = slot.pending.checked_add(bytes) {
+                            slot.pending = pending;
+                        } else if first_error.is_none() {
+                            first_error = Some(h2::Reason::INTERNAL_ERROR.into());
+                        }
+                    }
+                }
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+        }
+        first_error.map_or(Ok(()), Err)
+    }
+
+    #[cfg(test)]
+    fn active(&self) -> usize {
+        self.slots.borrow().len()
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BufferSnapshot {
     pub current: usize,
@@ -468,6 +620,8 @@ impl BufferSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::Bytes;
+    use std::task::Poll;
     fn frame(kind: u8, flags: u8, stream: u32) -> [u8; 9] {
         let id = stream.to_be_bytes();
         [0, 0, 0, kind, flags, id[0], id[1], id[2], id[3]]
@@ -592,5 +746,233 @@ mod tests {
         let error = metrics.observe_at(true, &frame(0, 0, 1), now).unwrap_err();
         assert_eq!(error.to_string(), "HTTP2 frame flood bound exceeded");
         assert_eq!(metrics.snapshot().unwrap().received_control_frames, 0);
+    }
+
+    #[tokio::test]
+    async fn real_h2_pending_flush_recovers_partial_window_without_end_stream() {
+        pending_progress_for_window(65_535).await;
+        pending_progress_for_window(MESSAGE_BYTES).await;
+    }
+
+    async fn pending_progress_for_window(window: usize) {
+        use tokio::{io::duplex, sync::oneshot, time::timeout};
+
+        let (client_io, server_io) = duplex(RECEIVE_BYTES);
+        let (first_sent, first_seen) = oneshot::channel();
+        let (first_consumed, first_released) = oneshot::channel();
+        let (second_sent, second_seen) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let mut connection = h2::server::handshake(server_io).await.unwrap();
+            let (_, mut response) = connection.accept().await.unwrap().unwrap();
+            let mut send = response
+                .send_response(http::Response::new(()), false)
+                .unwrap();
+            let producer = tokio::spawn(async move {
+                async fn send_bytes(send: &mut h2::SendStream<Bytes>, mut count: usize) {
+                    while count != 0 {
+                        let requested = count.min(FRAME_BYTES);
+                        send.reserve_capacity(requested);
+                        let capacity = futures::future::poll_fn(|cx| send.poll_capacity(cx))
+                            .await
+                            .unwrap()
+                            .unwrap();
+                        let size = requested.min(capacity);
+                        if size != 0 {
+                            send.send_data(Bytes::from(vec![7; size]), false).unwrap();
+                            count -= size;
+                        }
+                    }
+                }
+                send_bytes(&mut send, 8 * 1024).await;
+                first_sent.send(()).unwrap();
+                first_released.await.unwrap();
+                send_bytes(&mut send, window - 8 * 1024).await;
+                second_sent.send(()).unwrap();
+                send_bytes(&mut send, 1).await;
+                send.send_data(Bytes::new(), true).unwrap();
+            });
+            while let Some(result) = connection.accept().await {
+                result.unwrap();
+            }
+            producer.await.unwrap();
+        });
+
+        let (mut request, connection) = h2::client::Builder::new()
+            .initial_window_size(window as u32)
+            .initial_connection_window_size(RECEIVE_BYTES as u32)
+            .handshake::<_, Bytes>(client_io)
+            .await
+            .unwrap();
+        let driver = tokio::spawn(connection);
+        let (response, upload) = request.send_request(http::Request::new(()), false).unwrap();
+        let mut receive = response.await.unwrap().into_body();
+        let credit = ReceiveCredit::new(Arc::new(ConnectionMetrics::new(true)));
+        let id = credit.register(receive.flow_control().clone()).unwrap();
+        timeout(Duration::from_secs(3), first_seen)
+            .await
+            .unwrap()
+            .unwrap();
+        let first = timeout(Duration::from_secs(3), receive.data())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(first.len(), 8 * 1024);
+        credit.consumed(id, first.len()).unwrap();
+        credit.pending(id).unwrap();
+        first_consumed.send(()).unwrap();
+        timeout(Duration::from_secs(3), second_seen)
+            .await
+            .unwrap()
+            .unwrap();
+
+        // The peer's wire window is exhausted, though h2 reports locally
+        // available credit from the earlier 8 KiB release.
+        let mut received = 0;
+        while received < window - 8 * 1024 {
+            let bytes = timeout(Duration::from_secs(3), receive.data())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            received += bytes.len();
+            credit.consumed(id, bytes.len()).unwrap();
+        }
+        assert_eq!(received, window - 8 * 1024);
+        assert!(receive.flow_control().available_capacity() > 0);
+        let final_byte = timeout(
+            Duration::from_secs(3),
+            futures::future::poll_fn(|cx| match receive.poll_data(cx) {
+                Poll::Pending => {
+                    credit.pending(id).unwrap();
+                    Poll::Pending
+                }
+                ready => ready,
+            }),
+        )
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+        assert_eq!(final_byte.len(), 1);
+        credit.consumed(id, 1).unwrap();
+        credit.finish(id).unwrap();
+        assert_eq!(credit.active(), 0);
+        assert_eq!(receive.flow_control().used_capacity(), 0);
+        // A still-live upload reference does not retain consumed receive credit.
+        drop(upload);
+        drop(receive);
+        driver.abort();
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn real_h2_aggregate_credit_and_slot_reuse_are_bounded() {
+        use tokio::{io::duplex, time::timeout};
+
+        let (client_io, server_io) = duplex(RECEIVE_BYTES);
+        let server = tokio::spawn(async move {
+            let mut connection = h2::server::Builder::new()
+                .max_concurrent_streams(9)
+                .handshake::<_, Bytes>(server_io)
+                .await
+                .unwrap();
+            while let Some(request) = connection.accept().await {
+                let (_, mut response) = request.unwrap();
+                let mut send = response
+                    .send_response(http::Response::new(()), false)
+                    .unwrap();
+                tokio::spawn(async move {
+                    let mut remaining = 64 * 1024;
+                    while remaining != 0 {
+                        send.reserve_capacity(FRAME_BYTES);
+                        let capacity = futures::future::poll_fn(|cx| send.poll_capacity(cx))
+                            .await
+                            .unwrap()
+                            .unwrap();
+                        let size = remaining.min(FRAME_BYTES).min(capacity);
+                        if size != 0 {
+                            send.send_data(Bytes::from(vec![3; size]), false).unwrap();
+                            remaining -= size;
+                        }
+                    }
+                    send.send_data(Bytes::new(), true).unwrap();
+                });
+            }
+        });
+        let (mut request, connection) = h2::client::Builder::new()
+            .initial_window_size(MESSAGE_BYTES as u32)
+            .initial_connection_window_size(RECEIVE_BYTES as u32)
+            .initial_max_send_streams(9)
+            .handshake::<_, Bytes>(client_io)
+            .await
+            .unwrap();
+        let driver = tokio::spawn(connection);
+        let credit = ReceiveCredit::new(Arc::new(ConnectionMetrics::new(true)));
+        let mut bodies = Vec::new();
+        for _ in 0..8 {
+            let (response, _) = request.send_request(http::Request::new(()), true).unwrap();
+            let mut body = timeout(Duration::from_secs(3), response)
+                .await
+                .unwrap()
+                .unwrap()
+                .into_body();
+            let id = credit.register(body.flow_control().clone()).unwrap();
+            bodies.push((id, body));
+        }
+        assert_eq!(credit.active(), 8);
+        let (response, _) = request.send_request(http::Request::new(()), true).unwrap();
+        let mut overflow = timeout(Duration::from_secs(3), response)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_body();
+        assert!(credit.register(overflow.flow_control().clone()).is_err());
+        assert_eq!(credit.active(), 8);
+        drop(overflow);
+
+        for (id, body) in &mut bodies {
+            let mut received = 0;
+            while received < 64 * 1024 {
+                let bytes = timeout(Duration::from_secs(3), body.data())
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap();
+                received += bytes.len();
+                credit.consumed(*id, bytes.len()).unwrap();
+            }
+        }
+        assert!(
+            bodies
+                .iter_mut()
+                .all(|(_, body)| body.flow_control().used_capacity() == 0)
+        );
+        let mut retained = Vec::new();
+        for (id, mut body) in bodies {
+            credit.finish(id).unwrap();
+            // Completed response bodies may be retained without retaining a slot.
+            assert_eq!(body.flow_control().used_capacity(), 0);
+            retained.push(body);
+        }
+        assert_eq!(credit.active(), 0);
+        let (response, _) = request.send_request(http::Request::new(()), true).unwrap();
+        let mut reuse = timeout(Duration::from_secs(3), response)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_body();
+        let id = credit.register(reuse.flow_control().clone()).unwrap();
+        let used = reuse.flow_control().used_capacity();
+        // Inject impossible accounting to prove a failed h2 release is explicit
+        // and never substitutes a successful credit return.
+        assert!(credit.consumed(id, MESSAGE_BYTES).is_err());
+        assert_eq!(reuse.flow_control().used_capacity(), used);
+        assert!(credit.finish(id).is_err());
+        assert_eq!(credit.active(), 0);
+        drop(retained);
+        drop(reuse);
+        driver.abort();
+        server.abort();
     }
 }

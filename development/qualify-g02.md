@@ -80,6 +80,13 @@ connection receive credit1MiB, stream credit256KiB, send buffer256KiB/stream,
 decoded header list16KiB and codec frame16KiB are unchanged. The pinned h2 codec
 caps unfinished continuation chains at five nonterminal frames at these settings.
 Decoded/encoded protobuf remains64KiB. No compression is enabled.
+The browser shares at most eight private consumed-credit slots per physical
+connection. After the caller next polls a delivered DATA frame, it returns that
+frame's credit through h2 at256KiB per stream,512KiB aggregate, or when that
+stream's h2 receive poll is Pending; terminal/error/drop paths return consumed
+remainders and remove cloned handles. Unconsumed current frames are never
+credited early. This coalesces ordinary updates without changing either
+advertised window or the100 incoming-control/second admission rule.
 
 The **payload capacity reservation** sums: native two1MiB pipes (browser one1MiB
 callback queue), one1MiB connection credit, eight stream reservations of
