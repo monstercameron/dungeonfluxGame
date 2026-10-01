@@ -63,6 +63,15 @@ def valid_record(record):
  rid=record.get('id');outcome=record.get('outcome')
  if not isinstance(rid,str) or not rid or rid in ('.','..') or Path(rid).name!=rid or '/' in rid or '\\' in rid:return False
  if outcome not in ('captured','unavailable','disk_cap_stopped'):return False
+ if not isinstance(record.get('observed_at'),str) or not record['observed_at']:return False
+ if type(record.get('minute_bucket')) is not int:return False
+ for field in ('target','preview_kind','recorder_id'):
+  if not isinstance(record.get(field),str) or not record[field]:return False
+ for field in ('task_id','attempt_id'):
+  if record.get(field) is not None and not isinstance(record[field],str):return False
+ if record.get('observed_work_context') is not None and not isinstance(record['observed_work_context'],dict):return False
+ if 'missed_minute_count' in record and (type(record['missed_minute_count']) is not int or record['missed_minute_count']<0):return False
+ if 'reason' in record and not isinstance(record['reason'],str):return False
  before=record.get('source_before');after=record.get('source_after')
  if outcome=='captured':
   if not valid_source_identity(before) or not valid_source_identity(after):return False
