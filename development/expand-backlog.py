@@ -76,7 +76,8 @@ def expand(m,root,catalog):
   D,I,W,F,A,O,R=[ids(fid,p) for p in ['D','I','W','F','A','O','R']]
   # Contract/design outcomes are separately reviewable; only the last explicit design milestone rolls up the preceding design decisions.
   if D:dep(D[-1],D[:-1])
-  for t in I:dep(t,D)
+  # I01 consumes only the identity decision and the admitted first G03 wave.
+  for t in I:dep(t,[D[0]] if t=='B-C-df-types-I01' else D)
   for t in W:dep(t,D+I)
   for t in F+A:dep(t,I+W if I or W else R if R else D)
   for t in O:dep(t,F+A)
@@ -84,7 +85,7 @@ def expand(m,root,catalog):
   if R:dep(R[-1],R[:-1])
   if fid.startswith('C-'):
    crate=fid[2:]
-   for t in I+W:dep(t,[early('G01'),early('G03')]+['C-'+d+'-BOUNDARY' for d in family['plan_json'].get('direct_dependencies',[])]+[x for d in family['plan_json'].get('direct_dependencies',[]) for x in ids('C-'+d,'I') if not next(r for r in catalog['families']['C-'+d] if r['id']==x).get('implementation_delegate')])
+   for t in I+W:dep(t,(['CONTRACT-G03-001','B-G03-D01'] if t=='B-C-df-types-I01' else [early('G01'),early('G03')])+['C-'+d+'-BOUNDARY' for d in family['plan_json'].get('direct_dependencies',[])]+[x for d in family['plan_json'].get('direct_dependencies',[]) for x in ids('C-'+d,'I') if not next(r for r in catalog['families']['C-'+d] if r['id']==x).get('implementation_delegate')])
    for t in W:
     for consumer in new[t]['brief_json']['owners']:
      if consumer!=crate and 'C-'+consumer in families:dep(t,ids('C-'+consumer,'I'))
