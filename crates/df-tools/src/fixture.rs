@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    extract::{State, WebSocketUpgrade},
+    extract::{RawQuery, State, WebSocketUpgrade},
     http::HeaderMap,
     response::{Html, IntoResponse},
     routing::get,
@@ -282,7 +282,32 @@ struct PreviewState {
     connections: Arc<Semaphore>,
     resources: Arc<Mutex<VecDeque<Arc<ConnectionMetrics>>>>,
     origin: Arc<str>,
-    reports: Arc<Mutex<[String; 4]>>,
+    reports: Arc<Mutex<ReportState>>,
+}
+struct ReportState {
+    slots: [String; 4],
+    credit_order: Option<(u64, u8)>,
+}
+impl ReportState {
+    fn write(&mut self, index: usize, report: String, order: Option<(u64, u8)>) -> bool {
+        if index == 3 {
+            let Some(order) = order else {
+                return false;
+            };
+            if self.credit_order.is_some_and(|current| order <= current) {
+                return false;
+            }
+            self.credit_order = Some(order);
+        }
+        self.slots[index] = report;
+        true
+    }
+}
+fn credit_report_order(query: Option<&str>) -> Option<(u64, u8)> {
+    let (generation, phase) = query?.split_once("&phase=")?;
+    let generation = generation.strip_prefix("generation=")?.parse().ok()?;
+    let phase = phase.parse().ok()?;
+    (generation > 0 && phase <= 2).then_some((generation, phase))
 }
 async fn websocket(
     State(state): State<PreviewState>,
@@ -400,13 +425,14 @@ async fn read_report(
         return axum::http::StatusCode::NOT_FOUND.into_response();
     };
     match state.reports.lock() {
-        Ok(reports) => reports[index].clone().into_response(),
+        Ok(reports) => reports.slots[index].clone().into_response(),
         Err(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 async fn write_report(
     State(state): State<PreviewState>,
     axum::extract::Path(kind): axum::extract::Path<String>,
+    RawQuery(query): RawQuery,
     headers: HeaderMap,
     report: String,
 ) -> axum::response::Response {
@@ -419,10 +445,21 @@ async fn write_report(
     if report.len() > 64 * 1024 || report.is_empty() {
         return axum::http::StatusCode::PAYLOAD_TOO_LARGE.into_response();
     }
+    let order = if index == 3 {
+        match credit_report_order(query.as_deref()) {
+            Some(order) => Some(order),
+            None => return axum::http::StatusCode::BAD_REQUEST.into_response(),
+        }
+    } else {
+        None
+    };
     match state.reports.lock() {
         Ok(mut reports) => {
-            reports[index] = report;
-            axum::http::StatusCode::NO_CONTENT.into_response()
+            if reports.write(index, report, order) {
+                axum::http::StatusCode::NO_CONTENT.into_response()
+            } else {
+                axum::http::StatusCode::CONFLICT.into_response()
+            }
         }
         Err(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
@@ -546,7 +583,10 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         statistics,
         connections: Arc::new(Semaphore::new(4)),
         resources: Arc::new(Mutex::new(VecDeque::new())),
-        reports: Arc::new(Mutex::new(std::array::from_fn(|_| String::new()))),
+        reports: Arc::new(Mutex::new(ReportState {
+            slots: std::array::from_fn(|_| String::new()),
+            credit_order: None,
+        })),
         origin: format!("http://127.0.0.1:{port}").into(),
     };
     let router = Router::new()
@@ -578,6 +618,26 @@ mod tests {
     use super::*;
     use df_protocol::transport_fixture::transport_fixture_client::TransportFixtureClient;
     use futures::StreamExt;
+
+    #[test]
+    fn credit_report_rejects_late_run_and_late_success_after_deadline() {
+        let mut reports = ReportState {
+            slots: std::array::from_fn(|_| String::new()),
+            credit_order: None,
+        };
+        assert_eq!(
+            credit_report_order(Some("generation=10&phase=0")),
+            Some((10, 0))
+        );
+        assert_eq!(credit_report_order(Some("generation=10&phase=3")), None);
+        assert!(reports.write(3, "starting".to_owned(), Some((10, 0))));
+        assert!(reports.write(3, "deadline".to_owned(), Some((10, 2))));
+        assert!(!reports.write(3, "late success".to_owned(), Some((10, 1))));
+        assert_eq!(reports.slots[3], "deadline");
+        assert!(reports.write(3, "new run".to_owned(), Some((11, 0))));
+        assert!(!reports.write(3, "late old run".to_owned(), Some((10, 2))));
+        assert_eq!(reports.slots[3], "new run");
+    }
     #[tokio::test]
     async fn rejected_unary_preserves_terminal_metadata() {
         let service = FixtureService {

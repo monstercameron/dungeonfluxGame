@@ -769,7 +769,21 @@ async fn observe_connection_credit(
     Ok(credit_result.to_owned())
 }
 
-async fn run_connection_credit(document: &Document) -> Result<(), String> {
+async fn save_credit_report(generation: u64, phase: u8, report: &str) -> Result<(), String> {
+    save_report(
+        &format!("connection-credit?generation={generation}&phase={phase}"),
+        report,
+    )
+    .await
+}
+
+async fn run_connection_credit(document: &Document, generation: u64) -> Result<(), String> {
+    save_credit_report(
+        generation,
+        0,
+        "RUNNING · connection-credit observation admitted",
+    )
+    .await?;
     display_connection_credit(document, "RUNNING · opening four pressure:slow streams");
     let (connection, channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
         .await
@@ -797,11 +811,11 @@ async fn run_connection_credit(document: &Document) -> Result<(), String> {
         .user_agent()
         .map_err(|_| "user agent unavailable")?;
     let report = format!(
-        "{status}\n{observations}Callback cleanup observed: {cleaned}\nPost-close snapshot: {closed:?}\nBrowser: {browser}\nBuild: {}\nScope: connection wire DATA credit is not stream credit or memory allocation. WASM buffer length is the whole allocated linear memory, not live heap or browser-engine storage. Full G02/D03, total 8 MiB, pre-callback allocation, 128-frame/256 KiB control queue and fairness, physical phones, audio, gameplay and production remain pending.\n",
+        "{status}\n{observations}Callback cleanup observed: {cleaned}\nPost-close snapshot: {closed:?}\nBrowser: {browser}\nBuild: {}\nReport generation: {generation}\nScope: connection wire DATA credit is not stream credit or memory allocation. WASM buffer length is the whole allocated linear memory, not live heap or browser-engine storage. Full G02/D03, total 8 MiB, pre-callback allocation, 128-frame/256 KiB control queue and fairness, physical phones, audio, gameplay and production remain pending.\n",
         crate::BUILD_ID,
     );
     display_connection_credit(document, &report);
-    save_report("connection-credit", &report).await
+    save_credit_report(generation, 1, &report).await
 }
 
 pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(), JsValue> {
@@ -815,6 +829,7 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
     let capacity_active = active.clone();
     let credit_document = document.clone();
     let credit_active = active.clone();
+    let credit_generation = Rc::new(Cell::new(0u64));
     let document = document.clone();
     let callback_button = button.clone();
     let callback = Closure::wrap(Box::new(move || {
@@ -916,13 +931,21 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
         if credit_active.replace(true) {
             return;
         }
+        let generation =
+            (js_sys::Date::now() as u64).max(credit_generation.get().saturating_add(1));
+        if generation <= credit_generation.get() {
+            display_connection_credit(&credit_document, "FAIL · report generation exhausted");
+            credit_active.set(false);
+            return;
+        }
+        credit_generation.set(generation);
         callback_button.set_disabled(true);
         let document = credit_document.clone();
         let button = callback_button.clone();
         let active = credit_active.clone();
         wasm_bindgen_futures::spawn_local(async move {
             let outcome = select(
-                run_connection_credit(&document).boxed_local(),
+                run_connection_credit(&document, generation).boxed_local(),
                 TimeoutFuture::new(29000).boxed_local(),
             )
             .await;
@@ -943,7 +966,7 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
                 );
                 display_connection_credit(&document, &report);
                 let _ = select(
-                    save_report("connection-credit", &report).boxed_local(),
+                    save_credit_report(generation, 2, &report).boxed_local(),
                     TimeoutFuture::new(1000).boxed_local(),
                 )
                 .await;
