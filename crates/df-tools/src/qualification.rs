@@ -5,7 +5,7 @@ use df_rpc_bridge::{BrowserConnection, ConnectionSnapshot, RPC_MESSAGE_BYTES};
 use futures::{
     FutureExt,
     channel::oneshot,
-    future::{Either, select},
+    future::{Either, join_all, select},
 };
 use gloo_timers::future::TimeoutFuture;
 use std::{cell::Cell, rc::Rc};
@@ -81,6 +81,43 @@ fn display_callback_capacity(document: &Document, text: &str) {
     if let Some(element) = document.get_element_by_id("callback-capacity-report") {
         element.set_text_content(Some(text));
     }
+}
+fn display_connection_credit(document: &Document, text: &str) {
+    if let Some(element) = document.get_element_by_id("connection-credit-report") {
+        element.set_text_content(Some(text));
+    }
+}
+
+struct CreditPoint {
+    elapsed_ms: f64,
+    snapshot: ConnectionSnapshot,
+    wasm_buffer_bytes: usize,
+}
+fn credit_point(connection: &BrowserConnection, started: Instant) -> Result<CreditPoint, String> {
+    Ok(CreditPoint {
+        elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
+        snapshot: connection.snapshot().map_err(|error| error.to_string())?,
+        wasm_buffer_bytes: memory_bytes()?,
+    })
+}
+fn credit_line(label: &str, point: &CreditPoint) -> String {
+    let credit = &point.snapshot.receive_credit;
+    format!(
+        "{label} at {:.1}ms: connection available={} DATA={} WINDOW_UPDATE={} peak_grant={} peak_held={}; callback bytes={}/{} items={}/{} retained Vec capacity={}/{}; WASM buffer={} bytes\n",
+        point.elapsed_ms,
+        credit.available,
+        credit.data_bytes,
+        credit.update_bytes,
+        credit.peak_grant,
+        credit.peak_held,
+        point.snapshot.callback_bytes.current,
+        point.snapshot.callback_bytes.peak,
+        point.snapshot.callback_items.current,
+        point.snapshot.callback_items.peak,
+        point.snapshot.browser_callback_vec_capacity.current,
+        point.snapshot.browser_callback_vec_capacity.peak,
+        point.wasm_buffer_bytes,
+    )
 }
 #[derive(Debug)]
 struct StreamObservation {
@@ -544,6 +581,243 @@ async fn run_callback_capacity(document: &Document) -> Result<(), String> {
     save_report("callback-capacity", &report).await
 }
 
+async fn consume_credit_stream(
+    index: usize,
+    mut stream: tonic::Streaming<Sample>,
+) -> Result<usize, String> {
+    let mut bytes = 0;
+    for sequence in 0..8 {
+        let message = stream
+            .message()
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| format!("credit stream {index} ended before eight replies"))?;
+        require(
+            message.sequence == sequence
+                && message.payload.len() == 49_152
+                && message.payload.iter().all(|byte| *byte == 0x5a),
+            "credit stream sequence or payload changed",
+        )?;
+        bytes += message.payload.len();
+    }
+    require(
+        stream
+            .message()
+            .await
+            .map_err(|error| error.to_string())?
+            .is_none(),
+        "credit stream returned an extra reply",
+    )?;
+    require(
+        stream
+            .trailers()
+            .await
+            .map_err(|error| error.to_string())?
+            .is_some_and(|trailers| {
+                trailers
+                    .get("fixture-terminal")
+                    .is_some_and(|value| value == "observed")
+            }),
+        "credit stream terminal trailers missing",
+    )?;
+    Ok(bytes)
+}
+
+async fn observe_connection_credit(
+    document: &Document,
+    connection: &BrowserConnection,
+    channel: df_rpc_bridge::BrowserChannel,
+    report: &mut String,
+) -> Result<String, String> {
+    let started = Instant::now();
+    let baseline = credit_point(connection, started)?;
+    report.push_str(&credit_line("Baseline", &baseline));
+    let opened = join_all((0..4).map(|_| {
+        let mut client =
+            FixtureClient::new(channel.clone()).max_decoding_message_size(RPC_MESSAGE_BYTES);
+        async move {
+            client
+                .server_stream(request(Sample {
+                    sequence: 8,
+                    payload: b"pressure:slow".to_vec(),
+                    ..sample(0)
+                })?)
+                .await
+                .map(|response| response.into_inner())
+                .map_err(|error| error.to_string())
+        }
+    }))
+    .await;
+    let mut streams = Vec::with_capacity(4);
+    for opened_stream in opened {
+        streams.push(opened_stream?);
+    }
+    // Retain all four response bodies without polling message() until sampling ends.
+    let mut held = Vec::with_capacity(4);
+    held.push(credit_point(connection, started)?);
+    for _ in 0..3 {
+        TimeoutFuture::new(250).await;
+        held.push(credit_point(connection, started)?);
+    }
+    for (index, point) in held.iter().enumerate() {
+        report.push_str(&credit_line(&format!("Held sample {index}"), point));
+        require(
+            point.snapshot.envelope_within_limit()
+                && point.snapshot.callback_bytes.current <= 1024 * 1024
+                && point.snapshot.callback_items.current <= 256
+                && !point.snapshot.rejected
+                && !point.snapshot.driver_failed,
+            "held connection exceeded existing resource/protocol bounds",
+        )?;
+    }
+    display_connection_credit(document, report);
+    let last = held.last().ok_or("held credit sample missing")?;
+    let previous = &held[held.len() - 2];
+    let before_previous = &held[held.len() - 3];
+    let stalled_data = last.snapshot.receive_credit.data_bytes
+        == previous.snapshot.receive_credit.data_bytes
+        && previous.snapshot.receive_credit.data_bytes
+            == before_previous.snapshot.receive_credit.data_bytes
+        && last.snapshot.receive_credit.data_bytes > baseline.snapshot.receive_credit.data_bytes;
+    let stalled_updates = last.snapshot.receive_credit.update_bytes
+        == previous.snapshot.receive_credit.update_bytes
+        && previous.snapshot.receive_credit.update_bytes
+            == before_previous.snapshot.receive_credit.update_bytes;
+    let observed_exhaustion = stalled_data
+        && stalled_updates
+        && last.snapshot.receive_credit.available == 0
+        && previous.snapshot.receive_credit.available == 0;
+    let credit_result = if observed_exhaustion {
+        "PASS · directly observed zero connection DATA credit and no DATA/WINDOW_UPDATE progress across two 250ms held intervals"
+    } else {
+        "INCONCLUSIVE · held snapshots do not establish connection-credit exhaustion; remaining credit, stream-level credit, scheduling, and pre-callback allocation cannot be attributed from this connection snapshot"
+    };
+    report.push_str(credit_result);
+    report.push('\n');
+
+    let mut unary_client = FixtureClient::new(channel).max_decoding_message_size(RPC_MESSAGE_BYTES);
+    let unary_started = Instant::now();
+    let unary = async move {
+        let response = unary_client
+            .unary(request(sample(77))?)
+            .await
+            .map_err(|error| error.to_string())?;
+        require(
+            response
+                .metadata()
+                .get("fixture-server")
+                .is_some_and(|value| value == "native-tonic"),
+            "same-connection unary metadata missing",
+        )?;
+        let output = response.into_inner();
+        require(
+            output.sequence == 77 && output.payload == b"synthetic protobuf",
+            "same-connection unary response changed",
+        )?;
+        Ok::<f64, String>(unary_started.elapsed().as_secs_f64() * 1000.0)
+    };
+    let (early_unary, pending_unary) =
+        match select(unary.boxed_local(), TimeoutFuture::new(200).boxed_local()).await {
+            Either::Left((result, _)) => (Some(result), None),
+            Either::Right(((), pending)) => (None, Some(pending)),
+        };
+    report.push_str(if early_unary.is_some() {
+        "Unary completed while stream bodies remained unpolled.\n"
+    } else {
+        "Unary still pending after 200ms with stream bodies unpolled; resuming streams.\n"
+    });
+    display_connection_credit(document, report);
+    let resumed = join_all(
+        streams
+            .into_iter()
+            .enumerate()
+            .map(|(index, stream)| consume_credit_stream(index, stream)),
+    );
+    let unary_done = async move {
+        match pending_unary {
+            Some(pending) => pending.await,
+            None => early_unary.ok_or("unary result missing".to_owned())?,
+        }
+    };
+    let (stream_results, unary_result) = futures::join!(resumed, unary_done);
+    let mut payload_bytes = 0;
+    for stream_result in stream_results {
+        payload_bytes += stream_result?;
+    }
+    require(
+        payload_bytes == 32 * 49_152,
+        "credit stream byte count changed",
+    )?;
+    let unary_ms = unary_result?;
+    let resumed_point = credit_point(connection, started)?;
+    report.push_str(&credit_line("Resumed", &resumed_point));
+    require(
+        resumed_point.snapshot.envelope_within_limit()
+            && !resumed_point.snapshot.rejected
+            && !resumed_point.snapshot.driver_failed,
+        "resumed connection exceeded existing resource/protocol bounds",
+    )?;
+    require(
+        resumed_point.snapshot.receive_credit.data_bytes > last.snapshot.receive_credit.data_bytes
+            && resumed_point.snapshot.receive_credit.update_bytes
+                > last.snapshot.receive_credit.update_bytes,
+        "resumption lacked directly observed connection DATA and WINDOW_UPDATE progress",
+    )?;
+    report.push_str(&format!(
+        "PASS · four streams, 32 exact replies, {payload_bytes} payload bytes, all terminal trailers; same-connection unary metadata/response in {unary_ms:.1}ms; directly observed resumed DATA/WINDOW_UPDATE progress.\n"
+    ));
+    Ok(credit_result.to_owned())
+}
+
+async fn save_credit_report(generation: u64, phase: u8, report: &str) -> Result<(), String> {
+    save_report(
+        &format!("connection-credit?generation={generation}&phase={phase}"),
+        report,
+    )
+    .await
+}
+
+async fn run_connection_credit(document: &Document, generation: u64) -> Result<(), String> {
+    save_credit_report(
+        generation,
+        0,
+        "RUNNING · connection-credit observation admitted",
+    )
+    .await?;
+    display_connection_credit(document, "RUNNING · opening four pressure:slow streams");
+    let (connection, channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut observations = String::new();
+    let outcome =
+        observe_connection_credit(document, &connection, channel, &mut observations).await;
+    connection.close();
+    TimeoutFuture::new(20).await;
+    let closed = connection.snapshot().map_err(|error| error.to_string());
+    let cleaned = closed.as_ref().is_ok_and(|snapshot| {
+        snapshot.closed
+            && snapshot.callback_bytes.current == 0
+            && snapshot.callback_items.current == 0
+            && snapshot.browser_callback_vec_capacity.current == 0
+    });
+    let status = match outcome {
+        Ok(credit_result) if cleaned => credit_result,
+        Ok(_) => "FAIL · connection/callback owner cleanup was not observed".to_owned(),
+        Err(error) => format!("FAIL · {error}"),
+    };
+    let browser = web_sys::window()
+        .ok_or("window unavailable")?
+        .navigator()
+        .user_agent()
+        .map_err(|_| "user agent unavailable")?;
+    let report = format!(
+        "{status}\n{observations}Callback cleanup observed: {cleaned}\nPost-close snapshot: {closed:?}\nBrowser: {browser}\nBuild: {}\nReport generation: {generation}\nScope: connection wire DATA credit is not stream credit or memory allocation. WASM buffer length is the whole allocated linear memory, not live heap or browser-engine storage. Hostile over-credit bursts, full G02/D03, total 8 MiB, pre-callback allocation, 128-frame/256 KiB control queue and fairness, physical phones, audio, gameplay and production remain pending.\n",
+        crate::BUILD_ID,
+    );
+    display_connection_credit(document, &report);
+    save_credit_report(generation, 1, &report).await
+}
+
 pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(), JsValue> {
     let button = document
         .get_element_by_id("qualify")
@@ -553,6 +827,9 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
     button.set_text_content(Some("Run desktop pressure qualification"));
     let capacity_document = document.clone();
     let capacity_active = active.clone();
+    let credit_document = document.clone();
+    let credit_active = active.clone();
+    let credit_generation = Rc::new(Cell::new(0u64));
     let document = document.clone();
     let callback_button = button.clone();
     let callback = Closure::wrap(Box::new(move || {
@@ -643,6 +920,64 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
     capacity_button.set_onclick(Some(capacity_callback.as_ref().unchecked_ref()));
     // Owned by this document/WASM instance for its page lifetime.
     capacity_callback.forget();
+    let credit_button = credit_document
+        .get_element_by_id("connection-credit")
+        .ok_or_else(|| JsValue::from_str("connection credit button unavailable"))?
+        .dyn_into::<HtmlButtonElement>()?;
+    credit_button.set_disabled(false);
+    credit_button.set_text_content(Some("Run connection-credit stall observation"));
+    let callback_button = credit_button.clone();
+    let credit_callback = Closure::wrap(Box::new(move || {
+        if credit_active.replace(true) {
+            return;
+        }
+        let generation =
+            (js_sys::Date::now() as u64).max(credit_generation.get().saturating_add(1));
+        if generation <= credit_generation.get() {
+            display_connection_credit(&credit_document, "FAIL · report generation exhausted");
+            credit_active.set(false);
+            return;
+        }
+        credit_generation.set(generation);
+        callback_button.set_disabled(true);
+        let document = credit_document.clone();
+        let button = callback_button.clone();
+        let active = credit_active.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let outcome = select(
+                run_connection_credit(&document, generation).boxed_local(),
+                TimeoutFuture::new(29000).boxed_local(),
+            )
+            .await;
+            let result = match outcome {
+                Either::Left((result, _)) => result,
+                Either::Right(((), owned)) => {
+                    drop(owned);
+                    Err(
+                        "connection-credit observation reached its owned 30-second deadline"
+                            .to_owned(),
+                    )
+                }
+            };
+            if let Err(error) = result {
+                let report = format!(
+                    "FAIL · {error}\nBuild: {}\nConnection-credit attribution remains unverified. Hostile over-credit bursts, full G02/D03, total 8 MiB, pre-callback allocation, 128-frame/256 KiB control queue and fairness, physical phones, audio, gameplay and production remain pending. The run owner and its streams were dropped.\n",
+                    crate::BUILD_ID,
+                );
+                display_connection_credit(&document, &report);
+                let _ = select(
+                    save_credit_report(generation, 2, &report).boxed_local(),
+                    TimeoutFuture::new(1000).boxed_local(),
+                )
+                .await;
+            }
+            button.set_disabled(false);
+            active.set(false);
+        });
+    }) as Box<dyn FnMut()>);
+    credit_button.set_onclick(Some(credit_callback.as_ref().unchecked_ref()));
+    // Owned by this document/WASM instance for its page lifetime.
+    credit_callback.forget();
     Ok(())
 }
 

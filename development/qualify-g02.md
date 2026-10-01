@@ -33,12 +33,27 @@ sequences and terminal trailers, then closes and checks callback cleanup. It als
 uses the existing 262,145-byte malicious WebSocket route to observe rejection
 before `Uint8Array::to_vec` and zero copied callback Vec capacity for that rejected
 message. Its report is `/fixture-report/callback-capacity`; it does not run on load.
+The separate **Run connection-credit stall observation** also uses that owner and
+an owned 30-second deadline. On one physical connection it opens four existing
+`pressure:slow` streams requesting eight 49,152-byte replies each, then holds all
+four response bodies without message polling. A baseline and four bounded timed
+snapshots show connection DATA credit, WINDOW_UPDATE totals, callback bytes/items,
+retained callback Vec capacity and whole allocated WASM buffer length. Zero
+connection credit and a stable no-DATA/no-update interval are asserted only when
+the direct values establish them; otherwise the stall attribution is
+**INCONCLUSIVE**, even if every reply later succeeds. A small unary is attempted
+while the bodies remain unpolled, and the report says whether it completed then
+or after resumption. Resumption validates all 32 exact replies and terminal
+trailers, the unary response and metadata, and observed connection DATA/update
+progress. Close checks callback owner cleanup. The bounded report is
+`/fixture-report/connection-credit`; the button causes no load-time traffic.
 The server accepts only its own configured loopback Origin, at most four admitted
 connections and eight concurrent streams per connection. No paid/provider call occurs.
 
 Full Rust-produced reports are retained by the preview at
 `/fixture-report/semantics`, `/fixture-report/qualification` and
-`/fixture-report/callback-capacity`. Three bounded64KiB slots retain only synthetic
+`/fixture-report/callback-capacity` and `/fixture-report/connection-credit`. Four
+bounded64KiB slots retain only synthetic
 diagnostics; writes require the preview Origin and a
 bounded POST body. `/fixture-resources` shows current/peak connection snapshots,
 retaining at most20 owners (active plus closed), pruning only fully released old
@@ -123,6 +138,12 @@ payload plan, **not proof that total per-connection memory fits8MiB**. Current/p
 counters and whole allocated WASM linear-buffer length remain distinct observations.
 An oversized engine ArrayBuffer is observed only after allocation; rejection before
 Rust copying does not bound that engine allocation.
+The connection-credit stall snapshot measures wire credit at the connection
+observer, not stream credit, live heap or browser engine/pre-callback storage.
+Even a zero-credit held phase does not prove hostile over-credit burst handling,
+the total8MiB allocation, reserved 128-frame/256KiB control queue or fair
+scheduling. Those and D03/full G02,
+physical phones, audio, production and gameplay stay pending.
 
 Shared OTEL counts now use actual application payload bytes at service scopes and
 wire bytes at bridge scopes. Measurement failures and abandoned spans mark
