@@ -4,14 +4,14 @@ use std::{collections::VecDeque, io, sync::Mutex, time::Duration};
 use web_time::Instant;
 
 #[cfg(any(test, target_arch = "wasm32"))]
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::sync::{Arc, MutexGuard};
 
 /// Credit already consumed by browser response bodies on one physical connection.
 /// The coordinator owns no DATA and never changes the advertised receive windows.
 #[cfg(any(test, target_arch = "wasm32"))]
 #[derive(Clone)]
 pub(crate) struct ReceiveCredit {
-    slots: Rc<RefCell<Vec<CreditSlot>>>,
+    slots: Arc<Mutex<Vec<CreditSlot>>>,
     metrics: Arc<ConnectionMetrics>,
 }
 
@@ -26,16 +26,21 @@ struct CreditSlot {
 impl ReceiveCredit {
     pub(crate) fn new(metrics: Arc<ConnectionMetrics>) -> Self {
         Self {
-            slots: Rc::new(RefCell::new(Vec::with_capacity(
-                CONCURRENT_STREAMS as usize,
-            ))),
+            slots: Arc::new(Mutex::new(Vec::with_capacity(CONCURRENT_STREAMS as usize))),
             metrics,
         }
     }
 
+    fn slots(&self) -> Result<MutexGuard<'_, Vec<CreditSlot>>, h2::Error> {
+        self.slots.lock().map_err(|_| {
+            self.metrics.reject();
+            h2::Reason::INTERNAL_ERROR.into()
+        })
+    }
+
     pub(crate) fn register(&self, flow: h2::FlowControl) -> Result<h2::StreamId, h2::Error> {
         let id = flow.stream_id();
-        let mut slots = self.slots.borrow_mut();
+        let mut slots = self.slots()?;
         if slots.len() == CONCURRENT_STREAMS as usize || slots.iter().any(|slot| slot.id == id) {
             drop(slots);
             self.metrics.reject();
@@ -55,7 +60,7 @@ impl ReceiveCredit {
             return Ok(());
         }
         let selection = {
-            let mut slots = self.slots.borrow_mut();
+            let mut slots = self.slots()?;
             let Some(slot) = slots.iter_mut().find(|slot| slot.id == id) else {
                 self.metrics.reject();
                 return Err(h2::Reason::INTERNAL_ERROR.into());
@@ -96,11 +101,19 @@ impl ReceiveCredit {
     }
 
     fn release(&self, ids: &[h2::StreamId], remove: bool) -> Result<(), h2::Error> {
-        // Take both accounting and handles out of RefCell before h2 can wake its driver.
+        // Take both accounting and handles out of the mutex before h2 can wake its driver.
         let mut batch = Vec::with_capacity(ids.len());
         let mut missing = false;
+        let mut poisoned = false;
         {
-            let mut slots = self.slots.borrow_mut();
+            let mut slots = match self.slots.lock() {
+                Ok(slots) => slots,
+                Err(error) => {
+                    poisoned = true;
+                    self.metrics.reject();
+                    error.into_inner()
+                }
+            };
             for id in ids {
                 if let Some(index) = slots.iter().position(|slot| slot.id == *id) {
                     if remove {
@@ -121,7 +134,8 @@ impl ReceiveCredit {
                 }
             }
         }
-        let mut first_error = missing.then(|| h2::Error::from(h2::Reason::INTERNAL_ERROR));
+        let mut first_error =
+            (missing || poisoned).then(|| h2::Error::from(h2::Reason::INTERNAL_ERROR));
         if missing {
             self.metrics.reject();
         }
@@ -132,7 +146,16 @@ impl ReceiveCredit {
             if let Err(error) = flow.release_capacity(bytes) {
                 self.metrics.reject();
                 if !remove {
-                    let mut slots = self.slots.borrow_mut();
+                    let mut slots = match self.slots.lock() {
+                        Ok(slots) => slots,
+                        Err(error) => {
+                            self.metrics.reject();
+                            if first_error.is_none() {
+                                first_error = Some(h2::Reason::INTERNAL_ERROR.into());
+                            }
+                            error.into_inner()
+                        }
+                    };
                     if let Some(slot) = slots.iter_mut().find(|slot| slot.id == id) {
                         if let Some(pending) = slot.pending.checked_add(bytes) {
                             slot.pending = pending;
@@ -149,9 +172,9 @@ impl ReceiveCredit {
         first_error.map_or(Ok(()), Err)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, not(target_arch = "wasm32")))]
     fn active(&self) -> usize {
-        self.slots.borrow().len()
+        self.slots.lock().unwrap().len()
     }
 }
 
@@ -620,7 +643,9 @@ impl BufferSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(target_arch = "wasm32"))]
     use bytes::Bytes;
+    #[cfg(not(target_arch = "wasm32"))]
     use std::task::Poll;
     fn frame(kind: u8, flags: u8, stream: u32) -> [u8; 9] {
         let id = stream.to_be_bytes();
@@ -748,12 +773,14 @@ mod tests {
         assert_eq!(metrics.snapshot().unwrap().received_control_frames, 0);
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn real_h2_pending_flush_recovers_partial_window_without_end_stream() {
         pending_progress_for_window(65_535).await;
         pending_progress_for_window(MESSAGE_BYTES).await;
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     async fn pending_progress_for_window(window: usize) {
         use tokio::{io::duplex, sync::oneshot, time::timeout};
 
@@ -866,6 +893,7 @@ mod tests {
         server.abort();
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn real_h2_aggregate_credit_and_slot_reuse_are_bounded() {
         use tokio::{io::duplex, time::timeout};
