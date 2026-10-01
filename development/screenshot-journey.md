@@ -67,7 +67,11 @@ older pending entry exceeds the bound, preserve its original bytes and derive th
 same logical JOURNEY ID into a deterministic `<record-id>.bounded.json` retry file;
 accepted-size legacy payloads continue through their original path unchanged. An
 existing devlog ID with different accepted content remains a conflict and is never
-overwritten.
+overwritten. Captured records are admitted only when both complete source maps have
+valid per-file SHA-256 values, matching aggregate digests and a consistent
+changed-during-capture flag. Malformed records or legacy entry JSON remain pending
+without replacing their original bytes; unavailable and disk-cap outcomes may truthfully
+omit capture-only source and image fields.
 
 The recorder uses its own `screenshot-recorder:<session>` identity and the
 coordinator-issued task context. Its own SQL attempt is null; the observed worker

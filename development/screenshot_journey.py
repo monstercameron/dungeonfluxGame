@@ -49,10 +49,51 @@ def admitted_url(url):
 
 def journal_size():return sum(p.stat().st_size for p in JOURNEY.rglob('*') if p.is_file() and not p.is_symlink())
 
+def valid_source_identity(source):
+ if not isinstance(source,dict) or not isinstance(source.get('files'),dict):return False
+ files=source['files']
+ for path,value in files.items():
+  if not isinstance(path,str) or not path or Path(path).is_absolute() or '..' in Path(path).parts:return False
+  if not isinstance(value,str) or len(value)!=64 or not all(char in '0123456789abcdef' for char in value):return False
+ expected=hashlib.sha256(json.dumps(files,sort_keys=True).encode()).hexdigest()
+ return source.get('sha256')==expected
+
+def valid_record(record):
+ if not isinstance(record,dict):return False
+ rid=record.get('id');outcome=record.get('outcome')
+ if not isinstance(rid,str) or not rid or rid in ('.','..') or Path(rid).name!=rid or '/' in rid or '\\' in rid:return False
+ if outcome not in ('captured','unavailable','disk_cap_stopped'):return False
+ before=record.get('source_before');after=record.get('source_after')
+ if outcome=='captured':
+  if not valid_source_identity(before) or not valid_source_identity(after):return False
+  if not isinstance(record.get('source_changed_during_capture'),bool) or record['source_changed_during_capture']!=(before!=after):return False
+  if not isinstance(record.get('image'),str) or not record['image'] or not isinstance(record.get('image_sha256'),str) or len(record['image_sha256'])!=64:return False
+  if not all(char in '0123456789abcdef' for char in record['image_sha256']) or not isinstance(record.get('browser'),dict):return False
+ else:
+  if before is not None and not valid_source_identity(before):return False
+  if after is not None and not valid_source_identity(after):return False
+  if 'source_changed_during_capture' in record and not isinstance(record['source_changed_during_capture'],bool):return False
+  if before is not None and after is not None and 'source_changed_during_capture' in record:
+   if record['source_changed_during_capture']!=(before!=after):return False
+ try:json.dumps(record,sort_keys=True)
+ except (TypeError,ValueError):return False
+ return True
+
+def valid_entry(entry,expected_id):
+ if not isinstance(entry,dict):return False
+ allowed={'id','kind','summary','details','action','outcome','suggestion','related_entry_id','evidence_ref'}
+ if set(entry)-allowed:return False
+ for field in ('id','kind','summary','details','action','outcome'):
+  if not isinstance(entry.get(field),str) or not entry[field]:return False
+ if entry['id']!=expected_id:return False
+ for field in ('suggestion','related_entry_id','evidence_ref'):
+  if field in entry and entry[field] is not None and not isinstance(entry[field],str):return False
+ return True
+
 def devlog_entry(record):
  source_ref=str((JOURNEY/'records'/f"{record['id']}.json").relative_to(PROJECT))
  def source_summary(source):
-  if not isinstance(source,dict) or not isinstance(source.get('files'),dict):
+  if source is None:
    return None
   return {'sha256':source.get('sha256'),'file_count':len(source['files'])}
  details={
@@ -78,27 +119,37 @@ def devlog_entry(record):
   'kind':'discovery' if record['outcome']=='captured' else 'challenge',
   'summary':'DungeonFlux visual journey '+record['outcome'],
   'details':json.dumps(details,sort_keys=True,separators=(',',':')),
-  'action':'Capture only admitted public project preview in isolated headless browser; preserve actual evidence without queue mutation.',
+ 'action':'Capture only admitted public project preview in isolated headless browser; preserve actual evidence without queue mutation.',
   'outcome':record['outcome'],'evidence_ref':source_ref}
 
 def devlog(record,context):
- entrypath=JOURNEY/'entries'/f"{record['id']}.json"
- entry=devlog_entry(record)
- if entrypath.exists():
-  original=load(entrypath)
-  if len(original.get('details',''))>16000:
-   entrypath=JOURNEY/'entries'/f"{record['id']}.bounded.json"
-   if entrypath.exists():
-    if load(entrypath)!=entry:return 'pending_ingestion'
-   else:write(entrypath,entry)
-  elif original!=entry:
-   # Accepted-size legacy entry bytes are immutable and remain the retry payload.
-   entry=original
- else:
-  write(entrypath,entry)
- if len(entry.get('details',''))>16000:return 'pending_ingestion'
- result=subprocess.run(['python3',str(PROJECT/'development/devlog.py'),'--context',str(context),'--entry',str(entrypath)],capture_output=True,text=True,timeout=15)
- return 'appended_or_existing' if result.returncode==0 else 'pending_ingestion'
+ try:
+  if not valid_record(record):return 'pending_ingestion'
+  entry=devlog_entry(record)
+  if len(entry['details'])>16000:return 'pending_ingestion'
+  entrypath=JOURNEY/'entries'/f"{record['id']}.json"
+  if entrypath.exists():
+   try:original=load(entrypath)
+   except (OSError,json.JSONDecodeError):return 'pending_ingestion'
+   if not valid_entry(original,entry['id']):return 'pending_ingestion'
+   if len(original['details'])>16000:
+    original_fields={key:value for key,value in original.items() if key!='details'}
+    compact_fields={key:value for key,value in entry.items() if key!='details'}
+    if original_fields!=compact_fields:return 'pending_ingestion'
+    entrypath=JOURNEY/'entries'/f"{record['id']}.bounded.json"
+    if entrypath.exists():
+     try:existing=load(entrypath)
+     except (OSError,json.JSONDecodeError):return 'pending_ingestion'
+     if not valid_entry(existing,entry['id']) or existing!=entry:return 'pending_ingestion'
+    else:write(entrypath,entry)
+   elif original!=entry:
+    # Accepted-size legacy entry bytes are immutable and remain the retry payload.
+    entry=original
+  else:write(entrypath,entry)
+  if not valid_entry(entry,entry['id']) or len(entry['details'])>16000:return 'pending_ingestion'
+  result=subprocess.run(['python3',str(PROJECT/'development/devlog.py'),'--context',str(context),'--entry',str(entrypath)],capture_output=True,text=True,timeout=15)
+  return 'appended_or_existing' if result.returncode==0 else 'pending_ingestion'
+ except (KeyError,TypeError,ValueError,OSError,json.JSONDecodeError):return 'pending_ingestion'
 
 def make_index():
  import html
