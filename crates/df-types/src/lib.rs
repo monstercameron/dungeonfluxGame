@@ -7,11 +7,19 @@
 //! fn session_only(_: SessionId) {}
 //! session_only(MemberId::from_bytes(&[1; 16]).unwrap());
 //! ```
+//! Text constructors preserve the same kind boundary:
+//! ```compile_fail
+//! use df_types::{MemberId, SessionId};
+//! fn session_only(_: SessionId) {}
+//! session_only(MemberId::from_hex("01010101010101010101010101010101").unwrap());
+//! ```
 mod identity;
 mod provenance;
 mod revision;
 
-pub use identity::{ClientBindingId, IdentityError, MemberId, OperationId, RunId, SessionId};
+pub use identity::{
+    ClientBindingId, IdentityError, MemberId, OperationId, RunId, SessionId, TextIdentityError,
+};
 pub use provenance::{
     BuildIdentity, BuildIdentityError, BuildRevision, RevisionLabel, RevisionLabelError,
 };
