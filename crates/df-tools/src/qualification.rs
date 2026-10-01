@@ -77,6 +77,11 @@ fn display(document: &Document, text: &str) {
         element.set_text_content(Some(text));
     }
 }
+fn display_callback_capacity(document: &Document, text: &str) {
+    if let Some(element) = document.get_element_by_id("callback-capacity-report") {
+        element.set_text_content(Some(text));
+    }
+}
 #[derive(Debug)]
 struct StreamObservation {
     payload_bytes: usize,
@@ -214,7 +219,9 @@ async fn probe(
     if kind == "websocket" {
         require(
             snapshot.rejected
-                && snapshot.websocket_receive.peak == df_rpc_bridge::MESSAGE_BYTES + 1,
+                && snapshot.websocket_receive.peak == df_rpc_bridge::MESSAGE_BYTES + 1
+                && snapshot.browser_callback_vec_capacity.total == 0
+                && snapshot.callback_bytes.total == 0,
             "oversized engine receipt was not actually rejected before Rust copying",
         )?;
     }
@@ -240,7 +247,10 @@ async fn probe(
     TimeoutFuture::new(20).await;
     let closed = connection.snapshot().map_err(|error| error.to_string())?;
     require(
-        closed.closed && closed.callback_bytes.current == 0 && closed.callback_items.current == 0,
+        closed.closed
+            && closed.callback_bytes.current == 0
+            && closed.callback_items.current == 0
+            && closed.browser_callback_vec_capacity.current == 0,
         "malicious probe left browser callback ownership after close",
     )?;
     Ok((snapshot, closed, status, elapsed_ms))
@@ -350,7 +360,10 @@ async fn run(document: &Document) -> Result<(), String> {
     TimeoutFuture::new(20).await;
     let closed = connection.snapshot().map_err(|error| error.to_string())?;
     require(
-        closed.closed && closed.callback_bytes.current == 0 && closed.callback_items.current == 0,
+        closed.closed
+            && closed.callback_bytes.current == 0
+            && closed.callback_items.current == 0
+            && closed.browser_callback_vec_capacity.current == 0,
         "browser callbacks/queues remained after owner cancellation",
     )?;
     let mut text = format!(
@@ -402,6 +415,135 @@ async fn run(document: &Document) -> Result<(), String> {
     save_report("qualification", &text).await?;
     Ok(())
 }
+async fn run_callback_capacity(document: &Document) -> Result<(), String> {
+    display_callback_capacity(
+        document,
+        "RUNNING · eight slow replies and one same-connection unary",
+    );
+    let memory_before = memory_bytes()?;
+    let (connection, channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
+        .await
+        .map_err(|error| error.to_string())?;
+    let initial = connection.snapshot().map_err(|error| error.to_string())?;
+    let mut slow_client =
+        FixtureClient::new(channel.clone()).max_decoding_message_size(RPC_MESSAGE_BYTES);
+    let mut unary_client = FixtureClient::new(channel).max_decoding_message_size(RPC_MESSAGE_BYTES);
+    let slow = async {
+        let mut stream = slow_client
+            .server_stream(request(Sample {
+                sequence: 8,
+                payload: b"pressure:slow".to_vec(),
+                ..sample(0)
+            })?)
+            .await
+            .map_err(|error| error.to_string())?
+            .into_inner();
+        let mut payload_bytes = 0;
+        for sequence in 0..8 {
+            let message = stream
+                .message()
+                .await
+                .map_err(|error| error.to_string())?
+                .ok_or("slow stream ended before eight replies")?;
+            require(
+                message.sequence == sequence
+                    && message.payload.len() == 49_152
+                    && message.payload.iter().all(|byte| *byte == 0x5a),
+                "slow stream response changed",
+            )?;
+            payload_bytes += message.payload.len();
+            let progress = connection.snapshot().map_err(|error| error.to_string())?;
+            display_callback_capacity(
+                document,
+                &format!(
+                    "RUNNING · slow replies {}/8; payload {} bytes; retained callback Vec capacity {} bytes; peak {} bytes",
+                    sequence + 1,
+                    payload_bytes,
+                    progress.browser_callback_vec_capacity.current,
+                    progress.browser_callback_vec_capacity.peak,
+                ),
+            );
+            TimeoutFuture::new(20).await;
+        }
+        require(
+            stream
+                .message()
+                .await
+                .map_err(|error| error.to_string())?
+                .is_none(),
+            "slow stream returned an extra reply",
+        )?;
+        require(
+            stream
+                .trailers()
+                .await
+                .map_err(|error| error.to_string())?
+                .is_some_and(|trailers| {
+                    trailers
+                        .get("fixture-terminal")
+                        .is_some_and(|value| value == "observed")
+                }),
+            "slow stream terminal trailers missing",
+        )?;
+        Ok::<usize, String>(payload_bytes)
+    };
+    let unary = async {
+        TimeoutFuture::new(25).await;
+        let response = unary_client
+            .unary(request(sample(77))?)
+            .await
+            .map_err(|error| error.to_string())?;
+        require(
+            response
+                .metadata()
+                .get("fixture-server")
+                .is_some_and(|value| value == "native-tonic"),
+            "same-connection unary metadata missing",
+        )?;
+        let output = response.into_inner();
+        require(
+            output.sequence == 77 && output.payload == b"synthetic protobuf",
+            "same-connection unary response changed",
+        )
+    };
+    let (slow_result, unary_result) = futures::join!(slow, unary);
+    let payload_bytes = slow_result?;
+    unary_result?;
+    let peak = connection.snapshot().map_err(|error| error.to_string())?;
+    connection.close();
+    TimeoutFuture::new(20).await;
+    let closed = connection.snapshot().map_err(|error| error.to_string())?;
+    require(
+        closed.closed
+            && closed.callback_bytes.current == 0
+            && closed.callback_items.current == 0
+            && closed.browser_callback_vec_capacity.current == 0,
+        "slow observation retained callback owners after close",
+    )?;
+    let (oversized, oversized_closed, status, elapsed_ms) = probe("websocket").await?;
+    require(
+        oversized.websocket_receive.peak == 262_145
+            && oversized.browser_callback_vec_capacity.total == 0
+            && oversized_closed.browser_callback_vec_capacity.current == 0,
+        "oversized ArrayBuffer copied into a Rust callback Vec",
+    )?;
+    let user_agent = web_sys::window()
+        .ok_or("window unavailable")?
+        .navigator()
+        .user_agent()
+        .map_err(|_| "user agent unavailable")?;
+    let report = format!(
+        "PASS · eight exact 49,152-byte slow responses ({payload_bytes} bytes), generated terminal trailers and one same-connection unary response\nInitial snapshot: {initial:?}\nPeak/finished snapshot: {peak:?}\nClosed snapshot: {closed:?}\nPASS · oversized 262,145-byte engine ArrayBuffer rejected before Uint8Array::to_vec; copied callback Vec capacity total={} bytes, callback queue total={} bytes; RPC status {status:?} in {elapsed_ms:.3}ms\nOversized snapshot: {oversized:?}\nOversized closed snapshot: {oversized_closed:?}\nWASM linear memory buffer length before={} after={} bytes (whole instance, not live heap)\nBrowser: {user_agent}\nBuild: {}\nScope: callback Vec capacity is original Rust Vec::capacity at the copy boundary, retained through Bytes aliases. It excludes engine/pre-callback storage, allocator and Bytes metadata, h2 buffers and other allocations. Native capacity is unobserved/not applicable. D03/full G02, total 8MiB per-connection allocation, reserved control queue/fairness, physical phones and audio remain pending.\n",
+        oversized.browser_callback_vec_capacity.total,
+        oversized.callback_bytes.total,
+        memory_before,
+        memory_bytes()?,
+        crate::BUILD_ID,
+    );
+    display_callback_capacity(document, &report);
+    save_report("callback-capacity", &report).await
+}
+
 pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(), JsValue> {
     let button = document
         .get_element_by_id("qualify")
@@ -409,6 +551,8 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
         .dyn_into::<HtmlButtonElement>()?;
     button.set_disabled(false);
     button.set_text_content(Some("Run desktop pressure qualification"));
+    let capacity_document = document.clone();
+    let capacity_active = active.clone();
     let document = document.clone();
     let callback_button = button.clone();
     let callback = Closure::wrap(Box::new(move || {
@@ -453,6 +597,52 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
     button.set_onclick(Some(callback.as_ref().unchecked_ref()));
     // Owned by this document/WASM instance for its page lifetime.
     callback.forget();
+    let capacity_button = capacity_document
+        .get_element_by_id("callback-capacity")
+        .ok_or_else(|| JsValue::from_str("callback capacity button unavailable"))?
+        .dyn_into::<HtmlButtonElement>()?;
+    capacity_button.set_disabled(false);
+    capacity_button.set_text_content(Some("Run receive allocation observation"));
+    let callback_button = capacity_button.clone();
+    let capacity_callback = Closure::wrap(Box::new(move || {
+        if capacity_active.replace(true) {
+            return;
+        }
+        callback_button.set_disabled(true);
+        let document = capacity_document.clone();
+        let button = callback_button.clone();
+        let active = capacity_active.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let outcome = select(
+                run_callback_capacity(&document).boxed_local(),
+                TimeoutFuture::new(30000).boxed_local(),
+            )
+            .await;
+            let result = match outcome {
+                Either::Left((result, _)) => result,
+                Either::Right(((), owned)) => {
+                    drop(owned);
+                    Err(
+                        "callback capacity observation exceeded owned 30-second deadline"
+                            .to_owned(),
+                    )
+                }
+            };
+            if let Err(error) = result {
+                let report = format!(
+                    "FAIL · {error}\nBuild: {}\nCallback capacity and G02 qualification remain unverified.\n",
+                    crate::BUILD_ID
+                );
+                display_callback_capacity(&document, &report);
+                let _ = save_report("callback-capacity", &report).await;
+            }
+            button.set_disabled(false);
+            active.set(false);
+        });
+    }) as Box<dyn FnMut()>);
+    capacity_button.set_onclick(Some(capacity_callback.as_ref().unchecked_ref()));
+    // Owned by this document/WASM instance for its page lifetime.
+    capacity_callback.forget();
     Ok(())
 }
 

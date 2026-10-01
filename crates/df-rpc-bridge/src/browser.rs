@@ -51,6 +51,15 @@ impl ReceiveState {
             waker.wake();
         }
     }
+    fn clear_queued(&mut self, metrics: &ConnectionMetrics) {
+        for bytes in self.messages.drain(..) {
+            if metrics.queue(bytes.len(), false, true).is_err() {
+                metrics.reject();
+            }
+            drop(bytes);
+        }
+        self.bytes = 0;
+    }
 }
 struct WebSocketIo {
     socket: WebSocket,
@@ -107,23 +116,33 @@ impl WebSocketIo {
             {
                 message_metrics.reject();
                 state.failed = true;
-                for bytes in state.messages.drain(..) {
-                    let _ = message_metrics.queue(bytes.len(), false, true);
-                }
-                state.bytes = 0;
+                state.clear_queued(&message_metrics);
                 state.wake();
                 let _ = message_socket.close();
                 return;
             }
             let bytes = js_sys::Uint8Array::new(&array).to_vec();
-            if message_metrics.queue(bytes.len(), true, false).is_err() {
+            let copied = match message_metrics.browser_callback_from_vec(bytes) {
+                Ok(copied) => copied,
+                Err(_) => {
+                    message_metrics.reject();
+                    state.failed = true;
+                    state.clear_queued(&message_metrics);
+                    state.wake();
+                    let _ = message_socket.close();
+                    return;
+                }
+            };
+            if message_metrics.queue(copied.len(), true, false).is_err() {
+                message_metrics.reject();
                 state.failed = true;
+                state.clear_queued(&message_metrics);
                 state.wake();
                 let _ = message_socket.close();
                 return;
             }
-            state.bytes += bytes.len();
-            state.messages.push_back(bytes.into());
+            state.bytes += copied.len();
+            state.messages.push_back(copied);
             state.wake();
         }) as Box<dyn FnMut(MessageEvent)>);
         socket.set_onmessage(Some(message.as_ref().unchecked_ref()));
@@ -185,7 +204,7 @@ impl Drop for WebSocketIo {
         self.socket.set_onclose(None);
         self.socket.set_onerror(None);
         let _ = self.socket.close();
-        self.state.borrow_mut().messages.clear();
+        self.state.borrow_mut().clear_queued(&self.metrics);
         self.metrics.close();
     }
 }
@@ -216,6 +235,7 @@ impl AsyncRead for WebSocketIo {
             return Poll::Pending;
         }
         if let Some(mut bytes) = state.messages.pop_front() {
+            let original_length = bytes.len();
             let count = buffer
                 .remaining()
                 .min(bytes.len())
@@ -228,6 +248,10 @@ impl AsyncRead for WebSocketIo {
                 .and_then(|()| self.metrics.queue(count, false, bytes.is_empty()))
             {
                 state.failed = true;
+                if self.metrics.queue(original_length, false, true).is_err() {
+                    self.metrics.reject();
+                }
+                state.clear_queued(&self.metrics);
                 let _ = self.socket.close();
                 return Poll::Ready(Err(error));
             }
