@@ -998,8 +998,39 @@ mod tests {
         assert_eq!(reuse.flow_control().used_capacity(), used);
         assert!(credit.finish(id).is_err());
         assert_eq!(credit.active(), 0);
+        let (response, _) = request.send_request(http::Request::new(()), true).unwrap();
+        let mut poisoned_body = timeout(Duration::from_secs(3), response)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_body();
+        let id = credit
+            .register(poisoned_body.flow_control().clone())
+            .unwrap();
+        let data = timeout(Duration::from_secs(3), poisoned_body.data())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        credit.consumed(id, data.len()).unwrap();
+        let used = poisoned_body.flow_control().used_capacity();
+        let poisoned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = credit.slots.lock().unwrap();
+            panic!("intentional coordinator poison");
+        }));
+        assert!(poisoned.is_err());
+        // Even after a poisoned lock, terminal cleanup detaches the handle,
+        // releases consumed credit, and reports a typed failure.
+        assert!(credit.finish(id).is_err());
+        assert_eq!(
+            poisoned_body.flow_control().used_capacity(),
+            used - data.len()
+        );
+        assert_eq!(credit.slots.lock().err().unwrap().into_inner().len(), 0);
+        assert!(credit.metrics.snapshot().unwrap().rejected);
         drop(retained);
         drop(reuse);
+        drop(poisoned_body);
         driver.abort();
         server.abort();
     }
