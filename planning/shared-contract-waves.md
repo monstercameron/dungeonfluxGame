@@ -56,9 +56,19 @@ Native consumer/descriptor execution and WASM compilation are separate results. 
 
 ## B-C-df-types-I01 applicability and execution boundary
 
-The reviewed I01 prerequisite correction retains `B-C-df-types-D01` and requires
-both `CONTRACT-G03-001` and `B-G03-D01`. Its original acceptance and verification
-clauses in the backlog remain verbatim, including empty, whitespace, and oversized
+The reviewed I01 prerequisite correction retains `B-C-df-types-D01` and adds
+`B-G03-D01` as its only new graph prerequisite. The accepted historical
+`CONTRACT-G03-001` remains a mandatory source receipt in I01's generated brief,
+because it is an existing coordinator-intake task outside the seed manifests.
+That receipt includes the exact original objective, acceptance, verification and
+frozen brief, accepted tested/integrated revision, canonical payload hash and
+retained proof hashes. Before dispatch, the root coordinator must reread the
+original task/attempt/review and proof files, compare the original contract and
+retained proof hashes to the accepted integration, verify current source reuse
+separately, and retain a dated verifier outcome.
+A missing, mismatched, revoked or unverifiable receipt blocks dispatch; the
+blueprint remains `dispatch_ready=false`. The original I01 acceptance and
+verification clauses remain verbatim, including empty, whitespace, and oversized
 rejection. This is an applicability decision, not I01 dispatch or completion.
 The five currently implemented, distinct byte kinds are `SessionId`, `MemberId`,
 `ClientBindingId`, `RunId`, and `OperationId` in `crates/df-types/src/identity.rs`.
