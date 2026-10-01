@@ -281,9 +281,12 @@ fn every_identity_refuses_missing_empty_short_long_and_zero_values() {
 }
 
 #[test]
-fn recovery_round_trip_orders_newer_epoch_before_sequence_and_checks_overflow() {
+fn recovery_round_trip_preserves_checked_boundaries_and_epoch_first_order() {
     let older = SessionRevision::new(RecoveryEpoch::new(7).unwrap(), u64::MAX);
     let newer = SessionRevision::new(RecoveryEpoch::new(8).unwrap(), 0);
+    let maximum_epoch = RecoveryEpoch::new(u64::MAX).unwrap();
+    let near_maximum = SessionRevision::new(maximum_epoch, u64::MAX - 1);
+    let maximum = near_maximum.next_sequence().unwrap();
     let decode = |value| {
         read_revision(
             wire::SessionRevision::decode(write_revision(value).encode_to_vec().as_slice())
@@ -291,19 +294,67 @@ fn recovery_round_trip_orders_newer_epoch_before_sequence_and_checks_overflow() 
         )
         .unwrap()
     };
+
     assert!(decode(newer) > decode(older));
-    assert_eq!(older.next_sequence(), Err(RevisionError::SequenceOverflow));
+    assert_eq!(decode(newer).sequence(), 0);
+    assert_eq!(decode(near_maximum), near_maximum);
+    assert_eq!(decode(maximum), maximum);
+    assert_eq!(
+        decode(maximum).next_sequence(),
+        Err(RevisionError::SequenceOverflow)
+    );
+    assert_eq!(
+        decode(older).next_sequence(),
+        Err(RevisionError::SequenceOverflow)
+    );
     assert_eq!(newer.next_sequence().unwrap().sequence(), 1);
     assert!(newer.next_sequence().unwrap() > newer);
-    assert_eq!(
-        consume(
-            fixture::CompatibilityFixture::decode(
-                revision_fixture(8, 0).encode_to_vec().as_slice()
-            )
-            .unwrap()
-        ),
-        Ok(Payload::Revision(newer))
+
+    let consumed_near_maximum = consume(
+        fixture::CompatibilityFixture::decode(
+            revision_fixture(u64::MAX, u64::MAX - 1)
+                .encode_to_vec()
+                .as_slice(),
+        )
+        .unwrap(),
     );
+    assert_eq!(consumed_near_maximum, Ok(Payload::Revision(near_maximum)));
+    let Payload::Revision(consumed_near_maximum) = consumed_near_maximum.unwrap() else {
+        unreachable!();
+    };
+    let consumed_maximum = consumed_near_maximum.next_sequence().unwrap();
+    assert_eq!(consumed_maximum, maximum);
+    let consumed_maximum = consume(
+        fixture::CompatibilityFixture::decode(
+            revision_fixture(
+                consumed_maximum.epoch().get(),
+                consumed_maximum.sequence(),
+            )
+            .encode_to_vec()
+            .as_slice(),
+        )
+        .unwrap(),
+    );
+    assert_eq!(consumed_maximum, Ok(Payload::Revision(maximum)));
+    let Payload::Revision(consumed_maximum) = consumed_maximum.unwrap() else {
+        unreachable!();
+    };
+    assert_eq!(
+        consumed_maximum.next_sequence(),
+        Err(RevisionError::SequenceOverflow)
+    );
+
+    let consumed_zero = consume(
+        fixture::CompatibilityFixture::decode(
+            revision_fixture(8, 0).encode_to_vec().as_slice(),
+        )
+        .unwrap(),
+    );
+    assert_eq!(consumed_zero, Ok(Payload::Revision(newer)));
+    let Payload::Revision(consumed_zero) = consumed_zero.unwrap() else {
+        unreachable!();
+    };
+    assert_eq!(consumed_zero.next_sequence().unwrap().sequence(), 1);
 }
 
 #[test]
