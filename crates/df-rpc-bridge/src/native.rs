@@ -263,7 +263,7 @@ mod tests {
         Connection,
         Stream,
     }
-    async fn reject_wire(mut wire: Vec<u8>, rejection: Rejection) {
+    async fn reject_wire(mut wire: Vec<u8>, rejection: Rejection) -> crate::ConnectionSnapshot {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let (incoming, mut receiver) = mpsc::channel(1);
@@ -396,6 +396,7 @@ mod tests {
         let snapshot = metrics.snapshot().unwrap();
         assert!(snapshot.envelope_within_limit());
         assert_eq!(snapshot.pipe_owners, 0);
+        snapshot
     }
     #[tokio::test]
     async fn oversized_http2_frame_rejected_before_pipe_admission() {
@@ -410,6 +411,21 @@ mod tests {
             wire.extend([0, 0, 0, 4, 0, 0, 0, 0, 0]);
         }
         reject_wire(wire, Rejection::Adapter).await;
+    }
+    #[tokio::test]
+    async fn native_incoming_control_rate_rejects_exact_total_101_and_releases_owners() {
+        // reject_wire prepends the client's initial SETTINGS, so these 100
+        // additional frames make precisely 101 controls on the physical tunnel.
+        let mut wire = vec![];
+        for _ in 0..100 {
+            wire.extend([0, 0, 0, 4, 1, 0, 0, 0, 0]);
+        }
+        let snapshot = reject_wire(wire, Rejection::Adapter).await;
+        assert_eq!(snapshot.received_control_frames, 100);
+        assert_eq!(snapshot.received_frames, 101);
+        assert_eq!(snapshot.incoming_control_window.len(), 100);
+        assert_eq!(snapshot.rejected_control.unwrap().kind, 4);
+        assert!(snapshot.closed);
     }
     #[tokio::test]
     async fn continuation_chain_rejected_by_established_h2_limit() {

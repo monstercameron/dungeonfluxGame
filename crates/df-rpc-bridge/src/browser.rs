@@ -1,6 +1,6 @@
 use crate::{
     CONCURRENT_STREAMS, ConnectionMetrics, ConnectionSnapshot, FRAME_BYTES, MESSAGE_BYTES,
-    RECEIVE_BYTES,
+    RECEIVE_BYTES, resources::ReceiveCredit,
 };
 use bytes::Bytes;
 use futures::{
@@ -352,9 +352,12 @@ impl BrowserConnection {
         Ok((
             Self {
                 driver: AbortOnDrop(abort),
-                metrics,
+                metrics: metrics.clone(),
             },
-            BrowserChannel { sender },
+            BrowserChannel {
+                sender,
+                credit: ReceiveCredit::new(metrics),
+            },
         ))
     }
     /// Current and peak resource measurements owned by this connection.
@@ -371,6 +374,7 @@ impl BrowserConnection {
 #[derive(Clone)]
 pub struct BrowserChannel {
     sender: h2::client::SendRequest<Bytes>,
+    credit: ReceiveCredit,
 }
 impl Service<http::Request<tonic::body::Body>> for BrowserChannel {
     type Response = http::Response<ReceiveBody>;
@@ -380,6 +384,7 @@ impl Service<http::Request<tonic::body::Body>> for BrowserChannel {
         self.sender.poll_ready(context)
     }
     fn call(&mut self, request: http::Request<tonic::body::Body>) -> Self::Future {
+        let credit = self.credit.clone();
         let (mut parts, body) = request.into_parts();
         let path = parts
             .uri
@@ -435,13 +440,20 @@ impl Service<http::Request<tonic::body::Body>> for BrowserChannel {
                 }
             });
             let response = response.await?;
-            Ok(response.map(|receive| ReceiveBody {
-                receive,
-                _upload: guard,
-                data_finished: false,
-                finished: false,
-                credit: 0,
-            }))
+            let (parts, mut receive) = response.into_parts();
+            let id = credit.register(receive.flow_control().clone())?;
+            Ok(http::Response::from_parts(
+                parts,
+                ReceiveBody {
+                    receive,
+                    _upload: guard,
+                    data_finished: false,
+                    finished: false,
+                    previous_frame: 0,
+                    credit,
+                    id: Some(id),
+                },
+            ))
         }
         .boxed_local()
     }
@@ -453,7 +465,23 @@ pub struct ReceiveBody {
     _upload: AbortOnDrop,
     data_finished: bool,
     finished: bool,
-    credit: usize,
+    previous_frame: usize,
+    credit: ReceiveCredit,
+    id: Option<h2::StreamId>,
+}
+impl ReceiveBody {
+    fn finish(&mut self) -> Result<(), h2::Error> {
+        if let Some(id) = self.id.take() {
+            self.credit.finish(id)?;
+        }
+        Ok(())
+    }
+}
+impl Drop for ReceiveBody {
+    fn drop(&mut self) {
+        // The coordinator records a failed release; Drop cannot return it.
+        let _ = self.finish();
+    }
 }
 impl Body for ReceiveBody {
     type Data = Bytes;
@@ -465,19 +493,41 @@ impl Body for ReceiveBody {
         if self.finished {
             return Poll::Ready(None);
         }
-        let credit = std::mem::take(&mut self.credit);
-        if let Err(error) = self.receive.flow_control().release_capacity(credit) {
-            return Poll::Ready(Some(Err(error)));
-        }
         if !self.data_finished {
+            let previous_frame = std::mem::take(&mut self.previous_frame);
+            let Some(id) = self.id else {
+                self.finished = true;
+                return Poll::Ready(Some(Err(h2::Reason::INTERNAL_ERROR.into())));
+            };
+            if let Err(error) = self.credit.consumed(id, previous_frame) {
+                self.finished = true;
+                let _ = self.finish();
+                return Poll::Ready(Some(Err(error)));
+            }
             match self.receive.poll_data(context) {
                 Poll::Ready(Some(Ok(bytes))) => {
-                    self.credit = bytes.len();
+                    self.previous_frame = bytes.len();
                     return Poll::Ready(Some(Ok(Frame::data(bytes))));
                 }
-                Poll::Ready(Some(Err(error))) => return Poll::Ready(Some(Err(error))),
-                Poll::Ready(None) => self.data_finished = true,
-                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Some(Err(error))) => {
+                    self.finished = true;
+                    return Poll::Ready(Some(Err(self.finish().err().unwrap_or(error))));
+                }
+                Poll::Ready(None) => {
+                    self.data_finished = true;
+                    if let Err(error) = self.finish() {
+                        self.finished = true;
+                        return Poll::Ready(Some(Err(error)));
+                    }
+                }
+                Poll::Pending => {
+                    if let Err(error) = self.credit.pending(id) {
+                        self.finished = true;
+                        let _ = self.finish();
+                        return Poll::Ready(Some(Err(error)));
+                    }
+                    return Poll::Pending;
+                }
             }
         }
         match self.receive.poll_trailers(context) {

@@ -484,12 +484,21 @@ async fn malicious(
                         wire.extend([0, 0, 0, 4, 0, 0, 0, 0, 0]);
                     }
                 }
+                "control-rate" => {
+                    // The prefix already contains initial SETTINGS: exactly 100
+                    // more controls make total frame 101 the first rejection.
+                    for _ in 0..100 {
+                        wire.extend([0, 0, 0, 4, 1, 0, 0, 0, 0]);
+                    }
+                }
                 _ => return,
             }
-            if socket
-                .send(axum::extract::ws::Message::Binary(wire.into()))
-                .await
-                .is_ok()
+            if tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                socket.send(axum::extract::ws::Message::Binary(wire.into())),
+            )
+            .await
+            .is_ok_and(|result| result.is_ok())
             {
                 let _ = tokio::time::timeout(std::time::Duration::from_secs(2), async {
                     while socket.next().await.is_some() {}
