@@ -59,6 +59,19 @@ browser/viewport/status, task/attempt, recorder identity, image hash/path and de
 ingestion outcome. Changed sources during capture are disclosed rather than
 claimed as a stable tested revision. `entries/` retains same-ID sanitized devlog
 payloads; transient failures remain available for idempotent ingestion retry.
+Devlog details stay below the append command's 16,000-character bound: they retain
+the source identity digest and file count, before/after and changed-during-capture
+facts, actual image hash, browser observation, task context and a reference to the
+complete immutable record. The record retains every per-file source hash. When an
+older pending entry exceeds the bound, preserve its original bytes and derive the
+same logical JOURNEY ID into a deterministic `<record-id>.bounded.json` retry file;
+accepted-size legacy payloads continue through their original path unchanged. An
+existing devlog ID with different accepted content remains a conflict and is never
+overwritten. Captured records are admitted only when both complete source maps have
+valid per-file SHA-256 values, matching aggregate digests and a consistent
+changed-during-capture flag. Malformed records or legacy entry JSON remain pending
+without replacing their original bytes; unavailable and disk-cap outcomes may truthfully
+omit capture-only source and image fields.
 
 The recorder uses its own `screenshot-recorder:<session>` identity and the
 coordinator-issued task context. Its own SQL attempt is null; the observed worker
