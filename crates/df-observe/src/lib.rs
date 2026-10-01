@@ -1,4 +1,4 @@
-//! Shared experimental OTEL conventions. Durable G06 export is not implemented.
+//! Shared OTEL conventions, experimental transport spans, and native bounded capture.
 use opentelemetry::trace::{Span, SpanContext, SpanId, TraceFlags, TraceId, TraceState, Tracer};
 use opentelemetry::{Context, KeyValue, global};
 
@@ -176,3 +176,12 @@ mod native {
         }
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+mod ingress;
+#[cfg(not(target_arch = "wasm32"))]
+pub use ingress::*;
+#[cfg(not(target_arch = "wasm32"))]
+mod producer;
+#[cfg(not(target_arch = "wasm32"))]
+pub use producer::{AnyValue, CapturedBatch, LogInput, NativeProducer, Severity, SpanInput};
