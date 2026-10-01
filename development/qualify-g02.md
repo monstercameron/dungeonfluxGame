@@ -26,12 +26,20 @@ Open `http://127.0.0.1:43181`. Run **Run transport checks**, then **Run desktop
 pressure qualification**. Both share an exclusive run owner; a second click while
 one is active does not start competing work. Source/build identity appears in the
 page and reports. Freeze a clean candidate, rebuild and record hashes before review.
+The distinct **Run receive allocation observation** uses that same run owner and
+an owned 30-second deadline. It sends eight existing 49,152-byte `pressure:slow`
+responses alongside one small unary on the same connection, validates exact bytes,
+sequences and terminal trailers, then closes and checks callback cleanup. It also
+uses the existing 262,145-byte malicious WebSocket route to observe rejection
+before `Uint8Array::to_vec` and zero copied callback Vec capacity for that rejected
+message. Its report is `/fixture-report/callback-capacity`; it does not run on load.
 The server accepts only its own configured loopback Origin, at most four admitted
 connections and eight concurrent streams per connection. No paid/provider call occurs.
 
 Full Rust-produced reports are retained by the preview at
-`/fixture-report/semantics` and `/fixture-report/qualification`. Two bounded64KiB
-slots retain only synthetic diagnostics; writes require the preview Origin and a
+`/fixture-report/semantics`, `/fixture-report/qualification` and
+`/fixture-report/callback-capacity`. Three bounded64KiB slots retain only synthetic
+diagnostics; writes require the preview Origin and a
 bounded POST body. `/fixture-resources` shows current/peak connection snapshots,
 retaining at most20 owners (active plus closed), pruning only fully released old
 pipes. `/fixture-health` exposes native active/completed/cancelled/deadline counters;
@@ -41,6 +49,20 @@ pipes. `/fixture-health` exposes native active/completed/cancelled/deadline coun
 
 `ConnectionSnapshot` records actual byte/item current, peak and transfer totals for
 browser callback queues, native pipes and adapter-owned WebSocket receipt references.
+`browser_callback_vec_capacity` separately records original Rust `Vec::capacity()`
+immediately after `Uint8Array::to_vec`, before converting to `Bytes`. A private owner
+keeps the whole backing Vec until the final `Bytes` slice/clone drops, then frees it
+before removing its checked capacity accounting. Partial reads do not reduce this
+capacity; drain, rejection, failed read and connection drop release their owners.
+The `current` and `peak` values are logical retained backing capacity bytes, not
+live heap, a physical allocation count or a pre-callback bound. They exclude
+browser engine/ArrayBuffer storage, allocator overhead, `Bytes` owner metadata,
+h2 storage and every other allocation. Native snapshots show zero because this
+browser-only Vec boundary is unobserved there; that zero is not native allocation
+proof. In pinned `bytes` 1.12.1, `Bytes::from(Vec)` can retain a shared Vec
+backing or convert an exact-length Vec to a boxed slice. This boundary instead
+uses `Bytes::from_owner` so the measured original Vec remains the backing through
+every slice and clone, without relying on those conversion branches.
 Native pipe reads/writes update counters in the same short synchronous poll critical
 section, preventing a receiver from subtracting before a sender records its write.
 Both pipe endpoints own the counters; only their final drop clears freed unread

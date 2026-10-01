@@ -4,7 +4,37 @@ use std::{collections::VecDeque, io, sync::Mutex, time::Duration};
 use web_time::Instant;
 
 #[cfg(any(test, target_arch = "wasm32"))]
+use bytes::Bytes;
+#[cfg(any(test, target_arch = "wasm32"))]
 use std::sync::{Arc, MutexGuard};
+
+/// The original callback Vec stays owned across every Bytes split or clone.
+#[cfg(any(test, target_arch = "wasm32"))]
+struct BrowserCallbackBacking {
+    bytes: Vec<u8>,
+    capacity: usize,
+    metrics: Arc<ConnectionMetrics>,
+}
+#[cfg(any(test, target_arch = "wasm32"))]
+impl AsRef<[u8]> for BrowserCallbackBacking {
+    fn as_ref(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+#[cfg(any(test, target_arch = "wasm32"))]
+impl Drop for BrowserCallbackBacking {
+    fn drop(&mut self) {
+        // Bytes drops this owner only after its final alias; free the allocation first.
+        drop(std::mem::take(&mut self.bytes));
+        if self
+            .metrics
+            .browser_callback_capacity(self.capacity, false)
+            .is_err()
+        {
+            self.metrics.reject();
+        }
+    }
+}
 
 /// Credit already consumed by browser response bodies on one physical connection.
 /// The coordinator owns no DATA and never changes the advertised receive windows.
@@ -256,6 +286,9 @@ pub struct ConnectionSnapshot {
     pub sent_bytes: usize,
     pub callback_bytes: BufferSnapshot,
     pub callback_items: BufferSnapshot,
+    /// Original Rust callback Vec capacity retained by Bytes aliases. Browser only;
+    /// excludes engine storage, allocator overhead, Bytes metadata and h2 buffers.
+    pub browser_callback_vec_capacity: BufferSnapshot,
     pub pipe_to_grpc: BufferSnapshot,
     pub pipe_to_websocket: BufferSnapshot,
     pub websocket_receive: BufferSnapshot,
@@ -454,6 +487,7 @@ impl ConnectionMetrics {
             sent_bytes: 0,
             callback_bytes: BufferSnapshot::default(),
             callback_items: BufferSnapshot::default(),
+            browser_callback_vec_capacity: BufferSnapshot::default(),
             pipe_to_grpc: BufferSnapshot::default(),
             pipe_to_websocket: BufferSnapshot::default(),
             websocket_receive: BufferSnapshot::default(),
@@ -534,7 +568,7 @@ impl ConnectionMetrics {
         }
         result
     }
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(any(test, target_arch = "wasm32"))]
     pub(crate) fn queue(&self, bytes: usize, enqueue: bool, remove_item: bool) -> io::Result<()> {
         let mut state = self
             .state
@@ -544,12 +578,57 @@ impl ConnectionMetrics {
             state.snapshot.callback_bytes.add(bytes);
             state.snapshot.callback_items.add(1);
         } else {
-            state.snapshot.callback_bytes.remove(bytes)?;
-            if remove_item {
-                state.snapshot.callback_items.remove(1)?;
-            }
+            let remaining_bytes = state
+                .snapshot
+                .callback_bytes
+                .current
+                .checked_sub(bytes)
+                .ok_or_else(|| io::Error::other("callback byte accounting underflow"))?;
+            let remaining_items = state
+                .snapshot
+                .callback_items
+                .current
+                .checked_sub(usize::from(remove_item))
+                .ok_or_else(|| io::Error::other("callback item accounting underflow"))?;
+            state.snapshot.callback_bytes.current = remaining_bytes;
+            state.snapshot.callback_items.current = remaining_items;
         }
         Ok(())
+    }
+    #[cfg(any(test, target_arch = "wasm32"))]
+    fn browser_callback_capacity(&self, bytes: usize, retain: bool) -> io::Result<()> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| io::Error::other("callback capacity metrics lock poisoned"))?;
+        let capacity = &mut state.snapshot.browser_callback_vec_capacity;
+        if retain {
+            let current = capacity
+                .current
+                .checked_add(bytes)
+                .ok_or_else(|| io::Error::other("callback capacity accounting overflow"))?;
+            let total = capacity
+                .total
+                .checked_add(bytes)
+                .ok_or_else(|| io::Error::other("callback capacity total overflow"))?;
+            capacity.current = current;
+            capacity.total = total;
+            capacity.peak = capacity.peak.max(current);
+        } else {
+            capacity.remove(bytes)?;
+        }
+        Ok(())
+    }
+    /// Records capacity before Bytes owns the Vec; the final alias frees it.
+    #[cfg(any(test, target_arch = "wasm32"))]
+    pub(crate) fn browser_callback_from_vec(self: &Arc<Self>, bytes: Vec<u8>) -> io::Result<Bytes> {
+        let capacity = bytes.capacity();
+        self.browser_callback_capacity(capacity, true)?;
+        Ok(Bytes::from_owner(BrowserCallbackBacking {
+            bytes,
+            capacity,
+            metrics: self.clone(),
+        }))
     }
     pub(crate) fn socket_receive(&self, bytes: usize, holding: bool) -> io::Result<()> {
         let mut state = self
@@ -597,8 +676,6 @@ impl ConnectionMetrics {
     pub(crate) fn close(&self) {
         if let Ok(mut state) = self.state.lock() {
             state.snapshot.closed = true;
-            state.snapshot.callback_bytes.current = 0;
-            state.snapshot.callback_items.current = 0;
             // Keep the last observed engine backlog; WebSocket close may continue draining.
         }
     }
@@ -650,6 +727,101 @@ mod tests {
     fn frame(kind: u8, flags: u8, stream: u32) -> [u8; 9] {
         let id = stream.to_be_bytes();
         [0, 0, 0, kind, flags, id[0], id[1], id[2], id[3]]
+    }
+    #[test]
+    fn browser_callback_capacity_survives_partial_reads_and_last_alias() {
+        let metrics = Arc::new(ConnectionMetrics::new(true));
+        let mut copied = Vec::with_capacity(128);
+        copied.extend([7; 48]);
+        let mut queued = metrics.browser_callback_from_vec(copied).unwrap();
+        metrics.queue(queued.len(), true, false).unwrap();
+        let first_read = queued.split_to(16);
+        metrics.queue(first_read.len(), false, false).unwrap();
+        let synchronous_alias = queued.clone();
+        assert_eq!(metrics.snapshot().unwrap().callback_bytes.current, 32);
+        assert_eq!(
+            metrics
+                .snapshot()
+                .unwrap()
+                .browser_callback_vec_capacity
+                .current,
+            128
+        );
+        drop(first_read);
+        metrics.queue(queued.len(), false, true).unwrap();
+        drop(queued);
+        assert_eq!(metrics.snapshot().unwrap().callback_bytes.current, 0);
+        assert_eq!(
+            metrics
+                .snapshot()
+                .unwrap()
+                .browser_callback_vec_capacity
+                .current,
+            128
+        );
+        metrics.close();
+        assert_eq!(
+            metrics
+                .snapshot()
+                .unwrap()
+                .browser_callback_vec_capacity
+                .current,
+            128
+        );
+        drop(synchronous_alias);
+        let settled = metrics.snapshot().unwrap();
+        assert_eq!(settled.browser_callback_vec_capacity.current, 0);
+        assert_eq!(settled.browser_callback_vec_capacity.peak, 128);
+        assert_eq!(settled.browser_callback_vec_capacity.total, 128);
+        assert_eq!(settled.callback_items.current, 0);
+    }
+    #[test]
+    fn browser_callback_failure_drop_releases_only_owned_backings() {
+        let metrics = Arc::new(ConnectionMetrics::new(true));
+        let mut first = Vec::with_capacity(80);
+        first.extend([1; 20]);
+        let mut second = Vec::with_capacity(96);
+        second.extend([2; 24]);
+        let first = metrics.browser_callback_from_vec(first).unwrap();
+        let second = metrics.browser_callback_from_vec(second).unwrap();
+        metrics.queue(first.len(), true, false).unwrap();
+        metrics.queue(second.len(), true, false).unwrap();
+        assert_eq!(
+            metrics
+                .snapshot()
+                .unwrap()
+                .browser_callback_vec_capacity
+                .current,
+            176
+        );
+        metrics.reject();
+        metrics.queue(first.len(), false, true).unwrap();
+        drop(first);
+        assert_eq!(
+            metrics
+                .snapshot()
+                .unwrap()
+                .browser_callback_vec_capacity
+                .current,
+            96
+        );
+        metrics.queue(second.len(), false, true).unwrap();
+        metrics.close();
+        assert_eq!(
+            metrics
+                .snapshot()
+                .unwrap()
+                .browser_callback_vec_capacity
+                .current,
+            96
+        );
+        drop(second);
+        let settled = metrics.snapshot().unwrap();
+        assert!(settled.rejected && settled.closed);
+        assert_eq!(settled.browser_callback_vec_capacity.current, 0);
+        assert_eq!(settled.browser_callback_vec_capacity.peak, 176);
+        assert_eq!(settled.callback_bytes.current, 0);
+        assert_eq!(settled.callback_items.current, 0);
     }
     #[test]
     fn partial_frame_boundaries_preserve_data_credit() {
