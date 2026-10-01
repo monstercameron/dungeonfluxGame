@@ -326,12 +326,9 @@ fn recovery_round_trip_preserves_checked_boundaries_and_epoch_first_order() {
     assert_eq!(consumed_maximum, maximum);
     let consumed_maximum = consume(
         fixture::CompatibilityFixture::decode(
-            revision_fixture(
-                consumed_maximum.epoch().get(),
-                consumed_maximum.sequence(),
-            )
-            .encode_to_vec()
-            .as_slice(),
+            revision_fixture(consumed_maximum.epoch().get(), consumed_maximum.sequence())
+                .encode_to_vec()
+                .as_slice(),
         )
         .unwrap(),
     );
@@ -345,10 +342,8 @@ fn recovery_round_trip_preserves_checked_boundaries_and_epoch_first_order() {
     );
 
     let consumed_zero = consume(
-        fixture::CompatibilityFixture::decode(
-            revision_fixture(8, 0).encode_to_vec().as_slice(),
-        )
-        .unwrap(),
+        fixture::CompatibilityFixture::decode(revision_fixture(8, 0).encode_to_vec().as_slice())
+            .unwrap(),
     );
     assert_eq!(consumed_zero, Ok(Payload::Revision(newer)));
     let Payload::Revision(consumed_zero) = consumed_zero.unwrap() else {
