@@ -363,6 +363,14 @@ name = "df-types"
 version = "0.1.0"
 
 [[package]]
+name = "df-world"
+version = "0.1.0"
+dependencies = [
+ "df-model",
+ "df-types",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
