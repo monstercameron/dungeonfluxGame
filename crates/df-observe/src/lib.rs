@@ -51,6 +51,7 @@ fn parent(context: &OperationContext) -> Context {
 pub struct OperationSpan {
     span: global::BoxedSpan,
     finished: bool,
+    build: String,
 }
 /// Begin an operation using explicit correlation across asynchronous dispatch.
 pub fn begin(context: &OperationContext, method: &'static str) -> OperationSpan {
@@ -70,6 +71,7 @@ fn begin_with_tracer(
     OperationSpan {
         span,
         finished: false,
+        build: context.build.clone(),
     }
 }
 impl OperationSpan {
@@ -151,7 +153,7 @@ mod native {
     }
     /// Fixture-only bounded in-memory export. Not durable telemetry storage.
     pub struct FixtureTelemetry {
-        provider: SdkTracerProvider,
+        pub(super) provider: SdkTracerProvider,
         exporter: BoundedExporter,
     }
     impl Default for FixtureTelemetry {
@@ -400,3 +402,6 @@ pub use ingress::*;
 mod producer;
 #[cfg(not(target_arch = "wasm32"))]
 pub use producer::{AnyValue, CapturedBatch, LogInput, NativeProducer, Severity, SpanInput};
+
+mod dispatch_context;
+pub use dispatch_context::begin_dispatched;
