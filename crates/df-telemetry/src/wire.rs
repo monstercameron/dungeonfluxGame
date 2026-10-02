@@ -30,6 +30,23 @@ pub(crate) struct Batch {
     pub records: Vec<Record>,
 }
 impl Batch {
+    pub fn queue_cost(&self) -> Result<usize, TelemetryError> {
+        // Charge retained capacities, including projections copied out of OTLP. The
+        // existing structural allowance covers each record's fixed-size fields.
+        queue_cost(
+            std::iter::once(self.bytes.capacity()).chain(self.records.iter().flat_map(|record| {
+                [
+                    256,
+                    record.bytes.capacity(),
+                    record.trace.capacity(),
+                    record.span.capacity(),
+                    record.session.as_ref().map_or(0, String::capacity),
+                    record.operation.as_ref().map_or(0, String::capacity),
+                    record.build.as_ref().map_or(0, String::capacity),
+                ]
+            })),
+        )
+    }
     pub fn decode(
         signal: Signal,
         bytes: &[u8],
@@ -153,6 +170,11 @@ impl Batch {
             records,
         })
     }
+}
+fn queue_cost(mut capacities: impl Iterator<Item = usize>) -> Result<usize, TelemetryError> {
+    capacities.try_fold(0usize, |cost, capacity| {
+        cost.checked_add(capacity).ok_or(TelemetryError::Capacity)
+    })
 }
 fn text(attributes: &[KeyValue], name: &str) -> Option<String> {
     attributes
@@ -321,4 +343,18 @@ fn scan(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_queue_cost_refuses_arithmetic_overflow() {
+        assert_eq!(queue_cost([usize::MAX - 1, 1].into_iter()), Ok(usize::MAX));
+        assert_eq!(
+            queue_cost([usize::MAX, 1].into_iter()),
+            Err(TelemetryError::Capacity)
+        );
+    }
 }

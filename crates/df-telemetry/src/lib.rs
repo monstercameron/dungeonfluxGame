@@ -124,12 +124,13 @@ impl TelemetryIngress for LocalIngress {
         };
         // Bound owned queue payload plus canonical records; decoder's fixed field/depth
         // preflight separately bounds expansion. This is not a whole-process RAM bound.
-        let cost = batch.bytes.len()
-            + batch
-                .records
-                .iter()
-                .map(|record| record.bytes.len() + 256)
-                .sum::<usize>();
+        let cost = match batch.queue_cost() {
+            Ok(cost) => cost,
+            Err(error) => {
+                reject(&self.counters, &error);
+                return Err(error);
+            }
+        };
         let reserve = |counter: &AtomicUsize, amount: usize, limit: usize| {
             counter.fetch_update(Ordering::AcqRel, Ordering::Acquire, |value| {
                 value.checked_add(amount).filter(|next| *next <= limit)

@@ -28,6 +28,49 @@ use std::{
 };
 const WAIT: Duration = Duration::from_secs(5);
 fn root(name: &str) -> PathBuf {
+    if let Ok(namespace) = std::env::var("DF_TELEMETRY_FIXTURE_NAMESPACE") {
+        assert!(!namespace.is_empty());
+        assert!(
+            namespace
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        );
+        assert!(
+            [
+                "typed",
+                "dedupe",
+                "outage",
+                "queue-bytes",
+                "queue-items",
+                "wire-boundary",
+                "spool-capacity",
+                "sqlite-capacity",
+                "truncated",
+                "corrupt",
+                "foreign",
+                "exclusive",
+                "symlink",
+                "query",
+                "sequence",
+                "enabled-levels",
+                "structural-budget",
+                "sql-content-corrupt",
+                "checkpoint-missing-record",
+            ]
+            .contains(&name)
+        );
+        let path = PathBuf::from(
+            "/Users/earlcameron/Desktop/dungeonflux/development/runtime/telemetry-g06",
+        )
+        .join(format!("ownedfixture-{namespace}-{name}"));
+        assert!(path.file_name().unwrap().len() <= 100);
+        assert!(
+            !path.exists(),
+            "managed fixture root must be fresh: {}",
+            path.display()
+        );
+        return path;
+    }
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let nonce = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
