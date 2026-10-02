@@ -3,7 +3,7 @@
 Date: 2026-10-02
 Status: Source-backed decision; browser buffer/upload implementation remains pending
 Input revision: `4c0e050c2d30e632bd3b32c51a92cfda52479e6e`
-Task/attempt: `B-C-df-observe-D04` / `B-C-df-observe-D04-a1`
+Task/attempt: `B-C-df-observe-D04` / `B-C-df-observe-D04-a2`
 
 ## Decision
 
@@ -11,15 +11,24 @@ The browser buffer is owned by one live client binding generation. It accepts on
 already allowlisted, typed OTEL single-record bytes from the D02 catalog. It is
 best-effort memory owned by that page/binding; it does not claim browser crash
 persistence. The buffer retains records until a terminal upload receipt says they
-were durably accepted. A send, half-close, pending receipt, or timeout alone never
-releases them. Retries reuse the same record identities and bytes.
+were durably accepted. A send, half-close, enqueued/pending receipt, or timeout alone never
+releases them. Existing native `Durability::Spooled` and `Committed` are explicit
+durable stages; the generated browser adapter must prove which terminal stage
+identifies this exact batch before calling the release seam. Retries reuse the same record identities and bytes.
 
-Use a 128-record / 256-KiB retained-memory ceiling, including the one in-flight
-lease, with a single upload lease of at most 32 records / 64 KiB. These values
-bound the browser adapter independently of native memory and fit the existing
-`TelemetryLimits` batch ceiling. A record that cannot fit, or a new record arriving
-at capacity, is refused without evicting older records; increment a safe overflow
-count and expose it as a gap. Do not retain refused field names or values. The
+Use at most 128 records / 256 KiB of retained encoded payload, including the
+one in-flight prefix, and a single upload lease of at most 32 records / 64 KiB.
+Each encoded single-record request must be nonempty and at most 8192 bytes,
+matching `TelemetryLimits::default().record_bytes` and the native decoder.
+The 256 KiB limit is a payload bound, not a total process-memory claim. Normalize
+accepted bytes to boxed slices with no spare capacity. Fixed 128 inline slots
+independently bound metadata: retained requested storage is at most 256 KiB plus
+`size_of::<BrowserBuffer>()`, including slot/identity/lease metadata. Allocator
+bookkeeping, caller-owned input and transient serialization/upload allocations
+are separate; I03 must bound those before claiming a whole-path memory ceiling.
+The literal never copies an in-flight batch or allocates queue metadata. A record that cannot fit, or a new record arriving
+at capacity, is refused without evicting older records; increment a saturating refusal
+count and expose it as a gap (maximum means at least that many refusals). Do not retain refused field names or values. The
 buffer owns encoded record bytes, not generic event bodies or unfiltered
 attributes.
 
@@ -30,8 +39,11 @@ outcome; do not infer that the server rejected it or cancel server-owned work. A
 terminal durability receipt releases only records it identifies as accepted. An
 explicit partial/rejected receipt remains visible and leaves unaccepted records
 owned for a policy-correct retry or operator-visible stop. A callback may change
-state only when both its captured generation and lease still match the current
-owner. Rebinding invalidates the old lease; page destruction may lose the
+state only when its captured generation, nonreused checked attempt identity, and retained
+prefix identity all match the current owner. Attempt exhaustion refuses dispatch;
+rebinding never resets the counter. Record ordinals in the literal are private
+queue ownership tokens, not replacements for canonical capture identities. The
+D02 producer/record/sequence identities stay embedded in unchanged bytes. Rebinding invalidates the old lease; page destruction may lose the
 best-effort in-memory remainder, which is reported as a gap when the lifecycle
 allows reporting.
 
@@ -67,24 +79,32 @@ consumer implementation gate. Operation/trace context is provenance only.
 ## Bounded contract example
 
 The literal below models only the page-owned retained buffer and generation/lease
-checks. `bytes` stands for one already D02-filtered, bounded OTEL record. It does
+checks. `Record` stands for one already D02-filtered encoded OTEL record, preserving
+canonical capture identity. The local release seam models full-prefix acceptance;
+partial/rejected or unmatched receipts must never call it and remain retained
+with a visible classified outcome pending the concrete adapter mapping. It does
 not define or simulate an RPC receipt or an implemented browser uploader.
 
 ```rust
-use std::collections::VecDeque;
-
 const MAX_ITEMS: usize = 128;
 const MAX_BYTES: usize = 256 * 1024;
+const MAX_RECORD_BYTES: usize = 8192;
 const MAX_BATCH_ITEMS: usize = 32;
 const MAX_BATCH_BYTES: usize = 64 * 1024;
 const UPLOAD_DEADLINE_MS: u64 = 10_000;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
 struct Record(Vec<u8>);
+
+struct RetainedRecord {
+    ordinal: u64,
+    bytes: Box<[u8]>,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct UploadLease {
     generation: u64,
+    attempt: u64,
+    first_record: u64,
     records: usize,
     deadline_ms: u64,
 }
@@ -94,6 +114,7 @@ enum BufferError {
     Empty,
     Oversized,
     Capacity,
+    IdentityExhausted,
     StaleLease,
     Deadline,
     NotExpired,
@@ -101,9 +122,13 @@ enum BufferError {
 
 struct BrowserBuffer {
     generation: u64,
-    records: VecDeque<Record>,
+    slots: [Option<RetainedRecord>; MAX_ITEMS],
+    head: usize,
+    count: usize,
     bytes: usize,
     refused: usize,
+    next_record: u64,
+    next_attempt: u64,
     lease: Option<UploadLease>,
 }
 
@@ -111,31 +136,47 @@ impl BrowserBuffer {
     fn new(generation: u64) -> Self {
         Self {
             generation,
-            records: VecDeque::new(),
+            slots: std::array::from_fn(|_| None),
+            head: 0,
+            count: 0,
             bytes: 0,
             refused: 0,
+            next_record: 1,
+            next_attempt: 1,
             lease: None,
         }
     }
 
     fn retain(&mut self, record: Record) -> Result<(), BufferError> {
         let length = record.0.len();
-        if length == 0 {
-            self.refused += 1;
-            return Err(BufferError::Empty);
-        }
-        if length > MAX_BATCH_BYTES {
-            self.refused += 1;
-            return Err(BufferError::Oversized);
-        }
-        if self.records.len() >= MAX_ITEMS
-            || self.bytes.checked_add(length).is_none_or(|total| total > MAX_BYTES)
+        let error = if length == 0 {
+            Some(BufferError::Empty)
+        } else if length > MAX_RECORD_BYTES {
+            Some(BufferError::Oversized)
+        } else if self.count == MAX_ITEMS
+            || self
+                .bytes
+                .checked_add(length)
+                .is_none_or(|total| total > MAX_BYTES)
         {
-            self.refused += 1;
-            return Err(BufferError::Capacity);
+            Some(BufferError::Capacity)
+        } else if self.next_record == u64::MAX {
+            Some(BufferError::IdentityExhausted)
+        } else {
+            None
+        };
+        if let Some(error) = error {
+            self.refused = self.refused.saturating_add(1);
+            return Err(error);
         }
+        let index = (self.head + self.count) % MAX_ITEMS;
+        self.slots[index] = Some(RetainedRecord {
+            ordinal: self.next_record,
+            bytes: record.0.into_boxed_slice(),
+        });
+        self.next_record += 1;
+        self.count += 1;
         self.bytes += length;
-        self.records.push_back(record);
         Ok(())
     }
 
@@ -143,30 +184,38 @@ impl BrowserBuffer {
         if self.lease.is_some() {
             return Err(BufferError::Capacity);
         }
+        if self.next_attempt == u64::MAX {
+            return Err(BufferError::IdentityExhausted);
+        }
+        let first_record = self.slots[self.head]
+            .as_ref()
+            .ok_or(BufferError::Empty)?
+            .ordinal;
         let mut bytes = 0;
         let mut records = 0;
-        for record in &self.records {
-            if records == MAX_BATCH_ITEMS
-                || bytes + record.0.len() > MAX_BATCH_BYTES
-            {
+        for offset in 0..self.count {
+            let record = self.slots[(self.head + offset) % MAX_ITEMS]
+                .as_ref()
+                .ok_or(BufferError::Empty)?;
+            if records == MAX_BATCH_ITEMS || bytes + record.bytes.len() > MAX_BATCH_BYTES {
                 break;
             }
-            bytes += record.0.len();
+            bytes += record.bytes.len();
             records += 1;
-        }
-        if records == 0 {
-            return Err(BufferError::Empty);
         }
         let lease = UploadLease {
             generation: self.generation,
+            attempt: self.next_attempt,
+            first_record,
             records,
             deadline_ms: now_ms.saturating_add(UPLOAD_DEADLINE_MS),
         };
+        self.next_attempt += 1;
         self.lease = Some(lease);
         Ok(lease)
     }
 
-    // A timed-out attempt releases only its lease; retained records remain retryable.
+    // Timeout ends only this attempt; record identities and bytes remain owned.
     fn expire_upload(&mut self, now_ms: u64) -> Result<(), BufferError> {
         let lease = self.lease.ok_or(BufferError::Empty)?;
         if now_ms < lease.deadline_ms {
@@ -176,27 +225,35 @@ impl BrowserBuffer {
         Ok(())
     }
 
-    // Invalidate callbacks and report the best-effort records lost with this binding.
+    // Keep counters monotonic even if a caller mistakenly reuses a generation.
     fn invalidate(&mut self, generation: u64) -> usize {
-        let lost = self.records.len();
-        self.records.clear();
+        let lost = self.count;
+        self.slots = std::array::from_fn(|_| None);
+        self.head = 0;
+        self.count = 0;
         self.bytes = 0;
         self.lease = None;
         self.generation = generation;
         lost
     }
 
-    // Only a matching, in-deadline durable acknowledgement releases owned bytes.
+    // This local seam is called only after a matched, full terminal durable receipt.
     fn acknowledge_durable(&mut self, lease: UploadLease, now_ms: u64) -> Result<(), BufferError> {
-        if lease.generation != self.generation || self.lease != Some(lease) {
+        if lease.generation != self.generation
+            || self.lease != Some(lease)
+            || self.slots[self.head].as_ref().map(|record| record.ordinal)
+                != Some(lease.first_record)
+        {
             return Err(BufferError::StaleLease);
         }
-        if now_ms > lease.deadline_ms {
+        if now_ms >= lease.deadline_ms {
             return Err(BufferError::Deadline);
         }
         for _ in 0..lease.records {
-            if let Some(record) = self.records.pop_front() {
-                self.bytes -= record.0.len();
+            if let Some(record) = self.slots[self.head].take() {
+                self.bytes -= record.bytes.len();
+                self.count -= 1;
+                self.head = (self.head + 1) % MAX_ITEMS;
             }
         }
         self.lease = None;
@@ -210,19 +267,29 @@ fn main() {
     let lease = buffer.begin_upload(1_000).unwrap();
     assert_eq!(lease.deadline_ms, 11_000);
     assert_eq!(buffer.bytes, 3);
-    assert_eq!(buffer.expire_upload(11_000), Ok(()));
+    assert_eq!(buffer.expire_upload(10_999), Err(BufferError::NotExpired));
+    assert_eq!(
+        buffer.acknowledge_durable(lease, 11_000),
+        Err(BufferError::Deadline)
+    );
+    buffer.expire_upload(11_000).unwrap();
     let retry = buffer.begin_upload(11_000).unwrap();
-    assert_eq!(retry.records, lease.records);
+    assert_eq!(retry.first_record, lease.first_record);
+    assert_ne!(retry.attempt, lease.attempt);
     assert_eq!(
         buffer.acknowledge_durable(lease, 11_001),
         Err(BufferError::StaleLease)
     );
     assert_eq!(buffer.bytes, 3);
-    assert_eq!(buffer.acknowledge_durable(retry, 12_000), Ok(()));
+    buffer.acknowledge_durable(retry, 12_000).unwrap();
     assert_eq!(buffer.bytes, 0);
 
     let mut refused = BrowserBuffer::new(8);
     assert_eq!(refused.retain(Record(Vec::new())), Err(BufferError::Empty));
+    assert_eq!(
+        refused.retain(Record(vec![0; MAX_RECORD_BYTES + 1])),
+        Err(BufferError::Oversized)
+    );
     refused.retain(Record(vec![4])).unwrap();
     let stale = refused.begin_upload(1_000).unwrap();
     assert_eq!(refused.invalidate(9), 1);
@@ -232,14 +299,15 @@ fn main() {
         Err(BufferError::StaleLease)
     );
     assert_eq!(refused.bytes, 1);
-    assert_eq!(refused.refused, 1);
+    assert_eq!(refused.refused, 2);
 }
 ```
 
-The valid path proves this contract fixture retains bytes until a matching
-acknowledgement; refusal cases cover empty input and stale-generation completion.
-They do not prove receipt identity matching, privacy filtering, overflow reporting,
-RPC behavior, timer scheduling, page-close reporting, or a running browser path.
+The exact literal executes valid timeout/retry and stale-generation refusals.
+The retained adversarial harness additionally covers duplicate same-tick receipts,
+capacity normalization, the 8192-byte record ceiling, saturating refusal, item/byte/
+batch ceilings, prefix identity, counter exhaustion and ring reuse. These local
+checks do not implement receipts, filtering, RPC, timers, or a browser uploader.
 
 ## Alternatives
 
@@ -253,13 +321,28 @@ RPC behavior, timer scheduling, page-close reporting, or a running browser path.
 
 ## Evidence and remaining checks
 
-Source revision: `4c0e050c2d30e632bd3b32c51a92cfda52479e6e`. The literal and
-valid/refusal executions are prepared, but no source-active formatting or compile
-check passed. An initial guard invocation omitted required arguments and failed
-before receipt creation; a direct rustfmt check outside the guard found one
-formatting difference. The subsequent guarded rustfmt admission wrote
-`HOLD_NO_COMMAND_LAUNCHED` at 36% free proxy, below the 40% floor. Per the v6
-policy, no formatting, compile, or refusal check was retried after HOLD. The
-standalone fixture is therefore unverified. Cargo, WASM, real-browser, RPC,
-authorization, upload, durability, telemetry-pipeline, and frontier
-computer-use/vision evaluation remain unperformed and pending.
+Repair input: `6a40999877b224f6d20d578a0982e81db445ab36`; integration base:
+`4c0e050c2d30e632bd3b32c51a92cfda52479e6e`. Preserved a1 review found duplicate
+acknowledgement aliasing, spare vector capacity and exact formatter failure;
+its native record-limit and counter observations are also repaired here. The
+exact literal is extracted, formatted with the pinned root configuration, then
+reinserted without alteration; checks use pinned Rust 2024 `rustc -D warnings`
+and the unchanged v6 40%/256 MiB/60-second guard and shared compiler lock.
+Guarded root-configured formatter write/check, Rust 2024 compilation with
+warnings denied, exact valid/refusal execution and all 14 adversarial cases passed.
+The same-tick old acknowledgement returns `StaleLease` and retains the newer
+byte; a one-byte Vec with capacity 262145 becomes a one-byte boxed allocation;
+8193 bytes is refused and a maximum refusal count stays saturated. Actual
+commands, tool/config/source hashes and outputs are retained in the a2 evidence
+handoff/manifest. Prior a1 failures remain preserved, not overwritten.
+
+Next consumer `B-C-df-observe-I03` implements only the actual page/binding-owned
+buffer at the existing browser capture seam (`crates/df-tools/src/browser.rs`,
+`crates/df-observe/src/lib.rs`), preserving D01-D03 and stable capture IDs. The
+planned generated UploadTelemetry adapter must map matched full/partial durable
+receipts through existing ingress semantics (`crates/df-observe/src/ingress.rs`,
+`crates/df-telemetry/src/wire.rs`); no df-api implementation exists here.
+Cargo/native/WASM, real-browser, RPC, authorization, upload, durability, telemetry
+pipeline, frontier review and coordinator integration remain unperformed/pending.
+Browser crash persistence, concrete browser producer allocation, generated receipt
+identity mapping and whole-path allocation bounds remain consumer gates.
