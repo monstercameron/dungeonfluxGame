@@ -14,6 +14,83 @@ commit into the next block: keep the recorded ending revision as the next
 baseline and capture baseline..HEAD, which includes the bookkeeping commit.
 Do not invent a self-hash or silently discard metadata commits.
 
+## 2026-10-01 continued work — 16:38–22:38 EDT (open)
+
+Six-hour boundaries: 2026-10-01T16:38:04-04:00 through 2026-10-01T22:38:04-04:00.
+This block is still open; snapshot at 2026-10-01T22:12:00-04:00.
+
+Range recorded so far: 9def9b845531e5cc589a28343b822b4664bd03fd..537efdd541e77d5445ae52eefe21530fd69074ba
+
+- 827d947a8f1596eb9c7cb753d6a622b244184fb1 — docs: define private authoring upload boundary
+- 89e56102552f1f0388479d3db219b4246a835aa0 — Integrate independently reviewed private authoring boundary
+- fd55969483c6cad4b013c7b1d466f11fa1375e2e — docs: define G10 pack provenance validation contract
+- e76009dc8a16e9ebe0e67e7c9757601c1b9f58e4 — docs: correct G10 pack identity and ownership policy
+- aa52c1a83491da1f5d067607598e3098b2b2e314 — Integrate reviewed define graph and provenance validator
+- ff5999e7658f71e2d680163f5be79716bb9158d8 — Define replay compatibility and logical-time policy
+- 1458808da382db09d9614dd284fb7eb6adbb30da — Integrate reviewed define replay compatibility and pause policy
+- 2b4aa9f7e5b1ee74c77a915fadee09207b76a14e — docs: define listener-safe claim envelope
+- 23f1da942e113989fc948ab17f86b9fbf8a3d74f — Integrate reviewed define listener-safe claim envelope
+- f85580a600a4292cbea879b68a4ed880ce5f73b2 — docs: define bounded native memory retrieval contract
+- 72bbad19cfaa5f5690eef27b86cafef2ede63c4a — Integrate reviewed define bounded memory candidates
+- 487535c54ee696bd96513a94d5e4d4212346d215 — docs: define consented observation and spotlight policy
+- 0cb72148993754f5c28f60da705e99c5b8a19483 — docs: complete g12 d01 policy alternatives and evidence
+- 9c2f04176538c8d5169b9047260dffdbc3c3ea49 — Integrate reviewed define opt-in observation and spotlight scope
+- 376c5f7990164d80ce72557a673bf07851316e37 — Document heuristic predictive demand policy
+- 23806e6165af305e87c9eedeaa30eb0f4868a56d — Require compatible recordings for replay demand
+- 7178f630ee75b0b641a8032158e75634c6572348 — Integrate reviewed define heuristic predictive demand
+- 301a37f850d79d80efbd4fd16fad6fda867cea9b — docs: define vendor qualification policy
+- cd6f2cba6fdb1eda43f17628119e7f58088a8d22 — Integrate reviewed define future vendor qualification protocol
+- 2a1adc3c8e65f393046c911cf572ca5f7d6d573b — docs: define G09 runner model routing policy
+- cf0a15905359dbab3934bd18ab73f88f5a83e9d9 — docs: enforce frontier evaluator routing gates
+- be829d9c96c5cd0eee24115292721098bf18ad4d — docs: record G09 A2 policy provenance
+- a89b762108a4a2cfd208ef7ef077fa270384b740 — Integrate reviewed define runner model route policy
+- 1c073661249c96c4091fff1d2cb0603b1563c26d — Define independent output review contract
+- 308920e328ba6df85bea1e3d2abcbea5f1b796e6 — Integrate reviewed define independent output review contract
+- a0575c15cdf5171c1a90d4aa36a385317747660b — docs: define G11 director ordering policy
+- 8cdfce816581d043afad6083eed4514b1e15075d — docs: correct G11 composition ownership
+- 11a7872cf6534aca0f1ca0ccd41bf6d91871e4f2 — Integrate reviewed B-G11-D01 decision
+- 43a5f87c4235873f53a9cae60ab9d1b31df7c0ca — docs: define tempo accessibility policy
+- 7d1ce0c133cc6367063e65f926611eb16f36691f — docs: format tempo contract example
+- 5cc348c3ca44bf68f8e8ddd6520d13d679295a66 — docs: resolve tempo policy review defects
+- df1f907c8ef01f5bffce901dd693f3a29dd7b438 — docs: clarify illustrative timing basis
+- a3ce54a7d3eeba31e86be9fda5de540d650d1551 — Integrate reviewed B-G12-D02 decision
+- f076b430e4f603cf1213747cec4e0c983a11e7cb — docs: decide prepared initial provider mode
+- a215cc323244a681d6a98630a87ed9631ec0d261 — Integrate reviewed B-G08-D01 decision
+- 050036f3267706c2c320209f0a4e55584da1df63 — docs: define G08 modality quote and fallback contract
+- 4d565263046eed58830f2f231057393ea11ec1ac — Integrate reviewed B-G08-D02 decision
+- f8612a1819ab016e5821597ecd795c8cf0c5c2ac — docs: define PostgreSQL durable receipt boundary
+- 537efdd541e77d5445ae52eefe21530fd69074ba — Integrate reviewed B-F24-D01 decision
+
+The integration wave closes reviewed design decisions for authoring, provenance, replay, listener-safe claims, bounded memory candidates, consented observation, predictive demand, vendor qualification, evaluator routing, engine composition, legal tempo, provider spending modes/quotes, and PostgreSQL receipt authority. Executable policy examples and resulting-source checks support DESIGN completion; they do not prove production gameplay, provider services, audible audio, or physical devices. Earlier rejected drafts reachable through accepted branch ancestry are listed as historical commits, not separately approved deliverables.
+
+Current recorded ending revision: `537efdd541e77d5445ae52eefe21530fd69074ba`. Later integrations and the bookkeeping commit writing this snapshot belong to this open block; append them before closing it.
+
+## 2026-10-01 continued work — 10:38–16:38 EDT
+
+Six-hour boundaries: 2026-10-01T10:38:04-04:00 through 2026-10-01T16:38:04-04:00.
+
+Range: 9def9b845531e5cc589a28343b822b4664bd03fd..9def9b845531e5cc589a28343b822b4664bd03fd (no new integrated commits).
+
+No integration is recorded in this interval. A clock gap does not establish uninterrupted development or testing; no work or screenshot evidence is backfilled.
+
+## 2026-10-01 continued work — 04:38–10:38 EDT
+
+Six-hour boundaries: 2026-10-01T04:38:04-04:00 through 2026-10-01T10:38:04-04:00.
+
+Range: deb0462a59b6346803e545ff3627c8b6b030423e..9def9b845531e5cc589a28343b822b4664bd03fd
+
+- f7c8a7577385ecb04c2e3f3305e7fafa0c851119 — Record continued six-hour integration block
+- a6b66e818331306fd59a846d65c8c3e5a91c7a2f — Define public RPC error taxonomy
+- 2811f9d91667668f66717b1c5443552fbc06a74b — Integrate independently reviewed public RPC error taxonomy
+- c435c2d12c1faa3da51142e6d8e1ca0b1ec82397 — Add bounded browser connection credit stall observation
+- 51bf1d438294311c204380077ddb01fd043c5735 — Fence late connection credit report writes
+- f1c2fc1965db37d47a539ffec68835f68422e469 — State hostile over-credit bursts as pending in credit reports
+- 9def9b845531e5cc589a28343b822b4664bd03fd — Integrate independently reviewed browser connection credit observation
+
+Public RPC error classification and actual browser connection-credit stall/resumption were independently reviewed and integrated. Full transport memory/control-queue/device qualification and production gameplay remain pending.
+
+Next block baseline: `9def9b845531e5cc589a28343b822b4664bd03fd`. All newly reachable commits are recorded in topological integration order, including child corrections, merges, and prior bookkeeping.
+
 ## 2026-09-30–2026-10-01 continued work — 22:38–04:38 EDT
 
 Six-hour boundaries: 2026-09-30T22:38:04-04:00 through 2026-10-01T04:38:04-04:00.
