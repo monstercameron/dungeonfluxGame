@@ -3,8 +3,10 @@
 Status: Design decision for G09; coordinator implementation pending
 
 This policy defines how the future `df-workflow` coordinator selects workers and
-independent evaluators. It records routing rules, not a claim that a model,
-provider, tool, or production runner is currently available. The named outcome
+independent evaluators. The coordinator itself must be frontier-class. Select it
+only after current availability and frontier eligibility are verified.
+These are routing rules, not claims that any model, provider, tool, or production
+runner is currently available. The named outcome
 is the routing and frontier-coordinator-evaluator contract; implementing the
 runner, leases, evidence store, or game integration remains outstanding.
 
@@ -47,11 +49,21 @@ to the configured runner integration.
 ## Independent evaluator and evidence
 
 Every submitted implementation/repair attempt receives an evaluator dispatched
-by the coordinator under ADR 0001 and ADR 0005. The evaluator is a separate
-frontier invocation with actual computer-use and vision capabilities enabled
-when the acceptance contract requires user-facing inspection. Audio criteria
-also require a suitable audio-capable observation or retained capture. A model
-label alone proves none of these capabilities.
+by the frontier coordinator under ADR 0001 and ADR 0005. Before dispatch, require
+both (a) current model availability and (b) separately verified frontier
+eligibility from the configured trusted runner/provider integration. Eligibility
+is its own evidence-backed fact, not inferred from inventory membership, model
+name, strength, or capability flags. If frontier eligibility cannot be verified,
+refuse the evaluator route and keep review pending.
+
+Every evaluator invocation must have computer-use and vision capabilities
+enabled at dispatch, including internal-library tasks. This is a baseline
+frontier-evaluator requirement, not a claim that every task needs a user-facing
+UI check. The evaluator operates and visually inspects the running output when
+the acceptance contract has user-facing behavior; for internal outcomes it uses
+the actual affected boundary or fixture without inventing a UI criterion. Audio
+criteria also require a suitable audio-capable observation or retained capture.
+A model label alone proves neither frontier eligibility nor enabled capabilities.
 
 The evaluator must not be the implementer, a repair worker on the same attempt,
 or an invocation whose identity cannot be distinguished from the implementer.
@@ -107,9 +119,13 @@ start a blind retry loop.
 ## Literal decision example (standard library only)
 
 This illustrative contract has no production runner API. `available_models`
-answers what the current inventory reports; `serving_identity` describes the
-actual invocation separately. Capability and evaluator-independence refusals
-are explicit decision results.
+answers what the current inventory reports. `FrontierVerification` is distinct, identity/model-bound evidence from the
+trusted eligibility-verification boundary; it cannot be derived from the
+availability list. The coordinator accepts this result only from the configured
+trusted verifier, which must be independent of both worker and evaluator.
+`serving_identity_attested` records whether the actual invocation identity was
+attested. Capability, frontier, identity, and
+evaluator-independence refusals are explicit decision results.
 
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -123,6 +139,14 @@ enum ModelClass {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct FrontierVerification {
+    subject_identity: u64,
+    subject_model: ModelClass,
+    verifier_identity: u64,
+    verified_frontier: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Capabilities {
     computer_use: bool,
     vision: bool,
@@ -132,6 +156,7 @@ struct Capabilities {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Invocation {
     identity: u64,
+    serving_identity_attested: bool,
     model: ModelClass,
     capabilities: Capabilities,
 }
@@ -140,16 +165,17 @@ struct Invocation {
 enum RouteDecision {
     Dispatch(Invocation),
     RefuseUnavailable,
+    RefuseNotFrontier,
+    RefuseUnattestedIdentity,
     RefuseCapabilities,
     RefuseNotIndependent,
 }
 
 fn choose_evaluator(
     available_models: &[ModelClass],
+    frontier_verification: FrontierVerification,
     candidate: Invocation,
     implementer_identity: u64,
-    requires_computer_use: bool,
-    requires_vision: bool,
     requires_audio_observation: bool,
 ) -> RouteDecision {
     if candidate.identity == implementer_identity {
@@ -158,8 +184,19 @@ fn choose_evaluator(
     if !available_models.contains(&candidate.model) {
         return RouteDecision::RefuseUnavailable;
     }
-    if (requires_computer_use && !candidate.capabilities.computer_use)
-        || (requires_vision && !candidate.capabilities.vision)
+    if frontier_verification.subject_identity != candidate.identity
+        || frontier_verification.subject_model != candidate.model
+        || frontier_verification.verifier_identity == candidate.identity
+        || frontier_verification.verifier_identity == implementer_identity
+        || !frontier_verification.verified_frontier
+    {
+        return RouteDecision::RefuseNotFrontier;
+    }
+    if !candidate.serving_identity_attested {
+        return RouteDecision::RefuseUnattestedIdentity;
+    }
+    if !candidate.capabilities.computer_use
+        || !candidate.capabilities.vision
         || (requires_audio_observation && !candidate.capabilities.audio_observation)
     {
         return RouteDecision::RefuseCapabilities;
@@ -177,6 +214,7 @@ fn main() {
     ];
     let good = Invocation {
         identity: 20,
+        serving_identity_attested: true,
         model: ModelClass::Sol,
         capabilities: Capabilities {
             computer_use: true,
@@ -184,24 +222,145 @@ fn main() {
             audio_observation: false,
         },
     };
+    let verified_frontier = FrontierVerification {
+        subject_identity: 20,
+        subject_model: ModelClass::Sol,
+        verifier_identity: 30,
+        verified_frontier: true,
+    };
     assert_eq!(
-        choose_evaluator(&available, good, 10, true, true, false),
+        choose_evaluator(&available, verified_frontier, good, 10, false),
         RouteDecision::Dispatch(good),
     );
     assert_eq!(
-        choose_evaluator(&available, good, 10, true, true, true),
+        choose_evaluator(&available, verified_frontier, good, 10, true),
         RouteDecision::RefuseCapabilities,
     );
     assert_eq!(
         choose_evaluator(
             &available,
+            verified_frontier,
+            Invocation {
+                capabilities: Capabilities {
+                    computer_use: false,
+                    ..good.capabilities
+                },
+                ..good
+            },
+            10,
+            false,
+        ),
+        RouteDecision::RefuseCapabilities,
+    );
+    assert_eq!(
+        choose_evaluator(
+            &available,
+            verified_frontier,
+            Invocation {
+                capabilities: Capabilities {
+                    vision: false,
+                    ..good.capabilities
+                },
+                ..good
+            },
+            10,
+            false,
+        ),
+        RouteDecision::RefuseCapabilities,
+    );
+    assert_eq!(
+        choose_evaluator(
+            &available,
+            FrontierVerification {
+                verified_frontier: false,
+                ..verified_frontier
+            },
+            good,
+            10,
+            false,
+        ),
+        RouteDecision::RefuseNotFrontier,
+    );
+    assert_eq!(
+        choose_evaluator(
+            &available,
+            FrontierVerification {
+                subject_identity: 21,
+                subject_model: ModelClass::Luna,
+                verifier_identity: 30,
+                verified_frontier: false,
+            },
+            Invocation {
+                identity: 21,
+                model: ModelClass::Luna,
+                ..good
+            },
+            10,
+            false,
+        ),
+        RouteDecision::RefuseNotFrontier,
+    );
+    assert_eq!(
+        choose_evaluator(
+            &available,
+            FrontierVerification {
+                verifier_identity: 10,
+                ..verified_frontier
+            },
+            good,
+            10,
+            false,
+        ),
+        RouteDecision::RefuseNotFrontier,
+    );
+    assert_eq!(
+        choose_evaluator(
+            &available,
+            FrontierVerification {
+                verifier_identity: 20,
+                ..verified_frontier
+            },
+            good,
+            10,
+            false,
+        ),
+        RouteDecision::RefuseNotFrontier,
+    );
+    assert_eq!(
+        choose_evaluator(
+            &available,
+            FrontierVerification {
+                subject_model: ModelClass::Luna,
+                ..verified_frontier
+            },
+            good,
+            10,
+            false,
+        ),
+        RouteDecision::RefuseNotFrontier,
+    );
+    assert_eq!(
+        choose_evaluator(
+            &available,
+            verified_frontier,
+            Invocation {
+                serving_identity_attested: false,
+                ..good
+            },
+            10,
+            false,
+        ),
+        RouteDecision::RefuseUnattestedIdentity,
+    );
+    assert_eq!(
+        choose_evaluator(
+            &available,
+            verified_frontier,
             Invocation {
                 identity: 10,
                 ..good
             },
             10,
-            true,
-            true,
             false,
         ),
         RouteDecision::RefuseNotIndependent,
@@ -209,13 +368,15 @@ fn main() {
     assert_eq!(
         choose_evaluator(
             &available,
+            FrontierVerification {
+                subject_model: ModelClass::Opus,
+                ..verified_frontier
+            },
             Invocation {
                 model: ModelClass::Opus,
                 ..good
             },
             10,
-            true,
-            true,
             false,
         ),
         RouteDecision::RefuseUnavailable,
@@ -226,8 +387,11 @@ fn main() {
 ## Alternatives and unresolved production gates
 
 A model-name-only route was rejected because a name does not establish current
-availability, invocation identity, or enabled tools. A text-only independent
-review was rejected because it cannot establish visible behavior or audibility.
+availability, verified frontier eligibility, invocation identity, or enabled
+tools. Availability and frontier proof remain separate inputs in the example; an
+available Luna candidate with an independently verified negative eligibility
+result is refused. A text-only independent review was rejected because it cannot
+establish visible behavior or audibility.
 Adding a new review role/table or resetting escalation per worker was rejected
 because ADR 0001 already assigns review to the evaluator role and stores attempt
 state, and the existing escalation rule counts the same task across retries.
@@ -235,8 +399,9 @@ state, and the existing escalation rule counts the same task across retries.
 The concrete Rust example is a decision contract only; it is not wired to an
 agent runtime and does not validate an actual provider response. G09 production
 work still needs the coordinator/`df-workflow` owner to implement and demonstrate:
-current provider/model/tool inventory and serving-identity attestation; scoped
-capability negotiation; tracked leases, safe recovery/fencing and edit-area
+current provider/model/tool inventory and serving-identity attestation; an
+independent trusted frontier-verification result bound to each actual invocation;
+scoped capability negotiation; tracked leases, safe recovery/fencing and edit-area
 ownership; measured process/child memory and finite time admission; evaluator
 reservation and independent dispatch; durable evidence references and retention;
 workflow-backed cross-worker escalation; and integrated tests against real
@@ -247,8 +412,10 @@ available.
 
 ## Governing sources and provenance
 
-The dispatch brief is `B-G09-D01-a1`, input revision
-`9def9b845531e5cc589a28343b822b4664bd03fd`. Governing sources, frozen SHA-256:
+This is the A2 repair of the rejected A1 submission, based on source revision
+`2a1adc3c8e65f393046c911cf572ca5f7d6d573b`; original task acceptance is
+unchanged. A1 source, review, receipts, and handoff remain preserved in the prior
+attempt evidence directory. Governing sources, frozen SHA-256:
 
 - `planning/implementation-roadmap.md` — `0160ad8e8ec38f768e2348209b9989e30e8f403d9b1a4ebf694f0801f7206932`
 - `planning/subsystem-interfaces.md` — `f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a`
