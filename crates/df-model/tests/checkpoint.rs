@@ -946,20 +946,18 @@ fn native_input_retained_bytes_include_string_and_vector_capacities() {
         input.retained_bytes(),
         Some(std::mem::size_of::<GameInput>() + 4096)
     );
-    let input = GameInput::Game(CommandInput {
+    let input = GameInput::Job(JobCompletion {
         basis: basis(),
-        observed_revision: basis().revision,
         operation: OperationId::from_bytes(&[40; 16]).unwrap(),
-        member: member(3),
-        command: GameCommand::SubmitRoll {
-            resolution: ResolutionId::from_bytes(&[41; 16]).unwrap(),
-            window: WindowId::from_bytes(&[42; 16]).unwrap(),
-            values: Vec::with_capacity(16),
+        job: JobId::from_bytes(&[41; 16]).unwrap(),
+        generation: 1,
+        outcome: JobOutcome::MemoryCandidates {
+            records: Vec::with_capacity(16),
         },
     });
     assert_eq!(
         input.retained_heap_bytes(),
-        Some(16 * std::mem::size_of::<u32>())
+        Some(16 * std::mem::size_of::<RetrievedMemory>())
     );
 }
 #[test]
@@ -977,4 +975,234 @@ fn checkpoint_debug_output_omits_private_payload_and_choices() {
     assert!(diagnostic.contains("Checkpoint"));
     assert!(!diagnostic.contains("synthetic private witness report"));
     assert!(!diagnostic.contains("journal"));
+}
+
+#[test]
+fn pending_roll_request_retains_only_the_current_resolution_and_window() {
+    let resolution = ResolutionId::from_bytes(&[44; 16]).unwrap();
+    let window = WindowId::from_bytes(&[45; 16]).unwrap();
+    let input = GameInput::Game(CommandInput {
+        basis: basis(),
+        observed_revision: basis().revision,
+        operation: OperationId::from_bytes(&[46; 16]).unwrap(),
+        member: member(3),
+        command: GameCommand::SubmitRoll { resolution, window },
+    });
+    assert_eq!(input.retained_heap_bytes(), Some(0));
+    assert!(matches!(input, GameInput::Game(CommandInput {
+        command: GameCommand::SubmitRoll { resolution: observed_resolution, window: observed_window }, ..
+    }) if observed_resolution == resolution && observed_window == window));
+}
+
+#[test]
+fn pending_retains_prior_window_draw_but_never_another_resolutions_draw() {
+    let mut supplied = state();
+    supplied.facts.push(fact(7, 0));
+    let mut resolution = pending();
+    let draw = ActualDraw {
+        operation: OperationId::from_bytes(&[6; 16]).unwrap(),
+        ordinal: 0,
+        resolution: resolution.id,
+        window: WindowId::from_bytes(&[50; 16]).unwrap(),
+        sides: 6,
+        value: 4,
+        source: rule(),
+    };
+    resolution
+        .draw_ordinals
+        .push((draw.operation, draw.ordinal));
+    supplied.draws.push(draw);
+    supplied.pending.push(resolution);
+    assert!(checkpoint(supplied.clone()).is_ok());
+    supplied.draws[0].resolution = ResolutionId::from_bytes(&[51; 16]).unwrap();
+    assert_eq!(checkpoint(supplied), Err(CheckpointError::InvalidReference));
+}
+
+#[test]
+fn duplicate_schedule_ids_reject_even_with_different_due_times() {
+    let mut supplied = state();
+    let first = ScheduledEvent {
+        id: RecordId::from_bytes(&[52; 16]).unwrap(),
+        entity: entity(4),
+        due: supplied.logical_time,
+        definition: content(),
+    };
+    let mut next = first.clone();
+    next.due.ticks += 1;
+    supplied.schedules = vec![first, next];
+    assert_eq!(
+        checkpoint(supplied),
+        Err(CheckpointError::DuplicateIdentity)
+    );
+}
+
+#[test]
+fn private_output_and_capture_require_the_named_members_connection() {
+    use df_types::ClientBindingId;
+    let binding = ClientBindingId::from_bytes(&[53; 16]).unwrap();
+    let mut supplied = state();
+    supplied.members.push(MembershipLink {
+        member: member(54),
+        character: None,
+    });
+    supplied.continuity.presence.push(ParticipantPresence {
+        member: member(3),
+        bindings: vec![binding],
+        state: PresenceKind::Connected,
+        policy: content(),
+    });
+    supplied.continuity.audio = Some(AudioTopology {
+        policy: content(),
+        outputs: vec![AudioOutputLease {
+            id: RecordId::from_bytes(&[55; 16]).unwrap(),
+            destination: AudioDestination::PrivateListener {
+                member: member(3),
+                binding,
+            },
+            generation: 1,
+            audience: AudienceScope::Members(vec![member(3)]),
+            device_unlocked: true,
+        }],
+        captures: vec![CaptureLease {
+            id: RecordId::from_bytes(&[56; 16]).unwrap(),
+            member: member(3),
+            binding,
+            generation: 1,
+            permitted_offer: None,
+            format: label("fixture-audio"),
+        }],
+    });
+    assert!(checkpoint(supplied.clone()).is_ok());
+    let mut wrong_output = supplied.clone();
+    let audio = wrong_output.continuity.audio.as_mut().unwrap();
+    audio.outputs[0].destination = AudioDestination::PrivateListener {
+        member: member(54),
+        binding,
+    };
+    audio.outputs[0].audience = AudienceScope::Members(vec![member(54)]);
+    assert_eq!(
+        checkpoint(wrong_output),
+        Err(CheckpointError::InvalidReference)
+    );
+    supplied.continuity.audio.as_mut().unwrap().captures[0].member = member(54);
+    assert_eq!(checkpoint(supplied), Err(CheckpointError::InvalidIntent));
+}
+
+fn retrieved_state() -> GameState {
+    let mut supplied = state();
+    supplied.continuity.retrieval.push(RetrievalRequest {
+        id: RecordId::from_bytes(&[57; 16]).unwrap(),
+        basis: basis(),
+        observer: member(3),
+        purpose: RetrievalPurpose::PlayerRecall,
+        topics: vec![],
+        entities: vec![],
+        from: supplied.logical_time,
+        through: supplied.logical_time,
+        maximum_items: 1,
+        maximum_bytes: 2,
+        maximum_tokens: 1,
+        access_generation: 4,
+        index_generation: 8,
+        source_digest: pins().content.content_digest,
+        policy: content(),
+    });
+    supplied.continuity.retrieved.push(RetrievedMemory {
+        request: RecordId::from_bytes(&[57; 16]).unwrap(),
+        episodes: vec![],
+        facts: vec![],
+        attributed_claims: vec![],
+        snippets: vec!["ok".into()],
+        source_revision: basis().revision,
+        index_generation: 8,
+        access_generation: 4,
+        incomplete: false,
+    });
+    supplied
+}
+
+#[test]
+fn retrieved_memory_matches_request_provenance_and_exact_byte_item_bounds() {
+    assert!(checkpoint(retrieved_state()).is_ok());
+    for change in 0..5 {
+        let mut supplied = retrieved_state();
+        let result = &mut supplied.continuity.retrieved[0];
+        match change {
+            0 => result.access_generation = 3,
+            1 => result.index_generation = 7,
+            2 => result.source_revision = revision(1, 8),
+            3 => result.snippets[0].push('!'),
+            4 => result.snippets.push(String::new()),
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            checkpoint(supplied),
+            Err(match change {
+                0 | 1 => CheckpointError::InvalidReference,
+                2 => CheckpointError::StaleBasis,
+                _ => CheckpointError::Capacity,
+            })
+        );
+    }
+}
+
+#[test]
+fn aggregate_record_budget_counts_audience_members_in_all_state_families() {
+    for continuity in [false, true] {
+        let mut supplied = state();
+        if continuity {
+            supplied.continuity.journal.push(JournalEntry {
+                id: RecordId::from_bytes(&[58; 16]).unwrap(),
+                source_facts: vec![],
+                attributed_claims: vec![],
+                audience: AudienceScope::Members(vec![member(3)]),
+                text: String::new(),
+            });
+        } else {
+            let mut record = fact(7, 0);
+            record.audience = AudienceScope::Members(vec![member(3)]);
+            if let FactValue::ContentEvent { subjects, .. } = &mut record.value {
+                subjects.clear();
+            }
+            supplied.facts.push(record);
+        }
+        // Four base records, one fact/journal record and one audience identity.
+        let inventory = ReferenceInventory {
+            rules: &[rule()],
+            content: &[content()],
+            resources: &resource_constraints(),
+            assets: &[],
+        };
+        let mut bounds = limits();
+        bounds.maximum_records = 6;
+        assert!(
+            Checkpoint::new(
+                CHECKPOINT_SCHEMA,
+                basis(),
+                pins(),
+                supplied.clone(),
+                inventory,
+                bounds
+            )
+            .is_ok()
+        );
+        bounds.maximum_records = 5;
+        let inventory = ReferenceInventory {
+            rules: &[rule()],
+            content: &[content()],
+            resources: &resource_constraints(),
+            assets: &[],
+        };
+        assert_eq!(
+            Checkpoint::new(
+                CHECKPOINT_SCHEMA,
+                basis(),
+                pins(),
+                supplied,
+                inventory,
+                bounds
+            ),
+            Err(CheckpointError::Capacity)
+        );
+    }
 }

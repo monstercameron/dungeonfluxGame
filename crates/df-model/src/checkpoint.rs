@@ -723,6 +723,7 @@ fn validate_state(
     unique(state.active_effects.iter().map(|x| x.id))?;
     unique(state.beliefs.iter().map(|x| x.id))?;
     unique(state.memories.iter().map(|x| x.id))?;
+    unique(state.schedules.iter().map(|x| x.id))?;
     unique(state.inventory.iter().map(|x| x.item))?;
     unique(state.characters.iter().map(|x| x.entity))?;
     unique(
@@ -748,9 +749,9 @@ fn validate_state(
     let entity = |id: EntityId| require(entities.contains(&id), CheckpointError::InvalidReference);
     let member = |id: MemberId| require(members.contains(&id), CheckpointError::InvalidReference);
     let fact = |id: FactId| require(facts.contains(&id), CheckpointError::InvalidReference);
-    let audience = |scope: &AudienceScope| -> Result<(), CheckpointError> {
+    let audience = |scope: &AudienceScope, records: &mut usize| -> Result<(), CheckpointError> {
         if let AudienceScope::Members(ids) = scope {
-            count_nested(ids.len(), limits.maximum_records)?;
+            count_records(records, ids.len(), limits.maximum_records)?;
             unique(ids.iter().copied())?;
             for id in ids {
                 member(*id)?;
@@ -762,10 +763,10 @@ fn validate_state(
         member(x.participant)?;
         rule(&x.source)
     };
-    let ruling = |x: &ScopedRuling| -> Result<(), CheckpointError> {
+    let ruling = |x: &ScopedRuling, records: &mut usize| -> Result<(), CheckpointError> {
         member(x.adjudicator)?;
         rule(&x.source)?;
-        audience(&x.audience)
+        audience(&x.audience, records)
     };
     valid_time(state.logical_time)?;
     for x in &state.members {
@@ -853,7 +854,7 @@ fn validate_state(
             )?;
         }
         seen_facts.insert(x.id);
-        audience(&x.audience)?;
+        audience(&x.audience, &mut records)?;
         match &x.value {
             FactValue::EntityCreated {
                 entity: id,
@@ -887,7 +888,7 @@ fn validate_state(
             } => choice(selected)?,
             FactValue::RulingAccepted {
                 ruling: selected, ..
-            } => ruling(selected)?,
+            } => ruling(selected, &mut records)?,
             FactValue::TimeAdvanced { before, after } => {
                 valid_time(*before)?;
                 valid_time(*after)?;
@@ -962,7 +963,13 @@ fn validate_state(
             choice(selected)?;
         }
         for id in &x.draw_ordinals {
-            require(draws.contains(id), CheckpointError::InvalidReference)?;
+            require(
+                state
+                    .draws
+                    .iter()
+                    .any(|draw| (draw.operation, draw.ordinal) == *id && draw.resolution == x.id),
+                CheckpointError::InvalidReference,
+            )?;
         }
         for spent in &x.spent {
             entity(spent.owner)?;
@@ -975,7 +982,7 @@ fn validate_state(
             )?;
         }
         for selected in &x.rulings {
-            ruling(selected)?;
+            ruling(selected, &mut records)?;
         }
         match &x.next {
             PendingInput::Choice { remaining }
@@ -1098,7 +1105,7 @@ fn validate_state(
         entity(x.holder)?;
         entity(x.subject)?;
         content(&x.source)?;
-        audience(&x.audience)?;
+        audience(&x.audience, &mut records)?;
         count!(&x.evidence);
         for id in &x.evidence {
             fact(*id)?;
@@ -1107,7 +1114,7 @@ fn validate_state(
     }
     for x in &state.memories {
         entity(x.holder)?;
-        audience(&x.audience)?;
+        audience(&x.audience, &mut records)?;
         count!(&x.source_facts);
         for id in &x.source_facts {
             fact(*id)?;
@@ -1216,7 +1223,7 @@ fn validate_state(
     }
     for x in &state.presentation {
         content(&x.definition)?;
-        audience(&x.audience)?;
+        audience(&x.audience, &mut records)?;
         count!(&x.causal_facts);
         require(
             x.source_revision <= basis.revision,
@@ -1256,8 +1263,11 @@ fn require(condition: bool, error: CheckpointError) -> Result<(), CheckpointErro
 fn valid_time(time: LogicalTime) -> Result<(), CheckpointError> {
     require(time.ticks_per_second > 0, CheckpointError::InvalidTime)
 }
-fn count_nested(count: usize, maximum: usize) -> Result<(), CheckpointError> {
-    require(count <= maximum, CheckpointError::Capacity)
+fn count_records(records: &mut usize, count: usize, maximum: usize) -> Result<(), CheckpointError> {
+    *records = records
+        .checked_add(count)
+        .ok_or(CheckpointError::Capacity)?;
+    require(*records <= maximum, CheckpointError::Capacity)
 }
 fn ordered<T: Ord>(
     last: &mut std::collections::BTreeMap<T, u32>,
@@ -1583,8 +1593,11 @@ pub struct RetrievalRequest {
     pub entities: Vec<EntityId>,
     pub from: LogicalTime,
     pub through: LogicalTime,
+    /// Aggregate count of episode, fact, attributed-claim and snippet entries.
     pub maximum_items: u32,
+    /// Aggregate UTF-8 snippet bytes retained in the selected result.
     pub maximum_bytes: u64,
+    /// The admitted native tokenizer enforces this bound before candidate acceptance.
     pub maximum_tokens: u64,
     pub access_generation: u64,
     pub index_generation: u64,
@@ -2115,9 +2128,10 @@ fn validate_continuity(
     let members = unique(state.members.iter().map(|x| x.member))?;
     let facts = unique(state.facts.iter().map(|x| x.id))?;
     let episodes = unique(state.memories.iter().map(|x| x.id))?;
+    unique(state.schedules.iter().map(|x| x.id))?;
     let claims = unique(state.beliefs.iter().map(|x| x.id))?;
     let summaries = unique(all.summaries.iter().map(|x| x.id))?;
-    let requests = unique(all.retrieval.iter().map(|x| x.id))?;
+    unique(all.retrieval.iter().map(|x| x.id))?;
     let moments = unique(all.moments.iter().map(|x| x.id))?;
     let demands = unique(all.demands.iter().map(|x| x.id))?;
     let hooks = unique(all.hooks.iter().map(|x| x.id))?;
@@ -2152,8 +2166,9 @@ fn validate_continuity(
             CheckpointError::StaleBasis,
         )
     };
-    let audience = |x: &AudienceScope| -> Result<(), CheckpointError> {
+    let audience = |x: &AudienceScope, records: &mut usize| -> Result<(), CheckpointError> {
         if let AudienceScope::Members(ids) = x {
+            count_records(records, ids.len(), limits.maximum_records)?;
             unique(ids.iter().copied())?;
             for id in ids {
                 member(*id)?;
@@ -2250,14 +2265,14 @@ fn validate_continuity(
         entity(x.sender)?;
         entity(x.recipient)?;
         content(&x.policy)?;
-        audience(&x.audience)?;
+        audience(&x.audience, &mut progress.records)?;
         count!(&x.evidence);
         for id in &x.evidence {
             fact(*id)?;
         }
     }
     for x in &all.journal {
-        audience(&x.audience)?;
+        audience(&x.audience, &mut progress.records)?;
         count!(&x.source_facts);
         count!(&x.attributed_claims);
         for id in &x.source_facts {
@@ -2278,7 +2293,7 @@ fn validate_continuity(
             CheckpointError::ContentMismatch,
         )?;
         content(&x.policy)?;
-        audience(&x.audience)?;
+        audience(&x.audience, &mut progress.records)?;
         count!(&x.episodes);
         count!(&x.derived_claims);
         for id in &x.episodes {
@@ -2315,14 +2330,37 @@ fn validate_continuity(
         }
     }
     for x in &all.retrieved {
+        let request = all
+            .retrieval
+            .iter()
+            .find(|request| request.id == x.request)
+            .ok_or(CheckpointError::InvalidReference)?;
         require(
-            requests.contains(&x.request),
-            CheckpointError::InvalidReference,
-        )?;
-        require(
-            x.source_revision <= basis.revision,
+            x.source_revision == request.basis.revision,
             CheckpointError::StaleBasis,
         )?;
+        require(
+            x.access_generation == request.access_generation
+                && x.index_generation == request.index_generation,
+            CheckpointError::InvalidReference,
+        )?;
+        let items = x
+            .episodes
+            .len()
+            .checked_add(x.facts.len())
+            .and_then(|count| count.checked_add(x.attributed_claims.len()))
+            .and_then(|count| count.checked_add(x.snippets.len()))
+            .ok_or(CheckpointError::Capacity)?;
+        require(
+            u64::try_from(items).map_err(|_| CheckpointError::Capacity)?
+                <= u64::from(request.maximum_items),
+            CheckpointError::Capacity,
+        )?;
+        let bytes = x.snippets.iter().try_fold(0u64, |sum, text| {
+            let length = u64::try_from(text.len()).map_err(|_| CheckpointError::Capacity)?;
+            sum.checked_add(length).ok_or(CheckpointError::Capacity)
+        })?;
+        require(bytes <= request.maximum_bytes, CheckpointError::Capacity)?;
         count!(&x.episodes);
         count!(&x.facts);
         count!(&x.attributed_claims);
@@ -2378,7 +2416,7 @@ fn validate_continuity(
         for secret in &x.secrets {
             entity(secret.holder)?;
             content(&secret.policy)?;
-            audience(&secret.permitted_audience)?;
+            audience(&secret.permitted_audience, &mut progress.records)?;
             count!(&secret.claims);
             for id in &secret.claims {
                 claim(*id)?;
@@ -2388,7 +2426,7 @@ fn validate_continuity(
     for x in &all.hooks {
         member(x.member)?;
         content(&x.definition)?;
-        audience(&x.audience)?;
+        audience(&x.audience, &mut progress.records)?;
         require(x.consent_generation > 0, CheckpointError::InvalidReference)?;
         count!(&x.source_facts);
         for id in &x.source_facts {
@@ -2430,7 +2468,7 @@ fn validate_continuity(
         unique(x.captures.iter().map(|x| x.id))?;
         for output in &x.outputs {
             require(output.generation > 0, CheckpointError::InvalidIntent)?;
-            audience(&output.audience)?;
+            audience(&output.audience, &mut progress.records)?;
             match output.destination {
                 AudioDestination::PublicRoom(id) => {
                     require(
@@ -2444,8 +2482,9 @@ fn validate_continuity(
                 } => {
                     member(id)?;
                     require(
-                        bindings.contains(&binding)
-                            && output.device_unlocked
+                        all.presence.iter().any(|presence| {
+                            presence.member == id && presence.bindings.contains(&binding)
+                        }) && output.device_unlocked
                             && matches!(&output.audience, AudienceScope::Members(ids) if ids.contains(&id)
                             && ids.len() == 1),
                         CheckpointError::InvalidReference,
@@ -2456,7 +2495,11 @@ fn validate_continuity(
         for capture in &x.captures {
             member(capture.member)?;
             require(
-                capture.generation > 0 && bindings.contains(&capture.binding),
+                capture.generation > 0
+                    && all.presence.iter().any(|presence| {
+                        presence.member == capture.member
+                            && presence.bindings.contains(&capture.binding)
+                    }),
                 CheckpointError::InvalidIntent,
             )?;
             if let Some(id) = capture.permitted_offer {
@@ -2484,7 +2527,7 @@ fn validate_continuity(
         )?;
     }
     for x in &all.knowledge_cues {
-        audience(&x.audience)?;
+        audience(&x.audience, &mut progress.records)?;
         content(&x.definition)?;
         count!(&x.source_facts);
         for id in &x.source_facts {
@@ -2494,7 +2537,7 @@ fn validate_continuity(
     for x in &all.moments {
         entity(x.location)?;
         content(&x.semantic_focus)?;
-        audience(&x.audience)?;
+        audience(&x.audience, &mut progress.records)?;
         count!(&x.characters);
         count!(&x.facts);
         count!(&x.attributed_claims);
@@ -2508,7 +2551,7 @@ fn validate_continuity(
             claim(*id)?;
         }
     }
-    let request_key = |key: &AssetRequestKey| -> Result<(), CheckpointError> {
+    let request_key = |key: &AssetRequestKey, records: &mut usize| -> Result<(), CheckpointError> {
         require(
             key.schema == CHECKPOINT_SCHEMA && moments.contains(&key.moment),
             CheckpointError::InvalidReference,
@@ -2517,7 +2560,7 @@ fn validate_continuity(
             key.source == pins.content.content_digest,
             CheckpointError::ContentMismatch,
         )?;
-        audience(&key.audience)?;
+        audience(&key.audience, records)?;
         for reference in &key.references {
             asset(reference)?;
         }
@@ -2525,7 +2568,7 @@ fn validate_continuity(
     };
     for x in &all.demands {
         current_basis(x.basis)?;
-        request_key(&x.key)?;
+        request_key(&x.key, &mut progress.records)?;
         content(&x.policy)?;
         valid_time(x.expires)?;
         require(
@@ -2595,12 +2638,12 @@ fn validate_continuity(
             }
         }
     }
-    let shot = |x: &ShotPlan| -> Result<(), CheckpointError> {
+    let shot = |x: &ShotPlan, records: &mut usize| -> Result<(), CheckpointError> {
         require(
             moments.contains(&x.moment) && x.duration_ticks > 0,
             CheckpointError::InvalidReference,
         )?;
-        audience(&x.audience)?;
+        audience(&x.audience, records)?;
         content(&x.definition)?;
         content(&x.performance.definition)?;
         for id in &x.subjects {
@@ -2618,7 +2661,7 @@ fn validate_continuity(
         Ok(())
     };
     for x in &all.shots {
-        shot(x)?;
+        shot(x, &mut progress.records)?;
         count!(&x.subjects);
         count!(&x.references);
         count!(&x.performance.emphasis_facts);
@@ -2652,8 +2695,8 @@ fn validate_continuity(
         fact(x.source_fact)?;
         content(&x.definition)?;
     }
-    let selection = |x: &FactSelection| -> Result<(), CheckpointError> {
-        audience(&x.audience)?;
+    let selection = |x: &FactSelection, records: &mut usize| -> Result<(), CheckpointError> {
+        audience(&x.audience, records)?;
         for id in &x.facts {
             fact(*id)?;
         }
@@ -2665,9 +2708,9 @@ fn validate_continuity(
     for x in &all.bookends {
         current_basis(x.spec.basis)?;
         content(&x.spec.policy)?;
-        audience(&x.spec.audience)?;
+        audience(&x.spec.audience, &mut progress.records)?;
         valid_time(x.spec.expires)?;
-        selection(&x.selection)?;
+        selection(&x.selection, &mut progress.records)?;
         asset(&x.fallback)?;
         require(
             x.spec.from <= x.spec.through
@@ -2689,7 +2732,7 @@ fn validate_continuity(
         count!(&x.shots);
         count!(&x.captions);
         for value in &x.shots {
-            shot(value)?;
+            shot(value, &mut progress.records)?;
             require(
                 value.audience == x.spec.audience,
                 CheckpointError::InvalidReference,
@@ -2710,7 +2753,7 @@ fn validate_continuity(
                 && !x.downloaded_copy_retraction_supported,
             CheckpointError::InvalidReference,
         )?;
-        selection(&x.selection)?;
+        selection(&x.selection, &mut progress.records)?;
         valid_time(x.expires)?;
         count!(&x.recipients);
         count!(&x.assets);
@@ -2730,7 +2773,7 @@ fn validate_continuity(
     }
     for x in &all.critical_cues {
         fact(x.fact)?;
-        audience(&x.audience)?;
+        audience(&x.audience, &mut progress.records)?;
         content(&x.policy)?;
         count!(&x.ready_assets);
         require(x.maximum_duration_ticks > 0, CheckpointError::Capacity)?;
@@ -2744,7 +2787,7 @@ fn validate_continuity(
         content(&x.template)?;
         rule(&x.source)?;
         fact(x.origin)?;
-        audience(&x.audience)?;
+        audience(&x.audience, &mut progress.records)?;
         count!(&x.bounded_parameters);
     }
     for x in &all.content_admissions {
@@ -2887,10 +2930,18 @@ pub enum GameCommand {
         offer: RevisionLabel,
         option: RevisionLabel,
     },
+    /// Requests the pending server-owned draw; client data cannot choose its outcome.
+    /// ```compile_fail
+    /// use df_model::checkpoint::{GameCommand, ResolutionId, WindowId};
+    /// let request = GameCommand::SubmitRoll {
+    ///     resolution: ResolutionId::from_bytes(&[1; 16]).unwrap(),
+    ///     window: WindowId::from_bytes(&[2; 16]).unwrap(),
+    ///     values: vec![20],
+    /// };
+    /// ```
     SubmitRoll {
         resolution: ResolutionId,
         window: WindowId,
-        values: Vec<u32>,
     },
     SelectReaction {
         resolution: ResolutionId,
@@ -3038,7 +3089,7 @@ impl RetainedHeap for GameCommand {
             | Self::SelectReaction { offer, option, .. } => {
                 offer.retained_heap()?.checked_add(option.retained_heap()?)
             }
-            Self::SubmitRoll { values, .. } => values.retained_heap(),
+            Self::SubmitRoll { .. } => Some(0),
             Self::ProposeAction {
                 action,
                 targets,
