@@ -5,6 +5,7 @@
 
 mod catalog;
 mod format;
+mod loading;
 mod negotiation;
 mod text_key;
 
@@ -12,6 +13,9 @@ pub use catalog::{Catalog, Lookup, lookup_chain};
 pub use format::{
     ArgumentKind, ArgumentValue, FormatError, FormattedMessage, FormattedPart, MessageError,
     MessagePart,
+};
+pub use loading::{
+    CatalogEntry, CatalogLoadError, VersionedCatalog, VersionedFormattedMessage, VersionedLookup,
 };
 pub use negotiation::{LocaleConfigurationError, LocaleSelection, settle};
 pub use text_key::{TextKey, TextKeyError};
