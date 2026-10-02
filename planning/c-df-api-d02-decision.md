@@ -146,16 +146,6 @@ fn main() {
             from_rpc(RpcStatus::Cancelled, None),
             Next::LookupSameOperation,
         ),
-        (
-            "not recorded lookup",
-            Knowledge::Unknown,
-            Next::ResolveWithoutReplay,
-        ),
-        (
-            "expired lookup",
-            Knowledge::Unknown,
-            Next::ResolveWithoutReplay,
-        ),
     ];
 
     for (label, knowledge, expected) in cases {
@@ -167,8 +157,14 @@ fn main() {
     assert_eq!(next(Knowledge::Unknown), Next::LookupSameOperation);
     assert_eq!(next(Knowledge::Pending), Next::WaitSameOperation);
     assert_ne!(Knowledge::Pending, Knowledge::Unknown);
-    assert_eq!(next_lookup(Lookup::Receipt(Receipt::Accepted)), Next::ShowConfirmed);
-    assert_eq!(next_lookup(Lookup::Receipt(Receipt::Rejected)), Next::CorrectKnownRejection);
+    assert_eq!(
+        next_lookup(Lookup::Receipt(Receipt::Accepted)),
+        Next::ShowConfirmed
+    );
+    assert_eq!(
+        next_lookup(Lookup::Receipt(Receipt::Rejected)),
+        Next::CorrectKnownRejection
+    );
     assert_eq!(next_lookup(Lookup::InProgress), Next::WaitSameOperation);
     assert_eq!(next_lookup(Lookup::NotRecorded), Next::ResolveWithoutReplay);
     assert_eq!(
@@ -189,6 +185,6 @@ fn main() {
 
 ## Verification and provenance
 
-The governing inputs and SHA-256 values are recorded in `input-hashes.json` under this task's retained evidence root. Guarded extraction of the initial literal passed, but its `rustfmt --check` failed because the case tuples needed repository formatting. After formatting correction, `rustfmt --check` passed on the second literal. Its first `rustc --edition 2024 -D warnings` attempt failed because the example left the receipt-bearing lookup and no-replay action unconstructed. The document was then corrected to exercise those cases. The next guarded extraction produced `HOLD_NO_COMMAND_LAUNCHED` at a fresh free-memory proxy of 39% against the guard's 42% minimum. Per the wave rule, this hold was not retried. Therefore the current exact literal has not been extracted, formatted, compiled, or executed; the earlier checks apply only to prior revisions and do not verify the current source. Receipts and stdout/stderr remain retained under the evidence root. No production behavior or integrated game acceptance is established.
+The governing inputs and SHA-256 values are recorded in `input-hashes.json` under this task's retained evidence root. Earlier v3 evidence includes a 39% free-memory proxy hold against its 42% minimum; that hold and the preceding failed checks remain unchanged. Under a later one-shot v4 admission, extraction passed, `rustfmt --check` failed because two assertions needed repository wrapping, and `rustc --edition 2024 -D warnings` passed. Execution then exposed a fixture mismatch: the generic `Unknown` follow-up correctly chose `LookupSameOperation`, while two rows incorrectly expected the separate post-lookup `ResolveWithoutReplay` action. The source was corrected to test lookup results through `next_lookup` and to format the assertions, then committed as a source-only follow-up. This final correction has not been re-extracted, formatted, compiled, or executed; fresh verification admission is required. All prior receipts/stdout/stderr remain retained. No production behavior or integrated game acceptance is established.
 
 Integration hook: `Define command receipt versus transport status -> accepted pending rejected and unknown are distinct`, owner `df-api`, coordinated with the existing `df-session`, `df-persistence`, `df-protocol`, `df-rpc-bridge`, `df-auth`, and `df-observe` contracts above. Independent review and root integration remain pending.
