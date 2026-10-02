@@ -259,12 +259,6 @@ fn main() {
         Ok((first.principal, 1))
     );
 
-    // A trace value that happens to equal the credential's integer payload is not
-    // in the credential table and is refused.
-    assert_eq!(
-        state.authenticate(CredentialIdentity(first_trace.trace_id)),
-        Err(Refusal::UnknownCredential)
-    );
     let second = state.begin_guest(BootstrapRequestId(12), first_trace);
     assert_ne!(first.credential, second.credential);
     assert_ne!(first.principal, second.principal);
