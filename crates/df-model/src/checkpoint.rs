@@ -724,6 +724,11 @@ fn validate_state(
     unique(state.beliefs.iter().map(|x| x.id))?;
     unique(state.memories.iter().map(|x| x.id))?;
     unique(state.schedules.iter().map(|x| x.id))?;
+    unique(state.threats.iter().map(|x| x.id))?;
+    unique(state.conversations.iter().map(|x| x.id))?;
+    unique(state.obligations.iter().map(|x| x.id))?;
+    unique(state.encounters.iter().map(|x| x.id))?;
+    unique(state.presentation.iter().map(|x| x.id))?;
     unique(state.inventory.iter().map(|x| x.item))?;
     unique(state.characters.iter().map(|x| x.entity))?;
     unique(
@@ -2199,6 +2204,8 @@ fn validate_continuity(
     unique(all.asset_jobs.iter().map(|x| x.job))?;
     unique(all.shots.iter().map(|x| x.id))?;
     unique(all.exports.iter().map(|x| x.id))?;
+    unique(all.critical_cues.iter().map(|x| x.id))?;
+    unique(all.asset_dependencies.iter().map(|x| x.asset.key.as_str()))?;
     for x in &all.creation {
         entity(x.entity)?;
         member(x.member)?;
@@ -2600,11 +2607,12 @@ fn validate_continuity(
     // Dependencies are immutable references; any cycle is rejected before canonical admission.
     for start in &all.asset_dependencies {
         let mut pending = vec![&start.asset];
-        let mut visited = BTreeSet::new();
+        let mut visited = Vec::new();
         while let Some(current) = pending.pop() {
-            if !visited.insert(current.key.as_str()) {
+            if visited.contains(&current) {
                 continue;
             }
+            visited.push(current);
             if let Some(record) = all.asset_dependencies.iter().find(|x| &x.asset == current) {
                 for next in &record.prerequisites {
                     require(next != &start.asset, CheckpointError::InvalidReference)?;

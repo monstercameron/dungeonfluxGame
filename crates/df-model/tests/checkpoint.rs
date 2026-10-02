@@ -1206,3 +1206,156 @@ fn aggregate_record_budget_counts_audience_members_in_all_state_families() {
         );
     }
 }
+
+#[test]
+fn duplicate_encounter_identity_cannot_preserve_conflicting_turn_state() {
+    let mut supplied = state();
+    let encounter = EncounterState {
+        id: RecordId::from_bytes(&[60; 16]).unwrap(),
+        definition: content(),
+        participants: vec![entity(4)],
+        turn_order: vec![entity(4)],
+        active_turn: Some(entity(4)),
+        objectives: vec![],
+        combat_policy: content(),
+    };
+    supplied.encounters.push(encounter.clone());
+    assert!(checkpoint(supplied.clone()).is_ok());
+    let mut conflicting = encounter;
+    conflicting.active_turn = None;
+    supplied.encounters.push(conflicting);
+    assert_eq!(
+        checkpoint(supplied),
+        Err(CheckpointError::DuplicateIdentity)
+    );
+}
+
+#[test]
+fn duplicate_asset_dependency_cannot_hide_a_self_cycle_or_conflicting_edges() {
+    let asset = AssetReference {
+        key: label("fixture-dependency-a"),
+        digest: ContentDigest([60; 32]),
+        byte_length: 1,
+        kind: AssetKind::Image,
+    };
+    let dependency = AssetReference {
+        key: label("fixture-dependency-b"),
+        digest: ContentDigest([61; 32]),
+        byte_length: 1,
+        kind: AssetKind::Image,
+    };
+    for repeated in [false, true] {
+        let mut supplied = state();
+        supplied.continuity.asset_dependencies = vec![
+            AssetDependency {
+                asset: asset.clone(),
+                prerequisites: vec![],
+            },
+            AssetDependency {
+                asset: if repeated {
+                    asset.clone()
+                } else {
+                    dependency.clone()
+                },
+                prerequisites: vec![asset.clone()],
+            },
+        ];
+        let result = Checkpoint::new(
+            CHECKPOINT_SCHEMA,
+            basis(),
+            pins(),
+            supplied,
+            ReferenceInventory {
+                rules: &[rule()],
+                content: &[content()],
+                resources: &resource_constraints(),
+                assets: &[asset.clone(), dependency.clone()],
+            },
+            limits(),
+        );
+        if repeated {
+            assert_eq!(result, Err(CheckpointError::DuplicateIdentity));
+        } else {
+            assert!(result.is_ok());
+        }
+    }
+}
+
+#[test]
+fn records_with_owned_ids_are_unique_within_each_canonical_family() {
+    let id = RecordId::from_bytes(&[62; 16]).unwrap();
+    for family in 0..5 {
+        let mut supplied = state();
+        match family {
+            0 => {
+                let value = ThreatClock {
+                    id,
+                    definition: content(),
+                    progress: 0,
+                    capacity: 3,
+                };
+                supplied.threats.push(value.clone());
+                assert!(checkpoint(supplied.clone()).is_ok());
+                supplied.threats.push(value);
+            }
+            1 => {
+                let value = ConversationState {
+                    id,
+                    participants: vec![entity(4)],
+                    topic: content(),
+                    accepted_facts: vec![],
+                };
+                supplied.conversations.push(value.clone());
+                assert!(checkpoint(supplied.clone()).is_ok());
+                supplied.conversations.push(value);
+            }
+            2 => {
+                let value = Obligation {
+                    id,
+                    obligor: entity(4),
+                    beneficiary: entity(4),
+                    definition: content(),
+                    due: None,
+                    fulfilled: false,
+                };
+                supplied.obligations.push(value.clone());
+                assert!(checkpoint(supplied.clone()).is_ok());
+                supplied.obligations.push(value);
+            }
+            3 => {
+                let value = PresentationDemand {
+                    id,
+                    definition: content(),
+                    audience: AudienceScope::Shared,
+                    causal_facts: vec![],
+                    source_revision: basis().revision,
+                };
+                supplied.presentation.push(value.clone());
+                assert!(checkpoint(supplied.clone()).is_ok());
+                supplied.presentation.push(value);
+            }
+            4 => {
+                let pending = pending();
+                supplied.facts.push(fact(7, 0));
+                supplied.pending.push(pending.clone());
+                let value = CriticalCueEligibility {
+                    id,
+                    fact: fact(7, 0).id,
+                    resolution: pending.id,
+                    audience: AudienceScope::Shared,
+                    ready_assets: vec![],
+                    policy: content(),
+                    maximum_duration_ticks: 1,
+                };
+                supplied.continuity.critical_cues.push(value.clone());
+                assert!(checkpoint(supplied.clone()).is_ok());
+                supplied.continuity.critical_cues.push(value);
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            checkpoint(supplied),
+            Err(CheckpointError::DuplicateIdentity)
+        );
+    }
+}
