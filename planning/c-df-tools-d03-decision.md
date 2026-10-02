@@ -1,8 +1,9 @@
 # df-tools atomic artifact publication and provenance decision
 
-Task/attempt: `B-C-df-tools-D03/a1`
+Task/attempt: `B-C-df-tools-D03/a2`
 
 Input revision: `4c0e050c2d30e632bd3b32c51a92cfda52479e6e`
+Repair reference: rejected a1 candidate `f255f1fb31561bb0bfa625ea478e72499bc60f3d`, findings D03-R1/R2.
 Status: bounded design decision; filesystem publication and production qualification remain pending.
 
 ## Decision
@@ -17,6 +18,12 @@ the current `RevisionLabel` grammar; the manifest records the sorted ID/digest
 pairs. The build input's asset-ID set and manifest's asset-ID set must be equal.
 No component is inferred from a filename, directory name, source label, or another
 component's label. The digest is over the exact bytes published for that component.
+The build owner freezes an expected set before validation: all five labels, the
+expected native/WASM/configuration digests, and the complete asset ID/digest map.
+Observed candidate digests must equal that set for every component and asset;
+unchanged labels and IDs do not excuse a byte mismatch. Expected digests are not
+copied from the candidate under validation. In production, freezing trustworthy
+expected bytes/digests and computing observed hashes are I01 prerequisites.
 
 `BuildIdentity` is the actual shared source contract at this revision. It requires
 five independently supplied labels and validates each as 1–128 ASCII bytes from
@@ -45,15 +52,30 @@ asset set against the build inputs, writes the complete manifest, and only then
 atomically replaces one pointer file that names that manifest. Write and sync the
 staged files and manifest before pointer replacement; use a temporary pointer in
 the same filesystem, atomic rename, and parent-directory sync. The pointer is the
-commit point: before rename, readers see the prior accepted manifest; after
-rename, it names a complete immutable set. Never publish per-component pointers
-or mutate the current accepted directory in place. A missing label, missing
-native/WASM/configuration component, missing or extra asset, duplicate/invalid
-asset ID, digest mismatch, incomplete evidence, or any staging/write/sync/rename
-failure leaves the previous pointer intact and reports a typed refusal/failure.
-Ambiguous pointer-replacement outcomes must be resolved by rereading the pointer
-and manifest identity; they must not be reported as success based on the attempted
-write alone.
+commit point: before successful rename, readers see the prior accepted manifest;
+after successful rename, it names a complete immutable set. Never publish
+per-component pointers or mutate the current accepted directory in place.
+A missing label, missing native/WASM/configuration component, missing or extra
+asset, duplicate/invalid asset ID, digest mismatch, incomplete evidence, or a
+known staging/write/file-sync/manifest-sync/temporary-pointer-sync failure before
+rename is a typed pre-commit refusal that preserves the prior selected pointer.
+A known rename failure with confirmed no replacement has the same guarantee.
+
+A successful rename followed by failed parent-directory sync is instead
+`CommittedDurabilityUnconfirmed`: the new complete set is currently selected,
+but crash/power-loss durability is unconfirmed. It cannot promise that the old
+pointer remains selected. A lost/ambiguous replacement outcome is
+`ReplacementOutcomeUnknown`, whether replacement actually happened or not;
+neither success nor prior-pointer preservation is inferred from the attempted
+write. Reconciliation under the publication owner's exclusion rereads and
+validates the selected pointer/immutable manifest identity, then attempts the
+required sync. It reports the observed selected set separately from confirmed
+or unconfirmed durability; rereading alone does not prove durability. Missing,
+corrupt, unexpected, or inaccessible pointer/manifest remains unresolved rather
+than triggering a blind publish retry. Preserve both old and new immutable bytes
+and their claims until reconciliation and retention permit retirement. A
+compensating rollback would be a separate publication and is not an atomic undo
+of the successful rename. Cancellation cannot undo that committed selection.
 
 This pointer means “accepted local build set under the frozen build checks.” It
 does not mean browser/server readiness, deployment approval, campaign publication
@@ -80,7 +102,9 @@ cannot be promoted or translated into this manifest without the actual component
 bytes, configuration, and asset ID list.
 
 The next implementation belongs to `df-tools` and should add a private build
-publication module wired from the existing crate entry points. Its first input is
+publication module in `crates/df-tools/src/publication.rs`, privately wired by
+`crates/df-tools/src/lib.rs`; exact existing CLI/fixture entry point wiring is
+frozen with I01. Its first input is
 an explicit build request containing the five shared identity labels, build
 configuration bytes, resolved asset IDs, toolchain identity, and nonsecret build
 arguments. It stages native, WASM, config, and asset bytes under one attempt-owned
@@ -91,20 +115,31 @@ to the D02 owner and require it to claim that returned set, not reconstruct it
 from labels. No public/admin RPC or content-publication operation is added; those
 transport and authority decisions remain gated by X10/G03.
 
+## Alternatives
+
+- Independent per-component pointers and in-place updates were rejected because
+  readers could combine incomplete or mismatched sets.
+- Accepting source labels, asset IDs, or candidate-supplied digests as the expected
+  oracle was rejected because it cannot detect same-label byte substitutions.
+- Promising old-pointer selection after successful rename, or silently rolling
+  back on directory-sync failure, was rejected because replacement has committed;
+  visibility and durability need distinct outcomes and explicit reconciliation.
+
 ## Bounded contract literal
 
 This standalone literal imports the actual `df-types` provenance source by path.
-It models complete identity construction, distinct component digests, exact
-asset-set closure, and the final single pointer assignment. It does not perform
+It models complete identity construction, a separately frozen expected digest
+set, exact asset-set closure, the rename commit point, and typed uncertainty and
+reconciliation on either side of replacement. It does not perform
 filesystem writes, calculate cryptographic digests, run a Cargo build, or prove
 crash durability. The finite checks establish the contract decision only.
 
 ```rust
-#[path = "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/tools_artifact_provenance/crates/df-types/src/provenance.rs"]
+#[path = "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/wave04_build_publication_repair-a2/crates/df-types/src/provenance.rs"]
 mod provenance;
 
-use provenance::{BuildIdentity, BuildIdentityError, RevisionLabel};
-use std::collections::BTreeSet;
+use provenance::{BuildIdentity, BuildIdentityError, BuildRevision, RevisionLabel};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Digest([u8; 32]);
@@ -115,13 +150,20 @@ struct AssetEntry {
     digest: Digest,
 }
 
-#[derive(Clone, Debug)]
+struct ExpectedSet {
+    identity: [&'static str; 5],
+    native: Digest,
+    wasm: Digest,
+    configuration: Digest,
+    assets: Vec<AssetEntry>,
+}
+
+#[derive(Clone)]
 struct Candidate {
     identity: [&'static str; 5],
     native: Option<Digest>,
     wasm: Option<Digest>,
     configuration: Option<Digest>,
-    expected_asset_ids: Vec<String>,
     assets: Vec<AssetEntry>,
 }
 
@@ -135,57 +177,176 @@ struct Manifest {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Component {
+    Native,
+    Wasm,
+    Configuration,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PreCommitFailure {
+    Staging,
+    Write,
+    FileSync,
+    ManifestSync,
+    PointerWrite,
+    PointerSync,
+    RenameNotReplaced,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Refusal {
     IncompleteIdentity,
+    IdentityMismatch,
     MissingComponent,
     InvalidAssetId,
     DuplicateAssetId,
     AssetSetMismatch,
+    DigestMismatch(Component),
+    AssetDigestMismatch(String),
+    BeforeCommit(PreCommitFailure),
 }
 
-fn publish(current: &mut Option<Manifest>, candidate: Candidate) -> Result<(), Refusal> {
-    let identity = BuildIdentity::new(
-        Some(candidate.identity[0]),
-        Some(candidate.identity[1]),
-        Some(candidate.identity[2]),
-        Some(candidate.identity[3]),
-        Some(candidate.identity[4]),
+#[derive(Clone, Copy)]
+enum Boundary {
+    Ready,
+    BeforeRename(PreCommitFailure),
+    ParentSyncFailed,
+    LostBeforeRename,
+    LostAfterRename,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Publication {
+    Durable,
+    CommittedDurabilityUnconfirmed,
+    ReplacementOutcomeUnknown,
+}
+
+fn identity(labels: [&str; 5]) -> Result<BuildIdentity, Refusal> {
+    BuildIdentity::new(
+        Some(labels[0]),
+        Some(labels[1]),
+        Some(labels[2]),
+        Some(labels[3]),
+        Some(labels[4]),
     )
-    .map_err(|_: BuildIdentityError| Refusal::IncompleteIdentity)?;
+    .map_err(|_: BuildIdentityError| Refusal::IncompleteIdentity)
+}
+
+fn asset_map(assets: &[AssetEntry]) -> Result<BTreeMap<String, Digest>, Refusal> {
+    let mut entries = BTreeMap::new();
+    for asset in assets {
+        RevisionLabel::new(Some(&asset.id)).map_err(|_| Refusal::InvalidAssetId)?;
+        if entries.insert(asset.id.clone(), asset.digest).is_some() {
+            return Err(Refusal::DuplicateAssetId);
+        }
+    }
+    Ok(entries)
+}
+
+fn publish(
+    current: &mut Option<Manifest>,
+    expected: &ExpectedSet,
+    candidate: Candidate,
+    boundary: Boundary,
+) -> Result<Publication, Refusal> {
+    let identity = identity(candidate.identity)?;
+    if identity != self::identity(expected.identity)? {
+        return Err(Refusal::IdentityMismatch);
+    }
     let native = candidate.native.ok_or(Refusal::MissingComponent)?;
     let wasm = candidate.wasm.ok_or(Refusal::MissingComponent)?;
     let configuration = candidate.configuration.ok_or(Refusal::MissingComponent)?;
-
-    let mut expected = BTreeSet::new();
-    for id in candidate.expected_asset_ids {
-        RevisionLabel::new(Some(&id)).map_err(|_| Refusal::InvalidAssetId)?;
-        if !expected.insert(id) {
-            return Err(Refusal::DuplicateAssetId);
+    for (component, observed, expected_digest) in [
+        (Component::Native, native, expected.native),
+        (Component::Wasm, wasm, expected.wasm),
+        (
+            Component::Configuration,
+            configuration,
+            expected.configuration,
+        ),
+    ] {
+        if observed != expected_digest {
+            return Err(Refusal::DigestMismatch(component));
         }
     }
-    let mut observed = BTreeSet::new();
-    for asset in &candidate.assets {
-        RevisionLabel::new(Some(&asset.id)).map_err(|_| Refusal::InvalidAssetId)?;
-        if !observed.insert(asset.id.clone()) {
-            return Err(Refusal::DuplicateAssetId);
-        }
-    }
-    if expected != observed {
+    let expected_assets = asset_map(&expected.assets)?;
+    let observed_assets = asset_map(&candidate.assets)?;
+    if !expected_assets.keys().eq(observed_assets.keys()) {
         return Err(Refusal::AssetSetMismatch);
     }
-
-    let mut assets = candidate.assets;
-    assets.sort_by(|left, right| left.id.cmp(&right.id));
-    let manifest = Manifest {
+    for (id, digest) in &observed_assets {
+        if expected_assets.get(id) != Some(digest) {
+            return Err(Refusal::AssetDigestMismatch(id.clone()));
+        }
+    }
+    match boundary {
+        Boundary::BeforeRename(failure) => return Err(Refusal::BeforeCommit(failure)),
+        Boundary::LostBeforeRename => return Ok(Publication::ReplacementOutcomeUnknown),
+        _ => {}
+    }
+    let assets = observed_assets
+        .into_iter()
+        .map(|(id, digest)| AssetEntry { id, digest })
+        .collect();
+    // Finite stand-in for successful atomic rename, not filesystem evidence.
+    *current = Some(Manifest {
         identity,
         native,
         wasm,
         configuration,
         assets,
-    };
-    // The implementation's analogous operation is one atomic pointer rename.
-    *current = Some(manifest);
-    Ok(())
+    });
+    Ok(match boundary {
+        Boundary::ParentSyncFailed => Publication::CommittedDurabilityUnconfirmed,
+        Boundary::LostAfterRename => Publication::ReplacementOutcomeUnknown,
+        _ => Publication::Durable,
+    })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Durability {
+    Confirmed,
+    Unconfirmed,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct Reconciled {
+    selected: Option<Manifest>,
+    durability: Durability,
+}
+
+// Models a successful validated reread under owner exclusion and a separate
+// sync result. The reread alone never confirms durability or republishes.
+fn reconcile(current: &Option<Manifest>, sync_succeeded: bool) -> Reconciled {
+    Reconciled {
+        selected: current.clone(),
+        durability: if sync_succeeded {
+            Durability::Confirmed
+        } else {
+            Durability::Unconfirmed
+        },
+    }
+}
+
+fn expected_set() -> ExpectedSet {
+    ExpectedSet {
+        identity: ["src-1", "native-1", "wasm-1", "config-1", "content-1"],
+        native: Digest([1; 32]),
+        wasm: Digest([2; 32]),
+        configuration: Digest([3; 32]),
+        assets: vec![
+            AssetEntry {
+                id: "map:crypt-1".to_owned(),
+                digest: Digest([4; 32]),
+            },
+            AssetEntry {
+                id: "audio:theme-1".to_owned(),
+                digest: Digest([5; 32]),
+            },
+        ],
+    }
 }
 
 fn candidate() -> Candidate {
@@ -194,7 +355,6 @@ fn candidate() -> Candidate {
         native: Some(Digest([1; 32])),
         wasm: Some(Digest([2; 32])),
         configuration: Some(Digest([3; 32])),
-        expected_asset_ids: vec!["map:crypt-1".to_owned(), "audio:theme-1".to_owned()],
         assets: vec![
             AssetEntry {
                 id: "audio:theme-1".to_owned(),
@@ -209,64 +369,155 @@ fn candidate() -> Candidate {
 }
 
 fn main() {
+    let expected = expected_set();
     let mut accepted = None;
-    assert_eq!(publish(&mut accepted, candidate()), Ok(()));
+    assert_eq!(
+        publish(&mut accepted, &expected, candidate(), Boundary::Ready),
+        Ok(Publication::Durable)
+    );
     let previous = accepted.clone();
-
+    let mut cases = Vec::new();
     let mut incomplete = candidate();
     incomplete.identity[4] = "";
-    assert_eq!(
-        publish(&mut accepted, incomplete),
-        Err(Refusal::IncompleteIdentity)
-    );
-    assert_eq!(accepted, previous);
-
+    cases.push((incomplete, Refusal::IncompleteIdentity));
     let mut missing_wasm = candidate();
     missing_wasm.wasm = None;
-    assert_eq!(
-        publish(&mut accepted, missing_wasm),
-        Err(Refusal::MissingComponent)
-    );
-    assert_eq!(accepted, previous);
-
+    cases.push((missing_wasm, Refusal::MissingComponent));
     let mut omitted_asset = candidate();
     omitted_asset.assets.pop();
-    assert_eq!(
-        publish(&mut accepted, omitted_asset),
-        Err(Refusal::AssetSetMismatch)
-    );
-    assert_eq!(accepted, previous);
-
+    cases.push((omitted_asset, Refusal::AssetSetMismatch));
     let mut duplicate_asset = candidate();
     duplicate_asset
         .assets
         .push(duplicate_asset.assets[0].clone());
-    assert_eq!(
-        publish(&mut accepted, duplicate_asset),
-        Err(Refusal::DuplicateAssetId)
-    );
-    assert_eq!(accepted, previous);
-
+    cases.push((duplicate_asset, Refusal::DuplicateAssetId));
     let mut invalid_asset = candidate();
     invalid_asset.assets[0].id = "private token".to_owned();
-    assert_eq!(
-        publish(&mut accepted, invalid_asset),
-        Err(Refusal::InvalidAssetId)
-    );
-    assert_eq!(accepted, previous);
-
-    let manifest = accepted.expect("the valid complete candidate remains accepted");
-    assert_eq!(
-        manifest
-            .identity
-            .revision(provenance::BuildRevision::Source)
-            .as_str(),
-        "src-1"
-    );
+    cases.push((invalid_asset, Refusal::InvalidAssetId));
+    let mut changed_identity = candidate();
+    changed_identity.identity[0] = "src-other";
+    cases.push((changed_identity, Refusal::IdentityMismatch));
+    for (component, refusal) in [
+        (
+            Component::Native,
+            Refusal::DigestMismatch(Component::Native),
+        ),
+        (Component::Wasm, Refusal::DigestMismatch(Component::Wasm)),
+        (
+            Component::Configuration,
+            Refusal::DigestMismatch(Component::Configuration),
+        ),
+    ] {
+        let mut changed = candidate();
+        match component {
+            Component::Native => changed.native = Some(Digest([9; 32])),
+            Component::Wasm => changed.wasm = Some(Digest([9; 32])),
+            Component::Configuration => changed.configuration = Some(Digest([9; 32])),
+        }
+        assert_eq!(changed.identity, expected.identity);
+        cases.push((changed, refusal));
+    }
+    for index in 0..2 {
+        let mut changed = candidate();
+        changed.assets[index].digest = Digest([9; 32]);
+        assert_eq!(changed.identity, expected.identity);
+        cases.push((
+            changed.clone(),
+            Refusal::AssetDigestMismatch(changed.assets[index].id.clone()),
+        ));
+    }
+    for (invalid, refusal) in cases {
+        assert_eq!(
+            publish(&mut accepted, &expected, invalid, Boundary::Ready),
+            Err(refusal)
+        );
+        assert_eq!(accepted, previous);
+    }
+    for failure in [
+        PreCommitFailure::Staging,
+        PreCommitFailure::Write,
+        PreCommitFailure::FileSync,
+        PreCommitFailure::ManifestSync,
+        PreCommitFailure::PointerWrite,
+        PreCommitFailure::PointerSync,
+        PreCommitFailure::RenameNotReplaced,
+    ] {
+        assert_eq!(
+            publish(
+                &mut accepted,
+                &expected,
+                candidate(),
+                Boundary::BeforeRename(failure)
+            ),
+            Err(Refusal::BeforeCommit(failure))
+        );
+        assert_eq!(accepted, previous);
+    }
+    let manifest = accepted.as_ref().expect("finite valid fixture");
+    for (revision, label) in [
+        (BuildRevision::Source, "src-1"),
+        (BuildRevision::Native, "native-1"),
+        (BuildRevision::Wasm, "wasm-1"),
+        (BuildRevision::Configuration, "config-1"),
+        (BuildRevision::Content, "content-1"),
+    ] {
+        assert_eq!(manifest.identity.revision(revision).as_str(), label);
+    }
     assert_ne!(manifest.native, manifest.wasm);
     assert_eq!(manifest.assets[0].id, "audio:theme-1");
+
+    // A distinct valid replacement makes old-pointer guarantees falsifiable.
+    let mut replacement_expected = expected_set();
+    replacement_expected.identity[0] = "src-2";
+    let mut replacement = candidate();
+    replacement.identity[0] = "src-2";
+    for (boundary, outcome, replaced) in [
+        (
+            Boundary::ParentSyncFailed,
+            Publication::CommittedDurabilityUnconfirmed,
+            true,
+        ),
+        (
+            Boundary::LostBeforeRename,
+            Publication::ReplacementOutcomeUnknown,
+            false,
+        ),
+        (
+            Boundary::LostAfterRename,
+            Publication::ReplacementOutcomeUnknown,
+            true,
+        ),
+        (Boundary::Ready, Publication::Durable, true),
+    ] {
+        accepted = previous.clone();
+        assert_eq!(
+            publish(
+                &mut accepted,
+                &replacement_expected,
+                replacement.clone(),
+                boundary
+            ),
+            Ok(outcome)
+        );
+        assert_eq!(accepted != previous, replaced);
+        let reread = reconcile(&accepted, false);
+        assert_eq!(reread.selected, accepted);
+        assert_eq!(reread.durability, Durability::Unconfirmed);
+        let synced = reconcile(&accepted, true);
+        assert_eq!(synced.selected, accepted);
+        assert_eq!(synced.durability, Durability::Confirmed);
+        assert_eq!(
+            previous
+                .as_ref()
+                .unwrap()
+                .identity
+                .revision(BuildRevision::Source)
+                .as_str(),
+            "src-1"
+        );
+    }
     println!(
-        "PASS: complete identity, distinct artifacts, exact asset closure, 5 refusals retain prior pointer"
+        "PASS: five labels, frozen digests, exact asset closure; 11 validation and 7 pre-commit refusals preserve prior; 4 replacement outcomes and 8 reconciliation cases"
     );
 }
 ```
@@ -283,6 +534,17 @@ algorithms, filesystem atomicity, power-loss durability, readiness, preview
 consumption, browser output, or integrated native/WASM builds. Cargo, Clippy,
 browser, provider, production-build, and integrated publication checks remain
 unperformed.
+
+The exact literal covers 11 validation refusals (including all three component
+digests and both asset digests), seven known pre-commit failures, four replacement
+outcomes, and eight reread/sync outcomes. The retained separate harness supplies
+its own frozen oracle, exercises 27 invalid/incomplete cases and five same-label
+digest substitutions against a distinct prior selection, then repeats all seven
+pre-commit failures and four replacement/eight reconciliation boundaries. It
+checks both typed outcomes and the actual model pointer after every operation.
+These are finite sequencing counterexamples; no filesystem publication or
+physical durability is inferred from them. Independent frontier review and
+coordinator integration remain required.
 
 Open implementation/integration facts: the typed shared `AssetId` does not yet
 exist; exact content/configuration serialization and digest algorithm need to be
