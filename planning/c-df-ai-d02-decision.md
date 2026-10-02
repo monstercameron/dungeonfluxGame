@@ -97,11 +97,13 @@ fn qualify(clauses: &[Clause], context: &ExpressionContext) -> Result<Qualified,
     let mut has_flavor = false;
     for clause in clauses {
         let rendered = match clause {
-            Clause::Grounded(id) => context
-                .claims
-                .get(id)
-                .ok_or(Refusal::UnknownOrUnauthorizedClaim)?
-                .text,
+            Clause::Grounded(id) => {
+                context
+                    .claims
+                    .get(id)
+                    .ok_or(Refusal::UnknownOrUnauthorizedClaim)?
+                    .text
+            }
             Clause::Flavor(value) => {
                 if value.trim().is_empty() {
                     return Err(Refusal::EmptyFlavor);
@@ -176,7 +178,10 @@ fn main() {
         Err(Refusal::EmptyFlavor),
     );
     assert_eq!(
-        qualify(&[Clause::Flavor("See https://private.example".to_owned())], &first),
+        qualify(
+            &[Clause::Flavor("See https://private.example".to_owned())],
+            &first
+        ),
         Err(Refusal::ForbiddenFlavorContent),
     );
 }
