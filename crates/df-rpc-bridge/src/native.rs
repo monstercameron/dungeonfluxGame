@@ -258,6 +258,265 @@ mod tests {
         server.abort();
         assert!(server.await.unwrap_err().is_cancelled());
     }
+    struct OwnedListener(tokio::task::JoinHandle<io::Result<()>>);
+    impl Drop for OwnedListener {
+        fn drop(&mut self) {
+            self.0.abort();
+        }
+    }
+    impl OwnedListener {
+        async fn stop(&mut self) {
+            self.0.abort();
+            assert!((&mut self.0).await.unwrap_err().is_cancelled());
+        }
+    }
+    type ClientSocket = tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >;
+    async fn native_boundary(
+        incoming: mpsc::Sender<Result<TunnelStream, io::Error>>,
+    ) -> (
+        ClientSocket,
+        oneshot::Receiver<io::Result<()>>,
+        Arc<ConnectionMetrics>,
+        OwnedListener,
+    ) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let metrics = Arc::new(ConnectionMetrics::new(false));
+        let observed = metrics.clone();
+        let (sender, receiver) = oneshot::channel();
+        let sender = Arc::new(std::sync::Mutex::new(Some(sender)));
+        let app = Router::new().route(
+            "/",
+            get(move |upgrade: WebSocketUpgrade| {
+                let incoming = incoming.clone();
+                let metrics = observed.clone();
+                let sender = sender.clone();
+                async move {
+                    upgrade
+                        .read_buffer_size(FRAME_BYTES)
+                        .write_buffer_size(FRAME_BYTES)
+                        .max_write_buffer_size(MESSAGE_BYTES)
+                        .max_message_size(MESSAGE_BYTES)
+                        .max_frame_size(MESSAGE_BYTES)
+                        .on_upgrade(move |socket| async move {
+                            let result = accept_websocket_measured(socket, incoming, metrics).await;
+                            if let Some(sender) = sender.lock().unwrap().take() {
+                                let _ = sender.send(result);
+                            }
+                        })
+                }
+            }),
+        );
+        let owner = OwnedListener(tokio::spawn(
+            async move { axum::serve(listener, app).await },
+        ));
+        let (socket, _) = tokio_tungstenite::connect_async(format!("ws://{address}/"))
+            .await
+            .unwrap();
+        (socket, receiver, metrics, owner)
+    }
+    fn ordered_wire(client: bool) -> Vec<u8> {
+        let mut wire = if client {
+            b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".to_vec()
+        } else {
+            Vec::new()
+        };
+        wire.extend([0, 0, 0, 4, 0, 0, 0, 0, 0]);
+        for length in [FRAME_BYTES, FRAME_BYTES, 97] {
+            wire.extend([0, (length >> 8) as u8, length as u8, 0, 0, 0, 0, 0, 1]);
+            wire.extend((0..length).map(|index| ((index * 31 + length) % 251) as u8));
+        }
+        wire
+    }
+    fn assert_released(metrics: &ConnectionMetrics) {
+        let snapshot = metrics.snapshot().unwrap();
+        assert!(snapshot.closed);
+        assert_eq!(snapshot.pipe_owners, 0);
+        assert_eq!(snapshot.pipe_to_grpc.current, 0);
+        assert_eq!(snapshot.pipe_to_websocket.current, 0);
+        assert_eq!(snapshot.websocket_receive.current, 0);
+        assert_eq!(snapshot.websocket_receive_items.current, 0);
+        assert!(snapshot.envelope_within_limit());
+    }
+    #[tokio::test]
+    async fn native_partial_reads_preserve_bytes_across_websocket_message_boundaries() {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let (incoming, mut receiver) = mpsc::channel(1);
+            let (mut socket, finished, metrics, mut owner) = native_boundary(incoming).await;
+            let mut connection = receiver.recv().await.unwrap().unwrap();
+            let wire = ordered_wire(true);
+            let send = async {
+                // Empty messages do not manufacture EOF or an extra byte.
+                socket
+                    .send(tokio_tungstenite::tungstenite::Message::Binary(
+                        Vec::new().into(),
+                    ))
+                    .await
+                    .unwrap();
+                let mut cursor = 0;
+                for length in [1, 2, 5, 19, FRAME_BYTES + 3, 7, FRAME_BYTES + 1] {
+                    let end = (cursor + length).min(wire.len());
+                    socket
+                        .send(tokio_tungstenite::tungstenite::Message::Binary(
+                            wire[cursor..end].to_vec().into(),
+                        ))
+                        .await
+                        .unwrap();
+                    cursor = end;
+                }
+                if cursor != wire.len() {
+                    socket
+                        .send(tokio_tungstenite::tungstenite::Message::Binary(
+                            wire[cursor..].to_vec().into(),
+                        ))
+                        .await
+                        .unwrap();
+                }
+            };
+            let receive = async {
+                let mut actual = Vec::with_capacity(wire.len());
+                let mut buffer = [0u8; 113];
+                while actual.len() != wire.len() {
+                    let length = (wire.len() - actual.len()).min(buffer.len());
+                    let count = connection.read(&mut buffer[..length]).await.unwrap();
+                    assert!(count != 0, "unexpected EOF before all tunnel bytes");
+                    actual.extend_from_slice(&buffer[..count]);
+                }
+                assert_eq!(actual, wire);
+            };
+            tokio::join!(send, receive);
+            assert_eq!(metrics.snapshot().unwrap().received_bytes, wire.len());
+            socket.close(None).await.unwrap();
+            finished.await.unwrap().unwrap();
+            let mut byte = [0u8; 1];
+            assert_eq!(connection.read(&mut byte).await.unwrap(), 0);
+            drop(connection);
+            assert_released(&metrics);
+            owner.stop().await;
+        })
+        .await
+        .unwrap();
+    }
+    #[tokio::test]
+    async fn native_partial_writes_preserve_bytes_in_bounded_websocket_chunks() {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let (incoming, mut receiver) = mpsc::channel(1);
+            let (mut socket, finished, metrics, mut owner) = native_boundary(incoming).await;
+            let mut connection = receiver.recv().await.unwrap().unwrap();
+            let wire = ordered_wire(false);
+            let send = async {
+                for chunk in wire.chunks(FRAME_BYTES + 11) {
+                    connection.write_all(chunk).await.unwrap();
+                }
+                connection.flush().await.unwrap();
+            };
+            let receive = async {
+                let mut actual = Vec::with_capacity(wire.len());
+                while actual.len() != wire.len() {
+                    let message = socket.next().await.unwrap().unwrap();
+                    let tokio_tungstenite::tungstenite::Message::Binary(bytes) = message else {
+                        panic!("adapter emitted nonbinary tunnel payload");
+                    };
+                    assert!(!bytes.is_empty());
+                    assert!(bytes.len() <= FRAME_BYTES);
+                    assert!(actual.len() + bytes.len() <= wire.len());
+                    actual.extend_from_slice(&bytes);
+                }
+                assert_eq!(actual, wire);
+            };
+            tokio::join!(send, receive);
+            assert_eq!(metrics.snapshot().unwrap().sent_bytes, wire.len());
+            connection.shutdown().await.unwrap();
+            finished.await.unwrap().unwrap();
+            drop(connection);
+            drop(socket);
+            assert_released(&metrics);
+            owner.stop().await;
+        })
+        .await
+        .unwrap();
+    }
+    #[tokio::test]
+    async fn full_native_admission_fails_without_replacing_queued_connection() {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let (incoming, mut receiver) = mpsc::channel(1);
+            assert!(
+                incoming
+                    .try_send(Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        "retained admission marker"
+                    )))
+                    .is_ok()
+            );
+            let (socket, finished, metrics, mut owner) = native_boundary(incoming).await;
+            assert_eq!(
+                finished.await.unwrap().unwrap_err().kind(),
+                io::ErrorKind::Other
+            );
+            assert_eq!(
+                receiver.recv().await.unwrap().err().unwrap().kind(),
+                io::ErrorKind::PermissionDenied
+            );
+            assert!(matches!(
+                receiver.try_recv(),
+                Err(mpsc::error::TryRecvError::Empty)
+            ));
+            drop(socket);
+            assert_released(&metrics);
+            owner.stop().await;
+        })
+        .await
+        .unwrap();
+    }
+    #[tokio::test]
+    async fn pipe_partial_write_reports_only_transferred_bytes_and_preserves_tail() {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let metrics = Arc::new(ConnectionMetrics::new(false));
+            let (grpc, tunnel) = tokio::io::duplex(7);
+            let mut grpc = PipeIo {
+                stream: grpc,
+                metrics: metrics.clone(),
+                grpc_end: true,
+            };
+            let mut tunnel = PipeIo {
+                stream: tunnel,
+                metrics: metrics.clone(),
+                grpc_end: false,
+            };
+            let wire: Vec<u8> = (0..31).collect();
+            let first = grpc.write(&wire).await.unwrap();
+            assert_eq!(first, 7);
+            assert_eq!(metrics.snapshot().unwrap().pipe_to_websocket.current, first);
+            let mut actual = Vec::with_capacity(wire.len());
+            let mut prefix = [0u8; 7];
+            tunnel.read_exact(&mut prefix).await.unwrap();
+            actual.extend(prefix);
+            let send = async {
+                grpc.write_all(&wire[first..]).await.unwrap();
+                grpc.shutdown().await.unwrap();
+            };
+            let receive = async {
+                let mut buffer = [0u8; 3];
+                loop {
+                    let count = tunnel.read(&mut buffer).await.unwrap();
+                    if count == 0 {
+                        break;
+                    }
+                    actual.extend_from_slice(&buffer[..count]);
+                }
+            };
+            tokio::join!(send, receive);
+            assert_eq!(actual, wire);
+            let snapshot = metrics.snapshot().unwrap();
+            assert_eq!(snapshot.pipe_to_websocket.current, 0);
+            assert_eq!(snapshot.pipe_to_websocket.total, wire.len());
+            assert!(snapshot.pipe_to_websocket.peak <= 7);
+        })
+        .await
+        .unwrap();
+    }
     enum Rejection {
         Adapter,
         Connection,
