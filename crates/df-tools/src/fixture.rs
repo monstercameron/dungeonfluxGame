@@ -550,6 +550,7 @@ const HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"
 
 /// Start only a synthetic loopback preview. The caller owns process and output directory.
 pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
+    let preview_configuration = crate::preview::PreviewConfiguration::from_environment()?;
     let web_root = std::env::args()
         .nth(1)
         .ok_or("generated web directory argument required")?;
@@ -601,15 +602,36 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         )
         .layer(axum::extract::DefaultBodyLimit::max(64 * 1024))
         .route("/malicious/{kind}", get(malicious))
-        .nest_service("/pkg", ServeDir::new(web_root))
+        .nest_service("/pkg", ServeDir::new(&web_root))
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
+    let registration = match preview_configuration {
+        Some(configuration) => Some(configuration.register(web_root.into(), listener.local_addr()?).await?),
+        None => None,
+    };
     println!(
         "DungeonFlux S00 fixture ready at http://127.0.0.1:{port} · build {}",
         crate::BUILD_ID
     );
-    tokio::select! { result = grpc => result?, result = axum::serve(listener, router) => result?, result = tokio::signal::ctrl_c() => result? }
-    telemetry.shutdown().map_err(io::Error::other)?;
+    // Leaving this scope drops both serving futures and the owned listener before
+    // the capability is consumed. Errors also take the explicit release path.
+    let server_result: Result<(), Box<dyn std::error::Error>> = {
+        tokio::select! {
+            result = grpc => result.map_err(Into::into),
+            result = axum::serve(listener, router) => result.map_err(Into::into),
+            result = tokio::signal::ctrl_c() => result.map_err(Into::into),
+        }
+    };
+    let release_result = match registration {
+        Some(registration) => registration.release_after_listener_stopped().await,
+        None => Ok(()),
+    };
+    let telemetry_result = telemetry.shutdown();
+    if server_result.is_err() || release_result.is_err() || telemetry_result.is_err() {
+        return Err(io::Error::other(format!(
+            "fixture shutdown: server={server_result:?}; ownership={release_result:?}; telemetry={telemetry_result:?}"
+        )).into());
+    }
     Ok(())
 }
 
