@@ -84,6 +84,7 @@ fn main() {
     let de = LocaleTag::parse("de").unwrap();
     let supported = vec![en.clone(), fr.clone()];
 
+    assert_eq!(fr.as_str(), "fr");
     assert_eq!(settle(&[de.clone()], &supported, &en), Some(en.clone()));
     assert_eq!(settle(&[fr.clone(), en.clone()], &supported, &en), Some(fr));
     assert_eq!(settle(&[], &supported, &de), None);
