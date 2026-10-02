@@ -12,15 +12,17 @@ ID. Its record binds the actual process identity (PID plus OS process-start
 identity), bound port, canonical web root, private per-preview data directory,
 and build identity (the `df-tools` `BUILD_ID` plus the separately supplied web
 build/source identity). A PID, port, directory, or process name by itself never
-grants signal authority. Unknown entries, stale process identity, or a request
+grants release authority. Unknown entries, stale process identity, or a request
 from another attempt are typed refusals; cleanup never searches for and kills a
 matching-looking process.
 
-The attempt that started a preview may request its stop by `PreviewId`; the
-owner checks the attempt and process identity before stopping that exact
-process. Coordinator recovery first fences the old attempt and then uses the
-same registered identity to reap it. The periodic cleanup worker does not stop
-active previews. It may remove an artifact only inside an approved
+The serving scope owns its listener and registration for the same lifetime. On
+normal shutdown it releases only its own record after the listener stops, after
+rechecking the attempt, preview, and process identity. The periodic cleanup
+worker never signals a PID or stops a live preview. After a crash, it may retire
+a registration only after the OS process-start identity proves that exact
+process is gone and ADR 0002's terminal/abandoned and use-claim rules pass. It
+may remove an artifact only inside an approved
 `artifacts/build/` or `artifacts/tmp/` root, after its owner is terminal or
 confirmed abandoned, no active use claim remains, it is superseded or
 reproducible, it is not retained evidence or the latest verified build, and at
@@ -54,8 +56,9 @@ authority.
 The smallest I02 implementation belongs in `crates/df-tools/src/preview.rs`,
 privately wired from `crates/df-tools/src/lib.rs` and `fixture::serve` in
 `crates/df-tools/src/fixture.rs`. A private native registration owner should
-accept the attempt/preview identity and scoped state root from its launching
-tool, then, after successful bind, atomically record the actual process-start
+accept an explicit attempt-owned `DF_PREVIEW_STATE_ROOT` from its launching
+tool; absence keeps existing invocations unregistered. After successful bind,
+it atomically records the actual process-start
 identity, port, canonical web and per-preview data roots, `BUILD_ID`, and the
 separately supplied web-build/source identity. Keep registration opt-in so
 existing direct fixture invocations work unchanged. A record must be exclusive
@@ -95,34 +98,34 @@ struct Preview {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct StopRequest {
+struct ReleaseRequest {
     id: &'static str,
     caller: Attempt,
     observed_process: ProcessIdentity,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum StopDecision {
-    SignalOwnedProcess(u32),
+enum ReleaseDecision {
+    RemoveOwnRecord,
     RefuseUnknownPreview,
     RefuseWrongOwner,
     RefuseStaleProcessIdentity,
 }
 
-fn authorize_stop(registered: Option<&Preview>, request: StopRequest) -> StopDecision {
+fn authorize_release(registered: Option<&Preview>, request: ReleaseRequest) -> ReleaseDecision {
     let Some(preview) = registered else {
-        return StopDecision::RefuseUnknownPreview;
+        return ReleaseDecision::RefuseUnknownPreview;
     };
     if preview.id != request.id {
-        return StopDecision::RefuseUnknownPreview;
+        return ReleaseDecision::RefuseUnknownPreview;
     }
     if preview.owner != request.caller {
-        return StopDecision::RefuseWrongOwner;
+        return ReleaseDecision::RefuseWrongOwner;
     }
     if preview.process != request.observed_process {
-        return StopDecision::RefuseStaleProcessIdentity;
+        return ReleaseDecision::RefuseStaleProcessIdentity;
     }
-    StopDecision::SignalOwnedProcess(preview.process.pid)
+    ReleaseDecision::RemoveOwnRecord
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -173,33 +176,33 @@ fn main() {
     assert_eq!(preview.port, 43_123);
     assert_eq!(preview.data_dir, "artifacts/tmp/a1/preview-a1");
     assert_eq!(preview.build_hash, [7; 32]);
-    let request = StopRequest {
+    let request = ReleaseRequest {
         id: preview.id,
         caller: preview.owner,
         observed_process: process,
     };
     assert_eq!(
-        authorize_stop(Some(&preview), request),
-        StopDecision::SignalOwnedProcess(41)
+        authorize_release(Some(&preview), request),
+        ReleaseDecision::RemoveOwnRecord
     );
     assert_eq!(
-        authorize_stop(None, request),
-        StopDecision::RefuseUnknownPreview
+        authorize_release(None, request),
+        ReleaseDecision::RefuseUnknownPreview
     );
     assert_eq!(
-        authorize_stop(
+        authorize_release(
             Some(&preview),
-            StopRequest {
+            ReleaseRequest {
                 caller: Attempt("a2"),
                 ..request
             }
         ),
-        StopDecision::RefuseWrongOwner
+        ReleaseDecision::RefuseWrongOwner
     );
     assert_eq!(
-        authorize_stop(
+        authorize_release(
             Some(&preview),
-            StopRequest {
+            ReleaseRequest {
                 observed_process: ProcessIdentity {
                     pid: 41,
                     started_at: 899,
@@ -207,7 +210,7 @@ fn main() {
                 ..request
             }
         ),
-        StopDecision::RefuseStaleProcessIdentity
+        ReleaseDecision::RefuseStaleProcessIdentity
     );
     let eligible = ArtifactFacts {
         approved_root: true,
