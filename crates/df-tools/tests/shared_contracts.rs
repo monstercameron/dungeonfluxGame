@@ -355,6 +355,26 @@ fn recovery_round_trip_preserves_checked_boundaries_and_epoch_first_order() {
 
 #[test]
 fn missing_and_zero_recovery_components_and_old_scalar_ambiguity_reject() {
+    for (bytes, expected) in [
+        (&[8, 1, 26, 0][..], ContractError::Missing("epoch")),
+        (
+            &[8, 1, 26, 4, 10, 0, 16, 0][..],
+            ContractError::Missing("epoch"),
+        ),
+        (
+            &[8, 1, 26, 6, 10, 2, 8, 0, 16, 0][..],
+            ContractError::Revision(RevisionError::ZeroEpoch),
+        ),
+        (
+            &[8, 1, 26, 4, 10, 2, 8, 1][..],
+            ContractError::Missing("sequence"),
+        ),
+    ] {
+        assert_eq!(
+            consume(fixture::CompatibilityFixture::decode(bytes).unwrap()),
+            Err(expected)
+        );
+    }
     assert_eq!(
         read_revision(wire::SessionRevision::default()),
         Err(ContractError::Missing("epoch"))
@@ -476,12 +496,78 @@ fn older_wire_and_unknown_optional_fields_remain_additive() {
             0
         )))
     );
-    let mut additive = older.to_vec();
-    additive.extend_from_slice(&[0xA0, 0x06, 0x07]); // unknown optional field100, varint7
+    // Unknown field 100 in each supported wire form remains optional additive data.
+    for unknown in [
+        &[0xA0, 0x06, 0x07][..],
+        &[0xA1, 0x06, 1, 2, 3, 4, 5, 6, 7, 8][..],
+        &[0xA2, 0x06, 2, 8, 1][..],
+        &[0xA3, 0x06, 8, 1, 0xA4, 0x06][..],
+        &[0xA5, 0x06, 1, 2, 3, 4][..],
+    ] {
+        for prepend in [false, true] {
+            let additive = if prepend {
+                [unknown, older.as_slice()].concat()
+            } else {
+                [older.as_slice(), unknown].concat()
+            };
+            assert_eq!(
+                consume(fixture::CompatibilityFixture::decode(additive.as_slice()).unwrap()),
+                consume(fixture::CompatibilityFixture::decode(older.as_slice()).unwrap())
+            );
+        }
+    }
+
+    // The same additive field inside revision and epoch messages cannot hide their values.
+    for additive in [
+        &[8, 1, 26, 9, 10, 2, 8, 1, 16, 0, 0xA0, 0x06, 7][..],
+        &[8, 1, 26, 9, 10, 5, 8, 1, 0xA0, 0x06, 7, 16, 0][..],
+        &[
+            8, 1, 18, 7, 8, 99, 16, 0, 0xA0, 0x06, 7, 26, 6, 10, 2, 8, 1, 16, 0,
+        ][..],
+    ] {
+        assert_eq!(
+            consume(fixture::CompatibilityFixture::decode(additive).unwrap()),
+            consume(fixture::CompatibilityFixture::decode(older.as_slice()).unwrap())
+        );
+    }
+
+    // Build labels remain validated at the same consumer despite nested additive data.
+    let build = [
+        8, 1, 34, 18, 10, 1, b's', 18, 1, b'n', 26, 1, b'w', 34, 1, b'c', 42, 1, b'b', 0xA0, 0x06,
+        7,
+    ];
     assert_eq!(
-        consume(fixture::CompatibilityFixture::decode(additive.as_slice()).unwrap()),
-        consume(fixture::CompatibilityFixture::decode(older.as_slice()).unwrap())
+        consume(fixture::CompatibilityFixture::decode(build.as_slice()).unwrap()),
+        Ok(Payload::Build(
+            BuildIdentity::new(Some("s"), Some("n"), Some("w"), Some("c"), Some("b")).unwrap()
+        ))
     );
+}
+
+#[test]
+fn unknown_signed_capabilities_preserve_their_kind_and_required_refusal() {
+    for kind in [i32::MIN, -1, 99, i32::MAX] {
+        for required in [false, true] {
+            let mut value = revision_fixture(1, 0);
+            value.capabilities = vec![fixture::Capability {
+                kind: Some(kind),
+                required: Some(required),
+            }];
+            let decoded =
+                fixture::CompatibilityFixture::decode(value.encode_to_vec().as_slice()).unwrap();
+            assert_eq!(decoded.capabilities[0].kind, Some(kind));
+            assert_eq!(decoded.capabilities[0].required, Some(required));
+            let expected = if required {
+                Err(ContractError::UnknownRequiredCapability(kind))
+            } else {
+                Ok(Payload::Revision(SessionRevision::new(
+                    RecoveryEpoch::new(1).unwrap(),
+                    0,
+                )))
+            };
+            assert_eq!(consume(decoded), expected);
+        }
+    }
 }
 
 #[test]
@@ -502,25 +588,27 @@ fn unknown_required_capability_zero_enum_missing_oneof_and_protocol_reject() {
     );
     value.capabilities[0].kind = Some(0);
     assert_eq!(
-        consume(value.clone()),
+        consume(fixture::CompatibilityFixture::decode(value.encode_to_vec().as_slice()).unwrap()),
         Err(ContractError::UnspecifiedCapability)
     );
     value.capabilities[0].kind = None;
     assert_eq!(
-        consume(value.clone()),
+        consume(fixture::CompatibilityFixture::decode(value.encode_to_vec().as_slice()).unwrap()),
         Err(ContractError::Missing("capability.kind"))
     );
     value.capabilities[0].kind = Some(1);
     value.capabilities[0].required = None;
     assert_eq!(
-        consume(value),
+        consume(fixture::CompatibilityFixture::decode(value.encode_to_vec().as_slice()).unwrap()),
         Err(ContractError::Missing("capability.required"))
     );
     for revision in [None, Some(0), Some(2), Some(u32::MAX)] {
         let mut value = revision_fixture(1, 0);
         value.protocol_revision = revision;
         assert_eq!(
-            consume(value),
+            consume(
+                fixture::CompatibilityFixture::decode(value.encode_to_vec().as_slice()).unwrap()
+            ),
             Err(revision
                 .map(ContractError::UnsupportedProtocol)
                 .unwrap_or(ContractError::Missing("protocol_revision")))
@@ -531,16 +619,26 @@ fn unknown_required_capability_zero_enum_missing_oneof_and_protocol_reject() {
         capabilities: vec![],
         payload: None,
     };
-    assert_eq!(consume(missing), Err(ContractError::MissingPayload));
+    assert_eq!(
+        consume(fixture::CompatibilityFixture::decode(missing.encode_to_vec().as_slice()).unwrap()),
+        Err(ContractError::MissingPayload)
+    );
     // Future oneof alternative field9 is unknown: decode preserves no known payload.
     assert_eq!(
         consume(fixture::CompatibilityFixture::decode(&[8, 1, 74, 0][..]).unwrap()),
         Err(ContractError::MissingPayload)
     );
-    // Known payload plus an unrelated unknown field remains consumable.
-    let mut known = revision_fixture(1, 0).encode_to_vec();
-    known.extend_from_slice(&[74, 0]);
-    assert!(consume(fixture::CompatibilityFixture::decode(known.as_slice()).unwrap()).is_ok());
+    // Old readers cannot infer required semantics from a future oneof tag, in either order.
+    let known = revision_fixture(1, 0).encode_to_vec();
+    for additive in [
+        [known.as_slice(), &[74, 0]].concat(),
+        [&[74, 0], known.as_slice()].concat(),
+    ] {
+        assert_eq!(
+            consume(fixture::CompatibilityFixture::decode(additive.as_slice()).unwrap()),
+            consume(fixture::CompatibilityFixture::decode(known.as_slice()).unwrap())
+        );
+    }
 }
 
 #[test]
