@@ -1,16 +1,143 @@
 use crate::{ConnectionMetrics, FRAME_BYTES, MESSAGE_BYTES, RECEIVE_BYTES};
 use axum::extract::ws::{Message, WebSocket};
-use futures::{SinkExt, StreamExt};
+use futures::{SinkExt, Stream, StreamExt};
 use std::{
     io,
+    num::NonZeroUsize,
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, Mutex},
     task::{Context, Poll},
 };
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadBuf},
     sync::mpsc,
 };
+
+/// Failure to reserve a bounded incoming slot before a WebSocket upgrade.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AdmissionError {
+    InvalidCapacity,
+    Full,
+    Closed,
+}
+impl std::fmt::Display for AdmissionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::InvalidCapacity => "incoming capacity exceeds channel limit",
+            Self::Full => "incoming capacity exhausted",
+            Self::Closed => "incoming server closed",
+        })
+    }
+}
+impl std::error::Error for AdmissionError {}
+
+/// Bounded pending connections consumed directly by tonic's incoming server.
+/// Live connection limits remain the listener owner's responsibility.
+pub struct NativeIncoming {
+    receiver: mpsc::Receiver<Result<TunnelStream, io::Error>>,
+    accepting: Arc<Mutex<bool>>,
+}
+impl NativeIncoming {
+    /// Create a queue with an explicit nonzero pending connection bound.
+    /// Returns InvalidCapacity rather than panicking above Tokio's channel limit.
+    pub fn bounded(capacity: NonZeroUsize) -> Result<(NativeAdmission, Self), AdmissionError> {
+        if capacity.get() > tokio::sync::Semaphore::MAX_PERMITS {
+            return Err(AdmissionError::InvalidCapacity);
+        }
+        let (sender, receiver) = mpsc::channel(capacity.get());
+        let accepting = Arc::new(Mutex::new(true));
+        Ok((
+            NativeAdmission {
+                sender,
+                accepting: accepting.clone(),
+            },
+            Self {
+                receiver,
+                accepting,
+            },
+        ))
+    }
+}
+impl Drop for NativeIncoming {
+    fn drop(&mut self) {
+        // An owned Tokio permit may send after receiver closure. Serialize the
+        // final transfer with closure and drain while no reservation can publish.
+        let mut accepting = match self.accepting.lock() {
+            Ok(accepting) => accepting,
+            // Poison recovery is used only to close; reserve/transfer fail closed.
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        *accepting = false;
+        self.receiver.close();
+        while let Ok(connection) = self.receiver.try_recv() {
+            drop(connection);
+        }
+    }
+}
+impl Stream for NativeIncoming {
+    type Item = Result<TunnelStream, io::Error>;
+    fn poll_next(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.receiver.poll_recv(context)
+    }
+}
+
+/// Listener-side admission handle. This reserves capacity without waiting or allocating pipes.
+#[derive(Clone)]
+pub struct NativeAdmission {
+    sender: mpsc::Sender<Result<TunnelStream, io::Error>>,
+    accepting: Arc<Mutex<bool>>,
+}
+impl NativeAdmission {
+    /// Reserve before returning an HTTP upgrade response. Dropping a reservation releases its slot.
+    pub fn try_reserve(&self) -> Result<NativeConnectionPermit, AdmissionError> {
+        let accepting = self.accepting.lock().map_err(|_| AdmissionError::Closed)?;
+        if !*accepting {
+            return Err(AdmissionError::Closed);
+        }
+        self.sender
+            .clone()
+            .try_reserve_owned()
+            .map(|permit| NativeConnectionPermit {
+                permit,
+                accepting: self.accepting.clone(),
+            })
+            .map_err(|error| match error {
+                mpsc::error::TrySendError::Full(_) => AdmissionError::Full,
+                mpsc::error::TrySendError::Closed(_) => AdmissionError::Closed,
+            })
+    }
+}
+
+/// Single-use owned reservation transferred to the HTTP upgrade's connection task.
+pub struct NativeConnectionPermit {
+    permit: mpsc::OwnedPermit<Result<TunnelStream, io::Error>>,
+    accepting: Arc<Mutex<bool>>,
+}
+impl NativeConnectionPermit {
+    /// Forward the upgraded socket into tonic and own both byte directions until termination.
+    /// Receiver closure after reservation returns BrokenPipe; transport errors propagate unchanged.
+    pub async fn accept_websocket_measured(
+        self,
+        socket: WebSocket,
+        metrics: Arc<ConnectionMetrics>,
+    ) -> io::Result<()> {
+        pump_websocket(socket, metrics, |connection| {
+            let accepting = self
+                .accepting
+                .lock()
+                .map_err(|_| io::Error::other("incoming admission state unavailable"))?;
+            if !*accepting {
+                return Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "incoming server closed",
+                ));
+            }
+            drop(self.permit.send(Ok(connection)));
+            Ok(())
+        })
+        .await
+    }
+}
 
 /// Connection owned by tonic. Dropping it releases the associated WebSocket pump.
 pub struct TunnelStream(PipeIo);
@@ -129,6 +256,25 @@ pub async fn accept_websocket_measured(
     incoming: mpsc::Sender<Result<TunnelStream, io::Error>>,
     metrics: Arc<ConnectionMetrics>,
 ) -> io::Result<()> {
+    pump_websocket(socket, metrics, |connection| {
+        incoming
+            .try_send(Ok(connection))
+            .map_err(|error| match error {
+                mpsc::error::TrySendError::Full(_) => {
+                    io::Error::other("connection capacity exhausted")
+                }
+                mpsc::error::TrySendError::Closed(_) => {
+                    io::Error::new(io::ErrorKind::BrokenPipe, "incoming server closed")
+                }
+            })
+    })
+    .await
+}
+async fn pump_websocket(
+    socket: WebSocket,
+    metrics: Arc<ConnectionMetrics>,
+    admit: impl FnOnce(TunnelStream) -> io::Result<()>,
+) -> io::Result<()> {
     let _scope = ConnectionScope(metrics.clone());
     let (grpc, tunnel) = tokio::io::duplex(RECEIVE_BYTES);
     let grpc = PipeIo {
@@ -141,9 +287,10 @@ pub async fn accept_websocket_measured(
         metrics: metrics.clone(),
         grpc_end: false,
     };
-    incoming
-        .try_send(Ok(TunnelStream(grpc)))
-        .map_err(|_| io::Error::other("connection capacity exhausted"))?;
+    if let Err(error) = admit(TunnelStream(grpc)) {
+        metrics.reject();
+        return Err(error);
+    }
     let (mut outgoing, mut incoming_socket) = socket.split();
     let (mut reader, mut writer) = tokio::io::split(tunnel);
     let receive = async {
@@ -707,5 +854,109 @@ mod tests {
         let mut wire = vec![0, (length >> 8) as u8, length as u8, 1, 4, 0, 0, 0, 1];
         wire.extend(block);
         reject_wire(wire, Rejection::Stream).await;
+    }
+    #[test]
+    fn native_reservations_bound_pending_admission_and_release_when_dropped() {
+        let (admission, incoming) = NativeIncoming::bounded(NonZeroUsize::new(1).unwrap()).unwrap();
+        let reservation = admission.try_reserve().unwrap();
+        assert!(matches!(admission.try_reserve(), Err(AdmissionError::Full)));
+        drop(reservation);
+        let reservation = admission.try_reserve().unwrap();
+        drop(reservation);
+        drop(incoming);
+        assert!(matches!(
+            admission.try_reserve(),
+            Err(AdmissionError::Closed)
+        ));
+        assert!(matches!(
+            NativeIncoming::bounded(
+                NonZeroUsize::new(tokio::sync::Semaphore::MAX_PERMITS + 1).unwrap()
+            ),
+            Err(AdmissionError::InvalidCapacity)
+        ));
+    }
+    #[tokio::test]
+    async fn native_incoming_forwards_errors_and_ends_after_admission_owner_drop() {
+        let (admission, mut incoming) =
+            NativeIncoming::bounded(NonZeroUsize::new(1).unwrap()).unwrap();
+        assert!(
+            admission
+                .sender
+                .try_send(Err(io::Error::new(
+                    io::ErrorKind::ConnectionAborted,
+                    "synthetic listener failure",
+                )))
+                .is_ok()
+        );
+        assert_eq!(
+            incoming.next().await.unwrap().err().unwrap().kind(),
+            io::ErrorKind::ConnectionAborted
+        );
+        drop(admission);
+        assert!(incoming.next().await.is_none());
+    }
+    #[tokio::test]
+    async fn closed_native_server_rejects_upgraded_socket_and_releases_pipe_owners() {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let (incoming, receiver) = mpsc::channel(1);
+            drop(receiver);
+            let (socket, finished, metrics, mut owner) = native_boundary(incoming).await;
+            assert_eq!(
+                finished.await.unwrap().unwrap_err().kind(),
+                io::ErrorKind::BrokenPipe
+            );
+            drop(socket);
+            assert_released(&metrics);
+            owner.stop().await;
+        })
+        .await
+        .unwrap();
+    }
+    #[tokio::test]
+    async fn receiver_closed_after_reservation_rejects_owned_upgrade_and_releases_pipes() {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let (admission, incoming) =
+                NativeIncoming::bounded(NonZeroUsize::new(1).unwrap()).unwrap();
+            let reservation = admission.try_reserve().unwrap();
+            drop(incoming);
+            let reservation = Arc::new(std::sync::Mutex::new(Some(reservation)));
+            let metrics = Arc::new(ConnectionMetrics::new(false));
+            let observed = metrics.clone();
+            let (finished_tx, finished_rx) = oneshot::channel();
+            let finished_tx = Arc::new(std::sync::Mutex::new(Some(finished_tx)));
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let app = Router::new().route(
+                "/",
+                get(move |upgrade: WebSocketUpgrade| {
+                    let reservation = reservation.lock().unwrap().take().unwrap();
+                    let finished_tx = finished_tx.lock().unwrap().take().unwrap();
+                    let metrics = observed.clone();
+                    async move {
+                        upgrade.on_upgrade(move |socket| async move {
+                            let result =
+                                reservation.accept_websocket_measured(socket, metrics).await;
+                            let _ = finished_tx.send(result);
+                        })
+                    }
+                }),
+            );
+            let mut owner = OwnedListener(tokio::spawn(
+                async move { axum::serve(listener, app).await },
+            ));
+            let (socket, _) = tokio_tungstenite::connect_async(format!("ws://{address}/"))
+                .await
+                .unwrap();
+            assert_eq!(
+                finished_rx.await.unwrap().unwrap_err().kind(),
+                io::ErrorKind::BrokenPipe
+            );
+            assert!(metrics.snapshot().unwrap().rejected);
+            drop(socket);
+            assert_released(&metrics);
+            owner.stop().await;
+        })
+        .await
+        .unwrap();
     }
 }

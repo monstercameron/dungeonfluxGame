@@ -39,3 +39,6 @@ web-sys = { workspace = true, features = ["Window", "Document", "Element", "Html
 df-types = { path = "../df-types" }
 prost.workspace = true
 prost-types = "0.14"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio-tungstenite = "0.29"

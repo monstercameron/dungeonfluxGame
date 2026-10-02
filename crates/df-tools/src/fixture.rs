@@ -12,21 +12,21 @@ use df_protocol::transport_fixture::{
     transport_fixture_server::{TransportFixture, TransportFixtureServer},
 };
 use df_rpc_bridge::{
-    CONCURRENT_STREAMS, ConnectionMetrics, FRAME_BYTES, MESSAGE_BYTES, RPC_MESSAGE_BYTES,
-    TunnelStream, accept_websocket_measured,
+    CONCURRENT_STREAMS, ConnectionMetrics, FRAME_BYTES, MESSAGE_BYTES, NativeAdmission,
+    NativeIncoming, RPC_MESSAGE_BYTES,
 };
 use futures::{Stream, StreamExt};
 use std::{
     collections::VecDeque,
     io,
+    num::NonZeroUsize,
     pin::Pin,
     sync::{
         Arc, Mutex,
         atomic::{AtomicU32, Ordering},
     },
 };
-use tokio::sync::{Semaphore, mpsc};
-use tokio_stream::wrappers::ReceiverStream;
+use tokio::sync::Semaphore;
 use tonic::{Code, Request, Response, Status, Streaming, metadata::MetadataMap};
 use tower_http::services::ServeDir;
 
@@ -276,7 +276,7 @@ impl TransportFixture for FixtureService {
 }
 #[derive(Clone)]
 struct PreviewState {
-    incoming: mpsc::Sender<Result<TunnelStream, io::Error>>,
+    incoming: NativeAdmission,
     telemetry: Arc<FixtureTelemetry>,
     statistics: Arc<Statistics>,
     connections: Arc<Semaphore>,
@@ -328,6 +328,16 @@ async fn websocket(
         )
             .into_response();
     };
+    let admission = match state.incoming.try_reserve() {
+        Ok(admission) => admission,
+        Err(_) => {
+            return (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                "fixture incoming unavailable",
+            )
+                .into_response();
+        }
+    };
     let metrics = Arc::new(ConnectionMetrics::new(false));
     match state.resources.lock() {
         Ok(mut resources) => {
@@ -367,7 +377,9 @@ async fn websocket(
                 trace_parent: String::new(),
                 build: crate::BUILD_ID.to_owned(),
             };
-            let result = accept_websocket_measured(socket, state.incoming, metrics.clone()).await;
+            let result = admission
+                .accept_websocket_measured(socket, metrics.clone())
+                .await;
             drop(permit);
             let mut span = state.telemetry.begin(&context, "bridge.connection");
             match metrics.snapshot() {
@@ -563,7 +575,8 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     }
     let telemetry = Arc::new(FixtureTelemetry::default());
     let statistics = Arc::new(Statistics::default());
-    let (sender, receiver) = mpsc::channel(4);
+    let (sender, incoming) =
+        NativeIncoming::bounded(NonZeroUsize::new(4).ok_or("invalid fixture incoming capacity")?)?;
     let service = TransportFixtureServer::new(FixtureService {
         statistics: statistics.clone(),
         telemetry: telemetry.clone(),
@@ -577,7 +590,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .http2_max_header_list_size(FRAME_BYTES as u32)
         .max_concurrent_streams(CONCURRENT_STREAMS)
         .add_service(service)
-        .serve_with_incoming(ReceiverStream::new(receiver));
+        .serve_with_incoming(incoming);
     let state = PreviewState {
         incoming: sender,
         telemetry: telemetry.clone(),
@@ -803,5 +816,344 @@ mod tests {
         assert_eq!(telemetry.count().unwrap(), 5);
         let _ = shutdown_tx.send(());
         server.await.unwrap();
+    }
+    struct IncomingTestTasks(Vec<tokio::task::JoinHandle<io::Result<()>>>);
+    impl Drop for IncomingTestTasks {
+        fn drop(&mut self) {
+            for task in &self.0 {
+                task.abort();
+            }
+        }
+    }
+    impl IncomingTestTasks {
+        async fn stop(&mut self) {
+            for task in &self.0 {
+                task.abort();
+            }
+            for task in self.0.drain(..) {
+                match task.await {
+                    Ok(result) => result.unwrap(),
+                    Err(error) => assert!(error.is_cancelled()),
+                }
+            }
+        }
+    }
+    async fn incoming_listener(
+        admission: NativeAdmission,
+    ) -> (std::net::SocketAddr, PreviewState, IncomingTestTasks) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let state = PreviewState {
+            incoming: admission,
+            telemetry: Arc::new(FixtureTelemetry::default()),
+            statistics: Arc::new(Statistics::default()),
+            connections: Arc::new(Semaphore::new(4)),
+            resources: Arc::new(Mutex::new(VecDeque::new())),
+            origin: format!("http://{address}").into(),
+            reports: Arc::new(Mutex::new(ReportState {
+                slots: std::array::from_fn(|_| String::new()),
+                credit_order: None,
+            })),
+        };
+        let router = Router::new()
+            .route("/tunnel", get(websocket))
+            .with_state(state.clone());
+        let task = tokio::spawn(async move { axum::serve(listener, router).await });
+        (address, state, IncomingTestTasks(vec![task]))
+    }
+    fn tunnel_request(
+        address: std::net::SocketAddr,
+        origin: &str,
+    ) -> tokio_tungstenite::tungstenite::http::Request<()> {
+        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+        let mut request = format!("ws://{address}/tunnel")
+            .into_client_request()
+            .unwrap();
+        request
+            .headers_mut()
+            .insert("origin", origin.parse().unwrap());
+        request
+    }
+    async fn generated_client_over_websocket(
+        address: std::net::SocketAddr,
+        origin: Arc<str>,
+        tasks: &mut IncomingTestTasks,
+    ) -> TransportFixtureClient<tonic::transport::Channel> {
+        // Test-only TCP connector preserves generated native client behavior. Its
+        // unchanged bytes cross the real WebSocket listener and NativeIncoming.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let proxy_address = listener.local_addr().unwrap();
+        tasks.0.push(tokio::spawn(async move {
+            use futures::SinkExt;
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            use tokio_tungstenite::tungstenite::Message;
+            let (tcp, _) = listener.accept().await?;
+            let (socket, _) = tokio_tungstenite::connect_async(tunnel_request(address, &origin))
+                .await
+                .map_err(io::Error::other)?;
+            let (mut websocket_writer, mut websocket_reader) = socket.split();
+            let (mut tcp_reader, mut tcp_writer) = tcp.into_split();
+            let upload = async {
+                let mut buffer = vec![0; FRAME_BYTES];
+                loop {
+                    let count = tcp_reader.read(&mut buffer).await?;
+                    if count == 0 {
+                        return Ok::<_, io::Error>(());
+                    }
+                    websocket_writer
+                        .send(Message::Binary(buffer[..count].to_vec().into()))
+                        .await
+                        .map_err(io::Error::other)?;
+                }
+            };
+            let download = async {
+                while let Some(message) = websocket_reader.next().await {
+                    match message.map_err(io::Error::other)? {
+                        Message::Binary(bytes) => tcp_writer.write_all(&bytes).await?,
+                        Message::Ping(_) | Message::Pong(_) => {}
+                        Message::Close(_) => return Ok::<_, io::Error>(()),
+                        _ => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "nonbinary test tunnel",
+                            ));
+                        }
+                    }
+                }
+                Ok(())
+            };
+            tokio::select! { result = upload => result, result = download => result }
+        }));
+        let channel = tonic::transport::Endpoint::from_shared(format!("http://{proxy_address}"))
+            .unwrap()
+            .connect()
+            .await
+            .unwrap();
+        TransportFixtureClient::new(channel)
+    }
+    fn start_generated_server(
+        incoming: NativeIncoming,
+        state: &PreviewState,
+        tasks: &mut IncomingTestTasks,
+    ) {
+        let service = TransportFixtureServer::new(FixtureService {
+            statistics: state.statistics.clone(),
+            telemetry: state.telemetry.clone(),
+        })
+        .max_decoding_message_size(RPC_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MESSAGE_BYTES);
+        tasks.0.push(tokio::spawn(async move {
+            tonic::transport::Server::builder()
+                .initial_stream_window_size(MESSAGE_BYTES as u32)
+                .initial_connection_window_size(df_rpc_bridge::RECEIVE_BYTES as u32)
+                .max_frame_size(FRAME_BYTES as u32)
+                .http2_max_header_list_size(FRAME_BYTES as u32)
+                .max_concurrent_streams(CONCURRENT_STREAMS)
+                .add_service(service)
+                .serve_with_incoming(incoming)
+                .await
+                .map_err(io::Error::other)
+        }));
+    }
+    async fn wait_for_released_tunnels(state: &PreviewState) {
+        loop {
+            let released = state.resources.lock().unwrap().iter().all(|metrics| {
+                let snapshot = metrics.snapshot().unwrap();
+                snapshot.closed && snapshot.pipe_owners == 0 && snapshot.envelope_within_limit()
+            });
+            if released {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
+    }
+    #[tokio::test]
+    async fn generated_four_modes_use_websocket_native_incoming_and_preserve_status_trailers() {
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            let (admission, incoming) =
+                NativeIncoming::bounded(NonZeroUsize::new(1).unwrap()).unwrap();
+            let (address, state, mut tasks) = incoming_listener(admission).await;
+            start_generated_server(incoming, &state, &mut tasks);
+            let mut client =
+                generated_client_over_websocket(address, state.origin.clone(), &mut tasks).await;
+            let sample = |sequence| Sample {
+                sequence,
+                payload: b"native-incoming".to_vec(),
+                behavior: Behavior::Echo as i32,
+                ..Sample::default()
+            };
+            let response = client.unary(Request::new(sample(7))).await.unwrap();
+            assert_eq!(
+                response.metadata().get("fixture-server").unwrap(),
+                "native-tonic"
+            );
+            assert_eq!(response.into_inner(), sample(7));
+            let mut stream = client
+                .server_stream(Request::new(sample(9)))
+                .await
+                .unwrap()
+                .into_inner();
+            for sequence in 0..3 {
+                assert_eq!(stream.message().await.unwrap().unwrap(), sample(sequence));
+            }
+            assert!(stream.message().await.unwrap().is_none());
+            assert_eq!(
+                stream
+                    .trailers()
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .get("fixture-terminal")
+                    .unwrap(),
+                "observed"
+            );
+            let response = client
+                .client_stream(Request::new(futures::stream::iter([sample(0), sample(1)])))
+                .await
+                .unwrap()
+                .into_inner();
+            assert_eq!(response.sequence, 2);
+            assert_eq!(response.payload, b"half-close observed");
+            let mut bidi = client
+                .bidi(Request::new(futures::stream::iter([sample(3), sample(4)])))
+                .await
+                .unwrap()
+                .into_inner();
+            assert_eq!(bidi.message().await.unwrap().unwrap(), sample(3));
+            assert_eq!(bidi.message().await.unwrap().unwrap(), sample(4));
+            assert!(bidi.message().await.unwrap().is_none());
+            assert_eq!(
+                bidi.trailers()
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .get("fixture-terminal")
+                    .unwrap(),
+                "observed"
+            );
+            let status = client
+                .unary(Request::new(Sample {
+                    behavior: Behavior::Reject as i32,
+                    ..sample(0)
+                }))
+                .await
+                .unwrap_err();
+            assert_eq!(status.code(), Code::InvalidArgument);
+            assert_eq!(
+                status.metadata().get("fixture-terminal").unwrap(),
+                "observed"
+            );
+            assert_eq!(
+                client
+                    .unary(Request::new(sample(8)))
+                    .await
+                    .unwrap()
+                    .into_inner(),
+                sample(8)
+            );
+            assert_eq!(
+                state.resources.lock().unwrap().len(),
+                1,
+                "RPCs must reuse one physical tunnel"
+            );
+            assert_eq!(state.statistics.completed.load(Ordering::Relaxed), 6);
+            assert_eq!(state.statistics.active.load(Ordering::Relaxed), 0);
+            drop(client);
+            tasks.stop().await;
+            wait_for_released_tunnels(&state).await;
+        })
+        .await
+        .unwrap();
+    }
+    #[tokio::test]
+    async fn full_closed_and_origin_refused_incoming_fail_before_websocket_upgrade() {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let (admission, incoming) =
+                NativeIncoming::bounded(NonZeroUsize::new(1).unwrap()).unwrap();
+            let reservation = admission.try_reserve().unwrap();
+            let (address, state, mut tasks) = incoming_listener(admission).await;
+            for (origin, expected) in [
+                (
+                    "http://untrusted.invalid",
+                    axum::http::StatusCode::FORBIDDEN,
+                ),
+                (
+                    state.origin.as_ref(),
+                    axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                ),
+            ] {
+                let error = tokio_tungstenite::connect_async(tunnel_request(address, origin))
+                    .await
+                    .unwrap_err();
+                let tokio_tungstenite::tungstenite::Error::Http(response) = error else {
+                    panic!("expected HTTP refusal");
+                };
+                assert_eq!(response.status(), expected);
+            }
+            drop(reservation);
+            drop(incoming);
+            let error = tokio_tungstenite::connect_async(tunnel_request(address, &state.origin))
+                .await
+                .unwrap_err();
+            let tokio_tungstenite::tungstenite::Error::Http(response) = error else {
+                panic!("expected closed-server HTTP refusal");
+            };
+            assert_eq!(
+                response.status(),
+                axum::http::StatusCode::SERVICE_UNAVAILABLE
+            );
+            assert!(state.resources.lock().unwrap().is_empty());
+            assert_eq!(state.statistics.active.load(Ordering::Relaxed), 0);
+            assert_eq!(state.connections.available_permits(), 4);
+            tasks.stop().await;
+        })
+        .await
+        .unwrap();
+    }
+    #[tokio::test]
+    async fn malformed_tunnel_releases_incoming_connection_without_domain_service_dispatch() {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            use futures::SinkExt;
+            let (admission, incoming) =
+                NativeIncoming::bounded(NonZeroUsize::new(1).unwrap()).unwrap();
+            let (address, state, mut tasks) = incoming_listener(admission).await;
+            start_generated_server(incoming, &state, &mut tasks);
+            let (mut socket, _) =
+                tokio_tungstenite::connect_async(tunnel_request(address, &state.origin))
+                    .await
+                    .unwrap();
+            socket
+                .send(tokio_tungstenite::tungstenite::Message::Text(
+                    "invalid".into(),
+                ))
+                .await
+                .unwrap();
+            wait_for_released_tunnels(&state).await;
+            let metrics = state.resources.lock().unwrap().front().unwrap().clone();
+            assert!(metrics.snapshot().unwrap().rejected);
+            assert_eq!(state.statistics.active.load(Ordering::Relaxed), 0);
+            assert_eq!(state.statistics.completed.load(Ordering::Relaxed), 0);
+            drop(socket);
+            let mut client =
+                generated_client_over_websocket(address, state.origin.clone(), &mut tasks).await;
+            assert_eq!(
+                client
+                    .unary(Request::new(Sample {
+                        payload: b"healthy-after-failure".to_vec(),
+                        behavior: Behavior::Echo as i32,
+                        ..Sample::default()
+                    }))
+                    .await
+                    .unwrap()
+                    .into_inner()
+                    .payload,
+                b"healthy-after-failure"
+            );
+            drop(client);
+            tasks.stop().await;
+            wait_for_released_tunnels(&state).await;
+        })
+        .await
+        .unwrap();
     }
 }
