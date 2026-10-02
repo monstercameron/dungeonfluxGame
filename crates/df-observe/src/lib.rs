@@ -11,13 +11,31 @@ pub struct OperationContext {
 
 fn parent(context: &OperationContext) -> Context {
     use opentelemetry::trace::TraceContextExt;
-    let parts: Vec<_> = context.trace_parent.split('-').collect();
-    if let ["00", trace, span, flags] = parts.as_slice()
+    // Version 00 has one fixed shape. Reject before traversing untrusted metadata.
+    if context.trace_parent.len() != 55 {
+        return Context::new();
+    }
+    let mut parts = context.trace_parent.split('-');
+    if let (Some("00"), Some(trace), Some(span), Some(flags), None) = (
+        parts.next(),
+        parts.next(),
+        parts.next(),
+        parts.next(),
+        parts.next(),
+    ) && trace.len() == 32
+        && span.len() == 16
+        && flags.len() == 2
+        && [trace, span, flags].iter().all(|part| {
+            part.bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        })
         && let (Ok(trace), Ok(span), Ok(flags)) = (
             TraceId::from_hex(trace),
             SpanId::from_hex(span),
             u8::from_str_radix(flags, 16),
         )
+        && trace != TraceId::INVALID
+        && span != SpanId::INVALID
     {
         return Context::new().with_remote_span_context(SpanContext::new(
             trace,
@@ -67,13 +85,15 @@ impl OperationSpan {
         if self.finished {
             return;
         }
+        // OTEL integer attributes are signed. An unrepresentable observation is
+        // unmeasured rather than a wrapped or fabricated byte count.
+        let bytes = bytes.and_then(|bytes| i64::try_from(bytes).ok());
         self.span
             .set_attribute(KeyValue::new("rpc.status", status.to_owned()));
         self.span
             .set_attribute(KeyValue::new("rpc.bytes.measured", bytes.is_some()));
         if let Some(bytes) = bytes {
-            self.span
-                .set_attribute(KeyValue::new("rpc.bytes", bytes as i64));
+            self.span.set_attribute(KeyValue::new("rpc.bytes", bytes));
         }
         self.span.end();
         self.finished = true;
@@ -204,6 +224,170 @@ mod native {
         /// Flush the actual SDK before preview shutdown.
         pub fn shutdown(&self) -> Result<(), String> {
             self.provider.shutdown().map_err(|error| error.to_string())
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::OperationContext;
+        use opentelemetry::{Value, trace::SpanId};
+
+        const TRACE_PARENT: &str = "00-11111111111111111111111111111111-2222222222222222-01";
+
+        fn context(trace_parent: &str) -> OperationContext {
+            OperationContext {
+                trace_parent: trace_parent.to_owned(),
+                build: "admitted-build".to_owned(),
+            }
+        }
+
+        fn attribute<'a>(span: &'a SpanData, name: &str) -> Option<&'a Value> {
+            span.attributes
+                .iter()
+                .find(|attribute| attribute.key.as_str() == name)
+                .map(|attribute| &attribute.value)
+        }
+
+        #[test]
+        fn exported_operations_keep_admitted_context_and_terminal_measurements() {
+            let telemetry = FixtureTelemetry::default();
+            let mut admitted = context(TRACE_PARENT);
+            let mut complete = telemetry.begin(&admitted, "operation.complete");
+            admitted.build = "later-build".to_owned();
+            admitted.trace_parent.clear();
+            complete.finish("complete", 0);
+            complete.finish("duplicate", 99);
+            drop(complete);
+            let mut cancelled = telemetry.begin(&context(TRACE_PARENT), "operation.cancelled");
+            cancelled.finish_unmeasured("cancelled");
+            drop(cancelled);
+            drop(telemetry.begin(&context(TRACE_PARENT), "operation.abandoned"));
+
+            let spans = telemetry.exporter.spans.lock().unwrap();
+            assert_eq!(spans.len(), 3);
+            for (span, (name, status, measured)) in spans.iter().zip([
+                ("operation.complete", "complete", true),
+                ("operation.cancelled", "cancelled", false),
+                ("operation.abandoned", "abandoned", false),
+            ]) {
+                assert_eq!(span.name, name);
+                assert_eq!(
+                    span.instrumentation_scope.name(),
+                    "df-observe.transport-fixture"
+                );
+                assert_eq!(
+                    span.span_context.trace_id().to_string(),
+                    "11111111111111111111111111111111"
+                );
+                assert_eq!(span.parent_span_id.to_string(), "2222222222222222");
+                assert!(span.span_context.is_valid());
+                assert!(span.span_context.is_sampled());
+                assert_eq!(
+                    attribute(span, "fixture.build"),
+                    Some(&Value::String("admitted-build".into()))
+                );
+                assert_eq!(
+                    attribute(span, "rpc.status"),
+                    Some(&Value::String(status.into()))
+                );
+                assert_eq!(
+                    attribute(span, "rpc.bytes.measured"),
+                    Some(&Value::Bool(measured))
+                );
+                assert_eq!(
+                    attribute(span, "rpc.bytes"),
+                    measured.then_some(&Value::I64(0))
+                );
+                assert_eq!(span.attributes.len(), if measured { 4 } else { 3 });
+            }
+        }
+
+        #[test]
+        fn malformed_parent_exports_a_root_without_copying_the_input() {
+            let telemetry = FixtureTelemetry::default();
+            for malformed in [
+                "",
+                " 00-11111111111111111111111111111111-2222222222222222-01",
+                "00-11111111111111111111111111111111-2222222222222222-01 ",
+                "00-1111111111111111111111111111111é-2222222222222222-01",
+                "00-111111111111111111111111111111é-2222222222222222-01",
+                "00-1111111111111111111111111111111-2222222222222222-01",
+                "00-11111111111111111111111111111111_2222222222222222-01",
+                "01-11111111111111111111111111111111-2222222222222222-01",
+                "ff-11111111111111111111111111111111-2222222222222222-01",
+                "00-1111111111111111111111111111111g-2222222222222222-01",
+                "00-1111111111111111111111111111111A-2222222222222222-01",
+                "00-11111111111111111111111111111111-222222222222222g-01",
+                "00-11111111111111111111111111111111-2222222222222222-0g",
+                "00-11111111111111111111111111111111-2222222222222222-1",
+                "00-00000000000000000000000000000000-2222222222222222-01",
+                "00-11111111111111111111111111111111-0000000000000000-01",
+                "00-11111111111111111111111111111111-2222222222222222-01-extra",
+            ] {
+                telemetry.record(&context(malformed), "operation.root", "complete", 1);
+            }
+            telemetry.record(
+                &context(&"-".repeat(65536)),
+                "operation.long-parent",
+                "complete",
+                1,
+            );
+            let spans = telemetry.exporter.spans.lock().unwrap();
+            assert_eq!(spans.len(), 18);
+            for span in spans.iter() {
+                assert_eq!(span.parent_span_id, SpanId::INVALID);
+                assert!(span.span_context.is_valid());
+                assert_ne!(
+                    span.span_context.trace_id().to_string(),
+                    "11111111111111111111111111111111"
+                );
+                assert_eq!(span.attributes.len(), 4);
+            }
+        }
+
+        #[test]
+        fn unsampled_parent_preserves_causality_without_forcing_export() {
+            use opentelemetry::trace::{Span, TraceContextExt};
+            let context = context("00-11111111111111111111111111111111-2222222222222222-00");
+            let parent = crate::parent(&context);
+            let remote = parent.span().span_context().clone();
+            assert!(remote.is_remote());
+            assert!(remote.is_valid());
+            assert!(!remote.is_sampled());
+            assert_eq!(remote.span_id().to_string(), "2222222222222222");
+            let telemetry = FixtureTelemetry::default();
+            let mut operation = telemetry.begin(&context, "operation.unsampled");
+            assert_eq!(operation.span.span_context().trace_id(), remote.trace_id());
+            assert!(!operation.span.span_context().is_sampled());
+            operation.finish("complete", 1);
+            assert_eq!(telemetry.count().unwrap(), 0);
+        }
+
+        #[test]
+        fn byte_count_boundaries_never_export_wrapped_measurements() {
+            let telemetry = FixtureTelemetry::default();
+            let maximum = usize::try_from(i64::MAX).unwrap();
+            for (name, bytes) in [
+                ("operation.zero", 0),
+                ("operation.maximum", maximum),
+                ("operation.overflow", maximum + 1),
+                ("operation.usize-maximum", usize::MAX),
+            ] {
+                telemetry.record(&context(TRACE_PARENT), name, "complete", bytes);
+            }
+            let spans = telemetry.exporter.spans.lock().unwrap();
+            assert_eq!(spans.len(), 4);
+            for (span, expected) in spans.iter().zip([Some(0), Some(i64::MAX), None, None]) {
+                assert_eq!(
+                    attribute(span, "rpc.bytes.measured"),
+                    Some(&Value::Bool(expected.is_some()))
+                );
+                assert_eq!(
+                    attribute(span, "rpc.bytes"),
+                    expected.map(Value::I64).as_ref()
+                );
+            }
         }
     }
 }
