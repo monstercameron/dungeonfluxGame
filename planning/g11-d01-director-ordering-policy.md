@@ -4,12 +4,38 @@ Status: design contract; production interfaces and executable game behavior rema
 
 ## Decision
 
-A decision pass is a finite, one-way composition of pure ports. `df-session` owns
-its lifecycle and the only authoritative commit. It binds a trusted actor and
-session/run, checks the operation key and owner fence, and supplies an immutable
-basis containing the current revision, logical time, rules/content/policy
-revisions, and causal input IDs. The pure director ports do not authenticate,
-read clocks, access storage, call providers, schedule jobs, or mutate shared state.
+A decision pass is a finite, one-way composition of pure ports. The `df-session`
+owner admits and serializes an operation per session: it authenticates the actor,
+resolves an idempotent operation key, verifies the current owner fence, and
+supplies an immutable basis
+with session/run, current revision, logical time, source/content/policy revisions,
+and causal input IDs. It passes that basis and typed input to `df-engine`.
+
+`df-engine` is the pure composition owner. It invokes `df-intent`, the existing
+`df-rules` authority, and the applicable G11 director ports in the order below.
+It validates their bounded results, combines only compatible deltas, and selects
+an isolated candidate `Transition` assembled from canonical `df-model` records
+and `df-types` IDs/units. The engine owns its merge/selection policy; a
+contradictory or non-commuting proposal
+without a governing resolution is a typed conflict/pending result; one delta
+never silently overwrites another. A whole-decision refusal exposes no candidate.
+The engine does not authenticate, read a clock, access storage, call providers,
+schedule work, or mutate shared state.
+
+Shared IDs and units belong to `df-types`; shared persistence-bearing records
+belong to `df-model`; immutable authored policies/content belong to `df-content`.
+Subsystem-local request and error types remain with their owning pure crate. This
+policy names those ownership boundaries but does not freeze new concrete records,
+fields, enum variants, or function signatures: those remain G03/G10/G11 work.
+
+After composition, `df-session` rechecks the admitted revision/fence and owns
+authorization of the one durable commit through its `SessionRepository` port;
+`df-persistence` implements that port. State transition, operation result,
+ordered facts, and durable effect intents commit atomically. Only after the
+persistence result confirms commit may session apply/publish the transition and
+`df-server` supplied native executors dispatch committed effects. An ambiguous
+commit stays unknown until operation lookup resolves it. No effect runs before
+commit, and a post-commit delivery failure does not roll back gameplay state.
 
 The pass orders *authority*, not an obligation to run every director. A stage may
 be inapplicable and produce an explicit no-op. A domain decline is a typed result,
@@ -17,81 +43,105 @@ not an infrastructure error. Pending, invalid, stale, capacity-limited, and
 unsupported outcomes stop dependent stages. They do not become success through
 fallback parsing or generated narration.
 
-| Order | Port / owner | Input and permitted result | Stop or defer rule |
+| Causal order | Pure port / authority | Input and permitted result | Stop or defer rule |
 | --- | --- | --- | --- |
-| 0 | Session admission (`df-session`) | Authorized actor, operation/idempotency key, fenced current revision, immutable basis | Reject unauthorized/stale binding, stale revision, or capacity before director work. A duplicate operation key returns its recorded result; it never dispatches the decision twice. Authorization and fencing are not director policy. |
-| 1 | Intent (`df-intent`) | Validated input envelope and basis -> action/question/social/plan-only/meta/joke/clarify/rejected disposition; an action proposal is never authorization | Questions, hypotheticals, jokes, ambiguity, unsupported input, or stale semantic results cannot execute. Clarification or rejection is terminal for this pass. |
-| 2 | Rules authority (`df-rules`, existing owner) | Typed action proposal -> source-valid preparation/resolution, explicit decline, or pending ruling | Rules own legality, costs, dice, modifiers, and mechanical outcome. A required ruling/choice pauses the uncommitted continuation; no director or model invents a DC, roll, cost, or success. |
-| 3 | Consequence proposals (`df-world` and `df-interaction`) | The same immutable admitted basis plus the accepted rules result/permitted event -> bounded world and social proposals | These ports are siblings: neither calls the other or consumes its tentative output. Contradictory proposals require explicit session conflict handling or a new pass; never recursively iterate to convergence. Unsupported physical behavior returns a ruling/gap. NPC refusal, redirection, help, or no reaction is a valid result. |
-| 4 | Knowledge (`df-knowledge`) | Accepted candidate facts, actual permitted observations/witnesses, and provenance -> scoped knowledge/memory/belief/rumor delta | Truth changes only through an authorized world transition. Knowledge is not broadcast from global state; no witness/contact path means no fabricated awareness. Secret access is audience-scoped before any projection. |
-| 5 | Narrative (`df-narrative`) | Candidate opportunities from the accepted candidate plus permitted interaction/knowledge inputs -> bounded proposal or no intervention | Opportunity is not an outcome. Validate prerequisites, agency, and budget; a refusal is preserved. A proposal that needs a further reaction, ruling, or world choice becomes an explicit continuation for a later pass. |
-| 6 | Encounter (`df-encounter`) | Current candidate world and source/rules catalog -> legal bounded challenge/objective proposal or explicit gap | No enemies, rewards, or objective results enter state before rules/session acceptance. Invalid or unsupported compositions stop that proposal. |
-| 7 | Combat tactics (`df-combat`) | Current combat observation, perception-limited knowledge, and rules-provided legal action set -> one legal tactical/reinforcement proposal or no action | Rules keep initiative, reactions, resources, and action legality. Hidden information cannot influence what an actor appears to know. The proposal returns to the rules/session authority for acceptance. |
-| 8 | Session decision/commit (`df-session`) | Selected validated candidate, operation result, ordered facts, and effect intents -> one fenced revision transition | Commit the selected decision, resulting state, result/idempotency record, ordered facts, and durable effect intents atomically. If validation or commit fails, publish no candidate state. An ambiguous commit remains unknown until operation lookup resolves it. |
+| Admission | Native session (`df-session`) | Authorized actor; per-session serialized input; operation key, owner fence, immutable basis and typed input | A repeated key returns its recorded result without re-dispatch. Reject an unauthorized/stale binding, invalid fence, stale basis, or capacity before composition. |
+| 1 | Intent (`df-intent`), invoked by `df-engine` | Input envelope and basis -> action/question/social/plan-only/meta/joke/clarify/rejected disposition | An action proposal is not authorization. Questions, hypotheticals, jokes, ambiguity, unsupported input, or stale semantic results cannot execute. |
+| 2 | Rules (`df-rules`), invoked by `df-engine` | Typed action proposal -> source-valid preparation/resolution, explicit decline, or pending ruling | Rules own legality, costs, dice, modifiers, and mechanical outcome. Required ruling/choice pauses the uncommitted pass; no director/model invents a DC, roll, cost, or success. |
+| 3a / 3b | World (`df-world`) and interaction (`df-interaction`) sibling ports, invoked by `df-engine` | Same immutable basis plus accepted rules result/permitted event -> bounded world and social proposals | Neither sibling calls or consumes the other's tentative result. Unsupported physical behavior returns a ruling/gap. NPC refusal, redirection, help, or no reaction is valid. |
+| 4 | Knowledge (`df-knowledge`), invoked by `df-engine` | Actual permitted observations, provenance, and facts eligible in the candidate -> scoped knowledge/memory/belief/rumor delta | Truth changes only through an authorized world transition. No global-state broadcast or fabricated witness/contact path. Keep secret access audience-scoped. |
+| 5 | Narrative (`df-narrative`), invoked by `df-engine` | Candidate opportunities and permitted interaction/knowledge inputs -> bounded proposal or no intervention | An opportunity is not an outcome. Check prerequisites, agency and budget. A request needing another earlier-authority choice is a later continuation, never a recursive call. |
+| 6 | Encounter (`df-encounter`), invoked by `df-engine` | Candidate world and source/rules catalog -> bounded challenge/objective proposal or explicit gap | No enemies, rewards, or objective results enter the candidate before applicable rules/engine validation. |
+| 7 | Combat (`df-combat`), invoked by `df-engine` | Combat observation, perception-limited knowledge, and rules-provided legal action set -> legal tactical/reinforcement proposal or no action | Rules keep initiative, reactions, resources and legality. A tactic is a proposal returned to rules/engine validation. |
+| Selection | Pure engine composition (`df-engine`) | Applicable typed proposals -> compatible selected candidate `Transition` or typed conflict/refusal/pending | The engine owns merge and candidate selection. Reject contradictions that have no approved deterministic resolution. It returns owned data and never publishes it. |
+| Commit | Session (`df-session`) through `SessionRepository` (`df-persistence` implementation) | Engine candidate plus operation result, ordered facts, effects, and current fence/revision -> durable decision receipt | Revalidate current owner fence/revision and atomically persist. Failure publishes nothing; ambiguous outcome remains unknown pending operation lookup. |
+| Post-commit | Native composition (`df-server` executors supplied to session) | Confirmed committed effect intents -> owned job/result | Dispatch only after commit. Generation/job/run fences reject stale callbacks; provider failure cannot undo required committed outcomes. |
 
-The dependency graph is acyclic:
+### Causal flow
+
+The arrows below describe data/decision flow, not Rust crate imports:
 
 ```text
-admission -> intent -> rules result
-                         |       |
-                         +-> world proposal
-                         +-> interaction proposal
-                                  |
-             accepted candidate + provenance -> knowledge delta
-                                  |
-                    narrative / encounter proposals
-                                  |
-                  combat proposal (when applicable)
-                                  |
-                    session validation + commit
+df-session admits actor/operation and binds immutable basis
+  -> df-engine pure composition
+       -> df-intent classification -> df-rules preparation/resolution
+       -> df-world proposal ---------+
+       -> df-interaction proposal ---+  same basis; neither calls the other
+       -> df-knowledge -> df-narrative / df-encounter -> df-combat (when applicable)
+  -> df-engine validates deltas and selects candidate Transition
+  -> df-session rechecks fence/revision
+  -> SessionRepository commit (implemented by df-persistence)
+  -> confirmed commit -> apply/publish -> df-server native effect executors
 ```
 
-World and interaction are concurrent-capable siblings only because they receive
-the same immutable inputs. Their merge is a bounded, explicit validation step;
-there is no implicit world <-> interaction feedback edge. Knowledge consumes only
-observed or selected candidate facts, never arbitrary hidden state. Narrative and
-encounter proposals do not call back into earlier stages. Combat may be evaluated
-from the current legal-action set in the same decision, but any requested ruling,
-new reaction, or newly created encounter waits for another admitted pass. Every
-continuation carries its basis/revision and stable causal IDs and is revalidated;
-stale continuations are rejected rather than silently rebased.
+### Rust crate ownership/import direction
 
-Only the session owner decides which validated proposals comprise the selected
-candidate. On a whole-decision rejection, no candidate delta is visible. A
-compound action may deliberately accept a bounded prefix: each accepted step's
-outcome and cost is recorded, then the operation returns `PartiallyCompleted`,
-`NeedsRuling`, `NeedsClarification`, `Cancelled`, or another explicit terminal /
-continuation result. Already committed steps are not rolled back because a later
-step fails or the request is cancelled. Request cancellation cannot undo a commit
-or admitted durable effect. Generation/job/run bindings fence late callbacks;
-post-commit effects execute through the owning server/session ports, outside pure
-policy functions.
+These are ownership/import constraints, not a promise that every concrete crate
+API or dependency edge is already implemented. `A -> B` means A may import B;
+there is no reverse edge in this composition:
 
-Logical world time advances only through an accepted rules/session decision under
-the world pause/travel policy. Wall time, process wakeups, and presentation time do
-not independently advance game time. Due work is bounded and deterministically
-ordered; remaining catch-up is explicit. No director owns its own timer, database
-transaction, task, or authoritative singleton. Diagnostic facts are returned to
-native consumers; pure domain code does not emit SDK telemetry. Trace IDs do not
-authorize a principal, and private payloads stay out of default diagnostics.
+```text
+df-model -> df-types
+df-content -> df-types
+df-rules, df-intent, df-world, df-interaction, df-knowledge,
+df-narrative, df-encounter, df-combat -> df-types + df-model + df-content
+
+df-engine -> df-types + df-model + df-content + df-rules + applicable pure directors
+df-session imports df-types + df-model + df-engine; it declares SessionRepository
+df-persistence imports df-types + df-model + the df-session repository contract
+df-server imports df-session + df-persistence + native executor implementations
+```
+
+Shared IDs/units and persisted records are not redeclared by director crates.
+Director crates do not import one another or `df-engine`; `df-engine` imports and
+composes their pure ports. `df-session` does not import the persistence
+implementation: it owns the repository contract, and the native composition root
+wires the implementation. This keeps the application dependency graph acyclic
+while leaving storage and native execution out of the pure engine.
+
+World and interaction can be evaluated as siblings only because both consume the
+same immutable basis. `df-engine` validates/combines compatible deltas; conflict
+resolution is not delegated to the session. Knowledge consumes only observations
+and provenance permitted for the selected candidate, never arbitrary hidden state.
+Narrative/encounter proposals do not call back into earlier stages. Combat may be
+evaluated from the current legal-action set in the same pass, but a required
+ruling, new reaction, or newly created encounter waits for a later admitted pass.
+Every continuation carries its basis/revision and causal IDs and is revalidated;
+stale continuations are rejected instead of silently rebased.
+
+Only a confirmed session commit makes selected candidate changes authoritative.
+On a whole-decision rejection, no candidate delta is visible. A compound action
+may deliberately return a bounded accepted prefix: committed steps and costs are
+preserved, then the result explicitly reports `PartiallyCompleted`,
+`NeedsRuling`, `NeedsClarification`, `Cancelled`, or another typed terminal /
+continuation outcome. A later failure or request cancellation cannot roll back
+already committed steps. Logical world time advances only through an accepted
+rules/session decision under world pause/travel policy; wall time and presentation
+time do not advance it. Due work is bounded and deterministically ordered. No
+pure director owns a timer, task, transaction, provider call, or authoritative
+mutable singleton. Pure code returns facts; diagnostics and private payloads follow
+the existing observability/privacy boundaries.
 
 ## Alternatives considered
 
 - **Direct director calls / mutual feedback:** rejected because narrative-to-NPC-to-world-to-narrative recursion has no finite bound and creates crate cycles. Cross-stage intent is returned as typed data and, when it needs earlier authority again, as a later continuation.
 - **One monolithic director owning rules and state:** rejected because it would duplicate rules authority and combine policy, persistence, and effect execution. The existing rules and session owners retain these responsibilities.
-- **Commit each director independently or publish a partially merged working copy:** rejected because a later rejection could expose inconsistent facts, costs, and effects. The session commits one selected candidate atomically; intentional partial progress is represented as an accepted bounded prefix with an explicit result.
+- **Commit each director independently or publish a partially merged working copy:** rejected because a later rejection could expose inconsistent facts, costs, and effects. `df-engine` selects one isolated candidate; session authorizes and commits it atomically through persistence. Intentional partial progress is represented as an accepted bounded prefix with an explicit result.
 - **Treat every director as mandatory on every input:** rejected because questions, no-op turns, and non-combat actions have different applicable ports. Applicability is explicit and does not weaken the order of any port that does run.
 
 ## Executable contract example
 
-The following is a literal, standalone Rust 2024 specification example using only
-the standard library. Its names are local to the example and do not claim to be
-production API. It demonstrates the fixed order, stopping on a typed refusal or
-pending result, and rejecting a stale basis before any director is visited.
+This literal, standalone Rust 2024 example uses only the standard library. Its
+names are local specification labels, not production API. It distinguishes
+session admission, director calls, engine candidate selection, a separate session
+fence recheck and durable persistence result, then post-commit native effects. It also asserts that refusal,
+pending work, candidate conflict, stale fence, and uncertain commit stop before
+any forbidden downstream action.
 
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Stage {
+    SessionAdmission,
     Intent,
     Rules,
     World,
@@ -100,7 +150,10 @@ enum Stage {
     Narrative,
     Encounter,
     Combat,
-    SessionCommit,
+    EngineSelectCandidate,
+    SessionFenceRecheck,
+    PersistenceCommit,
+    NativeEffectDispatch,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -108,17 +161,23 @@ enum PortResult {
     Accept,
     Decline,
     Pending,
+    Conflict,
+    Failed,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum Decision {
-    Committed(Vec<Stage>),
+    Completed(Vec<Stage>),
     Refused { at: Stage, visited: Vec<Stage> },
     Awaiting { at: Stage, visited: Vec<Stage> },
-    StaleBasis,
+    Conflicted { visited: Vec<Stage> },
+    StaleFence { visited: Vec<Stage> },
+    CommitUnknown { visited: Vec<Stage> },
+    EffectsPending { visited: Vec<Stage> },
 }
 
-const ORDER: [Stage; 9] = [
+const ORDER: [Stage; 13] = [
+    Stage::SessionAdmission,
     Stage::Intent,
     Stage::Rules,
     Stage::World,
@@ -127,12 +186,17 @@ const ORDER: [Stage; 9] = [
     Stage::Narrative,
     Stage::Encounter,
     Stage::Combat,
-    Stage::SessionCommit,
+    Stage::EngineSelectCandidate,
+    Stage::SessionFenceRecheck,
+    Stage::PersistenceCommit,
+    Stage::NativeEffectDispatch,
 ];
 
-fn decide(basis_is_current: bool, results: [PortResult; 9]) -> Decision {
-    if !basis_is_current {
-        return Decision::StaleBasis;
+fn decide(fence_is_current: bool, results: [PortResult; 13]) -> Decision {
+    if !fence_is_current {
+        return Decision::StaleFence {
+            visited: Vec::new(),
+        };
     }
 
     let mut visited = Vec::new();
@@ -140,55 +204,107 @@ fn decide(basis_is_current: bool, results: [PortResult; 9]) -> Decision {
         visited.push(stage);
         match result {
             PortResult::Accept => {}
+            PortResult::Decline if stage == Stage::SessionFenceRecheck => {
+                return Decision::StaleFence { visited };
+            }
             PortResult::Decline => return Decision::Refused { at: stage, visited },
             PortResult::Pending => return Decision::Awaiting { at: stage, visited },
+            PortResult::Conflict if stage == Stage::EngineSelectCandidate => {
+                return Decision::Conflicted { visited };
+            }
+            PortResult::Conflict => return Decision::Refused { at: stage, visited },
+            PortResult::Failed if stage == Stage::PersistenceCommit => {
+                return Decision::CommitUnknown { visited };
+            }
+            PortResult::Failed if stage == Stage::NativeEffectDispatch => {
+                return Decision::EffectsPending { visited };
+            }
+            PortResult::Failed => return Decision::Refused { at: stage, visited },
         }
     }
-    Decision::Committed(visited)
+    Decision::Completed(visited)
 }
 
 fn main() {
-    let all_accept = [PortResult::Accept; 9];
+    let all_accept = [PortResult::Accept; 13];
     assert_eq!(
         decide(true, all_accept),
-        Decision::Committed(ORDER.to_vec())
+        Decision::Completed(ORDER.to_vec())
     );
 
     let mut refuses_at_rules = all_accept;
-    refuses_at_rules[1] = PortResult::Decline;
+    refuses_at_rules[2] = PortResult::Decline;
     assert_eq!(
         decide(true, refuses_at_rules),
         Decision::Refused {
             at: Stage::Rules,
-            visited: vec![Stage::Intent, Stage::Rules],
+            visited: ORDER[..3].to_vec(),
         },
     );
 
     let mut waits_at_interaction = all_accept;
-    waits_at_interaction[3] = PortResult::Pending;
+    waits_at_interaction[4] = PortResult::Pending;
     assert_eq!(
         decide(true, waits_at_interaction),
         Decision::Awaiting {
             at: Stage::Interaction,
-            visited: vec![
-                Stage::Intent,
-                Stage::Rules,
-                Stage::World,
-                Stage::Interaction
-            ],
+            visited: ORDER[..5].to_vec(),
         },
     );
 
-    assert_eq!(decide(false, all_accept), Decision::StaleBasis);
+    let mut sibling_conflict = all_accept;
+    sibling_conflict[9] = PortResult::Conflict;
+    assert_eq!(
+        decide(true, sibling_conflict),
+        Decision::Conflicted {
+            visited: ORDER[..10].to_vec(),
+        },
+    );
+
+    let mut stale_fence = all_accept;
+    stale_fence[10] = PortResult::Decline;
+    assert_eq!(
+        decide(true, stale_fence),
+        Decision::StaleFence {
+            visited: ORDER[..11].to_vec(),
+        },
+    );
+
+    let mut uncertain_commit = all_accept;
+    uncertain_commit[11] = PortResult::Failed;
+    assert_eq!(
+        decide(true, uncertain_commit),
+        Decision::CommitUnknown {
+            visited: ORDER[..12].to_vec(),
+        },
+    );
+
+    assert_eq!(
+        decide(false, all_accept),
+        Decision::StaleFence {
+            visited: Vec::new()
+        },
+    );
+
+    let mut executor_failure = all_accept;
+    executor_failure[12] = PortResult::Failed;
+    assert_eq!(
+        decide(true, executor_failure),
+        Decision::EffectsPending {
+            visited: ORDER.to_vec(),
+        },
+    );
 }
 ```
 
-The example models control flow only. It deliberately omits domain types,
-source validation, concurrency, candidate merging, transaction implementation,
-serialization, telemetry, and effects. In production, refusal/pending classification
-is typed per port, optional stages have explicit applicability/no-op results, and
-the session owner—not a director—performs the actual atomic commit. The example
-is not evidence of a compiled application or an integrated running feature.
+The example specifies control-flow ownership; it does not emulate actual candidate
+merging or database transactions. Optional director applicability, owned domain
+records, canonical IDs/units, and exact port signatures await G03/G10/G11. The
+example makes the invariant observable: only engine selection precedes the
+session commit gate, and native effect execution follows it. The session remains
+the only durable commit authority; a candidate conflict cannot reach commit, an
+uncertain commit cannot dispatch effects, and post-commit executor failure cannot
+undo the committed decision.
 
 ## Unresolved production gates and acceptance evidence
 
@@ -199,27 +315,26 @@ implementation, executors, or a running integration. G01/G03/G05/G06/G07/G09/G10
 G11/G12 and the named prerequisite children remain applicable at their planned
 boundaries; this task does not mark them complete. In particular, source-grounded
 2024 social/physical rulings and concrete actor/event/plan, memory/rumor, simulation,
-latency, and candidate-count limits need their owning tasks and evidence.
+latency, and candidate-count limits need their owning tasks and evidence. Exact
+shared-record shapes/fields, port signatures, merge-compatible fields, and
+repository contract methods are not frozen by this design excerpt.
 
 Acceptance for this design boundary is review that the table and example preserve
 the frozen ordering, no feedback cycle, typed refusal/pending behavior, candidate
-isolation, and sole session commit ownership. The exact extracted code passed
-pinned repository `rustfmt --check`, `rustc --edition 2024 -D warnings`, and
-execution of its finite boundary assertions. Guard receipts and captured stdout/
-stderr are retained under
-`development/evidence/fanout-20261001/B-G11-D01/`: `rustfmt-check-03.json`,
-`rustc-contract-02.json`, and `run-contract-01.json`. Formatter and compiler
-resource admission was recorded by the guard. Earlier formatting and path typos
-are retained as separate failed receipts; they were corrected before the passing
-checks. Native/WASM workspace checks, production contract checks, and integrated
-runtime/frontier output checks are unperformed and cannot be inferred from this
-example.
+isolation, engine-owned candidate selection, and sole session-authorized durable
+commit ownership. The exact a2 extracted code passed pinned repository
+`rustfmt --check`, `rustc --edition 2024 -D warnings`, and execution of its finite
+ownership/refusal assertions. Guard receipts and captured stdout/stderr are
+retained under `development/evidence/fanout-20261001/B-G11-D01/a2/`. Earlier a1
+receipts remain separate and are not a2 evidence. Native/WASM workspace checks,
+production contract checks, and integrated runtime/frontier output checks are
+unperformed and cannot be inferred from this example.
 
 ## Governing sources
 
-The frozen input brief is `development/evidence/fanout-20261001/B-G11-D01/brief.json`
-(task `B-G11-D01`, attempt `B-G11-D01-a1`; input revision
-`9def9b845531e5cc589a28343b822b4664bd03fd`). Governing files were checked against
+The frozen input brief is `development/evidence/fanout-20261001/B-G11-D01/a2/brief.json`
+(task `B-G11-D01`, attempt `B-G11-D01-a2`; input revision
+`a0575c15cdf5171c1a90d4aa36a385317747660b`). Governing files were checked against
 the brief's SHA-256 values before editing:
 
 - `planning/implementation-roadmap.md` (`0160ad8e8ec38f768e2348209b9989e30e8f403d9b1a4ebf694f0801f7206932`): dispatch/ownership,
@@ -241,8 +356,8 @@ the brief's SHA-256 values before editing:
   (`9500030ccefd0bab631fb7f1763f79f4103eca3a344c36cf15be869e330683bb`): example style and deferred verification environment.
 - `development/backlog-catalog.json` (`039b0a03b4085b43ad32c4063e2cb8fc789fc55fff7552aec6e951ec3b4704c3`): G11 / B-G11-D01
   original objective and criteria, unchanged.
-- `AGENTS.md` (`55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebec182`) and ADR 0001–0005 (`acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8`,
-  `a6476cfef449e089639109cc6d3cf5f0800b792b57a32696258d5ac0b951196`,
+- `AGENTS.md` (`55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182`) and ADR 0001–0005 (`acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8`,
+  `a6476cfef449e089639109cc6d3cf5f0800b792b57a32696258d5ac0b9511966`,
   `ee293673b01391c3a39577bd116a60abb3edfa662a7a8d1315556d6fe537d912`,
   `8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae`,
   `25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c`): scoped ownership, isolated worktree, evidence, devlog,
