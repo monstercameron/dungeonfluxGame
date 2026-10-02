@@ -405,3 +405,10 @@ pub use producer::{AnyValue, CapturedBatch, LogInput, NativeProducer, Severity, 
 
 mod dispatch_context;
 pub use dispatch_context::begin_dispatched;
+
+mod capture;
+pub use capture::{CaptureKey, ProducerId, RecordId, Signal, SourceSequence, TelemetryError};
+mod browser;
+pub use browser::{
+    BrowserBuffer, BrowserLog, BufferError, BufferSnapshot, UploadFailure, UploadLease,
+};
