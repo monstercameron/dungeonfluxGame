@@ -1,0 +1,10 @@
+[package]
+name = "df-session"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+df-model = { path = "../df-model" }
+df-types = { path = "../df-types" }
