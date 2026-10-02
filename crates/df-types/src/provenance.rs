@@ -34,6 +34,11 @@ impl RevisionLabel {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Retained label allocation for owners enforcing a total memory bound.
+    pub fn retained_heap_bytes(&self) -> usize {
+        self.0.capacity()
+    }
 }
 
 /// Required provenance component of the paired native/WASM fixture build.
