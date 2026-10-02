@@ -183,7 +183,10 @@ fn main() {
     );
     assert_eq!(
         decide_pin(
-            Source { committed: false, ..source },
+            Source {
+                committed: false,
+                ..source
+            },
             true,
             true,
             1_000,
@@ -194,7 +197,10 @@ fn main() {
     );
     assert_eq!(
         decide_pin(
-            Source { sealed: false, ..source },
+            Source {
+                sealed: false,
+                ..source
+            },
             true,
             true,
             1_000,
@@ -209,7 +215,10 @@ fn main() {
     );
     assert_eq!(
         decide_pin(
-            Source { suppressed: true, ..source },
+            Source {
+                suppressed: true,
+                ..source
+            },
             true,
             true,
             1_000,
@@ -223,7 +232,14 @@ fn main() {
         PinDecision::Refuse(Refusal::Unavailable)
     );
     assert_eq!(
-        decide_pin(source, true, true, source.retention_expires_at_ms, 30_000_000, 0),
+        decide_pin(
+            source,
+            true,
+            true,
+            source.retention_expires_at_ms,
+            30_000_000,
+            0
+        ),
         PinDecision::Refuse(Refusal::RetentionExpired)
     );
     assert_eq!(
