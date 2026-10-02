@@ -1,7 +1,7 @@
 # df-tools owned preview and process decision
 
-Task/attempt: `B-C-df-tools-D02/a1`  
-Input revision: `575df9c3a619e8ee68eecd6bbf3d4c5ebdd00c35`  
+Task/attempt: `B-C-df-tools-D02/a2`
+Input revision: `2022c90fa8b4f53b99eaec43d5e32f3e3b7205cc`
 Status: bounded design decision; production preview implementation remains pending.
 
 ## Decision
@@ -18,12 +18,14 @@ inputs are typed startup refusals. A PID, port, directory, or process name by
 itself never grants release authority; cleanup never searches for and kills a
 matching-looking process.
 
-The serving scope owns its listener and a non-clone private registration handle
+The serving scope owns its listener and a non-Clone private registration handle
 for the same lifetime. The handle retains the exclusive record file and is the
 release capability; its PID field is diagnostic, not authority. On normal
 shutdown it releases only its own record after the listener stops and the
-record still matches the held owner. The periodic cleanup worker never signals
-a PID or stops a live preview. After a crash, the orphan record is ambiguous
+entire record still matches the held owner's saved record. The handle cannot be
+reconstructed from observed labels or cloned; losing it leaves the record
+ambiguous. The periodic cleanup worker never signals a PID or stops a live
+preview. After a crash, the orphan record is ambiguous
 and retained. The contract intentionally grants no PID-based process or record
 action after the in-process owner is gone. It may remove an artifact only
 inside an approved
@@ -71,7 +73,8 @@ ID. Attempt/build labels are 1–128 ASCII bytes from
 canonical absolute path is Rust-debug-quoted UTF-8 of at most 4,096 bytes; the
 complete record is at most 16 KiB. A failed bind or record write never
 announces readiness. A clean shutdown removes only the exact record whose
-parsed owner, preview roots, and process PID still match this serving scope;
+entire parsed identity, including owner, PID, port, preview roots, native build
+ID, and web source ID, still matches this serving scope's private handle;
 report release errors. An abrupt exit leaves the record for coordinator review;
 no PID-based automatic retirement is authorized. The serving scope never
 signals the PID, recursively deletes the data root, or deletes supplied web
@@ -84,161 +87,294 @@ campaign publication or activation transport remains subject to X10/G03.
 
 ## Bounded contract literal
 
-This standalone literal captures the decision's release authorization and
-artifact retention cases. It is evidence for this pure decision table only; it
+This standalone literal models exclusive registration, a held capability,
+whole-record recheck, and artifact retention. Its `record` stands for the
+exclusively created file's bounded, successfully parsed contents;
+`simulate_external_record_change` stands for a missing or replaced file and is
+used only by these finite cases. I02 must perform exclusive file creation and
+a bounded 16 KiB parse/recheck while the in-process owner is held and after
+listener shutdown. This is evidence for the pure authorization boundary only; it
 does not claim production process signaling, a running preview, or an
 integrated `df-tools` implementation.
 
 ```rust
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct Attempt(&'static str);
+mod preview_contract {
+    use std::{cell::Cell, rc::Rc};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct ProcessIdentity(u32);
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct Attempt(&'static str);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct Preview {
-    id: &'static str,
-    owner: Attempt,
-    process: ProcessIdentity,
-    port: u16,
-    data_dir: &'static str,
-    build_hash: [u8; 32],
-}
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct ProcessIdentity(u32);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct ReleaseRequest {
-    id: &'static str,
-    caller: Attempt,
-    observed_process: ProcessIdentity,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ReleaseDecision {
-    RemoveOwnRecord,
-    RefuseUnknownPreview,
-    RefuseWrongOwner,
-    RefuseStaleProcessIdentity,
-}
-
-fn authorize_release(registered: Option<&Preview>, request: ReleaseRequest) -> ReleaseDecision {
-    let Some(preview) = registered else {
-        return ReleaseDecision::RefuseUnknownPreview;
-    };
-    if preview.id != request.id {
-        return ReleaseDecision::RefuseUnknownPreview;
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct Preview {
+        id: &'static str,
+        owner: Attempt,
+        process: ProcessIdentity,
+        port: u16,
+        web_root: &'static str,
+        data_root: &'static str,
+        native_build_id: &'static str,
+        web_source_id: &'static str,
     }
-    if preview.owner != request.caller {
-        return ReleaseDecision::RefuseWrongOwner;
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum RegisterError {
+        Occupied,
     }
-    if preview.process != request.observed_process {
-        return ReleaseDecision::RefuseStaleProcessIdentity;
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum ReleaseDecision {
+        RemoveOwnRecord,
+        RefuseListenerActive,
+        RefuseClosed,
+        RefuseMissingRecord,
+        RefuseReplacedRecord,
     }
-    ReleaseDecision::RemoveOwnRecord
-}
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct ArtifactFacts {
-    approved_root: bool,
-    owner_terminal_or_abandoned: bool,
-    active_use_claim: bool,
-    superseded_or_reproducible: bool,
-    retained_evidence: bool,
-    latest_verified_build: bool,
-    terminal_age_seconds: u64,
-}
+    // Models an exclusive record file. Only successful exclusive registration
+    // creates a handle; observed labels alone do not create one.
+    struct Registry {
+        record: Rc<Cell<Option<Preview>>>,
+    }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ArtifactDecision {
-    Remove,
-    Retain,
-}
+    impl Registry {
+        fn new() -> Self {
+            Self {
+                record: Rc::new(Cell::new(None)),
+            }
+        }
 
-fn artifact_cleanup(facts: ArtifactFacts) -> ArtifactDecision {
-    if facts.approved_root
-        && facts.owner_terminal_or_abandoned
-        && !facts.active_use_claim
-        && facts.superseded_or_reproducible
-        && !facts.retained_evidence
-        && !facts.latest_verified_build
-        && facts.terminal_age_seconds >= 1_800
-    {
-        ArtifactDecision::Remove
-    } else {
-        ArtifactDecision::Retain
+        fn register(&self, preview: Preview) -> Result<OwnerHandle, RegisterError> {
+            if self.record.get().is_some() {
+                return Err(RegisterError::Occupied);
+            }
+            self.record.set(Some(preview));
+            Ok(OwnerHandle {
+                expected: preview,
+                record: Rc::clone(&self.record),
+                listener_stopped: false,
+                released: false,
+            })
+        }
+
+        // Models a changed/missing on-disk record; only the finite cases call it.
+        fn simulate_external_record_change(&self, observed: Option<Preview>) {
+            self.record.set(observed);
+        }
+    }
+
+    // Private fields and no Clone/Copy implementation: only the registering
+    // serving scope can hold this capability. Drop does not retire the record.
+    struct OwnerHandle {
+        expected: Preview,
+        record: Rc<Cell<Option<Preview>>>,
+        listener_stopped: bool,
+        released: bool,
+    }
+
+    impl OwnerHandle {
+        fn listener_stopped(&mut self) {
+            self.listener_stopped = true;
+        }
+
+        fn release(&mut self) -> ReleaseDecision {
+            if self.released {
+                return ReleaseDecision::RefuseClosed;
+            }
+            if !self.listener_stopped {
+                return ReleaseDecision::RefuseListenerActive;
+            }
+            match self.record.get() {
+                None => ReleaseDecision::RefuseMissingRecord,
+                Some(observed) if observed != self.expected => {
+                    ReleaseDecision::RefuseReplacedRecord
+                }
+                Some(_) => {
+                    self.record.set(None);
+                    self.released = true;
+                    ReleaseDecision::RemoveOwnRecord
+                }
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct ArtifactFacts {
+        approved_root: bool,
+        owner_terminal_or_abandoned: bool,
+        active_use_claim: bool,
+        superseded_or_reproducible: bool,
+        retained_evidence: bool,
+        latest_verified_build: bool,
+        terminal_age_seconds: u64,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum ArtifactDecision {
+        Remove,
+        Retain,
+    }
+
+    fn artifact_cleanup(facts: ArtifactFacts) -> ArtifactDecision {
+        if facts.approved_root
+            && facts.owner_terminal_or_abandoned
+            && !facts.active_use_claim
+            && facts.superseded_or_reproducible
+            && !facts.retained_evidence
+            && !facts.latest_verified_build
+            && facts.terminal_age_seconds >= 1_800
+        {
+            ArtifactDecision::Remove
+        } else {
+            ArtifactDecision::Retain
+        }
+    }
+
+    pub(super) fn run_cases() {
+        let preview = Preview {
+            id: "preview-a2",
+            owner: Attempt("a2"),
+            process: ProcessIdentity(41),
+            port: 43_123,
+            web_root: "/artifacts/build/a2/web",
+            data_root: "/artifacts/tmp/a2/preview",
+            native_build_id: "native-a2",
+            web_source_id: "web-a2",
+        };
+        let registry = Registry::new();
+        let mut owner = registry.register(preview).unwrap();
+        assert_eq!(owner.release(), ReleaseDecision::RefuseListenerActive);
+        assert!(matches!(
+            registry.register(preview),
+            Err(RegisterError::Occupied)
+        ));
+        owner.listener_stopped();
+        assert_eq!(owner.release(), ReleaseDecision::RemoveOwnRecord);
+        assert_eq!(owner.release(), ReleaseDecision::RefuseClosed);
+        assert_eq!(registry.record.get(), None);
+
+        let replacements = [
+            ("missing", None),
+            (
+                "id",
+                Some(Preview {
+                    id: "replacement",
+                    ..preview
+                }),
+            ),
+            (
+                "owner",
+                Some(Preview {
+                    owner: Attempt("other"),
+                    ..preview
+                }),
+            ),
+            (
+                "pid",
+                Some(Preview {
+                    process: ProcessIdentity(42),
+                    ..preview
+                }),
+            ),
+            (
+                "port",
+                Some(Preview {
+                    port: 43_124,
+                    ..preview
+                }),
+            ),
+            (
+                "web root",
+                Some(Preview {
+                    web_root: "/other/web",
+                    ..preview
+                }),
+            ),
+            (
+                "data root",
+                Some(Preview {
+                    data_root: "/other/data",
+                    ..preview
+                }),
+            ),
+            (
+                "native build",
+                Some(Preview {
+                    native_build_id: "native-other",
+                    ..preview
+                }),
+            ),
+            (
+                "web source",
+                Some(Preview {
+                    web_source_id: "web-other",
+                    ..preview
+                }),
+            ),
+        ];
+        for (field, replacement) in replacements {
+            let registry = Registry::new();
+            let mut owner = registry.register(preview).unwrap();
+            owner.listener_stopped();
+            registry.simulate_external_record_change(replacement);
+            let expected = if replacement.is_some() {
+                ReleaseDecision::RefuseReplacedRecord
+            } else {
+                ReleaseDecision::RefuseMissingRecord
+            };
+            assert_eq!(owner.release(), expected, "{field}");
+            assert_eq!(registry.record.get(), replacement, "{field}");
+        }
+
+        let registry = Registry::new();
+        let dropped_owner = registry.register(preview).unwrap();
+        drop(dropped_owner); // Abrupt exit or lost handle retains ambiguous record.
+        assert_eq!(registry.record.get(), Some(preview));
+        assert!(matches!(
+            registry.register(preview),
+            Err(RegisterError::Occupied)
+        ));
+        let legacy_unregistered = Registry::new();
+        assert_eq!(legacy_unregistered.record.get(), None);
+        // Neither the dropped nor legacy scope has a handle on which to call release.
+
+        let eligible = ArtifactFacts {
+            approved_root: true,
+            owner_terminal_or_abandoned: true,
+            active_use_claim: false,
+            superseded_or_reproducible: true,
+            retained_evidence: false,
+            latest_verified_build: false,
+            terminal_age_seconds: 1_800,
+        };
+        for mask in 0_u32..64 {
+            for age in [0, 1_799, 1_800, 1_801, u64::MAX] {
+                let facts = ArtifactFacts {
+                    approved_root: mask & 1 != 0,
+                    owner_terminal_or_abandoned: mask & 2 != 0,
+                    active_use_claim: mask & 4 != 0,
+                    superseded_or_reproducible: mask & 8 != 0,
+                    retained_evidence: mask & 16 != 0,
+                    latest_verified_build: mask & 32 != 0,
+                    terminal_age_seconds: age,
+                };
+                let expected = if mask == 11 && age >= 1_800 {
+                    ArtifactDecision::Remove
+                } else {
+                    ArtifactDecision::Retain
+                };
+                assert_eq!(artifact_cleanup(facts), expected);
+            }
+        }
+        assert_eq!(artifact_cleanup(eligible), ArtifactDecision::Remove);
+        println!("PASS: held owner, full record, lifetime, and 320 retention cases");
     }
 }
 
 fn main() {
-    let process = ProcessIdentity(41);
-    let preview = Preview {
-        id: "preview-a1",
-        owner: Attempt("a1"),
-        process,
-        port: 43123,
-        data_dir: "artifacts/tmp/a1/preview-a1",
-        build_hash: [7; 32],
-    };
-    assert_eq!(preview.port, 43_123);
-    assert_eq!(preview.data_dir, "artifacts/tmp/a1/preview-a1");
-    assert_eq!(preview.build_hash, [7; 32]);
-    let request = ReleaseRequest {
-        id: preview.id,
-        caller: preview.owner,
-        observed_process: process,
-    };
-    assert_eq!(
-        authorize_release(Some(&preview), request),
-        ReleaseDecision::RemoveOwnRecord
-    );
-    assert_eq!(
-        authorize_release(None, request),
-        ReleaseDecision::RefuseUnknownPreview
-    );
-    assert_eq!(
-        authorize_release(
-            Some(&preview),
-            ReleaseRequest {
-                caller: Attempt("a2"),
-                ..request
-            }
-        ),
-        ReleaseDecision::RefuseWrongOwner
-    );
-    assert_eq!(
-        authorize_release(
-            Some(&preview),
-            ReleaseRequest {
-                observed_process: ProcessIdentity(42),
-                ..request
-            }
-        ),
-        ReleaseDecision::RefuseStaleProcessIdentity
-    );
-    let eligible = ArtifactFacts {
-        approved_root: true,
-        owner_terminal_or_abandoned: true,
-        active_use_claim: false,
-        superseded_or_reproducible: true,
-        retained_evidence: false,
-        latest_verified_build: false,
-        terminal_age_seconds: 1_800,
-    };
-    assert_eq!(artifact_cleanup(eligible), ArtifactDecision::Remove);
-    assert_eq!(
-        artifact_cleanup(ArtifactFacts {
-            active_use_claim: true,
-            ..eligible
-        }),
-        ArtifactDecision::Retain
-    );
-    assert_eq!(
-        artifact_cleanup(ArtifactFacts {
-            terminal_age_seconds: 1_799,
-            ..eligible
-        }),
-        ArtifactDecision::Retain
-    );
+    preview_contract::run_cases();
 }
 ```
 
@@ -264,22 +400,17 @@ fn main() {
 
 ## Provenance and handoff
 
-The input commit is `575df9c3a619e8ee68eecd6bbf3d4c5ebdd00c35`; source and
-tool hashes, extracted literal, executable, exact commands, guard receipts,
-attempt outputs, and criteria-to-evidence status are recorded in
-`handoff-manifest.json` under the frozen attempt evidence root. The literal
-passed pinned `rustfmt --check`, pinned `rustc --edition=2024 -Dwarnings`, and
-its finite assertions under the immutable v4 guard. Each fresh admission read
-44% against the 39% floor; sampled guard-plus-command peaks were 46,219,264,
-114,065,408, and 12,288,000 bytes. All three commands exited 0 with no remaining
-owned process group.
-
-The first rustfmt guard attempt failed before command launch because the guard's
-child PATH omitted `rustup`. Root recorded the changed-prerequisite admission;
-the missing-command exception and empty stdout/stderr files remain preserved.
-The retry used the existing pinned absolute binaries and fresh receipts, with
-the same limits. This attempt changes only this decision file. No Cargo,
-production, browser, preview-process, native/WASM build, or integrated checks
-were run or inferred from the literal. No queue/devlog database was mutated;
-the devlog entry ID is unavailable and must be supplied by the coordinator if
-recorded.
+The a2 input commit is `2022c90fa8b4f53b99eaec43d5e32f3e3b7205cc`.
+The exact submitted source, tool, literal, executable, guard-receipt and output
+hashes, plus the original criterion and unresolved production gaps, are in
+`handoff-manifest.json` under the frozen a2 attempt evidence root. The
+extracted literal passed the pinned `rustfmt --check`, pinned
+`rustc --edition=2024 -Dwarnings`, and finite execution under the a2 v5 guard.
+Compiler-negative cases confirmed that a sibling module cannot construct the
+private handle and that the handle cannot be cloned. The finite run covers valid
+owned release, refused active/closed/missing/replaced release, dropped-owner
+ambiguity, unregistered legacy scope, and all 320 original artifact-retention
+truth-table cases. No Cargo, production, browser, preview-process, native/WASM
+build, or integrated checks were run or inferred from the literal. The rejected
+a1 review and its independent failure corpus remain preserved. This attempt
+changes only this decision file; I02 still owns application implementation.
