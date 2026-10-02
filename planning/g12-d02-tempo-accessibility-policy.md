@@ -134,6 +134,9 @@ fields and whether the deadline/offer is active across distinct intensity, impul
 presentation-time and accessibility profiles, in both advancing and paused cases.
 The tick numbers are fixture labels only. The example does not assign a real-world
 duration or change which rules/session-owned source advances authoritative time.
+For this equality witness only, the rules deadline and offer expiry share the
+abstract game-tick coordinate; the document does not select a production clock basis
+for any timer or offer.
 
 ```rust
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
