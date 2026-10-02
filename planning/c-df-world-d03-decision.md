@@ -60,21 +60,15 @@ scene identity, source-reference and bounds contracts before implementation.
 ## Exact executable boundary example
 
 The only Rust literal is a private, finite design witness. It imports existing
-canonical revision/provenance primitives by path; it introduces no public types
-or production API. Its authored fixture record identifies the entity and physical
+canonical revision/provenance primitives from the actual `df-types` rlib; it
+introduces no public types or production API. Its authored fixture record identifies the entity and physical
 predicate, and admission checks those fields before retaining the source. Label
 construction alone is never such a resolver. The fixture checks candidate-only
 retention, an unsourced flammability ruling gap and two stale bases; it cannot
 qualify a rules catalog or prove standard-2024 mechanics.
 
 ```rust
-#[path = "../../../crates/df-types/src/provenance.rs"]
-mod provenance;
-#[path = "../../../crates/df-types/src/revision.rs"]
-mod revision;
-
-use provenance::{BuildIdentity, BuildRevision, RevisionLabel};
-use revision::{RecoveryEpoch, SessionRevision};
+use df_types::{BuildIdentity, BuildRevision, RecoveryEpoch, RevisionLabel, SessionRevision};
 
 #[derive(Debug, PartialEq, Eq)]
 enum Refusal {
@@ -150,7 +144,14 @@ fn main() {
     ] {
         assert!(!build.revision(component).as_str().is_empty());
     }
-    let valid = retain_flammability(current, &geometry, current, &geometry, "curtain", Some(&fact));
+    let valid = retain_flammability(
+        current,
+        &geometry,
+        current,
+        &geometry,
+        "curtain",
+        Some(&fact),
+    );
     assert_eq!(
         valid,
         Ok(PhysicalCandidate {
@@ -168,12 +169,35 @@ fn main() {
         retain_flammability(current, &geometry, current, &geometry, "door", Some(&fact)),
         Err(Refusal::NeedsRuling)
     );
+    let contrary_fact = AuthoredFact {
+        entity: "curtain",
+        flammable: false,
+        source: &authored,
+    };
+    assert_eq!(
+        retain_flammability(
+            current,
+            &geometry,
+            current,
+            &geometry,
+            "curtain",
+            Some(&contrary_fact)
+        ),
+        Err(Refusal::NeedsRuling)
+    );
     assert_eq!(
         retain_flammability(newer, &geometry, current, &geometry, "curtain", Some(&fact)),
         Err(Refusal::StaleBasis)
     );
     assert_eq!(
-        retain_flammability(current, &geometry, current, &old_geometry, "curtain", Some(&fact)),
+        retain_flammability(
+            current,
+            &geometry,
+            current,
+            &old_geometry,
+            "curtain",
+            Some(&fact)
+        ),
         Err(Refusal::StaleBasis)
     );
     assert_eq!(current.sequence(), 3);
@@ -208,8 +232,9 @@ must implement and review those connections before any integrated feature claim.
 ## Verification and explicit gaps
 
 Extract this exact Rust block into
-`artifacts/tmp/B-C-df-world-D03-a1/example.rs` in this worktree so the relative
-canonical imports resolve; compare the extracted bytes with the Markdown literal.
+`artifacts/tmp/B-C-df-world-D03-a1/example.rs`; compare the extracted bytes with
+the Markdown literal. Compile the worktree's actual `df-types/src/lib.rs` into
+an rlib and link it as `df_types`; do not duplicate canonical shared types.
 After the coordinator's finite-check release, use the pinned 1.98.1 `rustfmt`
 write/check with the root configuration, pinned `rustc --edition=2024 -Dwarnings`
 and run the resulting finite executable through the frozen v6 guard. Retain
@@ -218,3 +243,10 @@ the handoff records failures and unperformed checks. No Cargo, native/WASM crate
 PostgreSQL, rules catalog, engine integration, authorized projection or player
 experience is qualified by this witness. Independent frontier boundary review and
 integrated consumer checks remain required.
+
+The released group02 cycle extracted this literal and performed the pinned
+formatter write successfully at the original 40% admission floor. The following
+formatter check was not launched: the unchanged v6 guard returned
+`HOLD_NO_COMMAND_LAUNCHED` at 37%. No retry, rlib compilation, literal compilation
+or finite execution occurred. Those checks remain explicitly unperformed pending
+fresh coordinator readmission; the formatter write is not behavior evidence.
