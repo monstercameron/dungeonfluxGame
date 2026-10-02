@@ -301,6 +301,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-testkit"
+version = "0.1.0"
+dependencies = [
+ "df-experience",
+ "df-types",
+]
+
+[[package]]
 name = "df-tools"
 version = "0.1.0"
 dependencies = [

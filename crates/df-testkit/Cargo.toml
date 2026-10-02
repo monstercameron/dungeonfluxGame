@@ -1,0 +1,9 @@
+[package]
+name = "df-testkit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dev-dependencies]
+df-experience = { path = "../df-experience" }
+df-types = { path = "../df-types" }
