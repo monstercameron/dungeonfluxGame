@@ -167,6 +167,7 @@ impl AssetStore for NativeFileStore {
             .root
             .join("promotion")
             .join(hex(staged.operation.as_bytes()));
+        let mut owns_temporary = false;
         let result = (|| {
             let mut input = File::open(&staged.path).map_err(StoreError::from)?;
             let mut output = OpenOptions::new()
@@ -174,6 +175,7 @@ impl AssetStore for NativeFileStore {
                 .create_new(true)
                 .open(&temporary)
                 .map_err(StoreError::from)?;
+            owns_temporary = true;
             let mut hasher = Sha256::new();
             let mut length = 0_u64;
             let mut buffer = [0_u8; 65536];
@@ -222,17 +224,25 @@ impl AssetStore for NativeFileStore {
                     if !same_contents(&temporary, &destination).map_err(PublicationError::Store)? {
                         return Err(PublicationError::Store(StoreError::BackingIntegrity));
                     }
+                    File::open(&destination)
+                        .and_then(|object| object.sync_all())
+                        .map_err(StoreError::from)?;
+                    File::open(self.root.join("objects"))
+                        .and_then(|dir| dir.sync_all())
+                        .map_err(StoreError::from)?;
                 }
                 Err(error) => return Err(PublicationError::Store(StoreError::Io(error))),
             }
             Ok(DurableObject::from_manifest(expected))
         })();
-        let removed = fs::remove_file(&temporary);
-        if result.is_ok() {
-            removed.map_err(StoreError::from)?;
-            File::open(self.root.join("promotion"))
-                .and_then(|dir| dir.sync_all())
-                .map_err(StoreError::from)?;
+        if owns_temporary {
+            let removed = fs::remove_file(&temporary);
+            if result.is_ok() {
+                removed.map_err(StoreError::from)?;
+                File::open(self.root.join("promotion"))
+                    .and_then(|dir| dir.sync_all())
+                    .map_err(StoreError::from)?;
+            }
         }
         result
     }

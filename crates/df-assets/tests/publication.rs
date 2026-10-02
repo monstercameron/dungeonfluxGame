@@ -334,3 +334,34 @@ fn configured_byte_ceiling_accepts_edge_and_refuses_excess_before_publication() 
     assert_eq!(metadata.count(), 1);
     assert_eq!(fs::read_dir(path.join("staging")).unwrap().count(), 1);
 }
+
+#[test]
+fn occupied_promotion_path_survives_failed_publish_and_staged_retry() {
+    let path = root();
+    let bytes = Arc::new(NativeFileStore::new(&path, 1024).unwrap());
+    let metadata = Metadata::new(bytes.clone());
+    let content = b"complete bytes";
+    let staged = bytes.stage(operation(12), &mut &content[..]).unwrap();
+    let marker = path.join("promotion").join("0c".repeat(16));
+    let marker_bytes = b"another attempt owns this temporary";
+    fs::write(&marker, marker_bytes).unwrap();
+
+    let candidate = publication(operation(12), 12, "still", expected(content));
+    assert!(matches!(
+        publish(&context(), &candidate, &staged, bytes.as_ref(), &metadata),
+        Err(PublicationError::Store(StoreError::Io(error)))
+            if error.kind() == io::ErrorKind::AlreadyExists
+    ));
+    assert_eq!(fs::read(&marker).unwrap().as_slice(), marker_bytes);
+    assert_eq!(metadata.publish_calls.load(Ordering::Relaxed), 0);
+    assert_eq!(metadata.count(), 0);
+
+    fs::remove_file(&marker).unwrap();
+    assert_eq!(
+        publish(&context(), &candidate, &staged, bytes.as_ref(), &metadata)
+            .unwrap()
+            .status,
+        PublicationStatus::Published
+    );
+    assert_eq!(metadata.count(), 1);
+}
