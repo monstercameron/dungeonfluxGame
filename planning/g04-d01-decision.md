@@ -1,8 +1,8 @@
 # G04-D01: initial payer identity and recovery decision
 
 Date: 2026-10-01  
-Task/attempt: `B-G04-D01-a1`  
-Input revision: `3676e59e6316d9e4d77eab1f9dd812776041c2c9eb70f5dc2e396a13e50bf6b0`  
+Task/attempt: `B-G04-D01-a2`
+Input revision: `6b029bb4ba587d13be5682f4913b96c086d729b2`
 Owner: `df-auth` for principal credentials, linking and recovery; `df-commerce` for payer/tenant authority; `df-session` for membership allocation; `df-persistence` for durable atomic receipts; `df-server` for composition.  
 Status: selected identity relationship and recovery invariants; concrete issuer, credential format and running implementation remain pending.
 
@@ -12,7 +12,7 @@ A payer is an authenticated account principal with separately granted authority 
 
 Create and retain the payer account independently of any one game session. Campaign creation records its tenant and current payer grant against the authenticated account in the same durable operation receipt as campaign/session creation. Joining creates membership only after authentication and invitation-scoped authorization, using the session owner's allocation path. Neither operation infers the other from a matching person, email address, client role, trace ID, or possession of an opaque ID. Retries use their original scoped operation key and return the original result; expired request namespaces reject old keys rather than allocating another account, campaign, or member.
 
-Initial recovery is account recovery through `df-auth`: prove control of the independently configured, verified recovery channel with a short-lived, single-use challenge, bounded attempts, and the same public response whether an account exists or not. Successful recovery increments credential generation and revokes prior refresh and client-binding grants. It restores the same principal and its explicitly authorized tenant/payer records; it does not mint a new account, campaign, member, host grant, payment entitlement, or game decision. Account loss alone does not alter committed campaign/session state. Guest-to-account linking requires proof of both current guest credential and destination account; it transfers only explicitly selected memberships, never uses email matching, and never creates another campaign. Payer/tenant ownership transfer additionally requires current-owner and recipient acceptance, current revision, settled-reservation policy, and an idempotent result. An orphaned tenant becomes restricted pending recovery; it is not made public or reassigned by support guesswork.
+Initial recovery is account recovery through `df-auth`: prove control of the independently configured, verified recovery channel with a short-lived, single-use challenge, bounded attempts, and the same public response whether an account exists or not. Successful recovery increments credential generation with checked arithmetic and revokes prior refresh and client-binding grants; generation exhaustion fails closed as a typed refusal. A recovery challenge can be consumed only once. Credential or binding grants from an earlier generation are stale even when the principal remains the same. It restores the same principal and its explicitly authorized tenant/payer records; it does not mint a new account, campaign, member, host grant, payment entitlement, or game decision. Account loss alone does not alter committed campaign/session state. Guest-to-account linking requires proof of both current guest credential and destination account; it transfers only explicitly selected memberships, never uses email matching, and never creates another campaign. Payer/tenant ownership transfer additionally requires current-owner and recipient acceptance, current revision, settled-reservation policy, and an idempotent result. An orphaned tenant becomes restricted pending recovery; it is not made public or reassigned by support guesswork.
 
 `df-auth` remains the principal/credential/recovery authority and issues a typed principal after successful authentication. `df-commerce` remains authoritative for tenant, payer and entitlement records; it exposes no credential secrets. `df-session` remains authoritative for membership and session state; it does not create a parallel seat registry. `df-persistence` must commit account-link, allocation, membership, payer-grant and operation-result rows atomically at their respective authorized transaction boundary and retain retired-key fences. `df-server` composes these owners; clients display returned state and cannot confer authority.
 
@@ -24,7 +24,7 @@ The selected recovery mechanism is proof of a verified recovery channel, not sup
 
 ## Finite contract example
 
-This standalone standard-library Rust model exercises the decision's authority boundary. It demonstrates payer identity surviving independently of membership and rejects payment-as-membership, membership-as-payment, stale payer transfer, and transfer without both parties' acceptance. Local newtypes and integer values here illustrate the rule; they are not production `df-types`, `df-auth`, or `df-commerce` APIs and do not prove persistence, authentication, or runtime behavior.
+This standalone standard-library Rust model exercises the decision's authority boundary. It demonstrates payer identity surviving independently of membership and rejects payment-as-membership, membership-as-payment, stale payer transfer, transfer without both parties' acceptance, and revision exhaustion. It also exercises current credential/binding acceptance, verified single-use recovery, same-principal continuity, and stale credential/binding refusal after generation advance. Local newtypes and integer values here illustrate the rule; they are not production `df-types`, `df-auth`, or `df-commerce` APIs and do not prove persistence, cryptographic authentication, or runtime behavior.
 
 ```rust
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,12 +58,43 @@ struct Membership {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Account {
+    principal: Principal,
+    credential_generation: u8,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Credential {
+    principal: Principal,
+    generation: u8,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ClientBindingGrant {
+    principal: Principal,
+    credential_generation: u8,
+    active: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct RecoveryChallenge {
+    verified: bool,
+    used: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Refusal {
     NotPayer,
     NotMember,
     StaleRevision,
+    RevisionExhausted,
     MissingOwnerAcceptance,
     MissingRecipientAcceptance,
+    InvalidRecoveryProof,
+    RecoveryChallengeUsed,
+    InvalidCredential,
+    StaleCredential,
+    CredentialGenerationExhausted,
 }
 
 fn may_spend(grant: PayerGrant, principal: Principal) -> Result<(), Refusal> {
@@ -99,11 +130,62 @@ fn transfer_payer(
     if !recipient_accepted {
         return Err(Refusal::MissingRecipientAcceptance);
     }
+    let next_revision = grant
+        .revision
+        .0
+        .checked_add(1)
+        .ok_or(Refusal::RevisionExhausted)?;
     Ok(PayerGrant {
         principal: recipient,
-        revision: Revision(grant.revision.0 + 1),
+        revision: Revision(next_revision),
         ..grant
     })
+}
+
+fn authenticate(account: Account, credential: Credential) -> Result<Principal, Refusal> {
+    if account.principal != credential.principal {
+        return Err(Refusal::InvalidCredential);
+    }
+    if account.credential_generation != credential.generation {
+        return Err(Refusal::StaleCredential);
+    }
+    Ok(account.principal)
+}
+
+fn authorize_binding(account: Account, binding: ClientBindingGrant) -> Result<(), Refusal> {
+    if account.principal != binding.principal {
+        return Err(Refusal::InvalidCredential);
+    }
+    if !binding.active || account.credential_generation != binding.credential_generation {
+        return Err(Refusal::StaleCredential);
+    }
+    Ok(())
+}
+
+fn recover_account(
+    account: Account,
+    challenge: RecoveryChallenge,
+) -> Result<(Account, RecoveryChallenge), Refusal> {
+    if challenge.used {
+        return Err(Refusal::RecoveryChallengeUsed);
+    }
+    if !challenge.verified {
+        return Err(Refusal::InvalidRecoveryProof);
+    }
+    let credential_generation = account
+        .credential_generation
+        .checked_add(1)
+        .ok_or(Refusal::CredentialGenerationExhausted)?;
+    Ok((
+        Account {
+            credential_generation,
+            ..account
+        },
+        RecoveryChallenge {
+            used: true,
+            ..challenge
+        },
+    ))
 }
 
 fn main() {
@@ -144,18 +226,93 @@ fn main() {
     assert_eq!(transferred.revision, Revision(8));
     assert_eq!(may_play(member, player), Ok(()));
     assert_eq!(may_spend(transferred, payer), Err(Refusal::NotPayer));
+
+    let exhausted = PayerGrant {
+        revision: Revision(u8::MAX),
+        ..grant
+    };
+    assert_eq!(
+        transfer_payer(exhausted, payer, recipient, Revision(u8::MAX), true, true),
+        Err(Refusal::RevisionExhausted)
+    );
+
+    let account = Account {
+        principal: payer,
+        credential_generation: 4,
+    };
+    let current_credential = Credential {
+        principal: payer,
+        generation: 4,
+    };
+    let existing_binding = ClientBindingGrant {
+        principal: payer,
+        credential_generation: 4,
+        active: true,
+    };
+    let challenge = RecoveryChallenge {
+        verified: true,
+        used: false,
+    };
+
+    assert_eq!(authenticate(account, current_credential), Ok(payer));
+    assert_eq!(authorize_binding(account, existing_binding), Ok(()));
+    let (recovered, consumed_challenge) = recover_account(account, challenge).unwrap();
+    assert_eq!(recovered.principal, account.principal);
+    assert_eq!(recovered.credential_generation, 5);
+    assert_eq!(consumed_challenge.used, true);
+    assert_eq!(
+        authenticate(recovered, current_credential),
+        Err(Refusal::StaleCredential)
+    );
+    assert_eq!(
+        authorize_binding(recovered, existing_binding),
+        Err(Refusal::StaleCredential)
+    );
+    let replacement_credential = Credential {
+        generation: recovered.credential_generation,
+        ..current_credential
+    };
+    assert_eq!(authenticate(recovered, replacement_credential), Ok(payer));
+    assert_eq!(
+        recover_account(recovered, consumed_challenge),
+        Err(Refusal::RecoveryChallengeUsed)
+    );
+    assert_eq!(
+        recover_account(
+            recovered,
+            RecoveryChallenge {
+                verified: false,
+                used: false
+            }
+        ),
+        Err(Refusal::InvalidRecoveryProof)
+    );
+    assert_eq!(
+        recover_account(
+            Account {
+                credential_generation: u8::MAX,
+                ..recovered
+            },
+            challenge
+        ),
+        Err(Refusal::CredentialGenerationExhausted)
+    );
 }
 ```
 
 ## Failure semantics and unresolved production gates
 
-Bad credentials, unverified recovery proof, expired/used challenge, excessive attempts, stale owner revision, missing transfer consent, invitation denial, and mismatched operation fingerprints are typed domain refusals. Transport/auth-service/storage failures are safe operational errors, not denials that imply a new identity exists. If durable commit outcome is uncertain, return pending/unknown with lookup guidance; do not retry under a fresh key, show success, create a duplicate membership/campaign, or release payer authority. A committed allocation remains committed if the client disconnects. Revocation fences new admissions and private deliveries; data already received cannot be recalled. Recovery revokes old credentials/bindings but does not reverse already committed game decisions or effects.
+Bad credentials, unverified recovery proof, expired/used challenge, excessive attempts, stale owner revision, payer-transfer revision exhaustion, stale credentials/bindings, invalid or used recovery challenges, credential-generation exhaustion, missing transfer consent, invitation denial, and mismatched operation fingerprints are typed domain refusals. Transport/auth-service/storage failures are safe operational errors, not denials that imply a new identity exists. If durable commit outcome is uncertain, return pending/unknown with lookup guidance; do not retry under a fresh key, show success, create a duplicate membership/campaign, or release payer authority. A committed allocation remains committed if the client disconnects. Revocation fences new admissions and private deliveries; data already received cannot be recalled. Recovery revokes old credentials/bindings but does not reverse already committed game decisions or effects.
 
 Still open before production: verified identity issuer and channel (managed issuer vs native passkey/email adapter); challenge and credential wire/storage types, cryptographic verifier and rotation overlap; anonymous guest bootstrap and its operation namespace; admission/origin and cookie details in G04-D03; exact principal/member/payer typed production contracts and compatibility in G03; PostgreSQL schema, uniqueness, atomic multi-owner transaction and retired-key retention in G05; host/operator capability matrix; browser, phone, tablet and display support matrix; credential persistence/security behavior on each selected device; actual tenant restriction, dispute, deletion, legal hold and export rules. Device/browser and provider/authentication services were not exercised. Proposed service budgets remain proposals, not measured identity capacity. Production recovery journal and restore replay for revocation/ownership records must pass service-operations gates before promising disaster recovery. S01 integration and independent output review remain required.
 
 ## Evidence status
 
-The governing source files and hashes are retained in this attempt's `input-hashes.json`. The literal example above is to be extracted and checked with repository Rust 1.98.1, edition 2024, `rustfmt.toml`, `rustfmt --check`, `rustc -D warnings`, and finite execution. A passing fixture supports only these pure authority decisions. No Cargo, Clippy, WASM, browser/device, issuer, credential-store, PostgreSQL, recovery/restore, payment, or S01 end-to-end check is claimed.
+The governing source files and hashes are retained in this attempt's `input-hashes.json`. The literal example above is extracted byte-for-byte and checked with repository Rust 1.98.1, edition 2024, `rustfmt.toml`, `rustfmt --check`, `rustc -D warnings`, and finite execution. A passing fixture supports only these pure authority decisions. No Cargo, Clippy, WASM, browser/device, issuer, credential-store, PostgreSQL, recovery/restore, payment, or S01 end-to-end check is claimed.
+
+## Review correction from attempt a1
+
+The independent a1 review reproduced a panic when payer revision was `u8::MAX` and found no executable current-versus-stale credential recovery case. This attempt preserves the policy boundary, uses checked revision increment with typed `RevisionExhausted`, and adds finite recovery-challenge, principal-continuity, credential-generation, and binding-generation assertions. Attempt a1 and its receipts remain immutable.
 
 ## Original acceptance and verification
 
