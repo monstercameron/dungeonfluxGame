@@ -87,12 +87,12 @@ struct Alternative {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct Pack {
+struct Pack<'a> {
     schema: u8,
     start: Id,
-    beats: &'static [Beat],
-    facts: &'static [Id],
-    alternatives: &'static [Alternative],
+    beats: &'a [Beat],
+    facts: &'a [Id],
+    alternatives: &'a [Alternative],
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -157,7 +157,7 @@ fn acyclic(edges: &BTreeMap<Id, Vec<Id>>) -> Result<(), Id> {
     Ok(())
 }
 
-fn validate(pack: &Pack) -> Result<(), Refusal> {
+fn validate(pack: &Pack<'_>) -> Result<(), Refusal> {
     if pack.schema != 1 {
         return Err(Refusal::UnsupportedSchema);
     }
