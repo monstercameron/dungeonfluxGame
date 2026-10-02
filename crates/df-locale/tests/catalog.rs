@@ -157,7 +157,10 @@ fn catalog_owns_inserted_text_and_found_text_borrows_storage_including_empty_ent
     let first = catalog.lookup(&key, &chain);
     let second = catalog.lookup(&key, &chain);
     assert_eq!(first.label(), Some("Attack"));
-    assert!(std::ptr::eq(first.label().unwrap(), second.label().unwrap()));
+    assert!(std::ptr::eq(
+        first.label().unwrap(),
+        second.label().unwrap()
+    ));
     catalog.insert(&chain[0], key.clone(), "");
     assert_eq!(
         catalog.lookup(&key, &chain),
