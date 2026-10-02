@@ -330,6 +330,14 @@ name = "df-types"
 version = "0.1.0"
 
 [[package]]
+name = "df-ui"
+version = "0.1.0"
+dependencies = [
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
