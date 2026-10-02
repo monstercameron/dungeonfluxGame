@@ -51,6 +51,29 @@ prepared fallback or explicit silence. Late, stale, duplicate, expired or wrong-
 cues are dropped; reconnect resynchronizes the current frame and never replays an
 expired one-shot.
 
+## Alternatives considered and rationale
+
+**Direct target assignment** is the simplest inertia policy, but every recommendation
+would jump immediately. Recommendation noise would become perceptible churn, while a
+reduced-motion profile would only remove effects, without a stable equivalent emphasis.
+**One global smoothing curve** could reduce jitter, but it cannot distinguish a routine
+build from an explicitly approved event impulse and can smear a meaningful cue.
+**Versioned per-dimension slew, deadband and hysteresis with separately named, capped
+impulses and decay** keeps routine changes stable while allowing only a source-approved
+exception. This third shape is the selected contract direction; concrete units,
+coefficients, decay and fatigue remain unselected until G12 calibration.
+
+For accessibility, **client-only post-filtering** applies a profile after server
+serialization or asset forecasting; it cannot prevent a disallowed cue/demand from
+crossing the audience boundary. **A profile applied after server-side audience
+filtering, followed by an optional stricter local device clamp**, preserves scope before
+serialization and still permits local capability restrictions. This second shape is
+selected. Reduced motion gets a stationary, readable equivalent; mute/cancel affects
+delivery only. **Shortening or removing a legal input window to accommodate a cue** is
+rejected because it changes rules timing and agency. The selected policy leaves game
+time, rules timer and legal-offer expiry with their existing owner, independently of
+the tempo/profile path; the finite example compares their values and states directly.
+
 ## Accessibility profiles and agency
 
 Store authorized preferences as versioned inputs to server presentation planning.
@@ -102,10 +125,15 @@ claim a heuristic target is measured or a desktop viewport proves phone support.
 ## Rust contract example (illustrative, not a production API)
 
 The following standard-library-only example demonstrates a proposed transition
-boundary. Its `0..=100` units, step cap and refractory length exist only to make the
-finite example concrete; they are not measured limits or selected product defaults.
-The example keeps a legal-action flag outside tempo state to make the noninterference
-invariant explicit.
+boundary. Its `0..=100` intensity, step caps, refractory fixture value and logical
+tick labels are illustrative contract fixtures only: they are neither measured
+device limits nor approved rules durations or product defaults. The example
+keeps tempo state separate from a rules/session-owned timing witness containing
+game time, a rules-timer deadline and legal-offer expiry. It compares those exact
+fields and whether the deadline/offer is active across distinct intensity, impulse,
+presentation-time and accessibility profiles, in both advancing and paused cases.
+The tick numbers are fixture labels only. The example does not assign a real-world
+duration or change which rules/session-owned source advances authoritative time.
 
 ```rust
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -116,7 +144,7 @@ struct Profile {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct State {
+struct TempoState {
     intensity: u8,
     presentation_ms: u64,
     sequence: u64,
@@ -129,7 +157,32 @@ struct Frame {
     shake: bool,
     flash: bool,
     audio: bool,
-    legal_action_available: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LegalTiming {
+    game_tick: u64,
+    rules_timer_due_at_tick: u64,
+    offer_expires_at_tick: u64,
+    paused: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LegalWindow {
+    rules_timer_due: bool,
+    offer_open: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct AuthorizedTickAdvance {
+    ticks: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Observation {
+    frame: Frame,
+    timing: LegalTiming,
+    window: LegalWindow,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -137,17 +190,17 @@ enum Refusal {
     OutOfRange,
     StaleSequence,
     TimeWentBackwards,
+    TickOverflow,
 }
 
-fn advance(
-    state: State,
+fn advance_tempo(
+    state: TempoState,
     requested: u8,
     impulse: bool,
     profile: Profile,
     now_ms: u64,
     sequence: u64,
-    legal_action_available: bool,
-) -> Result<(State, Frame), Refusal> {
+) -> Result<(TempoState, Frame), Refusal> {
     if requested > 100 {
         return Err(Refusal::OutOfRange);
     }
@@ -169,7 +222,7 @@ fn advance(
         .map(|last| now_ms.saturating_sub(last) >= 1_000)
         .unwrap_or(true);
     let shake = impulse && !profile.reduced_motion && refractory_elapsed;
-    let next = State {
+    let next = TempoState {
         intensity,
         presentation_ms: now_ms,
         sequence,
@@ -184,44 +237,199 @@ fn advance(
         shake,
         flash: impulse && !profile.avoid_flash,
         audio: !profile.audio_muted,
-        legal_action_available,
     };
     Ok((next, frame))
 }
 
+fn apply_authorized_tick_advance(
+    timing: LegalTiming,
+    advance: AuthorizedTickAdvance,
+) -> Result<LegalTiming, Refusal> {
+    let game_tick = if timing.paused {
+        timing.game_tick
+    } else {
+        timing
+            .game_tick
+            .checked_add(advance.ticks)
+            .ok_or(Refusal::TickOverflow)?
+    };
+    Ok(LegalTiming {
+        game_tick,
+        ..timing
+    })
+}
+
+fn legal_window(timing: LegalTiming) -> LegalWindow {
+    LegalWindow {
+        rules_timer_due: timing.game_tick >= timing.rules_timer_due_at_tick,
+        offer_open: timing.game_tick < timing.offer_expires_at_tick,
+    }
+}
+
+fn observe_variant(
+    tempo: TempoState,
+    timing: LegalTiming,
+    requested: u8,
+    impulse: bool,
+    profile: Profile,
+    presentation_ms: u64,
+    sequence: u64,
+    authorized_advance: AuthorizedTickAdvance,
+) -> Result<(TempoState, Observation), Refusal> {
+    let (next_tempo, frame) = advance_tempo(
+        tempo,
+        requested,
+        impulse,
+        profile,
+        presentation_ms,
+        sequence,
+    )?;
+    let next_timing = apply_authorized_tick_advance(timing, authorized_advance)?;
+    Ok((
+        next_tempo,
+        Observation {
+            frame,
+            timing: next_timing,
+            window: legal_window(next_timing),
+        },
+    ))
+}
+
 fn main() {
-    let profile = Profile {
+    let accessible = Profile {
         reduced_motion: true,
         avoid_flash: true,
         audio_muted: true,
     };
-    let initial = State {
+    let ordinary = Profile {
+        reduced_motion: false,
+        avoid_flash: false,
+        audio_muted: false,
+    };
+    let tempo = TempoState {
         intensity: 10,
         presentation_ms: 100,
         sequence: 1,
         last_shake_ms: None,
     };
-    let (built, frame) = advance(initial, 80, false, profile, 200, 2, true).unwrap();
-    assert_eq!(built.intensity, 15);
-    assert!(frame.legal_action_available);
-    assert!(!frame.shake && !frame.flash && !frame.audio);
 
-    let (peak, _) = advance(built, 80, true, profile, 300, 3, true).unwrap();
-    assert_eq!(peak.intensity, 35);
+    let active_start = LegalTiming {
+        game_tick: 13,
+        rules_timer_due_at_tick: 14,
+        offer_expires_at_tick: 14,
+        paused: false,
+    };
+    let authorized_advance = AuthorizedTickAdvance { ticks: 1 };
+    let (active_ordinary_tempo, active_ordinary) = observe_variant(
+        tempo,
+        active_start,
+        20,
+        false,
+        ordinary,
+        250,
+        2,
+        authorized_advance,
+    )
+    .unwrap();
+    let (active_accessible_tempo, active_accessible) = observe_variant(
+        tempo,
+        active_start,
+        90,
+        true,
+        accessible,
+        1_250,
+        2,
+        authorized_advance,
+    )
+    .unwrap();
+    assert_ne!(active_ordinary.frame, active_accessible.frame);
+    assert_ne!(active_ordinary_tempo, active_accessible_tempo);
+    assert_eq!(active_ordinary.timing, active_accessible.timing);
+    assert_eq!(active_ordinary.window, active_accessible.window);
+    assert_eq!(active_ordinary.timing.game_tick, 14);
+    assert_eq!(active_ordinary.timing.rules_timer_due_at_tick, 14);
+    assert_eq!(active_ordinary.timing.offer_expires_at_tick, 14);
+    assert!(active_ordinary.window.rules_timer_due);
+    assert!(!active_ordinary.window.offer_open);
+
+    let paused_start = LegalTiming {
+        game_tick: 13,
+        rules_timer_due_at_tick: 14,
+        offer_expires_at_tick: 14,
+        paused: true,
+    };
+    let (_, paused_ordinary) = observe_variant(
+        tempo,
+        paused_start,
+        20,
+        false,
+        ordinary,
+        250,
+        2,
+        authorized_advance,
+    )
+    .unwrap();
+    let (_, paused_accessible) = observe_variant(
+        tempo,
+        paused_start,
+        90,
+        true,
+        accessible,
+        1_250,
+        2,
+        authorized_advance,
+    )
+    .unwrap();
+    assert_ne!(paused_ordinary.frame, paused_accessible.frame);
+    assert_eq!(paused_ordinary.timing, paused_accessible.timing);
+    assert_eq!(paused_ordinary.window, paused_accessible.window);
+    assert_eq!(paused_ordinary.timing.game_tick, 13);
+    assert_eq!(paused_ordinary.timing.rules_timer_due_at_tick, 14);
+    assert_eq!(paused_ordinary.timing.offer_expires_at_tick, 14);
+    assert!(!paused_ordinary.window.rules_timer_due);
+    assert!(paused_ordinary.window.offer_open);
+
     assert_eq!(
-        advance(peak, 101, false, profile, 400, 4, true),
+        advance_tempo(tempo, 101, false, ordinary, 200, 2),
         Err(Refusal::OutOfRange)
     );
     assert_eq!(
-        advance(peak, 40, false, profile, 400, 3, true),
+        advance_tempo(tempo, 40, false, ordinary, 200, 1),
         Err(Refusal::StaleSequence)
     );
     assert_eq!(
-        advance(peak, 40, false, profile, 299, 4, true),
+        advance_tempo(tempo, 40, false, ordinary, 99, 2),
         Err(Refusal::TimeWentBackwards)
+    );
+    assert_eq!(
+        apply_authorized_tick_advance(
+            LegalTiming {
+                game_tick: u64::MAX,
+                rules_timer_due_at_tick: u64::MAX,
+                offer_expires_at_tick: u64::MAX,
+                paused: false,
+            },
+            AuthorizedTickAdvance { ticks: 1 },
+        ),
+        Err(Refusal::TickOverflow)
     );
 }
 ```
+
+The fixture's bounded comparison is:
+
+| Scenario | Presentation/profile variants | Game tick after authorized input | Timer deadline and state | Offer expiry and state |
+| --- | --- | --- | --- | --- |
+| Active | Ordinary low-intensity step at presentation tick `250`; accessible impulse at `1_250` | Both `14` | Both deadline `14`, due | Both expiry `14`, closed |
+| Paused | Same differing presentation/profile inputs | Both `13` | Both deadline `14`, not due | Both expiry `14`, open |
+
+The example also asserts that active variants have different rendered frames while
+their complete `LegalTiming` and `LegalWindow` values match; paused variants likewise
+render differently while game time and legal timing remain unchanged. Authoritative
+time advances only through the explicit `AuthorizedTickAdvance` fixture, which is
+applied by the rules/session-side function independently of tempo output. The fixture
+tick values do not specify or imply any approved countdown, turn duration or product
+deadline.
 
 This example does not represent approved shared types, persistence, authorization,
 audience filtering, asset admission, audio synchronization, accessibility
@@ -242,8 +450,11 @@ unchanged**. At contract and later integrated boundaries, exercise:
 - Reduced motion, flash avoidance, mute/audio ceiling and captions while all legal
   offers and stable controls remain available; interrupt speech/music and reconnect
   mid-crossfade without stale-buffer playback or repeated one-shots.
-- Paused game time versus advancing presentation time; slow/missing providers and
-  assets leave committed outcomes, timers, input and safe fallbacks intact.
+- Paired ordinary/accessibility and low/impulse presentation runs compare the exact
+  game-time tick, rules-timer deadline, legal-offer expiry and due/open results for
+  both active and paused game time while presentation time differs. Slow/missing
+  providers and assets leave committed outcomes, timers, input and safe fallbacks
+  intact; fixture ticks do not establish a real rules duration.
 - Paired hidden-state cases yield equal unauthorized profiles, cues and prefetch
   demands; private phone fallback never leaks into public display/audio.
 - Fair demand priority, expiry, cancellation, reservations, waste and unknown-spend
@@ -271,7 +482,7 @@ voice and listener-safe output), [Long-horizon state](long-horizon-state.md)
 in backlog item `B-G12-D02` (`G12:D:Define tempo inertia and accessibility profiles`,
 expected: `legal timing unchanged`).
 
-Frozen input revision: `9def9b845531e5cc589a28343b822b4664bd03fd`. Governing source
+Frozen input revision: `7d1ce0c133cc6367063e65f926611eb16f36691f`. Governing source
 SHA-256 values recorded before editing:
 
 | Source | SHA-256 |
@@ -282,7 +493,7 @@ SHA-256 values recorded before editing:
 | `development/backlog-catalog.json` | `039b0a03b4085b43ad32c4063e2cb8fc789fc55fff7552aec6e951ec3b4704c3` |
 | `AGENTS.md` | `55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182` |
 | `planning/coding-style.md` | `2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb` |
-| `ADR/0001-sqlite-agent-workflow.md` | `acfe32a8d5e846aa4d3a2981529533b9f53cdcc11088424128e60c20b722adc8` |
+| `ADR/0001-sqlite-agent-workflow.md` | `acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8` |
 | `ADR/0002-resource-scheduling-and-cleanup.md` | `a6476cfef449e089639109cc6d3cf5f0800b792b57a32696258d5ac0b9511966` |
 | `ADR/0003-agent-devlog.md` | `ee293673b01391c3a39577bd116a60abb3edfa662a7a8d1315556d6fe537d912` |
 | `ADR/0004-development-reliability.md` | `8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae` |
