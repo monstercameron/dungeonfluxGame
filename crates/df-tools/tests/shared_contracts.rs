@@ -1,8 +1,9 @@
 use df_protocol::{common as wire, contract_fixture as fixture};
 use df_types::{
     BuildIdentity, BuildIdentityError, BuildRevision, ClientBindingId, Currency, IdentityError,
-    LiabilityRate, MemberId, Money, MoneyError, OperationId, RecoveryEpoch, RevisionError,
-    RevisionLabel, RevisionLabelError, RunId, SessionId, SessionRevision, Usage, UsageUnit,
+    LiabilityRate, LocaleTag, LocaleTagError, MemberId, Money, MoneyError, OperationId,
+    RecoveryEpoch, RevisionError, RevisionLabel, RevisionLabelError, RunId, SessionId,
+    SessionRevision, Usage, UsageUnit,
 };
 use prost::Message;
 
@@ -747,4 +748,219 @@ fn money_rate_refuses_zero_denominator_unit_mismatch_and_intermediate_overflow()
             }
         }
     }
+}
+
+#[test]
+fn locale_preferences_execute_the_127_frozen_public_contract_expectations() {
+    use LocaleTagError::{DuplicateExtension, DuplicateVariant, Empty, InvalidSyntax, TooLong};
+
+    // Frozen I04 admission cases exercise this external consumer's actual df-types API.
+    // These are spelling/error expectations, not a second parser or support catalog.
+    let cases: [(&str, Result<&str, LocaleTagError>); 127] = [
+        ("en", Ok("en")),
+        ("EN-us", Ok("en-us")),
+        ("sr-Latn-RS", Ok("sr-latn-rs")),
+        ("es-419", Ok("es-419")),
+        ("abcd", Ok("abcd")),
+        ("abcdefgh", Ok("abcdefgh")),
+        ("en-abc", Ok("en-abc")),
+        ("en-abc-def", Ok("en-abc-def")),
+        ("en-abc-def-ghi", Ok("en-abc-def-ghi")),
+        ("zh-cmn-Hans-CN", Ok("zh-cmn-hans-cn")),
+        ("en-1234", Ok("en-1234")),
+        ("en-12345", Ok("en-12345")),
+        ("en-abcde", Ok("en-abcde")),
+        ("en-abcdefgh", Ok("en-abcdefgh")),
+        ("sl-rozaj-biske-1994", Ok("sl-rozaj-biske-1994")),
+        ("de-CH-1901-1996", Ok("de-ch-1901-1996")),
+        ("en-a-aa", Ok("en-a-aa")),
+        ("en-0-aa", Ok("en-0-aa")),
+        ("en-9-12345678", Ok("en-9-12345678")),
+        ("en-z-zz", Ok("en-z-zz")),
+        ("en-b-bb-a-aa", Ok("en-b-bb-a-aa")),
+        ("en-a-AA-aa", Ok("en-a-aa-aa")),
+        ("en-a-abcde-abcde", Ok("en-a-abcde-abcde")),
+        ("en-a-bb-x-a", Ok("en-a-bb-x-a")),
+        ("en-a-aa-x-a-aa", Ok("en-a-aa-x-a-aa")),
+        ("x-a", Ok("x-a")),
+        ("X-Private", Ok("x-private")),
+        ("en-x-a", Ok("en-x-a")),
+        ("en-x-a-a-x-x", Ok("en-x-a-a-x-x")),
+        ("x-abcde-ABCDE", Ok("x-abcde-abcde")),
+        ("en-GB-oed", Ok("en-gb-oed")),
+        ("EN-GB-OED", Ok("en-gb-oed")),
+        ("i-ami", Ok("i-ami")),
+        ("I-AMI", Ok("i-ami")),
+        ("i-bnn", Ok("i-bnn")),
+        ("I-BNN", Ok("i-bnn")),
+        ("i-default", Ok("i-default")),
+        ("I-DEFAULT", Ok("i-default")),
+        ("i-enochian", Ok("i-enochian")),
+        ("I-ENOCHIAN", Ok("i-enochian")),
+        ("i-hak", Ok("i-hak")),
+        ("I-HAK", Ok("i-hak")),
+        ("i-klingon", Ok("i-klingon")),
+        ("I-KLINGON", Ok("i-klingon")),
+        ("i-lux", Ok("i-lux")),
+        ("I-LUX", Ok("i-lux")),
+        ("i-mingo", Ok("i-mingo")),
+        ("I-MINGO", Ok("i-mingo")),
+        ("i-navajo", Ok("i-navajo")),
+        ("I-NAVAJO", Ok("i-navajo")),
+        ("i-pwn", Ok("i-pwn")),
+        ("I-PWN", Ok("i-pwn")),
+        ("i-tao", Ok("i-tao")),
+        ("I-TAO", Ok("i-tao")),
+        ("i-tay", Ok("i-tay")),
+        ("I-TAY", Ok("i-tay")),
+        ("i-tsu", Ok("i-tsu")),
+        ("I-TSU", Ok("i-tsu")),
+        ("sgn-BE-FR", Ok("sgn-be-fr")),
+        ("SGN-BE-FR", Ok("sgn-be-fr")),
+        ("sgn-BE-NL", Ok("sgn-be-nl")),
+        ("SGN-BE-NL", Ok("sgn-be-nl")),
+        ("sgn-CH-DE", Ok("sgn-ch-de")),
+        ("SGN-CH-DE", Ok("sgn-ch-de")),
+        ("art-lojban", Ok("art-lojban")),
+        ("ART-LOJBAN", Ok("art-lojban")),
+        ("cel-gaulish", Ok("cel-gaulish")),
+        ("CEL-GAULISH", Ok("cel-gaulish")),
+        ("no-bok", Ok("no-bok")),
+        ("NO-BOK", Ok("no-bok")),
+        ("no-nyn", Ok("no-nyn")),
+        ("NO-NYN", Ok("no-nyn")),
+        ("zh-guoyu", Ok("zh-guoyu")),
+        ("ZH-GUOYU", Ok("zh-guoyu")),
+        ("zh-hakka", Ok("zh-hakka")),
+        ("ZH-HAKKA", Ok("zh-hakka")),
+        ("zh-min", Ok("zh-min")),
+        ("ZH-MIN", Ok("zh-min")),
+        ("zh-min-nan", Ok("zh-min-nan")),
+        ("ZH-MIN-NAN", Ok("zh-min-nan")),
+        ("zh-xiang", Ok("zh-xiang")),
+        ("ZH-XIANG", Ok("zh-xiang")),
+        ("e", Err(InvalidSyntax)),
+        ("abcdefghi", Err(InvalidSyntax)),
+        ("a-value", Err(InvalidSyntax)),
+        ("en_Us", Err(InvalidSyntax)),
+        (" en", Err(InvalidSyntax)),
+        ("en ", Err(InvalidSyntax)),
+        ("en\tUS", Err(InvalidSyntax)),
+        ("en\n", Err(InvalidSyntax)),
+        ("en--US", Err(InvalidSyntax)),
+        ("-en", Err(InvalidSyntax)),
+        ("en-", Err(InvalidSyntax)),
+        ("en-ä", Err(InvalidSyntax)),
+        ("en–US", Err(InvalidSyntax)),
+        ("en-ＵＳ", Err(InvalidSyntax)),
+        ("en-US-Latn", Err(InvalidSyntax)),
+        ("en-US-GB", Err(InvalidSyntax)),
+        ("en-Latn-Latn", Err(InvalidSyntax)),
+        ("en-abc-def-ghi-jkl", Err(InvalidSyntax)),
+        ("abcd-efg", Err(InvalidSyntax)),
+        ("en-abc123456", Err(InvalidSyntax)),
+        ("en-12", Err(InvalidSyntax)),
+        ("en-a", Err(InvalidSyntax)),
+        ("en-a-b-aa", Err(InvalidSyntax)),
+        ("en-a-a", Err(InvalidSyntax)),
+        ("en-a-abcdefghi", Err(InvalidSyntax)),
+        ("en-x", Err(InvalidSyntax)),
+        ("x", Err(InvalidSyntax)),
+        ("x-", Err(InvalidSyntax)),
+        ("x-abcdefghi", Err(InvalidSyntax)),
+        ("i-notreal", Err(InvalidSyntax)),
+        ("en-GB-oed-x-a", Err(InvalidSyntax)),
+        ("sgn-BE-FR-x-a", Err(InvalidSyntax)),
+        ("en-abcde-abcde-a", Err(InvalidSyntax)),
+        ("en-a-aa-a", Err(InvalidSyntax)),
+        ("", Err(Empty)),
+        ("en-abcde-ABCDE", Err(DuplicateVariant)),
+        ("de-1901-1901", Err(DuplicateVariant)),
+        ("en-a-aa-A-bb", Err(DuplicateExtension)),
+        ("en-0-aa-0-bb", Err(DuplicateExtension)),
+        ("en-abcde-ABCDE-a-aa-A-bb", Err(DuplicateVariant)),
+        (
+            "x-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcde",
+            Ok(
+                "x-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcde",
+            ),
+        ),
+        (
+            "x-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdefg-abcdef",
+            Err(TooLong { actual: 256 }),
+        ),
+        (
+            "                                                                                                                                                                                                                                                                ",
+            Err(TooLong { actual: 256 }),
+        ),
+        (
+            "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+            Err(TooLong { actual: 256 }),
+        ),
+        ("en-123", Ok("en-123")),
+    ];
+    for (input, expected) in cases {
+        for _ in 0..3 {
+            let parsed = LocaleTag::parse(input);
+            assert_eq!(
+                parsed
+                    .as_ref()
+                    .map(LocaleTag::as_str)
+                    .map_err(|error| *error),
+                expected,
+                "{input:?}"
+            );
+            match parsed {
+                Ok(tag) => {
+                    assert_eq!(tag, tag.clone());
+                    assert_eq!(LocaleTag::parse(tag.as_str()), Ok(tag.clone()));
+                    assert_eq!(LocaleTag::parse(&input.to_ascii_uppercase()), Ok(tag));
+                }
+                Err(error) => {
+                    // Matching typed facts requires no access to rejected payloads.
+                    match error {
+                        Empty | InvalidSyntax | DuplicateVariant | DuplicateExtension => {}
+                        TooLong { actual } => assert_eq!(actual, input.len()),
+                    }
+                    let copied = error;
+                    assert_eq!(error, copied);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn locale_preferences_preserve_identity_without_aliasing_reordering_or_fallback() {
+    assert_eq!(LocaleTag::MAX_BYTES, 255);
+    for (left, right) in [
+        ("iw", "he"),
+        ("i-klingon", "tlh"),
+        ("en-b-bb-a-aa", "en-a-aa-b-bb"),
+    ] {
+        assert_ne!(
+            LocaleTag::parse(left).unwrap(),
+            LocaleTag::parse(right).unwrap()
+        );
+    }
+    for input in [
+        "qqq-Zzzz-ZZ",
+        "en-a-abcde-abcde",
+        "x-abcde-ABCDE",
+        "en-x-a-a-x-x",
+    ] {
+        assert_eq!(
+            LocaleTag::parse(input).unwrap().as_str(),
+            input.to_ascii_lowercase()
+        );
+    }
+    let supplied = String::from("SR-Latn-RS");
+    let tag = LocaleTag::parse(&supplied).unwrap();
+    drop(supplied);
+    assert_eq!(tag.as_str(), "sr-latn-rs");
+    assert_eq!(
+        LocaleTag::parse("en_US"),
+        Err(LocaleTagError::InvalidSyntax)
+    );
+    assert_eq!(LocaleTag::parse(""), Err(LocaleTagError::Empty));
 }
