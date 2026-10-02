@@ -14,12 +14,18 @@ commit into the next block: keep the recorded ending revision as the next
 baseline and capture baseline..HEAD, which includes the bookkeeping commit.
 Do not invent a self-hash or silently discard metadata commits.
 
-## 2026-10-01 continued work — 16:38–22:38 EDT (open)
+## 2026-10-01–2026-10-02 continued work — 22:38–04:38 EDT (open)
+
+Six-hour boundaries: 2026-10-01T22:38:04-04:00 through 2026-10-02T04:38:04-04:00.
+
+Snapshot at 2026-10-01T22:45:37-04:00; no new integrated commits in this block yet.
+Range recorded so far: e8bbe087706d8f382ab92a96d11d4ee7be5cafa2..e8bbe087706d8f382ab92a96d11d4ee7be5cafa2. The bookkeeping commit writing this closure belongs to this open block and will be captured on its next update.
+
+## 2026-10-01 continued work — 16:38–22:38 EDT
 
 Six-hour boundaries: 2026-10-01T16:38:04-04:00 through 2026-10-01T22:38:04-04:00.
-This block is still open; snapshot at 2026-10-01T22:12:00-04:00.
 
-Range recorded so far: 9def9b845531e5cc589a28343b822b4664bd03fd..537efdd541e77d5445ae52eefe21530fd69074ba
+Range: 9def9b845531e5cc589a28343b822b4664bd03fd..e8bbe087706d8f382ab92a96d11d4ee7be5cafa2
 
 - 827d947a8f1596eb9c7cb753d6a622b244184fb1 — docs: define private authoring upload boundary
 - 89e56102552f1f0388479d3db219b4246a835aa0 — Integrate independently reviewed private authoring boundary
@@ -60,10 +66,37 @@ Range recorded so far: 9def9b845531e5cc589a28343b822b4664bd03fd..537efdd541e77d5
 - 4d565263046eed58830f2f231057393ea11ec1ac — Integrate reviewed B-G08-D02 decision
 - f8612a1819ab016e5821597ecd795c8cf0c5c2ac — docs: define PostgreSQL durable receipt boundary
 - 537efdd541e77d5445ae52eefe21530fd69074ba — Integrate reviewed B-F24-D01 decision
+- 97366425af66098b6aba52096ac68a936f798357 — Record continued integration blocks and open design wave
+- 6b029bb4ba587d13be5682f4913b96c086d729b2 — docs: decide initial payer identity recovery boundary
+- e2007daba2d4eaa5a14da5cdd8ba8646217d7b85 — docs: harden payer recovery contract boundaries
+- fa1316b2784608a1d8997969b36ca11a65971b3f — Integrate reviewed B-G04-D01 decision
+- 92be5c33f0e94b27c8237ebbbb9085eef79ddbba — docs: decide initial device browser role matrix
+- 4f80eb43ee75feffc198cc76b620e47cb2eab8ca — docs: correct G04 source availability status
+- fd54807128380386738f67f83e53038ba6a7ac1a — Integrate reviewed B-G04-D02 decision
+- b1981988681a3cc64f87c8c25303568878932abc — docs: decide initial G05 storage topology
+- 5328816ae69a083cc4c119ef6fa643b35e508ac1 — docs: align G05 media root with storage decision
+- 5d208d7ca953a8dd9a9360b6fb1a11a9ed20cc3d — docs: follow hosted G05 media deployment decision
+- 4b19b971c2ec022107bc6ded14b7f0fc3d930d88 — Integrate reviewed B-G05-D01 decision
+- 524fd9912b6e79fdb73a3faf0ede698dc56ca175 — docs: define bounded telemetry redaction contract
+- 80200e01ee1e248a273b2b2861d53b7e93144527 — docs: tighten telemetry redaction fixture
+- cf0c57891a5c068fd1376116e618637a6e10d053 — docs: format bounded telemetry example
+- d9c9ee09511fc5f6cfdaf066dfc8d52a354b4389 — Integrate reviewed B-G06-D02 decision
+- a774a5aac8b496a78d559280faa619ded89d953a — docs: define telemetry spool readiness policy
+- 98ba784a44c5c454254743c7ad035d0ad79f98ce — docs: record verified spool contract example
+- 5f3974212feff62a73589868b5bda15fd16ee306 — Integrate reviewed B-G06-D03 decision
+- 8dacb9c7c1df3f96b2760fa711c59d6119769190 — Specify recovery journal watermark source
+- 22b44d075762628970b1692d18012c0a3f0910b8 — Integrate reviewed B-F24-D02 decision
+- 2b4933fb23341bc1ff8923e0e6385eec7ba926df — docs: define tenant repository scope
+- af6d1bebbd702d1252cd091927e3fa1fad6a5aee — Integrate reviewed B-X01-D01 decision
+- 5c7f9ad322c704105ffdf9253a9dd6ad6c2d4acc — docs: define command receipt outcome boundary
+- 84f8294721bf3032ddfc4ba712423b618f1e4304 — docs: clarify receipt lookup refusal path
+- e8bbe087706d8f382ab92a96d11d4ee7be5cafa2 — Integrate reviewed B-C-df-api-D02 decision
 
-The integration wave closes reviewed design decisions for authoring, provenance, replay, listener-safe claims, bounded memory candidates, consented observation, predictive demand, vendor qualification, evaluator routing, engine composition, legal tempo, provider spending modes/quotes, and PostgreSQL receipt authority. Executable policy examples and resulting-source checks support DESIGN completion; they do not prove production gameplay, provider services, audible audio, or physical devices. Earlier rejected drafts reachable through accepted branch ancestry are listed as historical commits, not separately approved deliverables.
+Reviewed design decisions cover authoring, provenance, replay, listener-safe claims, bounded memory candidates, consented observation, predictive demand, vendor qualification, evaluator routing, engine composition, legal tempo, provider modes/quotes, identity/device allocation, hosted PostgreSQL/object media, telemetry schema/admission, recovery watermarks, caller isolation, and RPC outcome classification. Exact policy fixtures and resulting-source checks support DESIGN completion; production gameplay, real services and durable enforcement, audio and device qualification remain pending.
 
-Current recorded ending revision: `537efdd541e77d5445ae52eefe21530fd69074ba`. Later integrations and the bookkeeping commit writing this snapshot belong to this open block; append them before closing it.
+Earlier rejected drafts reachable through accepted branch ancestry are listed as historical commits, not separately approved deliverables. Every newly reachable child, merge and bookkeeping commit is included once by revision range and integration order.
+
+Next block baseline: `e8bbe087706d8f382ab92a96d11d4ee7be5cafa2`. The bookkeeping commit writing this closed block is carried into the open 22:38–04:38 block.
 
 ## 2026-10-01 continued work — 10:38–16:38 EDT
 
