@@ -400,3 +400,10 @@ pub use ingress::*;
 mod producer;
 #[cfg(not(target_arch = "wasm32"))]
 pub use producer::{AnyValue, CapturedBatch, LogInput, NativeProducer, Severity, SpanInput};
+
+mod capture;
+pub use capture::{CaptureKey, ProducerId, RecordId, Signal, SourceSequence, TelemetryError};
+mod browser;
+pub use browser::{
+    BrowserBuffer, BrowserLog, BufferError, BufferSnapshot, UploadFailure, UploadLease,
+};

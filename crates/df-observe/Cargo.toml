@@ -7,9 +7,11 @@ license.workspace = true
 [dependencies]
 opentelemetry = { version = "0.31", default-features = false, features = ["trace"] }
 
+prost.workspace = true
+df-types = { path = "../df-types" }
+opentelemetry-proto = { version = "=0.31.0", default-features = false, features = ["logs", "gen-tonic-messages"] }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 opentelemetry_sdk = { version = "=0.31.0", default-features = false, features = ["trace", "logs"] }
 opentelemetry = { version = "=0.31.0", default-features = false, features = ["trace", "logs"] }
-opentelemetry-proto = { version = "=0.31.0", default-features = false, features = ["logs", "trace", "gen-tonic-messages"] }
-prost.workspace = true
-df-types = { path = "../df-types" }
+opentelemetry-proto = { version = "=0.31.0", default-features = false, features = ["trace"] }
