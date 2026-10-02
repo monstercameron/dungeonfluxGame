@@ -412,9 +412,9 @@ available.
 
 ## Governing sources and provenance
 
-This is the A2 repair of the rejected A1 submission, based on source revision
-`2a1adc3c8e65f393046c911cf572ca5f7d6d573b`; original task acceptance is
-unchanged. A1 source, review, receipts, and handoff remain preserved in the prior
+This is attempt `B-G09-D01-a2`, repairing the rejected A1 submission. Its
+input revision is `2a1adc3c8e65f393046c911cf572ca5f7d6d573b`; original task
+acceptance is unchanged. A1 source, review, receipts, and handoff remain preserved in the prior
 attempt evidence directory. Governing sources, frozen SHA-256:
 
 - `planning/implementation-roadmap.md` — `0160ad8e8ec38f768e2348209b9989e30e8f403d9b1a4ebf694f0801f7206932`
