@@ -154,9 +154,7 @@ fn publish(current: &mut Option<Manifest>, candidate: Candidate) -> Result<(), R
     .map_err(|_: BuildIdentityError| Refusal::IncompleteIdentity)?;
     let native = candidate.native.ok_or(Refusal::MissingComponent)?;
     let wasm = candidate.wasm.ok_or(Refusal::MissingComponent)?;
-    let configuration = candidate
-        .configuration
-        .ok_or(Refusal::MissingComponent)?;
+    let configuration = candidate.configuration.ok_or(Refusal::MissingComponent)?;
 
     let mut expected = BTreeSet::new();
     for id in candidate.expected_asset_ids {
@@ -240,7 +238,9 @@ fn main() {
     assert_eq!(accepted, previous);
 
     let mut duplicate_asset = candidate();
-    duplicate_asset.assets.push(duplicate_asset.assets[0].clone());
+    duplicate_asset
+        .assets
+        .push(duplicate_asset.assets[0].clone());
     assert_eq!(
         publish(&mut accepted, duplicate_asset),
         Err(Refusal::DuplicateAssetId)
@@ -256,10 +256,18 @@ fn main() {
     assert_eq!(accepted, previous);
 
     let manifest = accepted.expect("the valid complete candidate remains accepted");
-    assert_eq!(manifest.identity.revision(provenance::BuildRevision::Source).as_str(), "src-1");
+    assert_eq!(
+        manifest
+            .identity
+            .revision(provenance::BuildRevision::Source)
+            .as_str(),
+        "src-1"
+    );
     assert_ne!(manifest.native, manifest.wasm);
     assert_eq!(manifest.assets[0].id, "audio:theme-1");
-    println!("PASS: complete identity, distinct artifacts, exact asset closure, 5 refusals retain prior pointer");
+    println!(
+        "PASS: complete identity, distinct artifacts, exact asset closure, 5 refusals retain prior pointer"
+    );
 }
 ```
 
