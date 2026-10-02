@@ -105,11 +105,7 @@ impl Shell {
         })
     }
 
-    fn mount(
-        &mut self,
-        target: MountTarget,
-        resources: ResourceOwner,
-    ) -> Result<(), StartupError> {
+    fn mount(&mut self, target: MountTarget, resources: ResourceOwner) -> Result<(), StartupError> {
         if self.disposed {
             return Err(StartupError::ShellDisposed);
         }
@@ -133,7 +129,10 @@ impl Shell {
 fn main() {
     let released = Arc::new(AtomicUsize::new(0));
 
-    assert_eq!(Shell::boot(None).err(), Some(StartupError::MissingBuildIdentity));
+    assert_eq!(
+        Shell::boot(None).err(),
+        Some(StartupError::MissingBuildIdentity)
+    );
     assert_eq!(
         Shell::boot(Some("")).err(),
         Some(StartupError::EmptyBuildIdentity)
