@@ -242,6 +242,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-model"
+version = "0.1.0"
+dependencies = [
+ "df-types",
+]
+
+[[package]]
 name = "df-observe"
 version = "0.1.0"
 dependencies = [

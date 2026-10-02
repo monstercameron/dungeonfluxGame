@@ -54,6 +54,11 @@ impl LocaleTag {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Retained locale allocation for owners enforcing a total memory bound.
+    pub fn retained_heap_bytes(&self) -> usize {
+        self.0.capacity()
+    }
 }
 
 // RFC 5646 section 2.1 defines this fixed set of whole tags, including irregular forms.
