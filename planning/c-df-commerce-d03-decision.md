@@ -477,7 +477,7 @@ fn main() {
     assert_eq!(budgets.used, [usd_max; 5]);
     let before_currency_refusal = budgets.used;
     assert_eq!(
-        budgets.reserve(Money::new(eur, 40), Money::new(eur, 45)),
+        budgets.reserve(Money::new(eur, 40), Money::new(eur, 40)),
         Err(Error::Money(MoneyError::CurrencyMismatch))
     );
     assert_eq!(budgets.used, before_currency_refusal);
@@ -573,6 +573,56 @@ fn main() {
         Err(Error::Money(MoneyError::Underflow))
     );
     assert_eq!(adjustment_scope.used, before_adjustment);
+    let mut overflow_adjustment = Hierarchy::new(usd, tagged_limits(usd, [u128::MAX; 5])).unwrap();
+    overflow_adjustment.used[4] = Money::new(usd, u128::MAX);
+    let before_overflow_adjustment = overflow_adjustment.used;
+    assert_eq!(
+        overflow_adjustment.adjust_all(Money::new(usd, 0), Money::new(usd, 1)),
+        Err(Error::Money(MoneyError::Overflow))
+    );
+    assert_eq!(overflow_adjustment.used, before_overflow_adjustment);
+
+    // Multiple outstanding obligations preserve each scope's prior balance on settlement.
+    let mut multiple = Hierarchy {
+        currency: usd,
+        used: [5, 6, 7, 8, 9].map(|amount| Money::new(usd, amount)),
+        limit: [Money::new(usd, 100); 5],
+    };
+    let mut first = multiple
+        .reserve(Money::new(usd, 30), Money::new(usd, 30))
+        .unwrap();
+    let mut second = multiple
+        .reserve(Money::new(usd, 40), Money::new(usd, 40))
+        .unwrap();
+    multiple.mark_unknown(&mut first).unwrap();
+    multiple.release_unsent(&mut second, true).unwrap();
+    assert_eq!(multiple.used.map(Money::micros), [35, 36, 37, 38, 39]);
+    multiple
+        .settle_known(&mut first, Money::new(usd, 17))
+        .unwrap();
+    assert_eq!(multiple.used.map(Money::micros), [22, 23, 24, 25, 26]);
+
+    // Zero and maximum exact amounts remain well-defined obligations.
+    let mut boundary = Hierarchy::new(usd, tagged_limits(usd, [u128::MAX; 5])).unwrap();
+    let mut zero_reservation = boundary
+        .reserve(Money::new(usd, 0), Money::new(usd, 0))
+        .unwrap();
+    boundary.mark_unknown(&mut zero_reservation).unwrap();
+    assert_eq!(
+        boundary.release_unsent(&mut zero_reservation, true),
+        Err(Error::UnknownCannotRelease)
+    );
+    boundary
+        .settle_known(&mut zero_reservation, Money::new(usd, 0))
+        .unwrap();
+    let mut max_reservation = boundary
+        .reserve(Money::new(usd, u128::MAX), Money::new(usd, u128::MAX))
+        .unwrap();
+    boundary.mark_unknown(&mut max_reservation).unwrap();
+    boundary
+        .settle_known(&mut max_reservation, Money::new(usd, u128::MAX))
+        .unwrap();
+    assert_eq!(boundary.used, [Money::new(usd, u128::MAX); 5]);
 
     // Verified actual plus billed waste settles once and releases only known unused maximum.
     budgets
