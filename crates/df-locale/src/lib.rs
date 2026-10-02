@@ -1,12 +1,17 @@
 //! Pure locale negotiation and checked display-text lookup.
 //!
 //! Callers supply each output's ordered preferences, supported locales, and default.
-//! Parsing belongs to `df_types::LocaleTag`; formatting is a separate boundary.
+//! Parsing belongs to `df_types::LocaleTag`; formatting preserves plain text and exact values.
 
 mod catalog;
+mod format;
 mod negotiation;
 mod text_key;
 
 pub use catalog::{Catalog, Lookup, lookup_chain};
+pub use format::{
+    ArgumentKind, ArgumentValue, FormatError, FormattedMessage, FormattedPart, MessageError,
+    MessagePart,
+};
 pub use negotiation::{LocaleConfigurationError, LocaleSelection, settle};
 pub use text_key::{TextKey, TextKeyError};
