@@ -1,4 +1,4 @@
-//! Pure caller-supplied identity, recovery ordering, and nonsecret provenance.
+//! Pure caller-supplied identity, recovery ordering, exact units, and nonsecret provenance.
 //! Valid values confer no authentication, permissions, issuance, or build approval.
 //!
 //! Different identity kinds cannot be substituted:
@@ -14,12 +14,14 @@
 //! session_only(MemberId::from_hex("01010101010101010101010101010101").unwrap());
 //! ```
 mod identity;
+mod money;
 mod provenance;
 mod revision;
 
 pub use identity::{
     ClientBindingId, IdentityError, MemberId, OperationId, RunId, SessionId, TextIdentityError,
 };
+pub use money::{Currency, LiabilityRate, Money, MoneyError, Usage, UsageUnit};
 pub use provenance::{
     BuildIdentity, BuildIdentityError, BuildRevision, RevisionLabel, RevisionLabelError,
 };
