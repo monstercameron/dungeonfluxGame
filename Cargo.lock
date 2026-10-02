@@ -172,6 +172,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-assets"
+version = "0.1.0"
+dependencies = [
+ "df-observe",
+ "df-types",
+ "sha2",
+]
+
+[[package]]
 name = "df-auth"
 version = "0.1.0"
 dependencies = [
