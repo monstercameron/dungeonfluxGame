@@ -207,7 +207,9 @@ fn main() {
     assert_eq!(unknown.err(), Some(Refusal::PrivateOrUnknownAttribute));
 
     let too_many = prepare(Candidate {
-        record_id: "evt-04", subsystem: "session", body: EventBody::ActionRejected,
+        record_id: "evt-04",
+        subsystem: "session",
+        body: EventBody::ActionRejected,
         attributes: BTreeMap::from([("a", "1"), ("b", "2"), ("c", "3"), ("d", "4"), ("e", "5")]),
     });
     assert!(matches!(too_many, Err(Refusal::TooManyAttributes)));
