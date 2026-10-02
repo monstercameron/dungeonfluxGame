@@ -13,6 +13,43 @@ It adds no subsystem or second implementation owner. A pure director may consume
 only bounded, explicitly supplied, authorized inputs and return a typed proposal;
 it does not observe people or acquire consent itself.
 
+## Alternatives considered
+
+* **Infer mood or boredom from speech, silence, inactivity, presence, or action
+  volume.** Rejected. The tempo policy says inactivity is not proof of boredom
+  and disallows covert microphone monitoring, emotion inference, and penalties
+  based on local muting or cancellation. G12's named outcome also requires no
+  ambient emotion. A model-produced affect label would still be an inference
+  from those signals, not a permitted observation. (Sources: [tempo engine —
+  Audience, preferences and observations](tempo-engine.md#audience-preferences-and-observations);
+  [implementation roadmap — G12](implementation-roadmap.md#prerequisite-decisions).)
+* **Treat joining, enabling audio, or silence as implicit consent.** Rejected.
+  The spotlight refinement specifies an explicit `SpotlightPreference` and
+  voluntary opportunities; subsystem contracts require authorization at
+  privileged boundaries and revalidation when projecting private data. These
+  actions do not express a purpose-specific preference or permission to observe.
+  (Sources: [feature refinement — Rumors, spotlight and grounded encounters](feature-refinement.md#rumors-spotlight-and-grounded-encounters);
+  [subsystem interfaces — Common contract rules](subsystem-interfaces.md#common-contract-rules)
+  and [Identity and session ownership](subsystem-interfaces.md#identity-and-session-ownership).)
+* **Permit only direct feedback and discard every activity count.** Rejected as
+  the complete policy. The runtime-director contract permits bounded committed-
+  activity windows alongside voluntary feedback. Keep that narrow aggregate for
+  pacing opportunity context while forbidding it from representing mood,
+  willingness, or attention. (Sources: [runtime directors — Pure public
+  boundaries](runtime-directors.md#pure-public-boundaries);
+  [feature refinement — Rumors, spotlight and grounded encounters](feature-refinement.md#rumors-spotlight-and-grounded-encounters).)
+* **Equalize speaking turns or automatically spotlight quiet participants.**
+  Rejected. The feature acceptance says fairness measures opportunities and
+  voluntary feedback, not equal forced speaking shares or an unproven boredom
+  classifier. Offer a credible choice with decline and ignore paths instead.
+  (Source: [feature refinement — Rumors, spotlight and grounded encounters](feature-refinement.md#rumors-spotlight-and-grounded-encounters).)
+* **Use spotlight consent to disclose a personal hook to the whole room.**
+  Rejected. The refinement requires separate disclosure scope for player/backstory
+  secrets, and projection contracts authorize audience scope before serialization
+  and asset delivery. A participation preference does not grant that access.
+  (Sources: [feature refinement — Rumors, spotlight and grounded encounters](feature-refinement.md#rumors-spotlight-and-grounded-encounters);
+  [interaction engine — Grounded creative speech and listener-safe generation](interaction-engine.md#grounded-creative-speech-and-listener-safe-generation).)
+
 “No ambient emotion” is a hard refusal boundary. DungeonFlux must not infer,
 estimate, classify, rank, or act on a player's emotion, boredom, attention,
 engagement, fatigue, enthusiasm, discomfort, or social willingness from ambient
@@ -102,12 +139,16 @@ The illustrative Rust contract below demonstrates only this consent/refusal
 boundary. It is not a production API, persistence model, wire schema, complete
 privacy system, or substitute for the named owners' reviewed contracts. It uses
 only the Rust standard library and deliberately refuses inferred emotion even
-when general observation consent is active.
+when general observation consent is active. The `current_generation` input
+represents the trusted current consent generation supplied by the existing
+authorization boundary; it is not caller-controlled. This small pure example
+does not load consent or implement revocation propagation.
 
 ```rust
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Purpose {
     Pacing,
+    Spotlight,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -132,12 +173,16 @@ enum Observation {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Refusal {
+    StaleConsent,
     ConsentRequired,
     WrongPurpose,
     InvalidInference,
 }
 
-fn admit(consent: Consent, input: Input) -> Result<Observation, Refusal> {
+fn admit(consent: Consent, current_generation: u64, input: Input) -> Result<Observation, Refusal> {
+    if consent.generation != current_generation {
+        return Err(Refusal::StaleConsent);
+    }
     if !consent.active {
         return Err(Refusal::ConsentRequired);
     }
@@ -158,9 +203,8 @@ fn main() {
         purpose: Purpose::Pacing,
         generation: 4,
     };
-    assert_eq!(consent.generation, 4);
     assert_eq!(
-        admit(consent, Input::CommittedInteraction),
+        admit(consent, 4, Input::CommittedInteraction),
         Ok(Observation::CommittedInteraction)
     );
 
@@ -170,12 +214,27 @@ fn main() {
         ..consent
     };
     assert_eq!(
-        admit(withdrawn, Input::ExplicitPacingFeedback),
+        admit(withdrawn, 5, Input::ExplicitPacingFeedback),
         Err(Refusal::ConsentRequired)
     );
 
     assert_eq!(
-        admit(consent, Input::InferredEmotion),
+        admit(consent, 5, Input::CommittedInteraction),
+        Err(Refusal::StaleConsent)
+    );
+
+    let spotlight_only = Consent {
+        active: true,
+        purpose: Purpose::Spotlight,
+        generation: 6,
+    };
+    assert_eq!(
+        admit(spotlight_only, 6, Input::ExplicitPacingFeedback),
+        Err(Refusal::WrongPurpose)
+    );
+
+    assert_eq!(
+        admit(consent, 4, Input::InferredEmotion),
         Err(Refusal::InvalidInference)
     );
 }
@@ -189,9 +248,15 @@ permitted observations; voluntary credible opportunities; no boredom/emotion
 inference; valid decline/ignore; consent revocation; hidden-state
 noninterference; accessible stable controls; bounded repeated cues; and measured
 device/session/cost behavior. The code example is a contract illustration only;
-it has not been compiled or executed. No production contract, integrated
-behavior, device calibration, browser flow, audio playback, visual output, or
-frontier evaluation is claimed by this document.
+the exact literal in this document revision was extracted, checked with the
+pinned Rust formatter, compiled with warnings denied, and executed against its
+finite acceptance/refusal assertions. Those standalone checks establish only
+the example's behavior at this boundary. They do not establish independent
+review, current-consent lookup or revocation propagation in a running service,
+integrated spotlight delivery, or production behavior. No device calibration,
+browser flow, audio playback, visual output, or frontier evaluation is claimed
+by this document. Cargo/native/WASM workspace checks are unperformed because
+this task changes no application source.
 
 Sources: [implementation roadmap](implementation-roadmap.md) (G12, delivery
 slices, runtime director delivery, release gaps); [subsystem interfaces](subsystem-interfaces.md)
