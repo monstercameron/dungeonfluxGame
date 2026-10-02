@@ -8,7 +8,7 @@ Status: design decision; storage, digest, authorization and runtime integration 
 
 A published asset version binds one immutable manifest and one exact complete byte sequence. The manifest's content hash is computed over those exact bytes without lossy normalization. It carries that hash alongside MIME/codec, byte length, duration/timebase where relevant, variant relationships, source/generator revisions, readiness/fallback, and access scope. These values describe the same version: after completeness is established, publishing the same version identifier with different bytes or any different manifest field is a version conflict and must refuse without replacing the previous version. An exact repeat is idempotent. Changed bytes or metadata require a fresh version identifier; existing references continue to resolve the old version while it is retained. Equal bytes may be deduplicated only when the store preserves the same immutable binding. Hash equality alone is neither proof of byte completeness nor permission to read.
 
-The operation retains typed outcomes: published or idempotently already-published on exact match; reject incomplete length, hash mismatch, immutable-version conflict, or unsupported manifest; report storage/metadata failure without a success receipt. If commit outcome is ambiguous, return/retain unknown and reconcile by the stable publication operation/version identity; never tell the caller publication succeeded based on a staged write or a lost acknowledgment. A retry of a confirmed identical operation can return the same immutable receipt. Cleanup only removes unreferenced staging/orphans under the byte-store owner's recovery policy.
+The operation retains typed outcomes: published or idempotently already-published on exact match; reject incomplete length, hash mismatch, immutable-version conflict, or unsupported manifest; report storage/metadata failure without a success receipt. Check complete length first. For an existing version, compare the entire manifest and complete byte sequence before checking the candidate digest or other manifest validity: an exact repeat is idempotent, and any complete non-identical reuse is a version conflict. For a new version, validate the manifest and compute its digest over the complete bytes before publication. This ordering does not accept a mismatched digest; it prevents the digest error from masking an attempted immutable-version replacement. If commit outcome is ambiguous, return/retain unknown and reconcile by the stable publication operation/version identity; never tell the caller publication succeeded based on a staged write or a lost acknowledgment. A retry of a confirmed identical operation can return the same immutable receipt. Cleanup only removes unreferenced staging/orphans under the byte-store owner's recovery policy.
 
 ## Alternatives and rationale
 
@@ -25,7 +25,7 @@ The integration proof must cut/fail between staging, verification, durable byte 
 
 ## Unresolved production gates
 
-The current plans do not freeze the manifest's concrete Rust/schema representation, canonical field encoding, cryptographic digest algorithm, opaque version identifier, or collision policy beyond safe refusal. `df-types` owns shared ID representations; `df-assets` owns domain manifest and publication outcomes; G03/G05 and `df-persistence` freeze storage layout and adapter transaction/recovery semantics. The initial durable file root and deployment/retention policy remain storage/deployment gates; object storage is a later adapter option. MIME sniffing/decoder agreement and image/video resource limits remain the service-operations media-validation boundary. Concrete maximum sizes, durations, range arithmetic, staging expiry and cleanup bounds must be selected by the existing G05/storage and media owners from workload/deployment evidence, not inferred here. Access-policy/retention changes do not mutate the bytes or erase identity; revocation blocks future access through existing auth/access policy. No provider, generation, runtime integration, API freeze, benchmark, or production persistence behavior is claimed.
+The current plans do not freeze the manifest's concrete Rust/schema representation, canonical field encoding, cryptographic digest algorithm, opaque version identifier, or collision policy beyond safe refusal. `df-types` owns shared ID representations; `df-assets` owns domain manifest and publication outcomes; G03/G05 and `df-persistence` freeze storage layout and adapter transaction/recovery semantics. The storage plan proposes a separately configured durable file root initially, while the service-operations plan proposes object-backed media at initial deployment. Storage/deployment owners must reconcile that choice and its retention/recovery policy before production; either backing must confirm complete durable bytes before metadata becomes visible. MIME sniffing/decoder agreement and image/video resource limits remain the service-operations media-validation boundary. Concrete maximum sizes, durations, range arithmetic, staging expiry and cleanup bounds must be selected by the existing G05/storage and media owners from workload/deployment evidence, not inferred here. Access-policy/retention changes do not mutate the bytes or erase identity; revocation blocks future access through existing auth/access policy. No provider, generation, runtime integration, API freeze, benchmark, or production persistence behavior is claimed.
 
 ## Finite literal contract example
 
@@ -72,27 +72,29 @@ fn fixture_hash(bytes: &[u8]) -> u32 {
 
 impl Store {
     fn publish(&mut self, manifest: Manifest, staged: &[u8]) -> Result<bool, Refusal> {
-        if manifest.mime.is_empty() || manifest.codec.is_empty() {
-            return Err(Refusal::InvalidManifest);
-        }
         if u64::try_from(staged.len()).ok() != Some(manifest.byte_len) {
             return Err(Refusal::Incomplete);
         }
-        if fixture_hash(staged) != manifest.hash {
-            return Err(Refusal::HashMismatch);
-        }
-        let candidate = Published {
-            manifest: manifest.clone(),
-            bytes: staged.to_vec(),
-        };
         if let Some(previous) = self.versions.get(&manifest.version) {
-            return if previous == &candidate {
+            return if previous.manifest == manifest && previous.bytes.as_slice() == staged {
                 Ok(false)
             } else {
                 Err(Refusal::VersionConflict)
             };
         }
-        self.versions.insert(manifest.version, candidate);
+        if manifest.mime.is_empty() || manifest.codec.is_empty() {
+            return Err(Refusal::InvalidManifest);
+        }
+        if fixture_hash(staged) != manifest.hash {
+            return Err(Refusal::HashMismatch);
+        }
+        self.versions.insert(
+            manifest.version,
+            Published {
+                manifest,
+                bytes: staged.to_vec(),
+            },
+        );
         Ok(true)
     }
 }
@@ -132,6 +134,19 @@ fn main() {
     assert_eq!(
         store.publish(manifest.clone(), b"asset-v2"),
         Err(Refusal::VersionConflict)
+    );
+    // The fixture checksum also collides for these complete, different bytes.
+    assert_eq!(fixture_hash(complete), fixture_hash(b"asset-w0"));
+    assert_eq!(
+        store.publish(manifest.clone(), b"asset-w0"),
+        Err(Refusal::VersionConflict)
+    );
+    let mut unsupported = manifest.clone();
+    unsupported.version = 4;
+    unsupported.mime = "";
+    assert_eq!(
+        store.publish(unsupported, complete),
+        Err(Refusal::InvalidManifest)
     );
     assert_eq!(store.versions.get(&1).unwrap().bytes, complete);
 
