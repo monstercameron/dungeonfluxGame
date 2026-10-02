@@ -1,0 +1,8 @@
+[package]
+name = "df-media"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+df-types = { path = "../df-types" }

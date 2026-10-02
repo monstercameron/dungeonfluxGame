@@ -1,0 +1,8 @@
+[package]
+name = "df-content"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+df-types = { path = "../df-types" }

@@ -164,7 +164,78 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
 
 [[package]]
+name = "df-ai"
+version = "0.1.0"
+dependencies = [
+ "df-types",
+ "sha2",
+]
+
+[[package]]
+name = "df-auth"
+version = "0.1.0"
+dependencies = [
+ "df-types",
+]
+
+[[package]]
+name = "df-client"
+version = "0.1.0"
+dependencies = [
+ "df-types",
+]
+
+[[package]]
+name = "df-content"
+version = "0.1.0"
+dependencies = [
+ "df-types",
+]
+
+[[package]]
+name = "df-encounter"
+version = "0.1.0"
+dependencies = [
+ "df-types",
+]
+
+[[package]]
+name = "df-experience"
+version = "0.1.0"
+dependencies = [
+ "df-types",
+]
+
+[[package]]
+name = "df-intent"
+version = "0.1.0"
+dependencies = [
+ "df-types",
+]
+
+[[package]]
+name = "df-interaction"
+version = "0.1.0"
+dependencies = [
+ "df-types",
+]
+
+[[package]]
+name = "df-knowledge"
+version = "0.1.0"
+dependencies = [
+ "df-types",
+]
+
+[[package]]
 name = "df-locale"
+version = "0.1.0"
+dependencies = [
+ "df-types",
+]
+
+[[package]]
+name = "df-media"
 version = "0.1.0"
 dependencies = [
  "df-types",
