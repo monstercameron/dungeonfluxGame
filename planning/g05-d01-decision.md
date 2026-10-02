@@ -5,11 +5,11 @@ Status: decision proposal for independent review; no service provisioned or qual
 
 ## Decision
 
-For the initial deployment, select one native Rust application process, managed PostgreSQL, and a separately configured durable filesystem root for immutable media bytes. PostgreSQL remains authoritative for game/session/player state, ownership fences, revisions, operation receipts, facts/checkpoints, effect intents, and asset manifests/access metadata. `df-assets` owns bytes through its storage adapter. Keep the durable root distinct from process temporary files, artifacts, and disposable caches. This is the one-node application topology; managed PostgreSQL remains a separately operated dependency. Neither store is the workflow or telemetry database.
+For the initial hosted deployment, select one native Rust application process, managed PostgreSQL, and durable object-backed media. PostgreSQL remains authoritative for game/session/player state, ownership fences, revisions, operation receipts, facts/checkpoints, effect intents, and asset manifests/access metadata. `df-assets` owns bytes through its storage adapter. Keep durable media distinct from process temporary files, artifacts, and disposable caches. This is the one-node application topology; managed PostgreSQL and object-backed media are separately operated dependencies. Neither store is the workflow or telemetry database. PostgreSQL remains the required backend for local integration tests as well.
 
 The deployment boundary follows `df-persistence` for PostgreSQL-backed repositories/migrations and `df-assets` for byte storage and metadata/access publication. `df-server` composes services; it does not introduce a second database owner. `df-session` stages pure transitions and commits state, receipt, facts and required intents atomically under the current owner fence/revision, then publishes. It never holds a PostgreSQL transaction over media/provider I/O or a client wait. `df-api` authenticates and scopes requests; trusted principal and audience, never an opaque asset ID or content hash, authorize media access. The asset service may issue/read a reference only after authorization is revalidated.
 
-This follows the explicit initial-root decision in storage architecture and the subsystem interface: a separately configured durable file root initially, with object storage available later through the same adapter boundary. The service-operations phrase “durable object-backed media” describes a conflicting proposal; for this D01 initial deployment, read it as durable backing, with its object-backed implementation deferred until a later deployment decision. That resolves the choice for this task; it does not claim the prose in service-operations has already been edited. Do not silently treat a local cache, artifact directory, staging upload, or PostgreSQL large object as the selected durable root.
+The storage-architecture document's final “Hosted service operating contract” names `service-operations.md` as the governing refinement for initial deployment. Therefore its “one native Rust process plus managed PostgreSQL and durable object-backed media” choice controls hosted deployment. Earlier storage-architecture and subsystem-interface text describes the initial local durable file root and object storage as later adapter option; that older deployment detail is superseded for hosted deployment by the final hosted-service refinement. The `AssetStore` boundary still permits a separately configured durable file root for local development and integration tests; it does not change the hosted choice. Do not silently treat a local cache, artifact directory, staging upload, or PostgreSQL large object as durable hosted media.
 
 ## PostgreSQL physical starting point
 
@@ -17,20 +17,20 @@ Start with one PostgreSQL database and one migration owner. Use normalized relat
 
 Enforce uniqueness at the transaction boundary for scoped operation/allocation keys and stable effect IDs; bind retries to a canonical request fingerprint and return the prior durable result. Keep a tombstone or retired namespace when the advertised receipt lookup window ends so an old retry cannot become a fresh write. Commit authoritative state revision, decision result, ordered facts and all mandatory effect intents together using compare-and-swap revision plus current unexpired owner fence. Use database time for fence expiry. A stale fence/revision rejects without publication. If the commit response is ambiguous, reload by operation key; do not repeat the transition blindly. If PostgreSQL is unavailable, reject new authoritative writes and paid dispatch, or return an explicit unknown outcome when the commit may have happened; never fabricate success.
 
-Use a bounded pool, explicit transaction/query deadlines, tenant predicates and transaction-scoped settings reset on every pooled connection. Runtime credentials are separate from migration/backup roles and are neither owner nor superuser/BYPASSRLS. Tenant/audience checks remain in application code even when row-level security is enabled. No transaction spans filesystem calls. Configure managed backups/PITR only after selecting and verifying the provider mode; acknowledged-decision RPO and restore objectives in service operations remain conditional candidate targets until a restore drill succeeds. Initial single-process operation has restart downtime and no application-node HA claim. The managed database's own HA/replication mode is a separate provider selection and must not be inferred from “managed.”
+Use a bounded pool, explicit transaction/query deadlines, tenant predicates and transaction-scoped settings reset on every pooled connection. Runtime credentials are separate from migration/backup roles and are neither owner nor superuser/BYPASSRLS. Tenant/audience checks remain in application code even when row-level security is enabled. No transaction spans object-store calls. Configure managed backups/PITR only after selecting and verifying the provider mode; acknowledged-decision RPO and restore objectives in service operations remain conditional candidate targets until a restore drill succeeds. Initial single-process operation has restart downtime and no application-node HA claim. The managed database's own HA/replication mode is a separate provider selection and must not be inferred from “managed.”
 
 ## Immutable media publication
 
-`df-assets::AssetStore` owns byte I/O to the configured durable filesystem root; its PostgreSQL `AssetMetadataStore` owns manifests and access metadata. Stage each upload under an owned unique path outside the public namespace; enforce configured request bounds while streaming. Before visibility, verify complete byte length and a cryptographic content digest against the declared digest, then finalize under a content-addressed immutable path. Only after the complete file is durably present may the metadata transaction publish the manifest and audience scope. Resolve/open checks trusted scope and current authorization, then reads/ranges from the immutable file. Hashes identify bytes but grant no permission.
+`df-assets::AssetStore` owns byte I/O to durable object-backed media; its PostgreSQL `AssetMetadataStore` owns manifests and access metadata. Stage each upload under an owned unique non-public object key; enforce configured request bounds while streaming. Before visibility, verify complete byte length and a cryptographic content digest against the declared digest, then finalize under a content-addressed immutable object key (or backing-supported immutable version). Only after complete bytes are durably present may the metadata transaction publish the manifest and audience scope. Resolve/open checks trusted scope and current authorization, then reads/ranges from the immutable object. Hashes identify bytes but grant no permission.
 
-The required ordering is bytes durable → digest/length verified → immutable file finalized → authorized manifest committed → reference returned. A retry of the same content may reuse a verified immutable file, but metadata authorization is still checked. Failure before manifest commit leaves an inaccessible staging/orphan file, eligible for bounded owned cleanup; this is safe. A manifest must never point at absent, partial, mutable, or unverified bytes. If metadata commit is ambiguous, look up the stable publication identity before retrying. If file durability or PostgreSQL metadata is uncertain, return unavailable/unknown and do not publish a success reference. Deletion/rights policy can suppress access and schedule eligible byte deletion; “immutable” means bytes are never overwritten in place, not that personal data is retained against the rights lifecycle.
+The required ordering is bytes durable → digest/length verified → immutable object finalized → authorized manifest committed → reference returned. A retry of the same content may reuse a verified immutable object, but metadata authorization is still checked. Failure before manifest commit leaves an inaccessible staging/orphan object, eligible for bounded owned cleanup; this is safe. A manifest must never point at absent, partial, mutable, or unverified bytes. If metadata commit is ambiguous, look up the stable publication identity before retrying. If object durability or PostgreSQL metadata is uncertain, return unavailable/unknown and do not publish a success reference. Deletion/rights policy can suppress access and schedule eligible byte deletion; “immutable” means bytes are never overwritten in place, not that personal data is retained against the rights lifecycle.
 
-Back up PostgreSQL and the durable file root separately and preserve their manifest/hash linkage. Restore must validate referenced-file availability and hashes before reopening access; missing media yields explicit unavailable and never a placeholder success. Reconcile immutable orphans without deleting referenced files. Financial/dispatch/erasure nonregression still depends on the independently protected journal/head policy, not an older PostgreSQL backup. No availability, RPO, RTO, throughput, filesystem durability class, geographic redundancy, cost, retention period, or legal deletion period is asserted by this selection.
+Back up PostgreSQL and durable media separately and preserve their manifest/hash linkage. Restore must validate referenced-object availability and hashes before reopening access; missing media yields explicit unavailable and never a placeholder success. Reconcile immutable orphans without deleting referenced objects. Financial/dispatch/erasure nonregression still depends on the independently protected journal/head policy, not an older PostgreSQL backup. No availability, RPO, RTO, throughput, object durability class, geographic redundancy, cost, retention period, or legal deletion period is asserted by this selection.
 
 ## Alternatives and rationale
 
 - PostgreSQL as both authority and media byte store: rejected for the initial deployment. It couples large byte transfer/retention to transactional database capacity and does not follow the existing `AssetStore`/`AssetMetadataStore` split.
-- Managed object storage at launch: supported later behind `AssetStore`, but deferred because storage architecture selects a separately configured durable file root for the initial deployment. The phrase in service-operations does not override that more specific initial-root selection in this D01 decision.
+- Separately configured durable filesystem root for hosted initial media: retained as a local development/integration option behind `AssetStore`; superseded for hosted deployment by the final hosted-service refinement, which selects object-backed media.
 - Disposable local/object cache as authoritative bytes: rejected because cache loss cannot preserve a published manifest.
 - One local SQLite gameplay store: rejected by the architecture and storage decision; SQLite remains workflow and separate telemetry only.
 - Multi-process/application-node cluster at launch: deferred. It adds routing and deployment complexity before one process plus existing PostgreSQL fencing is qualified. One process is not a claim of high availability; scale-out follows the same PostgreSQL owner directory and durable media boundary only after fencing, restore, load and migration qualification.
@@ -39,7 +39,7 @@ Back up PostgreSQL and the durable file root separately and preserve their manif
 
 `df-persistence` owns PostgreSQL schema/migrations, repository transactions, constraints/indexes, bounded pool, operation/allocation retention, restore and fence implementation. `df-assets` owns immutable byte-root adapter, streaming/digest verification, publication state, manifest/access metadata and orphan reconciliation. `df-session` owns commit-before-publication use of the repository; `df-auth` owns principal/audience authorization; `df-server` composes the services; `df-api` owns request boundary. `df-commerce` remains the independent spend/entitlement authority sharing PostgreSQL transactions at admission; it does not move into session state. `df-telemetry` and workflow SQLite remain separate.
 
-Before production implementation, select the actual managed PostgreSQL provider/mode and durable filesystem root/mount lifecycle, credential/key custody, encryption, backup/versioning/retention and recovery behavior, and migration/backup roles; freeze finite schemas and dedupe/tombstone retention; qualify access patterns, query plans, pool/concurrency limits, tenant isolation, ambiguous commit/publication, filesystem loss, migrations, backup restore, deletion replay, and media hash/access behavior. No provider or secrets are selected here. The filesystem root's durable backing and restore behavior remain unqualified facts, not assumed guarantees. No dependency contracts were supplied in this task, so this proposal adds none and does not claim sibling proposals accepted. Browser/phone testing is inapplicable; no runtime, native, WASM, provider, benchmark, integration, restore, or independent-review check has been performed.
+Before production implementation, select the actual managed PostgreSQL and object-media provider/modes, credentials/key custody, encryption, backup/versioning/retention and recovery behavior, and migration/backup roles; freeze finite schemas and dedupe/tombstone retention; qualify access patterns, query plans, pool/concurrency limits, tenant isolation, ambiguous commit/publication, object loss, migrations, backup restore, deletion replay, and media hash/access behavior. No provider or secrets are selected here. Object durability and restore behavior remain unqualified facts, not assumed guarantees. No dependency contracts were supplied in this task, so this proposal adds none and does not claim sibling proposals accepted. Browser/phone testing is inapplicable; no runtime, native, WASM, provider, benchmark, integration, restore, or independent-review check has been performed.
 
 ## Finite illustrative contract example
 
@@ -66,26 +66,11 @@ fn publish_manifest(
 }
 
 fn main() {
-    assert_eq!(
-        publish_manifest(true, true, true, true),
-        Publish::Visible,
-    );
-    assert_eq!(
-        publish_manifest(false, true, true, true),
-        Publish::Refused,
-    );
-    assert_eq!(
-        publish_manifest(true, false, true, true),
-        Publish::Refused,
-    );
-    assert_eq!(
-        publish_manifest(true, true, false, true),
-        Publish::Refused,
-    );
-    assert_eq!(
-        publish_manifest(true, true, true, false),
-        Publish::Refused,
-    );
+    assert_eq!(publish_manifest(true, true, true, true), Publish::Visible,);
+    assert_eq!(publish_manifest(false, true, true, true), Publish::Refused,);
+    assert_eq!(publish_manifest(true, false, true, true), Publish::Refused,);
+    assert_eq!(publish_manifest(true, true, false, true), Publish::Refused,);
+    assert_eq!(publish_manifest(true, true, true, false), Publish::Refused,);
 }
 ```
 
