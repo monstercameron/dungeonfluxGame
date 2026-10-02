@@ -6,23 +6,27 @@ Status: bounded design decision; production preview implementation remains pendi
 
 ## Decision
 
-`df-tools` is the sole owner of build-preview process identity and its owned
-artifact claims. A managed preview has one attempt ID and one immutable preview
-ID. Its record binds the actual process identity (PID plus OS process-start
-identity), bound port, canonical web root, private per-preview data directory,
-and build identity (the `df-tools` `BUILD_ID` plus the separately supplied web
-build/source identity). A PID, port, directory, or process name by itself never
-grants release authority. Unknown entries, stale process identity, or a request
-from another attempt are typed refusals; cleanup never searches for and kills a
+`df-tools` is the sole owner of the managed preview's lifecycle record. One
+attempt owns one explicitly scoped `DF_PREVIEW_STATE_ROOT`; managed mode also
+requires `DF_PREVIEW_ATTEMPT_ID` and `DF_PREVIEW_WEB_SOURCE_ID`. The record binds
+the serving process PID, bound port, canonical web root, private per-preview
+data root, injected native `BUILD_ID`,
+and the separately supplied web build/source label. These labels identify the
+preview inputs; they do not claim a complete or approved native/WASM/asset
+build manifest. Missing, malformed, shared, or already-owned registration
+inputs are typed startup refusals. A PID, port, directory, or process name by
+itself never grants release authority; cleanup never searches for and kills a
 matching-looking process.
 
-The serving scope owns its listener and registration for the same lifetime. On
-normal shutdown it releases only its own record after the listener stops, after
-rechecking the attempt, preview, and process identity. The periodic cleanup
-worker never signals a PID or stops a live preview. After a crash, it may retire
-a registration only after the OS process-start identity proves that exact
-process is gone and ADR 0002's terminal/abandoned and use-claim rules pass. It
-may remove an artifact only inside an approved
+The serving scope owns its listener and a non-clone private registration handle
+for the same lifetime. The handle retains the exclusive record file and is the
+release capability; its PID field is diagnostic, not authority. On normal
+shutdown it releases only its own record after the listener stops and the
+record still matches the held owner. The periodic cleanup worker never signals
+a PID or stops a live preview. After a crash, the orphan record is ambiguous
+and retained. The contract intentionally grants no PID-based process or record
+action after the in-process owner is gone. It may remove an artifact only
+inside an approved
 `artifacts/build/` or `artifacts/tmp/` root, after its owner is terminal or
 confirmed abandoned, no active use claim remains, it is superseded or
 reproducible, it is not retained evidence or the latest verified build, and at
@@ -32,13 +36,11 @@ This preserves ADR 0002's use-claim and retention rules and ADR 0004's
 attempt-owned preview boundary. It does not authorize deletion of source, Git
 state, databases, durable evidence, active runtime data, or a live preview.
 
-Build publication is atomic: the complete native/WASM/asset set and manifest
-become visible together. A preview holds an active claim on that exact build
-identity for its lifetime. A new build cannot replace files under a running
-preview. A last-verified build remains available until a newer complete build
-has passed readiness and is explicitly promoted. Attempt completion, failed
-builds, cancellation, and uncertain shutdown are explicit results; none imply
-successful publication or release of an unconfirmed process claim.
+The record's native build ID and web source ID are provenance labels only. They
+do not establish a complete `BuildManifest`, paired native/WASM/asset identity,
+atomic publication, or readiness of any build. The existing fixture serves a
+supplied web root without modifying it. Full build publication and promotion
+remain a separate implementation outcome.
 
 ## Current source and minimum implementation boundary
 
@@ -55,37 +57,44 @@ authority.
 
 The smallest I02 implementation belongs in `crates/df-tools/src/preview.rs`,
 privately wired from `crates/df-tools/src/lib.rs` and `fixture::serve` in
-`crates/df-tools/src/fixture.rs`. A private native registration owner should
-accept an explicit attempt-owned `DF_PREVIEW_STATE_ROOT` from its launching
-tool; absence keeps existing invocations unregistered. After successful bind,
-it atomically records the actual process-start
-identity, port, canonical web and per-preview data roots, `BUILD_ID`, and the
-separately supplied web-build/source identity. Keep registration opt-in so
-existing direct fixture invocations work unchanged. A record must be exclusive
-to its preview ID and removed on orderly shutdown only if its owner identity
-still matches. A later reaper may retire a record or artifact only under the
-cleanup conditions above; it must not infer process authority from the record
-filename. The existing `df-transport-fixture` main is the real consumer; no
-`dfctl`/`xtask` binary exists yet. Do not add public/admin RPC: campaign
-publication or activation transport remains subject to X10/G03. `df-tools`
-returns safe lifecycle facts and does not call telemetry SDKs.
+`crates/df-tools/src/fixture.rs`. When the three managed-mode environment values
+are absent, current direct fixture invocations remain unregistered and retain
+their behavior. If any managed-mode value is present but invalid or incomplete,
+startup fails closed. The state root must be a canonical, attempt-owned
+directory beneath `artifacts/tmp/`; no two previews share it. Registered mode
+rejects the current `unregistered-cargo-build` sentinel. After the loopback
+listener binds, create `preview-owner.txt` exclusively with a
+`DF-PREVIEW-OWNER-V1` header and these finite fields: attempt ID, PID, bound
+port, canonical web root, canonical data root, native build ID, and web source
+ID. Attempt/build labels are 1–128 ASCII bytes from
+`[A-Za-z0-9._-]`; PID is a decimal `u32`; port is a nonzero decimal `u16`; each
+canonical absolute path is Rust-debug-quoted UTF-8 of at most 4,096 bytes; the
+complete record is at most 16 KiB. A failed bind or record write never
+announces readiness. A clean shutdown removes only the exact record whose
+parsed owner, preview roots, and process PID still match this serving scope;
+report release errors. An abrupt exit leaves the record for coordinator review;
+no PID-based automatic retirement is authorized. The serving scope never
+signals the PID, recursively deletes the data root, or deletes supplied web
+assets. The periodic artifact cleanup policy remains ADR 0002; implementation
+of that worker is outside I02. The existing
+`df-transport-fixture` main is the
+real consumer; no `dfctl`/`xtask` binary exists yet. Do not add public/admin RPC:
+campaign publication or activation transport remains subject to X10/G03.
+`df-tools` returns safe lifecycle facts and does not call telemetry SDKs.
 
 ## Bounded contract literal
 
-This standalone literal captures the decision's authorization and artifact
-retention cases. It is evidence for this pure decision table only; it does not
-claim production process signaling, a running preview, or an integrated
-`df-tools` implementation.
+This standalone literal captures the decision's release authorization and
+artifact retention cases. It is evidence for this pure decision table only; it
+does not claim production process signaling, a running preview, or an
+integrated `df-tools` implementation.
 
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Attempt(&'static str);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct ProcessIdentity {
-    pid: u32,
-    started_at: u64,
-}
+struct ProcessIdentity(u32);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Preview {
@@ -161,10 +170,7 @@ fn artifact_cleanup(facts: ArtifactFacts) -> ArtifactDecision {
 }
 
 fn main() {
-    let process = ProcessIdentity {
-        pid: 41,
-        started_at: 900,
-    };
+    let process = ProcessIdentity(41);
     let preview = Preview {
         id: "preview-a1",
         owner: Attempt("a1"),
@@ -203,10 +209,7 @@ fn main() {
         authorize_release(
             Some(&preview),
             ReleaseRequest {
-                observed_process: ProcessIdentity {
-                    pid: 41,
-                    started_at: 899,
-                },
+                observed_process: ProcessIdentity(42),
                 ..request
             }
         ),
@@ -250,12 +253,11 @@ fn main() {
 - Treating attempt termination, cancellation, age, or a successful build
   command as sufficient deletion/publication authority was rejected by ADR 0002
   and the build identity/readiness requirements in ADR 0004.
-- Exact portable process-start identity verification, port reservation
-  handoff, data-directory
-  layout, complete build manifest fields, readiness probe, last-verified
-  promotion authority, and the coordinator-to-registry recovery call are not
-  frozen by the current source or upstream gates. Resolve them in the bounded
-  I02 implementation brief; do not weaken the ownership checks above.
+- Port reservation handoff, complete production build manifest fields,
+  readiness probe, last-verified promotion authority, and the
+  coordinator-to-registry recovery call are not frozen by current source or
+  upstream gates. They are outside this lifecycle boundary; do not infer them
+  from the fixture's PID or provenance labels.
 - No executable application or production preview exists at this revision.
   Browser/device behavior, native/WASM build publication, process signaling,
   coordinator integration, and cleanup execution remain unperformed.
