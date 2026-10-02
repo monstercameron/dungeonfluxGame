@@ -127,7 +127,10 @@ fn decide(state: State, input: Input) -> Result<Transition, Refusal> {
         return Err(Refusal::BoundGap);
     }
     let next_pending = rules_resolve(pending, input.answer)?;
-    let revision = state.revision.checked_add(1).ok_or(Refusal::RevisionOverflow)?;
+    let revision = state
+        .revision
+        .checked_add(1)
+        .ok_or(Refusal::RevisionOverflow)?;
     Ok(Transition {
         expected_revision: state.revision,
         next: State {
@@ -198,22 +201,80 @@ fn main() {
         source_version: 1,
         answer: Answer::Choice(1),
     };
-    let mut session = SessionFixture { state: initial, records: Vec::new() };
+    let mut session = SessionFixture {
+        state: initial,
+        records: Vec::new(),
+    };
     for (bad, expected) in [
-        (Input { revision: 9, ..first_input }, Refusal::StaleBasis),
-        (Input { resolution: ResolutionId(8), ..first_input }, Refusal::StaleResolution),
-        (Input { offer: OfferId(9), ..first_input }, Refusal::StaleOffer),
-        (Input { source_version: 2, ..first_input }, Refusal::UnsupportedSource),
-        (Input { answer: Answer::Choice(9), ..first_input }, Refusal::IllegalInput),
-        (Input { answer: Answer::Roll(11), ..first_input }, Refusal::IllegalInput),
+        (
+            Input {
+                revision: 9,
+                ..first_input
+            },
+            Refusal::StaleBasis,
+        ),
+        (
+            Input {
+                resolution: ResolutionId(8),
+                ..first_input
+            },
+            Refusal::StaleResolution,
+        ),
+        (
+            Input {
+                offer: OfferId(9),
+                ..first_input
+            },
+            Refusal::StaleOffer,
+        ),
+        (
+            Input {
+                source_version: 2,
+                ..first_input
+            },
+            Refusal::UnsupportedSource,
+        ),
+        (
+            Input {
+                answer: Answer::Choice(9),
+                ..first_input
+            },
+            Refusal::IllegalInput,
+        ),
+        (
+            Input {
+                answer: Answer::Roll(11),
+                ..first_input
+            },
+            Refusal::IllegalInput,
+        ),
     ] {
         assert_eq!(decide(session.state, bad), Err(expected));
         assert_eq!(session.state, initial);
     }
-    assert_eq!(decide(State { steps: 4, ..initial }, first_input), Err(Refusal::BoundGap));
-    assert_eq!(decide(State { revision: u8::MAX, ..initial }, Input {
-        revision: u8::MAX, ..first_input
-    }), Err(Refusal::RevisionOverflow));
+    assert_eq!(
+        decide(
+            State {
+                steps: 4,
+                ..initial
+            },
+            first_input
+        ),
+        Err(Refusal::BoundGap)
+    );
+    assert_eq!(
+        decide(
+            State {
+                revision: u8::MAX,
+                ..initial
+            },
+            Input {
+                revision: u8::MAX,
+                ..first_input
+            }
+        ),
+        Err(Refusal::RevisionOverflow)
+    );
     let first = decide(initial, first_input).unwrap();
     assert_eq!(session.apply(first), Err(Refusal::NotCommitted));
     assert_eq!(session.commit(first, false), Err(Refusal::CommitFailed));
@@ -231,10 +292,21 @@ fn main() {
             answer: pending.allowed,
         };
         if operation > 1 {
-            assert_eq!(decide(session.state, previous_input), Err(Refusal::Duplicate));
-            assert_eq!(decide(session.state, Input {
-                operation, revision: session.state.revision, ..previous_input
-            }), Err(Refusal::StaleOffer));
+            assert_eq!(
+                decide(session.state, previous_input),
+                Err(Refusal::Duplicate)
+            );
+            assert_eq!(
+                decide(
+                    session.state,
+                    Input {
+                        operation,
+                        revision: session.state.revision,
+                        ..previous_input
+                    }
+                ),
+                Err(Refusal::StaleOffer)
+            );
         }
         let transition = decide(session.state, input).unwrap();
         let before = session.state;
@@ -248,21 +320,34 @@ fn main() {
     assert_eq!(session.state.pending, None);
     assert_eq!(session.state.draw, Some(11));
     assert_eq!(session.state.steps, 4);
-    assert_eq!(decide(session.state, Input {
-        operation: 5, revision: 4, ..first_input
-    }), Err(Refusal::NoPending));
-    let mut replay = SessionFixture { state: initial, records: Vec::new() };
+    assert_eq!(
+        decide(
+            session.state,
+            Input {
+                operation: 5,
+                revision: 4,
+                ..first_input
+            }
+        ),
+        Err(Refusal::NoPending)
+    );
+    let mut replay = SessionFixture {
+        state: initial,
+        records: Vec::new(),
+    };
     for record in &session.records {
         replay.commit(*record, true).unwrap();
         replay.apply(*record).unwrap();
     }
     assert_eq!(replay.state, session.state);
-    println!("PASS: 4 typed offers; stale/duplicate/illegal/source/bound/overflow refusals; commit-before-apply; deterministic replay");
+    println!(
+        "PASS: 4 typed offers; stale/duplicate/illegal/source/bound/overflow refusals; commit-before-apply; deterministic replay"
+    );
 }
 ```
 
 ## Verification limits
 
-The exact Markdown Rust literal has been extracted and compared byte-for-byte. The issued v6 40% admission/256 MiB/60-second guard held the initial formatter command at39% free-memory proxy; no formatter or compiler launched. Formatting write/check with pinned Rust 1.98.1/root configuration, edition2024 compilation with warnings denied and finite execution remain unperformed pending materially changed coordinator readmission. The prepared candidate retains the actual attempted argv/HOLD receipt and source/tool/config identities. Both original acceptance criteria remain pending those checks and independent frontier review/integration; this source-backed draft is not a passing executable submission.
+The exact Markdown Rust literal was extracted and compared byte-for-byte, formatted with pinned Rust 1.98.1/root configuration, checked, compiled as edition 2024 with warnings denied, and executed successfully. Actual tool versions, argv, source/config hashes and finite assertion output are retained in the immutable v2 handoff/manifest. The initial v6 admission HOLD at39% launched no command and remains preserved with the earlier unverified candidate. After coordinator readmission based on an observed43%, both fresh guard calls admitted at40% within the unchanged256 MiB/60-second bound. No compiler/assertion repair or semantic assertion change was needed. Evidence proves this decision and its finite synthetic boundary only; independent frontier review and integrated acceptance remain coordinator gates.
 
 No Cargo, Clippy, WASM, browser, audio, provider, production session/PostgreSQL durability, authorization, timer/job cancellation or source-grounded 2024 mechanics check is claimed. The fixture keeps only the last operation for its duplicate refusal; production session operation lookup owns the complete admitted idempotency namespace. Production budgets, source catalog, handler migrations, rights and concrete shared types remain explicit prerequisites.
