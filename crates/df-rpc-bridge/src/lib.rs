@@ -13,7 +13,10 @@ pub use browser::{BrowserChannel, BrowserConnection};
 #[cfg(not(target_arch = "wasm32"))]
 mod native;
 #[cfg(not(target_arch = "wasm32"))]
-pub use native::{TunnelStream, accept_websocket, accept_websocket_measured};
+pub use native::{
+    AdmissionError, NativeAdmission, NativeConnectionPermit, NativeIncoming, TunnelStream,
+    accept_websocket, accept_websocket_measured,
+};
 
 mod resources;
 pub use resources::{BufferSnapshot, ConnectionMetrics, ConnectionSnapshot, CreditSnapshot};
