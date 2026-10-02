@@ -2,8 +2,8 @@
 
 Date: 2026-10-02
 Status: Source-backed decision; browser buffer/upload implementation remains pending
-Input revision: `4c0e050c2d30e632bd3b32c51a92cfda52479e6e`
-Task/attempt: `B-C-df-observe-D04` / `B-C-df-observe-D04-a2`
+Repair input: `95d7c0cad8af34b60c9062b002fd5c2790eb474c`
+Task/attempt: `B-C-df-observe-D04` / `B-C-df-observe-D04-a3`
 
 ## Decision
 
@@ -23,7 +23,11 @@ matching `TelemetryLimits::default().record_bytes` and the native decoder.
 The 256 KiB limit is a payload bound, not a total process-memory claim. Normalize
 accepted bytes to boxed slices with no spare capacity. Fixed 128 inline slots
 independently bound metadata: retained requested storage is at most 256 KiB plus
-`size_of::<BrowserBuffer>()`, including slot/identity/lease metadata. Allocator
+`size_of::<BrowserBuffer>()` and one fixed `Rc<u8>` owner allocation (one marker
+byte plus the platform reference-count header). Lease handles share this allocation;
+cloning a handle never copies payload. Old callback tokens retain their original
+owner allocation until dropped; callbacks and token counts must be bounded by
+their I03 lifecycle owner separately. Allocator
 bookkeeping, caller-owned input and transient serialization/upload allocations
 are separate; I03 must bound those before claiming a whole-path memory ceiling.
 The literal never copies an in-flight batch or allocates queue metadata. A record that cannot fit, or a new record arriving
@@ -39,9 +43,15 @@ outcome; do not infer that the server rejected it or cancel server-owned work. A
 terminal durability receipt releases only records it identifies as accepted. An
 explicit partial/rejected receipt remains visible and leaves unaccepted records
 owned for a policy-correct retry or operator-visible stop. A callback may change
-state only when its captured generation, nonreused checked attempt identity, and retained
-prefix identity all match the current owner. Attempt exhaustion refuses dispatch;
-rebinding never resets the counter. Record ordinals in the literal are private
+state only when its private owner marker, captured generation, checked attempt
+identity, and retained prefix identity all match the current owner. Every constructor
+allocates a fresh `Rc` marker; lease tokens retain that allocation, so a queued old
+callback prevents address reuse even after its buffer is destroyed. Equality uses
+`Rc::ptr_eq`, not marker value or a caller-supplied unique generation. Moving the
+buffer preserves its owner; reconstruction creates a distinct owner even with the
+same generation, counters and clock. Marker/token fields are private and are never
+serialized or reconstructed from RPC values. Attempt exhaustion refuses dispatch;
+rebinding within one owner never resets its counters. Record ordinals in the literal are private
 queue ownership tokens, not replacements for canonical capture identities. The
 D02 producer/record/sequence identities stay embedded in unchanged bytes. Rebinding invalidates the old lease; page destruction may lose the
 best-effort in-memory remainder, which is reported as a gap when the lifecycle
@@ -78,7 +88,7 @@ consumer implementation gate. Operation/trace context is provenance only.
 
 ## Bounded contract example
 
-The literal below models only the page-owned retained buffer and generation/lease
+The literal below models only the page-owned retained buffer and owner/generation/lease
 checks. `Record` stands for one already D02-filtered encoded OTEL record, preserving
 canonical capture identity. The local release seam models full-prefix acceptance;
 partial/rejected or unmatched receipts must never call it and remain retained
@@ -86,6 +96,8 @@ with a visible classified outcome pending the concrete adapter mapping. It does
 not define or simulate an RPC receipt or an implemented browser uploader.
 
 ```rust
+use std::rc::Rc;
+
 const MAX_ITEMS: usize = 128;
 const MAX_BYTES: usize = 256 * 1024;
 const MAX_RECORD_BYTES: usize = 8192;
@@ -100,8 +112,20 @@ struct RetainedRecord {
     bytes: Box<[u8]>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
+struct OwnerId(Rc<u8>);
+
+impl PartialEq for OwnerId {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for OwnerId {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct UploadLease {
+    owner: OwnerId,
     generation: u64,
     attempt: u64,
     first_record: u64,
@@ -121,6 +145,7 @@ enum BufferError {
 }
 
 struct BrowserBuffer {
+    owner: OwnerId,
     generation: u64,
     slots: [Option<RetainedRecord>; MAX_ITEMS],
     head: usize,
@@ -135,6 +160,7 @@ struct BrowserBuffer {
 impl BrowserBuffer {
     fn new(generation: u64) -> Self {
         Self {
+            owner: OwnerId(Rc::new(0)),
             generation,
             slots: std::array::from_fn(|_| None),
             head: 0,
@@ -204,6 +230,7 @@ impl BrowserBuffer {
             records += 1;
         }
         let lease = UploadLease {
+            owner: self.owner.clone(),
             generation: self.generation,
             attempt: self.next_attempt,
             first_record,
@@ -211,13 +238,13 @@ impl BrowserBuffer {
             deadline_ms: now_ms.saturating_add(UPLOAD_DEADLINE_MS),
         };
         self.next_attempt += 1;
-        self.lease = Some(lease);
+        self.lease = Some(lease.clone());
         Ok(lease)
     }
 
     // Timeout ends only this attempt; record identities and bytes remain owned.
     fn expire_upload(&mut self, now_ms: u64) -> Result<(), BufferError> {
-        let lease = self.lease.ok_or(BufferError::Empty)?;
+        let lease = self.lease.as_ref().ok_or(BufferError::Empty)?;
         if now_ms < lease.deadline_ms {
             return Err(BufferError::NotExpired);
         }
@@ -238,9 +265,10 @@ impl BrowserBuffer {
     }
 
     // This local seam is called only after a matched, full terminal durable receipt.
-    fn acknowledge_durable(&mut self, lease: UploadLease, now_ms: u64) -> Result<(), BufferError> {
-        if lease.generation != self.generation
-            || self.lease != Some(lease)
+    fn acknowledge_durable(&mut self, lease: &UploadLease, now_ms: u64) -> Result<(), BufferError> {
+        if lease.owner != self.owner
+            || lease.generation != self.generation
+            || self.lease.as_ref() != Some(lease)
             || self.slots[self.head].as_ref().map(|record| record.ordinal)
                 != Some(lease.first_record)
         {
@@ -269,7 +297,7 @@ fn main() {
     assert_eq!(buffer.bytes, 3);
     assert_eq!(buffer.expire_upload(10_999), Err(BufferError::NotExpired));
     assert_eq!(
-        buffer.acknowledge_durable(lease, 11_000),
+        buffer.acknowledge_durable(&lease, 11_000),
         Err(BufferError::Deadline)
     );
     buffer.expire_upload(11_000).unwrap();
@@ -277,11 +305,11 @@ fn main() {
     assert_eq!(retry.first_record, lease.first_record);
     assert_ne!(retry.attempt, lease.attempt);
     assert_eq!(
-        buffer.acknowledge_durable(lease, 11_001),
+        buffer.acknowledge_durable(&lease, 11_001),
         Err(BufferError::StaleLease)
     );
     assert_eq!(buffer.bytes, 3);
-    buffer.acknowledge_durable(retry, 12_000).unwrap();
+    buffer.acknowledge_durable(&retry, 12_000).unwrap();
     assert_eq!(buffer.bytes, 0);
 
     let mut refused = BrowserBuffer::new(8);
@@ -295,15 +323,34 @@ fn main() {
     assert_eq!(refused.invalidate(9), 1);
     refused.retain(Record(vec![5])).unwrap();
     assert_eq!(
-        refused.acknowledge_durable(stale, 2_000),
+        refused.acknowledge_durable(&stale, 2_000),
         Err(BufferError::StaleLease)
     );
     assert_eq!(refused.bytes, 1);
     assert_eq!(refused.refused, 2);
+
+    let mut previous = BrowserBuffer::new(30);
+    previous.retain(Record(vec![1])).unwrap();
+    let old = previous.begin_upload(0).unwrap();
+    drop(previous);
+    let mut current = BrowserBuffer::new(30);
+    current.retain(Record(vec![2])).unwrap();
+    let live = current.begin_upload(0).unwrap();
+    assert_eq!(old.attempt, live.attempt);
+    assert_eq!(old.first_record, live.first_record);
+    assert_eq!(old.deadline_ms, live.deadline_ms);
+    assert_ne!(old.owner, live.owner);
+    assert_eq!(
+        current.acknowledge_durable(&old, 0),
+        Err(BufferError::StaleLease)
+    );
+    assert_eq!(current.bytes, 1);
+    current.acknowledge_durable(&live, 0).unwrap();
 }
 ```
 
-The exact literal executes valid timeout/retry and stale-generation refusals.
+The exact literal executes valid timeout/retry, stale-generation refusals, and
+cross-reconstruction refusal after the original buffer is dropped.
 The retained adversarial harness additionally covers duplicate same-tick receipts,
 capacity normalization, the 8192-byte record ceiling, saturating refusal, item/byte/
 batch ceilings, prefix identity, counter exhaustion and ring reuse. These local
@@ -321,20 +368,22 @@ checks do not implement receipts, filtering, RPC, timers, or a browser uploader.
 
 ## Evidence and remaining checks
 
-Repair input: `6a40999877b224f6d20d578a0982e81db445ab36`; integration base:
-`4c0e050c2d30e632bd3b32c51a92cfda52479e6e`. Preserved a1 review found duplicate
-acknowledgement aliasing, spare vector capacity and exact formatter failure;
-its native record-limit and counter observations are also repaired here. The
-exact literal is extracted, formatted with the pinned root configuration, then
-reinserted without alteration; checks use pinned Rust 2024 `rustc -D warnings`
-and the unchanged v6 40%/256 MiB/60-second guard and shared compiler lock.
-Guarded root-configured formatter write/check, Rust 2024 compilation with
-warnings denied, exact valid/refusal execution and all 14 adversarial cases passed.
-The same-tick old acknowledgement returns `StaleLease` and retains the newer
-byte; a one-byte Vec with capacity 262145 becomes a one-byte boxed allocation;
-8193 bytes is refused and a maximum refusal count stays saturated. Actual
-commands, tool/config/source hashes and outputs are retained in the a2 evidence
-handoff/manifest. Prior a1 failures remain preserved, not overwritten.
+Repair input: `95d7c0cad8af34b60c9062b002fd5c2790eb474c`; integration base:
+`61829e8b43cb6338f9188efbb406b68b52662b7c`. The preserved a1 fixes remain.
+Independent a2 review passed 15 cases but reproduced an old lease acknowledging
+a reconstructed owner with equal generation/counters/clock. The private shared
+owner marker repairs that gap without a public identity allocator or RPC change.
+The exact literal is extracted, formatted using the pinned root configuration,
+then reinserted unchanged. Pinned Rust 2024 `rustc -D warnings` and the unchanged
+v6 40%/256 MiB/60-second shared-lock guard govern finite checks. Actual a3
+commands, source/tool/config/build/output hashes and results are retained in its
+handoff/manifest; preserved a1/a2 failures remain explicit. Guarded pinned
+formatter write/check, both warning-denied compiles, exact valid/refusal execution
+and all 18 adversarial cases passed. The exact 16 reviewer cases are retained
+with borrow/clone-only token access changes; the same-generation replacement
+returns `StaleLease` and retains its newer byte. Two extra cases prove old tokens
+keep a destroyed owner alive across 256 replacements, release the marker when
+dropped, and preserve identity when the buffer moves. No assertions were weakened.
 
 Next consumer `B-C-df-observe-I03` implements only the actual page/binding-owned
 buffer at the existing browser capture seam (`crates/df-tools/src/browser.rs`,
