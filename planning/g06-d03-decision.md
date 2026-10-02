@@ -152,7 +152,10 @@ fn checkpoint(health: TelemetryHealth, already_admitted: bool) -> Checkpoint {
     if !already_admitted {
         return Checkpoint::NoAdmittedWork;
     }
-    if matches!(health, TelemetryHealth::Degraded | TelemetryHealth::HardFull) {
+    if matches!(
+        health,
+        TelemetryHealth::Degraded | TelemetryHealth::HardFull
+    ) {
         Checkpoint::FinishCurrentThenStop
     } else {
         Checkpoint::ContinueAdmitted
@@ -226,3 +229,13 @@ The Rust example is a finite policy contract only. Native/WASM workspace checks,
 SQLite/spool recovery, real admission wiring, load/recovery measurement, and
 browser/device observation are unperformed in this design task. Independent
 frontier review and root integration remain required.
+
+For attempt `B-G06-D03-a1`, the final extracted literal compiled with pinned
+Rust 1.98.1 (`rustc --edition 2024 -D warnings`) and its finite assertions
+exited successfully; guarded receipts are retained as
+`rustc-correction-01.json` and `fixture-correction-01.json` in the task
+evidence root. The final `rustfmt --check` was held before launch when the fresh
+free-memory proxy was 38%; its receipt is `rustfmt-correction-03.json`. An
+earlier formatter diff was corrected in this source, but the final formatter
+result remains unverified. These checks establish only the standalone contract,
+not integrated or runtime behavior.
