@@ -98,13 +98,19 @@ enum Refusal {
     InvalidKey,
     PrivateOrUnknownAttribute,
     ValueTooLong,
-    BodyTooLong,
+    InvalidSafeValue,
+}
+
+#[derive(Clone, Copy)]
+enum EventBody {
+    ActionRejected,
+    QueueStalled,
 }
 
 struct Candidate<'a> {
     record_id: &'a str,
     subsystem: &'a str,
-    body: &'a str,
+    body: EventBody,
     attributes: BTreeMap<&'a str, &'a str>,
 }
 
@@ -118,7 +124,13 @@ struct SafeRecord {
 fn valid_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 32
-        && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+}
+
+fn valid_decimal(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 32 && value.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 fn prepare(candidate: Candidate<'_>) -> Result<SafeRecord, Refusal> {
@@ -131,21 +143,24 @@ fn prepare(candidate: Candidate<'_>) -> Result<SafeRecord, Refusal> {
     if candidate.attributes.len() > 4 {
         return Err(Refusal::TooManyAttributes);
     }
-    if candidate.body.len() > 64 {
-        return Err(Refusal::BodyTooLong);
-    }
-
     let mut safe = BTreeMap::new();
     for (key, value) in candidate.attributes {
-        if key.is_empty() || key.len() > 24 || !key.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') {
+        if key.is_empty()
+            || key.len() > 24
+            || !key.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
+        {
             return Err(Refusal::InvalidKey);
-        }
-        match key {
-            "state_revision" | "error_code" | "queue_depth" => {}
-            _ => return Err(Refusal::PrivateOrUnknownAttribute),
         }
         if value.len() > 32 {
             return Err(Refusal::ValueTooLong);
+        }
+        match key {
+            "state_revision" | "queue_depth" if valid_decimal(value) => {}
+            "error_code" if matches!(value, "stale_revision" | "capacity" | "timeout") => {}
+            "state_revision" | "queue_depth" | "error_code" => {
+                return Err(Refusal::InvalidSafeValue);
+            }
+            _ => return Err(Refusal::PrivateOrUnknownAttribute),
         }
         safe.insert(key.to_owned(), value.to_owned());
     }
@@ -153,7 +168,11 @@ fn prepare(candidate: Candidate<'_>) -> Result<SafeRecord, Refusal> {
     Ok(SafeRecord {
         record_id: candidate.record_id.to_owned(),
         subsystem: candidate.subsystem.to_owned(),
-        body: candidate.body.to_owned(),
+        body: match candidate.body {
+            EventBody::ActionRejected => "action rejected",
+            EventBody::QueueStalled => "queue stalled",
+        }
+        .to_owned(),
         attributes: safe,
     })
 }
@@ -162,47 +181,52 @@ fn main() {
     let accepted = prepare(Candidate {
         record_id: "evt-01",
         subsystem: "session",
-        body: "action rejected",
+        body: EventBody::ActionRejected,
         attributes: BTreeMap::from([("error_code", "stale_revision")]),
-    }).expect("allowlisted bounded diagnostic record");
+    })
+    .expect("allowlisted bounded diagnostic record");
     assert_eq!(accepted.record_id, "evt-01");
     assert_eq!(accepted.subsystem, "session");
     assert_eq!(accepted.body, "action rejected");
     assert_eq!(accepted.attributes["error_code"], "stale_revision");
 
     let private = prepare(Candidate {
-        record_id: "evt-02", subsystem: "session", body: "private text",
+        record_id: "evt-02",
+        subsystem: "session",
+        body: EventBody::ActionRejected,
         attributes: BTreeMap::from([("player_message", "secret")]),
     });
     assert_eq!(private.err(), Some(Refusal::PrivateOrUnknownAttribute));
 
     let unknown = prepare(Candidate {
-        record_id: "evt-03", subsystem: "session", body: "event",
+        record_id: "evt-03",
+        subsystem: "session",
+        body: EventBody::ActionRejected,
         attributes: BTreeMap::from([("unreviewed", "value")]),
     });
     assert_eq!(unknown.err(), Some(Refusal::PrivateOrUnknownAttribute));
 
     let too_many = prepare(Candidate {
-        record_id: "evt-04", subsystem: "session", body: "event",
-        attributes: BTreeMap::from([
-            ("a", "1"), ("b", "2"), ("c", "3"),
-            ("d", "4"), ("e", "5"),
-        ]),
+        record_id: "evt-04", subsystem: "session", body: EventBody::ActionRejected,
+        attributes: BTreeMap::from([("a", "1"), ("b", "2"), ("c", "3"), ("d", "4"), ("e", "5")]),
     });
     assert!(matches!(too_many, Err(Refusal::TooManyAttributes)));
 
     let invalid_id = prepare(Candidate {
-        record_id: "bad id", subsystem: "session", body: "event",
+        record_id: "bad id",
+        subsystem: "session",
+        body: EventBody::ActionRejected,
         attributes: BTreeMap::new(),
     });
     assert_eq!(invalid_id.err(), Some(Refusal::InvalidIdentifier));
 
-    let long_body_text = "x".repeat(65);
-    let long_body = prepare(Candidate {
-        record_id: "evt-05", subsystem: "session", body: &long_body_text,
-        attributes: BTreeMap::new(),
+    let private_value = prepare(Candidate {
+        record_id: "evt-05",
+        subsystem: "session",
+        body: EventBody::QueueStalled,
+        attributes: BTreeMap::from([("state_revision", "private player text")]),
     });
-    assert_eq!(long_body.err(), Some(Refusal::BodyTooLong));
+    assert_eq!(private_value.err(), Some(Refusal::InvalidSafeValue));
 }
 ```
 
