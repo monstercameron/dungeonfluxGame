@@ -14,6 +14,7 @@
 //! session_only(MemberId::from_hex("01010101010101010101010101010101").unwrap());
 //! ```
 mod identity;
+mod locale;
 mod money;
 mod provenance;
 mod revision;
@@ -21,6 +22,7 @@ mod revision;
 pub use identity::{
     ClientBindingId, IdentityError, MemberId, OperationId, RunId, SessionId, TextIdentityError,
 };
+pub use locale::{LocaleTag, LocaleTagError};
 pub use money::{Currency, LiabilityRate, Money, MoneyError, Usage, UsageUnit};
 pub use provenance::{
     BuildIdentity, BuildIdentityError, BuildRevision, RevisionLabel, RevisionLabelError,
