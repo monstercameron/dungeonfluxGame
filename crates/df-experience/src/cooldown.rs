@@ -131,6 +131,11 @@ impl<ParticipantId: Copy + Eq, OpportunityId: Copy + Eq>
         } else {
             None
         };
+        // Clone may retain only the used slots. Restore the validated exact
+        // reservation before mutation so push cannot double beyond the byte cap.
+        self.refusals
+            .try_reserve_exact(self.max_refusals - self.refusals.len())
+            .map_err(|_| RefusalError::Capacity)?;
         if let Some(index) = expired_slot {
             self.refusals.remove(index);
         }
@@ -186,5 +191,56 @@ impl<ParticipantId: Copy + Eq, OpportunityId: Copy + Eq>
             return Err(RefusalError::TimeRegression);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type LargeMemory = RefusalMemory<[u8; 16385], u16>;
+
+    fn scope() -> RefusalScope {
+        RefusalScope {
+            session: SessionId::from_bytes(&[1; 16]).unwrap(),
+            run: RunId::from_bytes(&[2; 16]).unwrap(),
+        }
+    }
+
+    fn fill_within_record_budget(memory: &mut LargeMemory, first_opportunity: u16) {
+        for opportunity in first_opportunity..63 {
+            memory
+                .record_decline(scope(), [1; 16385], opportunity, Duration::ZERO)
+                .unwrap();
+            let allocated_record_bytes =
+                memory.refusals.capacity() * size_of::<Refusal<[u8; 16385], u16>>();
+            assert!(allocated_record_bytes <= MAX_RECORD_BYTES);
+            assert_eq!(memory.refusals.len(), usize::from(opportunity) + 1);
+        }
+    }
+
+    #[test]
+    fn filling_an_empty_clone_preserves_the_validated_allocation_bound() {
+        let accepted = LargeMemory::new(scope(), 63, Duration::from_secs(1)).unwrap();
+        let mut candidate = accepted.clone();
+        fill_within_record_budget(&mut candidate, 0);
+        assert!(accepted.is_empty());
+        assert_eq!(candidate.len(), 63);
+    }
+
+    #[test]
+    fn filling_a_partial_clone_preserves_the_validated_allocation_bound() {
+        let mut accepted = LargeMemory::new(scope(), 63, Duration::from_secs(1)).unwrap();
+        accepted
+            .record_decline(scope(), [1; 16385], 0, Duration::ZERO)
+            .unwrap();
+        let mut candidate = accepted.clone();
+        fill_within_record_budget(&mut candidate, 1);
+        assert_eq!(accepted.len(), 1);
+        assert_eq!(candidate.len(), 63);
+        assert_eq!(
+            candidate.record_decline(scope(), [2; 16385], 64, Duration::ZERO),
+            Err(RefusalError::Capacity)
+        );
     }
 }

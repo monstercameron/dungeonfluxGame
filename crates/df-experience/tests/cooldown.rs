@@ -231,3 +231,47 @@ fn cloning_stages_refusal_without_mutating_the_accepted_candidate() {
         })
     );
 }
+
+fn fill_large_clone_and_check_semantics(first_opportunity: u16) {
+    let mut accepted = RefusalMemory::<[u8; 16385], u16>::new(scope(1, 2), 63, time(10)).unwrap();
+    if first_opportunity == 1 {
+        accepted
+            .record_decline(scope(1, 2), [1; 16385], 0, Duration::ZERO)
+            .unwrap();
+    }
+    let mut candidate = accepted.clone();
+    for opportunity in first_opportunity..63 {
+        candidate
+            .record_decline(scope(1, 2), [1; 16385], opportunity, Duration::ZERO)
+            .unwrap();
+    }
+    assert_eq!(accepted.len(), usize::from(first_opportunity));
+    assert_eq!(candidate.len(), 63);
+    assert_eq!(
+        candidate.record_decline(scope(1, 2), [1; 16385], 0, time(5)),
+        Ok(DeclineOutcome::AlreadyRecorded { ready_at: time(10) })
+    );
+    assert_eq!(
+        candidate.record_decline(scope(1, 2), [2; 16385], 64, time(5)),
+        Err(RefusalError::Capacity)
+    );
+    assert_eq!(
+        candidate.eligibility(scope(1, 2), [1; 16385], time(10)),
+        Ok(RefusalEligibility::Eligible)
+    );
+    assert_eq!(
+        candidate.record_decline(scope(1, 2), [2; 16385], 64, time(10)),
+        Ok(DeclineOutcome::Recorded { ready_at: time(20) })
+    );
+    assert_eq!(candidate.len(), 63);
+}
+
+#[test]
+fn filling_empty_large_clone_preserves_retry_capacity_and_expiry() {
+    fill_large_clone_and_check_semantics(0);
+}
+
+#[test]
+fn filling_partial_large_clone_preserves_retry_capacity_and_expiry() {
+    fill_large_clone_and_check_semantics(1);
+}
