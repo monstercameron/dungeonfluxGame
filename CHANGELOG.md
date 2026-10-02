@@ -14,12 +14,150 @@ commit into the next block: keep the recorded ending revision as the next
 baseline and capture baseline..HEAD, which includes the bookkeeping commit.
 Do not invent a self-hash or silently discard metadata commits.
 
-## 2026-10-01–2026-10-02 continued work — 22:38–04:38 EDT (open)
+## 2026-10-02 continued work — 04:38–10:38 EDT (open)
+
+Six-hour boundaries: 2026-10-02T04:38:04-04:00 through 2026-10-02T10:38:04-04:00.
+
+Starting revision: `38f6983c8f9df39610c6a67acc00bc29084e5f30`. The bookkeeping commit closing the preceding block belongs here.
+
+## 2026-10-01–2026-10-02 continued work — 22:38–04:38 EDT
 
 Six-hour boundaries: 2026-10-01T22:38:04-04:00 through 2026-10-02T04:38:04-04:00.
 
-Snapshot at 2026-10-01T22:45:37-04:00; no new integrated commits in this block yet.
-Range recorded so far: e8bbe087706d8f382ab92a96d11d4ee7be5cafa2..e8bbe087706d8f382ab92a96d11d4ee7be5cafa2. The bookkeeping commit writing this closure belongs to this open block and will be captured on its next update.
+Range: e8bbe087706d8f382ab92a96d11d4ee7be5cafa2..38f6983c8f9df39610c6a67acc00bc29084e5f30
+
+- 8cb823eff46f81d0c3da37feedbbc9ce34ac3dc6 — Close continued six-hour integration block
+- 4b38ab2fa35a8bad68ef4e9c09e5ec2696bfc5ca — Freeze exact money arithmetic and I03 consumer contract
+- 6a3050df9c83a8582954ade5c56a19213ef1fbb9 — Integrate reviewed MONEY-I03-CONTRACT-001 contract
+- 750e24ef5d6a7cc386f9650a628c626c48c73b4d — docs: specify remote mixed-room authority topology
+- 0941a6bc507143a55c587b99f6b7dcc08b235ec6 — docs: repair remote topology retry and audio contract
+- 1a535202640f382c29d800a8a0aca79f3f36af81 — Integrate reviewed B-F45-D01 contract
+- 70f08ec656776b36c002fc43823d1b84f2f6dc75 — Document commerce transition policy boundary
+- bd9a80c288198ca489132d44d1f9ba5edf846cf2 — Integrate reviewed B-C-df-commerce-D01 contract
+- 7bb741f31e6dbe1019e311c35ada22b8ede028f1 — docs: define canonical commerce authority decision
+- 0605dbbe214f114a7f99f104d9cd5c2aa31521ad — Integrate reviewed B-C-df-commerce-D02 contract
+- 47715a3ac13d2bbed8b4a54bb7b64ece315546e0 — docs: define df-ai semantic and flavor contract
+- 3c3ecd68cd1af8d390b12de8f4e0e098f564047c — Integrate reviewed B-C-df-ai-D01 contract
+- ec9c05f83074e62a1f2bea2c85f88b092aced2ea — docs: define listener-safe expression context
+- 479845c599ac12e62d089d85acd88dbd7f3324b3 — docs: format expression context example
+- 924af3ec6cbfd08f62259720299e6d335af986ef — Integrate reviewed B-C-df-ai-D02 contract
+- 93cfc93d9201999390fda59b55c2ed1d63ffb877 — docs: define immutable asset publication contract
+- 7acdc275cadd818680b19a5b67b14cf7cc148770 — Clarify immutable asset version refusal ordering
+- 989232793db3c0be35092837e998b442a6c75275 — Honor hosted object media selection for assets
+- 0bbcc1fc73e59d35e320795ccef7422c3879a106 — Integrate reviewed B-C-df-assets-D01 contract
+- 62f95adc39afeba2d903e71354bdd7eb67fa3d90 — docs: specify AFK and resume admission policy
+- 778436d1522c7404e7dfb8f812d2c44c3acc9c99 — docs: refuse exhausted resume generation
+- 8b6b3cdfe13f39dff2ce738e6179697aaefefe66 — Integrate reviewed B-F45-D02 contract
+- d8380082fd8129b67e470e4c877ee8f199e7c41e — docs: specify F46 recap fact selection
+- 9fa8243bea585c32ab93e94ec26497b9712c6c15 — Integrate reviewed B-F46-D01 contract
+- 545801e7ff152d8637cc7c668cf3b74c263e0a20 — docs: specify speculative trailer label contract
+- e24157ca71ca8bbca1ed4011114c8faa526e0a7c — Integrate reviewed B-F46-D02 contract
+- 5630eeb3c79ceaed3ce2ac9d0832462b2426455d — docs: define AI claim outcome slot qualification
+- 2718f594595319dff7798b0522775c71895d8cf7 — Integrate reviewed B-C-df-ai-D03 contract
+- 2c05f2571902a1d23605587afee64e089d4a53d3 — docs: define authorized df-api projection policy
+- 748508e4893fc4bead8567f5c6686c6233d0407e — Integrate reviewed B-C-df-api-D01 contract
+- 2badff8198f16322670084f58ee7b46484b28945 — docs: define public and operator API service sets
+- 2b447fcb1df0b57d8d56032bde2ca40010830ade — Integrate reviewed B-C-df-api-D03 contract
+- 0280118c5735b191d449bf607401b0176cd3ea01 — Implement exact money and conservative liability arithmetic
+- f5f10c56543ea2ffbabbcbdce6d4dc00733113da — Implement exact tagged money and usage arithmetic
+- bdade349f7ac97c7684e501a3cdddec05c586512 — docs(commerce): define hierarchical liability contract
+- d100afb0badfa2da22bc8a19db53c263cd4c9585 — docs(commerce): bind spend hierarchy to currency
+- 0e3bf37d363945be1fa5d843fa93ab18b5186fb6 — docs(commerce): cover currency-safe settlement probes
+- d440691d6b947ecb5402bf0c8e1ff8b3c6a1406e — Integrate currency-safe hierarchical liability design
+- 2ec637ef9a32f6e84e93d9d9d2218ad97809a6e3 — docs: define df-assets open authorization policy
+- efea6bc97e578fa77d990a0c68f1161da4680383 — Integrate reviewed B-C-df-assets-D02 design
+- 1491d5015cb2ee94cac489c8c35eecc7f9d1a54b — Define durable asset backing and cache boundary
+- 9bebaa91fcdbef501ba3c62ab9bafb5af8f66a19 — Integrate reviewed B-C-df-assets-D03 design
+- 8222e4030c6a336c76ab79ca8a4d68449cb788b5 — Define immutable ContentPack publication identity
+- 68b07b7d3e83d9c319463805f5f3f7fceaf370c4 — Integrate reviewed B-C-df-content-D01 design
+- d4a5b987fc00106fcc60f046e68df7a9fba38025 — docs: define df-session owner fencing decision
+- 96c2e1b6994db88d40b139f4aec16a7ea9887eab — Integrate reviewed B-C-df-session-D01 design
+- 3d07c2cc825c5f5a4acd8195aa58716bef810cf5 — docs: define staged director composition contract
+- d6bf7dc1e0230d3f2cf65c88059ad08ced2d02ef — docs: preserve required engine outcomes on optional decline
+- 575df9c3a619e8ee68eecd6bbf3d4c5ebdd00c35 — Integrate engine staged composition optional-capacity decision
+- 44744aafeb13301578a10b52106c933b46de9252 — Add native origin CSRF recovery policy
+- 9d7ebd7de32c36c3e140723d08a67ad0a09f3cf4 — Integrate B-X01-D02 reviewed security decision
+- d0f78ab158e792d403f556b22d57c452978dd995 — docs: define X01 media decoder trust bounds
+- 1a107c0ea2c688a975435d26939e05b1cc6257cc — Integrate B-X01-D03 reviewed security decision
+- d92d1ca5d64e066a4380ecbad199b89f6ad3cc0b — Implement bounded RFC 5646 locale preference parsing
+- a3c31a00e7406898b0a82617fa7626dc0a4e4c94 — Implement validated RFC5646 locale tags and actual consumer tests
+- 105aec9813b26c92dfa3a0ca5302816444e54e56 — docs(observe): define operation context contract
+- 88a5326aedff436a6baa4a4e58d0bab501e3787e — Integrate observable operation context decision
+- 2be2e6ec9f45eece840b81cf0f4f04951ce97906 — docs: define owned df-tools preview lifecycle
+- ba8bb287e1e3cfcdabc0bc5682b54d5d789084dd — docs: define owned df-tools preview lifecycle
+- 2022c90fa8b4f53b99eaec43d5e32f3e3b7205cc — docs: define owned df-tools preview lifecycle
+- 4745fdd11b8e8a2a7b787b1fc5f2746911701125 — Repair df-tools preview owner release contract literal
+- f38d70a01b7cb8903ae58c211a6090ad90463def — Integrate held preview ownership decision repair
+- b1beda21538c4e83bdf72ac93eed383010974fb6 — docs: define telemetry segment retention policy
+- c8b4217e2790e11123e0231a9cd604f97a9755b5 — Integrate native telemetry segment ownership decision
+- ca13cbf8cb36a6436f43da8904cbc650a9d87f16 — Define pure diagnostic instrumentation handoff
+- 87cb4d114b12cfda9d3b27dd21d54e8c872fc22f — Integrate pure diagnostic handoff ownership decision
+- e72b18a55ae18bde118e0120bec194fac912d51e — Define telemetry spool receipt semantics
+- c8e0c62a7636a24c8b354131176e5376a2cd381e — Integrate B-C-df-telemetry-D02 diagnostic decision
+- 92c94f4348e8d047a2cf446d10ec0119e87f877c — docs(observe): define diagnostic field catalog
+- 0ffe02cf8bddfd83306b849e113c4eb0225da95b — Integrate B-C-df-observe-D02 diagnostic decision
+- f8bf04fd8ee68ce319bd50409362f01a7d27f959 — Freeze telemetry SQLite mapping and query scope
+- 4c0e050c2d30e632bd3b32c51a92cfda52479e6e — Integrate B-C-df-telemetry-D01 diagnostic decision
+- c17a8fa27cf1108568dc0f9072a44daf381a196d — docs: define locale preference precedence
+- bd92c3bd8484bf19abfa677046c9adfa3c9d6e31 — docs: fix locale example ownership
+- 4eda2a7c00926bd15c730362f8dc36671b899726 — docs: exercise LocaleTag spelling accessor
+- 2029cdff17f54ad8c870fc0737614125f2612b3c — Integrate B-C-df-locale-D02 bounded decision
+- 42a929b3a2eef5e39bff984c100db08721d46c35 — docs(locale): define typed placeholder contract
+- d17fb14284d902eb405a26b8f444cb4cdad54f30 — Integrate B-C-df-locale-D03 bounded decision
+- 9d32ecbb8150d214d8dd97b2007d57da70b98fa3 — docs: define df-web Rust WASM boot contract
+- 1effd3872ccac7c7da8184370266bfd5dd6bc764 — style: format df-web boot contract example
+- c4dc4b7f08e5f274936456e022bf9fbd06ba37b1 — Integrate B-C-df-web-D01 bounded decision
+- 4e64ad555a35068ebe9475071592944b885e10e0 — docs(engine): prepare pending continuation ownership decision
+- f6a7d05517a19a4c2ee0c136742ed7c58ef9a213 — docs(engine): verify pending continuation boundary illustration
+- a761d1dadd53c73b1fc32309244075ffb9c352dc — docs(engine): retain diagnosed formatter binding evidence
+- 61829e8b43cb6338f9188efbb406b68b52662b7c — Integrate B-C-df-engine-D02 bounded decision
+- 5b84413ae6023636eceadf7c3401180f5194b756 — Implement held preview registration in native fixture
+- c59b5e9a3fcc0416e8b0baf1abde82fd74e08646 — Format owned preview lifecycle with pinned repository style
+- d870db00dc349425e8f977bdfb20c6ffb24bfd3e — Integrate B-C-df-tools-I02 bounded decision
+- e9d50fe8a388d8b127c81853c79ef6446e3253a1 — Define principal and campaign authority boundary
+- 822a11af4105c5072e7d23ece5d21a5c65a9ada4 — Integrate B-C-df-auth-D01 bounded decision
+- 9aaca00485233bb4114c51c3ba2d271a08102a3a — Define bootstrap credential and binding lifecycle
+- f3e486a0b701e696f5fbd406a661727b4d1b44bd — Correct credential trace proof example
+- 0750952025ca041eea2af0ba0c12c24bf338409a — Integrate B-C-df-auth-D02 bounded decision
+- ede965b74d16fc9fd958c0db3f67108d268ffc3c — Define df-auth current entitlement reader boundary
+- 491c9333493415533323abd8f2b79dd34caefbe0 — Integrate B-C-df-auth-D03 bounded decision
+- 7a7cfd64e953d3dd89ee270c8ae8ef7d884e46a9 — Define immutable checkpoint envelope and exact pin refusals
+- 076e5d13b12fc460a41ca97a998254bb91c83a26 — Integrate B-C-df-model-D01 bounded decision
+- 47daeb632f25c65db8af63087d7b29d02488632d — Define closed model input and effect ownership decision
+- 7d04a55c4fe62324adbaa6f1b02ca1d23a2dde54 — Integrate B-C-df-model-D02 bounded decision
+- 4d33fd8f6e74a22c06fdf6413791cd231083737a — Define distinct pending resolution continuations and timing windows
+- 1a172510fa7d7e27e2a3cd782e46c2b704a76dd0 — Integrate B-C-df-model-D03 bounded decision
+- fb23e4a88dab6bff71edaed54853d1f8e0478e05 — Define consumer-owned PostgreSQL repository mappings
+- d4785c08adce53bc81880a3b0a989cf7b8b3dbe4 — Integrate B-C-df-persistence-D01 bounded decision
+- 8ded06467ba2fcce38082ca34b9b63895f735001 — Define durable decision transaction fence and unique intents
+- 75a1a28ec0313184645e6538c2e6e47693be9b04 — Integrate B-C-df-persistence-D02 bounded decision
+- 7cf0751f1d899cb73eb85c9f777d51df58c4dc5a — Define verified tenant RLS transaction scope and pool reset policy
+- 41359242170a1f065ae67417e60df1ed4cdd0cc5 — Integrate B-C-df-persistence-D03 bounded decision
+- 516ead38776d28f860cbde67c67085c04c437607 — Define exhaustive effect registration and terminal routing
+- a901ea360786542496139d47bcd8081f57dd2caf — Integrate B-C-df-engine-D03 bounded decision
+- e50e2e74e2583f6ed81517ce0eb0046671d2b371 — docs(content): define campaign graph validation
+- 21363efa35cc8f39cad0fb08c8f6a439a082699e — docs(content): fix campaign fixture slice lifetimes
+- 47c4e1f5fc15d12797006baea2e336e4fb2e4094 — Integrate B-C-df-content-D02 bounded decision
+- a48788fe9729823d5a607fb91838f4950a713011 — Document asset revocation and replay suppression
+- 118c87b006d0991057cc49141f6ad2ee3e3005aa — Integrate B-C-df-assets-D04 bounded decision
+- 571f8aaa605825837597aa2b5c5d3bb91a409f10 — docs(locale): define stable catalog text keys
+- 577099b8cf3c56f978f10c44954bb6aebe812cfb — docs(locale): prove stable catalog key behavior
+- 5985c118233bd1008da01a44ca2d8faa2181ffaa — Integrate B-C-df-locale-D01 bounded decision
+- 9d85e311b75c2dfdd6b72da9f617123011a76c2d — Define telemetry private-data lifecycle
+- ebec071bea0f8f39a253ec6a35f079afb3edf3fe — Format telemetry lifecycle contract literal
+- 08898e03b6cd66d81bfc94435d8c13eed9001ffd — Integrate B-C-df-telemetry-D04 bounded decision
+- 67df32eff1a0650bf5a64e5ec4f86a1425158bcd — docs(observe): decide bounded browser export lifetime
+- 85363e83e205eea86e3b86cceec584334ff4f139 — Repair browser export lease identity and bounded retained storage
+- a055862bbe64fe8d310bfc92b2c31aa9570dac5a — Bind browser upload leases to their concrete buffer owner
+- fe772c5cdfb98cc60eb914631b46c2edfa6a0a28 — Integrate B-C-df-observe-D04 bounded decision
+- dd2ad30026f809b986b7fa16ced9b6daa547c766 — docs: define df-tools artifact provenance
+- 7091c788cde1dace252fbf4e7f57a96d2add9cd9 — docs: format df-tools provenance contract
+- c8237df681ed138fb83f29dde6750edbec44b613 — docs: repair artifact digest and rename boundaries
+- 38f6983c8f9df39610c6a67acc00bc29084e5f30 — Integrate B-C-df-tools-D03 bounded decision
+
+Includes integrated shared money/locale primitives, commerce policy, native observation ownership and preview lifecycle source, and independently reviewed bounded subsystem decisions. Preview lifecycle passed native/WASM gates, 30 native tests and 30 real owned process cases at d870db00. The final sixteen decision merges are awaiting independent acceptance at the fixed whole resulting revision; they are not yet marked DONE. Full game, standard-2024 coverage, production publication, database and browser feature qualification remain incomplete.
+
+Next block baseline: `38f6983c8f9df39610c6a67acc00bc29084e5f30`. All branch commits and root bookkeeping in this range are retained in topological integration order; this closure commit is captured in the next block.
 
 ## 2026-10-01 continued work — 16:38–22:38 EDT
 
