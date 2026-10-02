@@ -33,8 +33,8 @@ impl Batch {
     pub fn queue_cost(&self) -> Result<usize, TelemetryError> {
         // Charge retained capacities, including projections copied out of OTLP. The
         // existing structural allowance covers each record's fixed-size fields.
-        queue_cost(std::iter::once(self.bytes.capacity()).chain(self.records.iter().flat_map(
-            |record| {
+        queue_cost(
+            std::iter::once(self.bytes.capacity()).chain(self.records.iter().flat_map(|record| {
                 [
                     256,
                     record.bytes.capacity(),
@@ -44,8 +44,8 @@ impl Batch {
                     record.operation.as_ref().map_or(0, String::capacity),
                     record.build.as_ref().map_or(0, String::capacity),
                 ]
-            },
-        )))
+            })),
+        )
     }
     pub fn decode(
         signal: Signal,
