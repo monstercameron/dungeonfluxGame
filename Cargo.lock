@@ -295,6 +295,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-session"
+version = "0.1.0"
+dependencies = [
+ "df-model",
+ "df-types",
+]
+
+[[package]]
 name = "df-telemetry"
 version = "0.1.0"
 dependencies = [
