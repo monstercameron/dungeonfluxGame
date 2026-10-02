@@ -31,14 +31,26 @@ pub(super) enum PreviewError {
 impl fmt::Display for PreviewError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::IncompleteConfiguration => formatter.write_str("incomplete managed preview configuration"),
+            Self::IncompleteConfiguration => {
+                formatter.write_str("incomplete managed preview configuration")
+            }
             Self::InvalidLabel(field) => write!(formatter, "invalid preview {field}"),
-            Self::InvalidRoot => formatter.write_str("preview state root must be canonical and attempt-owned beneath artifacts/tmp"),
-            Self::InvalidPath => formatter.write_str("preview path must be a canonical UTF-8 directory of at most 4096 bytes"),
-            Self::InvalidListener => formatter.write_str("preview listener must bind a nonzero 127.0.0.1 port"),
+            Self::InvalidRoot => formatter.write_str(
+                "preview state root must be canonical and attempt-owned beneath artifacts/tmp",
+            ),
+            Self::InvalidPath => formatter.write_str(
+                "preview path must be a canonical UTF-8 directory of at most 4096 bytes",
+            ),
+            Self::InvalidListener => {
+                formatter.write_str("preview listener must bind a nonzero 127.0.0.1 port")
+            }
             Self::RecordTooLarge => formatter.write_str("preview record exceeds 16 KiB"),
-            Self::RecordChanged => formatter.write_str("preview ownership changed; record retained"),
-            Self::RecordMissing => formatter.write_str("preview ownership record missing; release refused"),
+            Self::RecordChanged => {
+                formatter.write_str("preview ownership changed; record retained")
+            }
+            Self::RecordMissing => {
+                formatter.write_str("preview ownership record missing; release refused")
+            }
             Self::Io(error) => write!(formatter, "preview filesystem failure: {error}"),
             Self::Worker(error) => write!(formatter, "preview filesystem worker failed: {error}"),
         }
@@ -68,10 +80,14 @@ pub(super) struct PreviewConfiguration {
 }
 
 fn label(value: OsString, field: &'static str) -> Result<String, PreviewError> {
-    let value = value.into_string().map_err(|_| PreviewError::InvalidLabel(field))?;
+    let value = value
+        .into_string()
+        .map_err(|_| PreviewError::InvalidLabel(field))?;
     if value.is_empty()
         || value.len() > 128
-        || !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
     {
         return Err(PreviewError::InvalidLabel(field));
     }
@@ -133,7 +149,12 @@ impl PreviewConfiguration {
         let root_identity = fs::metadata(&root)?;
         let record = self.record(address, &web_root, native_build)?;
         let path = root.join(RECORD_NAME);
-        let mut file = OpenOptions::new().read(true).write(true).create_new(true).mode(0o600).open(&path)?;
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)?;
         // Any partial write remains ambiguous; startup never announces readiness.
         file.write_all(&record)?;
         file.sync_all()?;
@@ -143,10 +164,21 @@ impl PreviewConfiguration {
         {
             return Err(PreviewError::RecordChanged);
         }
-        Ok(PreviewRegistration { file, path, root_identity, file_identity, record })
+        Ok(PreviewRegistration {
+            file,
+            path,
+            root_identity,
+            file_identity,
+            record,
+        })
     }
 
-    fn record(&self, address: SocketAddr, web_root: &Path, native_build: &str) -> Result<Vec<u8>, PreviewError> {
+    fn record(
+        &self,
+        address: SocketAddr,
+        web_root: &Path,
+        native_build: &str,
+    ) -> Result<Vec<u8>, PreviewError> {
         let record = format!(
             "DF-PREVIEW-OWNER-V1\nattempt={}\npid={}\nport={}\nweb_root={:?}\ndata_root={:?}\nnative_build={}\nweb_source={}\n",
             self.attempt,
@@ -186,11 +218,15 @@ fn attempt_root(root: &Path, attempt: &str) -> Result<bool, PreviewError> {
         return Ok(false);
     }
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent().and_then(Path::parent).ok_or(PreviewError::InvalidRoot)?;
+        .parent()
+        .and_then(Path::parent)
+        .ok_or(PreviewError::InvalidRoot)?;
     // Managed worktrees live under the main repository's artifacts/worktrees.
-    let artifacts = workspace.ancestors()
+    let artifacts = workspace
+        .ancestors()
         .find(|ancestor| ancestor.file_name().is_some_and(|name| name == "artifacts"))
-        .map(Path::to_path_buf).unwrap_or_else(|| workspace.join("artifacts"));
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| workspace.join("artifacts"));
     let temporary_root = artifacts.join("tmp");
     if fs::canonicalize(&temporary_root)? != temporary_root {
         return Ok(false);
@@ -244,7 +280,9 @@ impl PreviewRegistration {
         }
         let observed = match fs::symlink_metadata(&self.path) {
             Ok(metadata) => metadata,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Err(PreviewError::RecordMissing),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Err(PreviewError::RecordMissing);
+            }
             Err(error) => return Err(error.into()),
         };
         if !same_file(&self.file_identity, &observed) || observed.len() > RECORD_LIMIT as u64 {
@@ -252,7 +290,9 @@ impl PreviewRegistration {
         }
         self.file.seek(SeekFrom::Start(0))?;
         let mut record = Vec::new();
-        (&mut self.file).take(RECORD_LIMIT as u64 + 1).read_to_end(&mut record)?;
+        (&mut self.file)
+            .take(RECORD_LIMIT as u64 + 1)
+            .read_to_end(&mut record)?;
         // Exact equality recognizes only the finite, validated serialization that
         // this capability wrote. Trailing, malformed, or changed fields all refuse.
         if record != self.record
@@ -268,12 +308,19 @@ impl PreviewRegistration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{os::unix::fs::{DirBuilderExt, symlink}, sync::atomic::{AtomicUsize, Ordering}};
+    use std::{
+        os::unix::fs::{DirBuilderExt, symlink},
+        sync::atomic::{AtomicUsize, Ordering},
+    };
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);
 
     fn root() -> PathBuf {
-        let root = env::temp_dir().join(format!("preview-unit-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        let root = env::temp_dir().join(format!(
+            "preview-unit-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
         fs::DirBuilder::new().mode(0o700).create(&root).unwrap();
         root
     }
@@ -281,25 +328,41 @@ mod tests {
     fn configuration(root: PathBuf) -> PreviewConfiguration {
         PreviewConfiguration {
             root,
-            attempt: env::temp_dir().file_name().unwrap().to_str().unwrap().into(),
+            attempt: env::temp_dir()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .into(),
             web_source: "web-test".into(),
         }
     }
 
     fn registration(root: &Path) -> PreviewRegistration {
-        configuration(root.into()).register_file(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")),
-            "127.0.0.1:43195".parse().unwrap(),
-            "native-test",
-        ).unwrap()
+        configuration(root.into())
+            .register_file(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+                "127.0.0.1:43195".parse().unwrap(),
+                "native-test",
+            )
+            .unwrap()
     }
 
     #[test]
     fn configuration_is_all_absent_or_all_valid() {
-        assert!(PreviewConfiguration::from_values([None, None, None]).unwrap().is_none());
+        assert!(
+            PreviewConfiguration::from_values([None, None, None])
+                .unwrap()
+                .is_none()
+        );
         for mask in 1..7 {
-            let values = std::array::from_fn(|index| (mask & (1 << index) != 0).then(|| OsString::from("valid")));
-            assert!(matches!(PreviewConfiguration::from_values(values), Err(PreviewError::IncompleteConfiguration)));
+            let values = std::array::from_fn(|index| {
+                (mask & (1 << index) != 0).then(|| OsString::from("valid"))
+            });
+            assert!(matches!(
+                PreviewConfiguration::from_values(values),
+                Err(PreviewError::IncompleteConfiguration)
+            ));
         }
         for value in ["", "bad label", "../bad", "λ"] {
             assert!(label(value.into(), "test").is_err());
@@ -318,7 +381,15 @@ mod tests {
         assert!(record.contains("port=43195\n"));
         assert!(record.contains("native_build=native-test\nweb_source=web-test\n"));
         assert!(record.contains(&format!("data_root={:?}\n", root.to_str().unwrap())));
-        assert!(configuration(root.clone()).register_file(PathBuf::from(env!("CARGO_MANIFEST_DIR")), "127.0.0.1:43195".parse().unwrap(), "native-test").is_err());
+        assert!(
+            configuration(root.clone())
+                .register_file(
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+                    "127.0.0.1:43195".parse().unwrap(),
+                    "native-test"
+                )
+                .is_err()
+        );
         owner.release_file().unwrap();
         assert!(!root.join(RECORD_NAME).exists());
         assert_eq!(fs::read(root.join("sentinel")).unwrap(), b"keep");
@@ -326,16 +397,44 @@ mod tests {
 
     #[test]
     fn every_identity_change_and_extra_bytes_refuse_release() {
-        for field in ["attempt", "pid", "port", "web_root", "data_root", "native_build", "web_source", "trailing", "oversized"] {
+        for field in [
+            "attempt",
+            "pid",
+            "port",
+            "web_root",
+            "data_root",
+            "native_build",
+            "web_source",
+            "trailing",
+            "oversized",
+        ] {
             let root = root();
             let owner = registration(&root);
             let path = root.join(RECORD_NAME);
             let original = fs::read_to_string(&path).unwrap();
-            let changed = if field == "oversized" { "x".repeat(RECORD_LIMIT + 1) }
-                else if field == "trailing" { format!("{original}extra\n") }
-                else { original.lines().map(|line| if line.starts_with(&format!("{field}=")) { format!("{field}=changed") } else { line.to_owned() }).collect::<Vec<_>>().join("\n") + "\n" };
+            let changed = if field == "oversized" {
+                "x".repeat(RECORD_LIMIT + 1)
+            } else if field == "trailing" {
+                format!("{original}extra\n")
+            } else {
+                original
+                    .lines()
+                    .map(|line| {
+                        if line.starts_with(&format!("{field}=")) {
+                            format!("{field}=changed")
+                        } else {
+                            line.to_owned()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    + "\n"
+            };
             fs::write(&path, &changed).unwrap();
-            assert!(matches!(owner.release_file(), Err(PreviewError::RecordChanged)), "{field}");
+            assert!(
+                matches!(owner.release_file(), Err(PreviewError::RecordChanged)),
+                "{field}"
+            );
             assert_eq!(fs::read_to_string(&path).unwrap(), changed);
         }
     }
@@ -358,7 +457,9 @@ mod tests {
                 fs::write(&path, &record).unwrap();
             } else {
                 fs::remove_file(&path).unwrap();
-                if kind == "replacement" { fs::write(&path, &record).unwrap(); }
+                if kind == "replacement" {
+                    fs::write(&path, &record).unwrap();
+                }
                 if kind == "symlink" {
                     let target = root.join("foreign");
                     fs::write(&target, &record).unwrap();
@@ -366,24 +467,61 @@ mod tests {
                 }
             }
             let result = owner.release_file();
-            assert!(matches!(result, Err(PreviewError::RecordChanged | PreviewError::RecordMissing)), "{kind}: {result:?}");
-            if kind != "missing" { assert_eq!(fs::read(&path).unwrap(), record); }
+            assert!(
+                matches!(
+                    result,
+                    Err(PreviewError::RecordChanged | PreviewError::RecordMissing)
+                ),
+                "{kind}: {result:?}"
+            );
+            if kind != "missing" {
+                assert_eq!(fs::read(&path).unwrap(), record);
+            }
         }
     }
 
     #[test]
     fn root_build_and_listener_validation_precede_record_creation() {
         let root = root();
-        for (address, build) in [("127.0.0.1:0", "native"), ("127.0.0.2:43195", "native"), ("127.0.0.1:43195", "unregistered-cargo-build"), ("127.0.0.1:43195", "bad build")] {
-            assert!(configuration(root.clone()).register_file(PathBuf::from(env!("CARGO_MANIFEST_DIR")), address.parse().unwrap(), build).is_err());
+        for (address, build) in [
+            ("127.0.0.1:0", "native"),
+            ("127.0.0.2:43195", "native"),
+            ("127.0.0.1:43195", "unregistered-cargo-build"),
+            ("127.0.0.1:43195", "bad build"),
+        ] {
+            assert!(
+                configuration(root.clone())
+                    .register_file(
+                        PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+                        address.parse().unwrap(),
+                        build
+                    )
+                    .is_err()
+            );
             assert!(!root.join(RECORD_NAME).exists());
         }
         let alias = root.with_extension("alias");
         symlink(&root, &alias).unwrap();
-        assert!(configuration(alias).register_file(PathBuf::from(env!("CARGO_MANIFEST_DIR")), "127.0.0.1:43195".parse().unwrap(), "native").is_err());
+        assert!(
+            configuration(alias)
+                .register_file(
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+                    "127.0.0.1:43195".parse().unwrap(),
+                    "native"
+                )
+                .is_err()
+        );
         let mut wrong_owner = configuration(root.clone());
         wrong_owner.attempt = "foreign".into();
-        assert!(wrong_owner.register_file(PathBuf::from(env!("CARGO_MANIFEST_DIR")), "127.0.0.1:43195".parse().unwrap(), "native").is_err());
+        assert!(
+            wrong_owner
+                .register_file(
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+                    "127.0.0.1:43195".parse().unwrap(),
+                    "native"
+                )
+                .is_err()
+        );
         assert!(!root.join(RECORD_NAME).exists());
     }
 
@@ -400,12 +538,28 @@ mod tests {
         let configuration = configuration(PathBuf::from(format!("/{}", "\\".repeat(4095))));
         let plain_web = format!("/{}", "x".repeat(4095));
         let address = "127.0.0.1:43195".parse().unwrap();
-        let base = configuration.record(address, Path::new(&plain_web), "native").unwrap().len();
+        let base = configuration
+            .record(address, Path::new(&plain_web), "native")
+            .unwrap()
+            .len();
         let escaped = RECORD_LIMIT - base;
         assert!(escaped < 4095);
         let web = format!("/{}{}", "\\".repeat(escaped), "x".repeat(4095 - escaped));
-        assert_eq!(configuration.record(address, Path::new(&web), "native").unwrap().len(), RECORD_LIMIT);
-        let larger_web = format!("/{}{}", "\\".repeat(escaped + 1), "x".repeat(4094 - escaped));
-        assert!(matches!(configuration.record(address, Path::new(&larger_web), "native"), Err(PreviewError::RecordTooLarge)));
+        assert_eq!(
+            configuration
+                .record(address, Path::new(&web), "native")
+                .unwrap()
+                .len(),
+            RECORD_LIMIT
+        );
+        let larger_web = format!(
+            "/{}{}",
+            "\\".repeat(escaped + 1),
+            "x".repeat(4094 - escaped)
+        );
+        assert!(matches!(
+            configuration.record(address, Path::new(&larger_web), "native"),
+            Err(PreviewError::RecordTooLarge)
+        ));
     }
 }

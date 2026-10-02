@@ -5,7 +5,11 @@ use std::{net::TcpListener, process::Command};
 fn fixture() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_df-transport-fixture"));
     command.args([env!("CARGO_MANIFEST_DIR"), "43195"]);
-    for variable in ["DF_PREVIEW_STATE_ROOT", "DF_PREVIEW_ATTEMPT_ID", "DF_PREVIEW_WEB_SOURCE_ID"] {
+    for variable in [
+        "DF_PREVIEW_STATE_ROOT",
+        "DF_PREVIEW_ATTEMPT_ID",
+        "DF_PREVIEW_WEB_SOURCE_ID",
+    ] {
         command.env_remove(variable);
     }
     command
@@ -13,13 +17,22 @@ fn fixture() -> Command {
 
 #[test]
 fn actual_fixture_rejects_partial_and_invalid_managed_configuration() {
-    for (name, value) in [("DF_PREVIEW_STATE_ROOT", "/foreign"), ("DF_PREVIEW_ATTEMPT_ID", "valid"), ("DF_PREVIEW_WEB_SOURCE_ID", "valid")] {
+    for (name, value) in [
+        ("DF_PREVIEW_STATE_ROOT", "/foreign"),
+        ("DF_PREVIEW_ATTEMPT_ID", "valid"),
+        ("DF_PREVIEW_WEB_SOURCE_ID", "valid"),
+    ] {
         let output = fixture().env(name, value).output().unwrap();
         assert!(!output.status.success());
         assert!(!String::from_utf8_lossy(&output.stdout).contains("fixture ready"));
         assert!(String::from_utf8_lossy(&output.stderr).contains("IncompleteConfiguration"));
     }
-    let output = fixture().env("DF_PREVIEW_STATE_ROOT", "/foreign").env("DF_PREVIEW_ATTEMPT_ID", "bad label").env("DF_PREVIEW_WEB_SOURCE_ID", "valid").output().unwrap();
+    let output = fixture()
+        .env("DF_PREVIEW_STATE_ROOT", "/foreign")
+        .env("DF_PREVIEW_ATTEMPT_ID", "bad label")
+        .env("DF_PREVIEW_WEB_SOURCE_ID", "valid")
+        .output()
+        .unwrap();
     assert!(!output.status.success());
     assert!(!String::from_utf8_lossy(&output.stdout).contains("fixture ready"));
     assert!(String::from_utf8_lossy(&output.stderr).contains("InvalidLabel"));
@@ -33,7 +46,11 @@ fn actual_fixture_bind_failure_never_announces_ready_or_registers() {
     // A fresh command selects the occupied socket's actual nonzero port.
     command = Command::new(command.get_program());
     command.args([env!("CARGO_MANIFEST_DIR"), &port]);
-    for variable in ["DF_PREVIEW_STATE_ROOT", "DF_PREVIEW_ATTEMPT_ID", "DF_PREVIEW_WEB_SOURCE_ID"] {
+    for variable in [
+        "DF_PREVIEW_STATE_ROOT",
+        "DF_PREVIEW_ATTEMPT_ID",
+        "DF_PREVIEW_WEB_SOURCE_ID",
+    ] {
         command.env_remove(variable);
     }
     let output = command.output().unwrap();

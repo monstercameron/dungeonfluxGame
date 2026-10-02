@@ -606,7 +606,11 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
     let registration = match preview_configuration {
-        Some(configuration) => Some(configuration.register(web_root.into(), listener.local_addr()?).await?),
+        Some(configuration) => Some(
+            configuration
+                .register(web_root.into(), listener.local_addr()?)
+                .await?,
+        ),
         None => None,
     };
     println!(
