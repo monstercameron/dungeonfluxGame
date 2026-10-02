@@ -121,6 +121,7 @@ enum Refusal {
     Unauthenticated,
     NotMember,
     StaleGeneration,
+    GenerationExhausted,
     StalePolicy,
     InputLeaseHeld,
     AfkRequiresCommand,
@@ -175,7 +176,11 @@ fn resume(
         return Err(Refusal::InputLeaseHeld);
     }
 
-    participant.generation += 1;
+    let next_generation = participant
+        .generation
+        .checked_add(1)
+        .ok_or(Refusal::GenerationExhausted)?;
+    participant.generation = next_generation;
     participant.input_lease = Some(requested_lease);
     participant.presence = Presence::Connected;
     Ok(participant.generation)
@@ -224,6 +229,12 @@ fn main() {
     assert_eq!(
         resume(&mut participant, Some(9), Some(7), 3, 5, 20),
         Err(Refusal::StalePolicy)
+    );
+    let mut exhausted_generation = participant;
+    exhausted_generation.generation = u8::MAX;
+    assert_eq!(
+        resume(&mut exhausted_generation, Some(9), Some(7), u8::MAX, 4, 20),
+        Err(Refusal::GenerationExhausted)
     );
 
     assert_eq!(resume(&mut participant, Some(9), Some(7), 3, 4, 20), Ok(4));
