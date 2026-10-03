@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "kit": "DungeonFlux phase UI",
+  "source_origin": "Original path geometry authored for DungeonFlux; palette and ornamental direction reference preserved ShellHacks concept art. No raster art altered.",
+  "source_revision": "6571ff79854043c1413a2a7c99c9e01374c6332a",
+  "palette": {
+    "gold": "#dfb974",
+    "ivory": "#f5eee0",
+    "storm_teal": "#87b8c5"
+  },
+  "assets": [
+    {
+      "name": "backpack",
+      "path": "assets/ui/backpack.svg",
+      "bytes": 593,
+      "sha256": "e8e9c3e75b62f03892ed2f085ab6f11c6f3b0ca251686ec60a2a3e97f8e9e150",
+      "kind": "icon"
+    },
+    {
+      "name": "compass",
+      "path": "assets/ui/compass.svg",
+      "bytes": 591,
+      "sha256": "31ddde7d63417aba34e8e98981050341bca4c2df9f001fa1a3ff5c841d5e3acb",
+      "kind": "icon"
+    },
+    {
+      "name": "connection",
+      "path": "assets/ui/connection.svg",
+      "bytes": 483,
+      "sha256": "7f68e39d9b5047966a94a0494490bf2fc091418cd82e78dc1db93aed3229938a",
+      "kind": "icon"
+    },
+    {
+      "name": "d20",
+      "path": "assets/ui/d20.svg",
+      "bytes": 594,
+      "sha256": "3b8308ebfc495628a2482d4243bb878a691bbe871d896fe84f01c522471bd003",
+      "kind": "icon"
+    },
+    {
+      "name": "lantern",
+      "path": "assets/ui/lantern.svg",
+      "bytes": 591,
+      "sha256": "e66c929a829d221f659113db040ba76f0ae2befd3154a897c94d09cc4d8ccb2c",
+      "kind": "icon"
+    },
+    {
+      "name": "party",
+      "path": "assets/ui/party.svg",
+      "bytes": 660,
+      "sha256": "be7d02ffcca3cb0984f50d706e264863547ea2bf8509696ffebcf18b63e16335",
+      "kind": "icon"
+    },
+    {
+      "name": "portrait-frame",
+      "path": "assets/ui/portrait-frame.svg",
+      "bytes": 542,
+      "sha256": "2e382b50de267c4f3e21080674375cd98f95d91d6a1a39e5f3482b56a6e9f7a0",
+      "kind": "decoration"
+    },
+    {
+      "name": "section-ornament",
+      "path": "assets/ui/section-ornament.svg",
+      "bytes": 472,
+      "sha256": "f07febbb5134bd79f9d3da4930cae059eccde10aa830a8604893c198c23dea21",
+      "kind": "decoration"
+    },
+    {
+      "name": "shield",
+      "path": "assets/ui/shield.svg",
+      "bytes": 565,
+      "sha256": "aa8fa2fb4ff9f3c41a8f7232c304b82fadd73cf11a09713941f59a134100e468",
+      "kind": "icon"
+    },
+    {
+      "name": "spellbook",
+      "path": "assets/ui/spellbook.svg",
+      "bytes": 685,
+      "sha256": "5408a63e89a2835e64bc0873d4b55653540ee4d4ccaa2e88e56cbc771a7e63d6",
+      "kind": "icon"
+    },
+    {
+      "name": "sword",
+      "path": "assets/ui/sword.svg",
+      "bytes": 551,
+      "sha256": "0340c137406eac263568e24d6d0840193ad7b1ebdb55a69dc7172c87f8f3ddda",
+      "kind": "icon"
+    }
+  ]
+}

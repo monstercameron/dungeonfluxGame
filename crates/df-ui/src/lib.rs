@@ -11,6 +11,7 @@ mod controls;
 mod draft_state;
 #[cfg(target_arch = "wasm32")]
 mod layout;
+mod phase_assets;
 mod theme;
 
 #[cfg(target_arch = "wasm32")]
@@ -29,3 +30,5 @@ pub use draft_state::{DraftError, MAX_DRAFT_UTF16_UNITS};
 #[cfg(target_arch = "wasm32")]
 pub use layout::{LayoutRole, LayoutRoot, UiError, action_button, panel, stack, text_input};
 pub use theme::ThemeToken;
+
+pub use phase_assets::{MAX_PHASE_ASSET_BYTES, PHASE_ASSETS, PhaseAsset, PhaseAssetFallback};

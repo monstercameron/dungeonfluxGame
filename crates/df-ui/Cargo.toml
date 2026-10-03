@@ -22,3 +22,8 @@ crate-type = ["cdylib"]
 name = "campaign_art_fixture"
 path = "tests/fixtures/campaign_art_fixture.rs"
 crate-type = ["cdylib"]
+
+[[example]]
+name = "phase_assets_fixture"
+path = "tests/fixtures/phase_assets_fixture.rs"
+crate-type = ["cdylib"]
