@@ -4,9 +4,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[dependencies]
+df-client = { path = "../df-client" }
+df-types = { path = "../df-types" }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "Event", "EventTarget", "HtmlElement", "HtmlButtonElement", "HtmlInputElement"] }
+web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "Event", "EventTarget", "HtmlElement", "HtmlButtonElement", "HtmlInputElement", "KeyboardEvent", "KeyboardEventInit"] }
 
 [[example]]
 name = "ui_browser_fixture"
@@ -26,4 +30,39 @@ crate-type = ["cdylib"]
 [[example]]
 name = "phase_assets_fixture"
 path = "tests/fixtures/phase_assets_fixture.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "join_phase_fixture"
+path = "tests/fixtures/join_phase_fixture.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "character_phase_fixture"
+path = "tests/fixtures/character_phase_fixture.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "character_display_phase_fixture"
+path = "tests/fixtures/character_display_phase_fixture.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "exploration_phase_fixture"
+path = "tests/fixtures/exploration_phase_fixture.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "combat_phase_fixture"
+path = "tests/fixtures/combat_phase_fixture.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "character_sheet_phase_fixture"
+path = "tests/fixtures/character_sheet_phase_fixture.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "session_overlay_phase_fixture"
+path = "tests/fixtures/session_overlay_phase_fixture.rs"
 crate-type = ["cdylib"]

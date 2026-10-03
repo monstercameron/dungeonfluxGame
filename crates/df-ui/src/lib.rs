@@ -32,3 +32,86 @@ pub use layout::{LayoutRole, LayoutRoot, UiError, action_button, panel, stack, t
 pub use theme::ThemeToken;
 
 pub use phase_assets::{MAX_PHASE_ASSET_BYTES, PHASE_ASSETS, PhaseAsset, PhaseAssetFallback};
+
+mod join_phase;
+#[cfg(target_arch = "wasm32")]
+mod join_phase_theme;
+pub use join_phase::{
+    JoinFeedback, JoinPhaseIntent, JoinPhaseView, JoinRoom, JoinStage, JoinStamp, JoinUpdate,
+    JoinValidationError, LobbyOffer, LobbyParticipant, validate_join_drafts,
+};
+#[cfg(target_arch = "wasm32")]
+pub use join_phase::{JoinPhaseError, JoinPhaseSurface};
+
+mod character_phase;
+#[cfg(target_arch = "wasm32")]
+mod character_phase_theme;
+pub use character_phase::{
+    CharacterAction, CharacterActionKind, CharacterChoice, CharacterFact, CharacterGroup,
+    CharacterLimits, CharacterOption, CharacterPhaseView, CharacterPortrait, CharacterStatus,
+    CharacterSubmission, CharacterValidationError,
+};
+#[cfg(target_arch = "wasm32")]
+pub use character_phase::{CharacterPhaseError, CharacterPhaseSurface};
+
+mod exploration_phase;
+#[cfg(target_arch = "wasm32")]
+mod exploration_phase_theme;
+
+pub use exploration_phase::{
+    ExplorationChoice, ExplorationInput, ExplorationLimits, ExplorationNpc, ExplorationPortrait,
+    ExplorationValidationError, ExplorationView,
+};
+#[cfg(target_arch = "wasm32")]
+pub use exploration_phase::{ExplorationError, ExplorationPhase};
+
+mod combat_phase;
+#[cfg(target_arch = "wasm32")]
+mod combat_phase_theme;
+
+pub use combat_phase::{
+    CombatActor, CombatArt, CombatDraft, CombatFeedback, CombatIntent, CombatLimits, CombatOffer,
+    CombatOfferKind, CombatPhaseState, CombatPhaseView, CombatReaction, CombatResource, CombatRoll,
+    CombatValidationError,
+};
+#[cfg(target_arch = "wasm32")]
+pub use combat_phase::{CombatError, CombatPhaseSurface};
+
+mod character_sheet_phase;
+#[cfg(target_arch = "wasm32")]
+mod character_sheet_phase_theme;
+
+#[cfg(target_arch = "wasm32")]
+pub use character_sheet_phase::{CharacterSheetSurface, SheetError};
+pub use character_sheet_phase::{
+    CharacterSheetView, SheetField, SheetLabels, SheetOffer, SheetOwnerGeneration, SheetRow,
+    SheetSection, SheetSubmission, SheetTab, SheetValidationError,
+};
+
+mod feedback;
+mod session_overlay_phase;
+#[cfg(target_arch = "wasm32")]
+mod session_overlay_phase_theme;
+
+pub use feedback::FeedbackView;
+#[cfg(target_arch = "wasm32")]
+pub use feedback::{FeedbackScope, OperationFeedback};
+pub use session_overlay_phase::{
+    MAX_SESSION_HOST_OFFERS, SessionBookend, SessionBookendKind, SessionConnection,
+    SessionOverlayOffer, SessionOverlaySelection, SessionOverlayValidationError,
+    SessionOverlayView,
+};
+#[cfg(target_arch = "wasm32")]
+pub use session_overlay_phase::{SessionOverlayError, SessionOverlayPhase};
+
+mod character_display_phase;
+#[cfg(target_arch = "wasm32")]
+mod character_display_phase_theme;
+
+#[cfg(target_arch = "wasm32")]
+pub use character_display_phase::CharacterDisplaySurface;
+pub use character_display_phase::{
+    CharacterDisplayConnection, CharacterDisplayHostOffer, CharacterDisplayLimits,
+    CharacterDisplaySubmission, CharacterDisplayView, CharacterPublicMember,
+    CharacterPublicReadiness,
+};
