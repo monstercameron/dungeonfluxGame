@@ -304,6 +304,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-rules"
+version = "0.1.0"
+dependencies = [
+ "df-content",
+ "df-model",
+ "df-types",
+]
+
+[[package]]
 name = "df-session"
 version = "0.1.0"
 dependencies = [
