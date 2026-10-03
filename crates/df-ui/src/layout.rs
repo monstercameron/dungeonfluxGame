@@ -125,6 +125,7 @@ pub fn action_button(
         .map_err(|_| UiError::WrongElementType)?;
     button.set_class_name("df-ui-action");
     button.set_type("button");
+    button.set_tab_index(0);
     button.set_disabled(!enabled);
     button.set_text_content(Some(label));
     Ok(button)
