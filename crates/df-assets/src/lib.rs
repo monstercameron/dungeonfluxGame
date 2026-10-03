@@ -10,3 +10,9 @@ pub use publication::{
 mod native_file_store;
 #[cfg(not(target_arch = "wasm32"))]
 pub use native_file_store::{NativeFileStore, StagedUpload};
+
+mod range;
+pub use range::{
+    AccessFailure, AssetReadAuthority, AssetReadStore, AuthorizedBinding, AuthorizedRange,
+    ByteRange, ChunkOutcome, MAX_CHUNK_BYTES, RangeError, open_range,
+};
