@@ -3,6 +3,8 @@
 mod browser;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod fixture;
+#[cfg(target_arch = "wasm32")]
+mod generated_browser_bindings;
 #[cfg(not(target_arch = "wasm32"))]
 mod preview;
 #[cfg(target_arch = "wasm32")]

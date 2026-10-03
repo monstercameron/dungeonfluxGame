@@ -81,6 +81,12 @@ async fn run(document: Document) -> Result<(), String> {
     let mut client = FixtureClient::new(channel)
         .max_decoding_message_size(RPC_MESSAGE_BYTES)
         .max_encoding_message_size(RPC_MESSAGE_BYTES * 2);
+    crate::generated_browser_bindings::verify(&mut client).await?;
+    append(
+        &document,
+        &mut lines,
+        "PASS · Generated Rust browser bindings: exact protobuf fields in four modes, metadata/status/trailers/EOF, half-close/cancel and client message bounds",
+    );
     let reply = client
         .unary(request(sample(7))?)
         .await
@@ -312,13 +318,16 @@ async fn run(document: Document) -> Result<(), String> {
     append(
         &document,
         &mut lines,
-        "COMPLETE · 10 transport checks passed\nG02 INCONCLUSIVE · physical devices / adversarial receive memory pending",
+        "COMPLETE · Generated Rust browser binding and transport checks passed\nG02 INCONCLUSIVE · physical devices / adversarial receive memory pending",
     );
     crate::qualification::save_report("semantics", &format!("Build: {}\n{lines}", crate::BUILD_ID))
         .await?;
     Ok(())
 }
-async fn wait_for_cancellation(client: &mut FixtureClient, expected: u32) -> Result<(), String> {
+pub(super) async fn wait_for_cancellation(
+    client: &mut FixtureClient,
+    expected: u32,
+) -> Result<(), String> {
     for _ in 0..100 {
         let stats = client
             .unary(request(Sample {

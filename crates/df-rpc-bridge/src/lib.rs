@@ -20,3 +20,6 @@ pub use native::{
 
 mod resources;
 pub use resources::{BufferSnapshot, ConnectionMetrics, ConnectionSnapshot, CreditSnapshot};
+
+#[cfg(any(target_arch = "wasm32", test))]
+mod upload;

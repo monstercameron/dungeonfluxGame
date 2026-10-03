@@ -1,10 +1,13 @@
 use crate::{
     CONCURRENT_STREAMS, ConnectionMetrics, ConnectionSnapshot, FRAME_BYTES, MESSAGE_BYTES,
-    RECEIVE_BYTES, resources::ReceiveCredit,
+    RECEIVE_BYTES,
+    resources::ReceiveCredit,
+    upload::{UploadCompletion, UploadResult},
 };
 use bytes::Bytes;
 use futures::{
     FutureExt,
+    channel::oneshot,
     future::{AbortHandle, Abortable, poll_fn},
 };
 use gloo_timers::callback::Timeout;
@@ -402,10 +405,10 @@ pub struct BrowserChannel {
 }
 impl Service<http::Request<tonic::body::Body>> for BrowserChannel {
     type Response = http::Response<ReceiveBody>;
-    type Error = h2::Error;
+    type Error = tonic::Status;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
     fn poll_ready(&mut self, context: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.sender.poll_ready(context)
+        self.sender.poll_ready(context).map_err(transport_status)
     }
     fn call(&mut self, request: http::Request<tonic::body::Body>) -> Self::Future {
         let credit = self.credit.clone();
@@ -417,7 +420,10 @@ impl Service<http::Request<tonic::body::Body>> for BrowserChannel {
             .unwrap_or("/");
         let uri = format!("http://fixture{path}").parse();
         let Ok(uri) = uri else {
-            return futures::future::ready(Err(h2::Reason::PROTOCOL_ERROR.into())).boxed_local();
+            return futures::future::ready(Err(transport_status(
+                h2::Reason::PROTOCOL_ERROR.into(),
+            )))
+            .boxed_local();
         };
         parts.uri = uri;
         parts.version = http::Version::HTTP_2;
@@ -425,52 +431,77 @@ impl Service<http::Request<tonic::body::Body>> for BrowserChannel {
             .sender
             .send_request(http::Request::from_parts(parts, ()), false);
         async move {
-            let (response, mut send) = result?;
+            let (response, mut send) = result.map_err(transport_status)?;
             let (abort, registration) = AbortHandle::new_pair();
             let guard = AbortOnDrop(abort);
+            let (completion, receiver) = oneshot::channel();
+            let mut upload = UploadCompletion::new(receiver);
             wasm_bindgen_futures::spawn_local(async move {
                 let upload = async {
                     let mut body = body;
                     while let Some(frame) = body.frame().await {
-                        let frame =
-                            frame.map_err(|_| h2::Error::from(h2::Reason::INTERNAL_ERROR))?;
+                        let frame = frame?;
                         match frame.into_data() {
                             Ok(mut bytes) => {
                                 while !bytes.is_empty() {
                                     send.reserve_capacity(bytes.len().min(FRAME_BYTES));
                                     let capacity = poll_fn(|context| send.poll_capacity(context))
                                         .await
-                                        .ok_or_else(|| h2::Error::from(h2::Reason::CANCEL))??;
+                                        .ok_or_else(|| transport_status(h2::Reason::CANCEL.into()))?
+                                        .map_err(transport_status)?;
                                     let count = capacity.min(bytes.len()).min(FRAME_BYTES);
                                     if count != 0 {
-                                        send.send_data(bytes.split_to(count), false)?;
+                                        send.send_data(bytes.split_to(count), false)
+                                            .map_err(transport_status)?;
                                     }
                                 }
                             }
                             Err(frame) => {
-                                let trailers = frame
-                                    .into_trailers()
-                                    .map_err(|_| h2::Error::from(h2::Reason::PROTOCOL_ERROR))?;
-                                send.send_trailers(trailers)?;
+                                let trailers = frame.into_trailers().map_err(|_| {
+                                    transport_status(h2::Reason::PROTOCOL_ERROR.into())
+                                })?;
+                                send.send_trailers(trailers).map_err(transport_status)?;
                                 return Ok(());
                             }
                         }
                     }
-                    send.send_data(Bytes::new(), true)?;
-                    Ok::<(), h2::Error>(())
+                    send.send_data(Bytes::new(), true)
+                        .map_err(transport_status)?;
+                    Ok::<(), tonic::Status>(())
                 };
-                if let Ok(Err(_)) = Abortable::new(upload, registration).await {
+                let result = match Abortable::new(upload, registration).await {
+                    Ok(Ok(())) => UploadResult::Completed,
+                    Ok(Err(status)) => UploadResult::Failed(status),
+                    Err(_) => UploadResult::Cancelled,
+                };
+                let failed = matches!(result, UploadResult::Failed(_));
+                // Publish the original failure before reset can wake the response future.
+                // A missing receiver means its response owner has already cancelled/dropped.
+                let _ = completion.send(result);
+                if failed {
                     send.send_reset(h2::Reason::INTERNAL_ERROR);
                 }
             });
-            let response = response.await?;
+            let mut response = Box::pin(response);
+            let response = poll_fn(|context| {
+                if let Poll::Ready(Err(status)) = upload.poll_completion(context, false) {
+                    return Poll::Ready(Err(status));
+                }
+                response.as_mut().poll(context).map_err(transport_status)
+            })
+            .await?;
             let (parts, mut receive) = response.into_parts();
-            let id = credit.register(receive.flow_control().clone())?;
+            let id = credit
+                .register(receive.flow_control().clone())
+                .map_err(transport_status)?;
             Ok(http::Response::from_parts(
                 parts,
                 ReceiveBody {
                     receive,
-                    _upload: guard,
+                    upload_guard: guard,
+                    upload,
+                    terminal_received: false,
+                    terminal_trailers: None,
                     data_finished: false,
                     finished: false,
                     previous_frame: 0,
@@ -486,7 +517,10 @@ impl Service<http::Request<tonic::body::Body>> for BrowserChannel {
 /// DATA and trailers remain distinct HTTP/2 frames. Credit follows body consumption.
 pub struct ReceiveBody {
     receive: h2::RecvStream,
-    _upload: AbortOnDrop,
+    upload_guard: AbortOnDrop,
+    upload: UploadCompletion,
+    terminal_received: bool,
+    terminal_trailers: Option<http::HeaderMap>,
     data_finished: bool,
     finished: bool,
     previous_frame: usize,
@@ -509,7 +543,7 @@ impl Drop for ReceiveBody {
 }
 impl Body for ReceiveBody {
     type Data = Bytes;
-    type Error = h2::Error;
+    type Error = tonic::Status;
     fn poll_frame(
         mut self: Pin<&mut Self>,
         context: &mut Context<'_>,
@@ -517,16 +551,26 @@ impl Body for ReceiveBody {
         if self.finished {
             return Poll::Ready(None);
         }
+        let terminal_received = self.terminal_received;
+        if let Poll::Ready(Err(status)) = self.upload.poll_completion(context, terminal_received) {
+            self.finished = true;
+            self.upload_guard.0.abort();
+            // Credit release records its own failure; it must not erase the upload status.
+            let _ = self.finish();
+            return Poll::Ready(Some(Err(status)));
+        }
         if !self.data_finished {
             let previous_frame = std::mem::take(&mut self.previous_frame);
             let Some(id) = self.id else {
                 self.finished = true;
-                return Poll::Ready(Some(Err(h2::Reason::INTERNAL_ERROR.into())));
+                return Poll::Ready(Some(Err(transport_status(
+                    h2::Reason::INTERNAL_ERROR.into(),
+                ))));
             };
             if let Err(error) = self.credit.consumed(id, previous_frame) {
                 self.finished = true;
                 let _ = self.finish();
-                return Poll::Ready(Some(Err(error)));
+                return Poll::Ready(Some(Err(transport_status(error))));
             }
             match self.receive.poll_data(context) {
                 Poll::Ready(Some(Ok(bytes))) => {
@@ -535,33 +579,55 @@ impl Body for ReceiveBody {
                 }
                 Poll::Ready(Some(Err(error))) => {
                     self.finished = true;
-                    return Poll::Ready(Some(Err(self.finish().err().unwrap_or(error))));
+                    return Poll::Ready(Some(Err(transport_status(
+                        self.finish().err().unwrap_or(error),
+                    ))));
                 }
                 Poll::Ready(None) => {
                     self.data_finished = true;
                     if let Err(error) = self.finish() {
                         self.finished = true;
-                        return Poll::Ready(Some(Err(error)));
+                        return Poll::Ready(Some(Err(transport_status(error))));
                     }
                 }
                 Poll::Pending => {
                     if let Err(error) = self.credit.pending(id) {
                         self.finished = true;
                         let _ = self.finish();
-                        return Poll::Ready(Some(Err(error)));
+                        return Poll::Ready(Some(Err(transport_status(error))));
                     }
                     return Poll::Pending;
                 }
             }
         }
-        match self.receive.poll_trailers(context) {
-            Poll::Ready(Ok(trailers)) => {
-                self.finished = true;
-                Poll::Ready(trailers.map(|trailers| Ok(Frame::trailers(trailers))))
+        if !self.terminal_received {
+            match self.receive.poll_trailers(context) {
+                Poll::Ready(Ok(trailers)) => {
+                    self.terminal_received = true;
+                    self.terminal_trailers = trailers;
+                    // A server may finish while client/bidi input is still open. Cancel its
+                    // owned upload, then observe completion before exposing terminal frames.
+                    self.upload_guard.0.abort();
+                }
+                Poll::Ready(Err(error)) => {
+                    self.finished = true;
+                    return Poll::Ready(Some(Err(transport_status(error))));
+                }
+                Poll::Pending => return Poll::Pending,
             }
-            Poll::Ready(Err(error)) => {
+        }
+        match self.upload.poll_completion(context, true) {
+            Poll::Ready(Ok(())) => {
                 self.finished = true;
-                Poll::Ready(Some(Err(error)))
+                Poll::Ready(
+                    self.terminal_trailers
+                        .take()
+                        .map(|trailers| Ok(Frame::trailers(trailers))),
+                )
+            }
+            Poll::Ready(Err(status)) => {
+                self.finished = true;
+                Poll::Ready(Some(Err(status)))
             }
             Poll::Pending => Poll::Pending,
         }
@@ -569,4 +635,8 @@ impl Body for ReceiveBody {
     fn is_end_stream(&self) -> bool {
         self.finished
     }
+}
+
+fn transport_status(error: h2::Error) -> tonic::Status {
+    tonic::Status::from_error(Box::new(error))
 }
