@@ -3,12 +3,22 @@
 //! Labels are already localized plain text. Role layout is presentation only;
 //! callers retain server-authorized view, action, focus, and resource ownership.
 
+mod campaign_surface;
+#[cfg(target_arch = "wasm32")]
+mod campaign_theme;
 #[cfg(target_arch = "wasm32")]
 mod controls;
 mod draft_state;
 #[cfg(target_arch = "wasm32")]
 mod layout;
 mod theme;
+
+#[cfg(target_arch = "wasm32")]
+pub use campaign_surface::{CampaignError, CampaignSurface};
+pub use campaign_surface::{
+    CampaignLimits, CampaignMember, CampaignObjective, CampaignValidationError, CampaignView,
+    ConceptScene, ObjectiveState,
+};
 
 #[cfg(target_arch = "wasm32")]
 pub use controls::{

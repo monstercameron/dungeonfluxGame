@@ -17,3 +17,8 @@ crate-type = ["cdylib"]
 name = "ui_controlled_input_fixture"
 path = "tests/fixtures/ui_controlled_input_fixture.rs"
 crate-type = ["cdylib"]
+
+[[example]]
+name = "campaign_art_fixture"
+path = "tests/fixtures/campaign_art_fixture.rs"
+crate-type = ["cdylib"]
