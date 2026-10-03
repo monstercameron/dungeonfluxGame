@@ -329,6 +329,7 @@ name = "df-testkit"
 version = "0.1.0"
 dependencies = [
  "df-experience",
+ "df-model",
  "df-types",
 ]
 

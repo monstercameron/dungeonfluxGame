@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[dependencies]
+df-model = { path = "../df-model" }
+df-types = { path = "../df-types" }
+
 [dev-dependencies]
 df-experience = { path = "../df-experience" }
 df-types = { path = "../df-types" }
