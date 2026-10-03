@@ -4,9 +4,18 @@
 //! callers retain server-authorized view, action, focus, and resource ownership.
 
 #[cfg(target_arch = "wasm32")]
+mod controls;
+mod draft_state;
+#[cfg(target_arch = "wasm32")]
 mod layout;
 mod theme;
 
+#[cfg(target_arch = "wasm32")]
+pub use controls::{
+    ActionView, ControlError, ControlledAction, ControlledTextInput, DraftUpdate, InputFeedback,
+    TextInputView,
+};
+pub use draft_state::{DraftError, MAX_DRAFT_UTF16_UNITS};
 #[cfg(target_arch = "wasm32")]
 pub use layout::{LayoutRole, LayoutRoot, UiError, action_button, panel, stack, text_input};
 pub use theme::ThemeToken;
