@@ -1,0 +1,19 @@
+[package]
+name = "df-rules"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+df-types = { path = "../df-types" }
+df-model = { path = "../df-model" }
+df-content = { path = "../df-content" }
+
+[[test]]
+name = "dispatch"
+path = "tests/dispatch.rs"
+
+[[test]]
+name = "invocation"
+path = "tests/invocation.rs"
