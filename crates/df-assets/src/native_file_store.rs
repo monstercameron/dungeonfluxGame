@@ -1,10 +1,11 @@
 use crate::{
-    AssetManifest, AssetStore, DurableObject, PublicationError, PublishedBinding, StoreError,
+    AssetManifest, AssetReadStore, AssetStore, DurableObject, PublicationError, PublishedBinding,
+    StoreError,
 };
 use df_types::OperationId;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 /// Native file-backed byte port. The caller configures a durable root outside caches.
@@ -306,4 +307,51 @@ fn hex(bytes: &[u8]) -> String {
         text.push(char::from(DIGITS[usize::from(byte & 0x0f)]));
     }
     text
+}
+
+impl AssetReadStore for NativeFileStore {
+    type Reader = File;
+
+    fn open_verified(
+        &self,
+        object: DurableObject,
+        manifest: AssetManifest,
+    ) -> Result<File, StoreError> {
+        self.check_expected(manifest)?;
+        if object.byte_len() != manifest.byte_len || object.digest() != &manifest.sha256 {
+            return Err(StoreError::BackingIntegrity);
+        }
+        let mut file = File::open(self.object_path(object.digest())).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                StoreError::BackingMissing
+            } else {
+                StoreError::Io(error)
+            }
+        })?;
+        if file.metadata()?.len() != manifest.byte_len {
+            return Err(StoreError::BackingIntegrity);
+        }
+        let mut hasher = Sha256::new();
+        let mut length = 0_u64;
+        let mut buffer = [0_u8; 65536];
+        loop {
+            let read = file.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            length = length
+                .checked_add(u64::try_from(read).map_err(|_| StoreError::BackingIntegrity)?)
+                .ok_or(StoreError::BackingIntegrity)?;
+            if length > manifest.byte_len {
+                return Err(StoreError::BackingIntegrity);
+            }
+            hasher.update(&buffer[..read]);
+        }
+        let digest: [u8; 32] = hasher.finalize().into();
+        if length != manifest.byte_len || digest != manifest.sha256 {
+            return Err(StoreError::BackingIntegrity);
+        }
+        file.seek(SeekFrom::Start(0))?;
+        Ok(file)
+    }
 }
