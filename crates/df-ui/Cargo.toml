@@ -1,0 +1,14 @@
+[package]
+name = "df-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "Event", "EventTarget", "HtmlElement", "HtmlButtonElement", "HtmlInputElement"] }
+
+[[example]]
+name = "ui_browser_fixture"
+path = "tests/fixtures/ui_browser_fixture.rs"
+crate-type = ["cdylib"]
