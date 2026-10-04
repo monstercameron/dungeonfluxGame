@@ -515,6 +515,13 @@ mod browser {
             {
                 stage.append_child(&narration)?;
             }
+            // Scene context belongs to the masthead's negative space, leaving the
+            // conversational artwork unobstructed. The same mounted nodes are retained.
+            if let Some(hero) = surface.root().query_selector(".hero")?
+                && let Some(scene_panel) = surface.root().query_selector(".scene-panel")?
+            {
+                hero.append_child(&scene_panel)?;
+            }
             let npc = child(document, &interaction, "article", "exploration-npc")?;
             let portrait = child(document, &npc, "img", "exploration-portrait")?;
             let identity = child(document, &npc, "div", "exploration-npc-text")?;
@@ -607,6 +614,12 @@ mod browser {
             fallback.set_text_content(Some(
                 "Scene art unavailable · narration and choices remain available.",
             ));
+            if let Some(stage) = phase.surface.root().query_selector(".stage")? {
+                phase
+                    .surface
+                    .root()
+                    .insert_before(&fallback, Some(&stage))?;
+            }
             phase
                 .listeners
                 .borrow_mut()
