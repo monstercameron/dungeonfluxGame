@@ -131,6 +131,10 @@ mod browser {
             editable: true,
             name: "Mara".into(),
             flavor: PRIVATE.into(),
+            appearance: Some(df_ui::CharacterAppearanceDraft {
+                features: PRIVATE.into(),
+                outfit: "A weathered green travel cloak".into(),
+            }),
             portrait: None,
             groups: vec![],
             facts: vec![],

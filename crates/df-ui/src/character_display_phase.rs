@@ -38,7 +38,7 @@ pub enum CharacterDisplayConnection {
 }
 
 /// Only public values filtered by the server may enter this roster. There are no
-/// private name/flavor drafts, build choices, scores, or rejection fields.
+/// private name/flavor/appearance drafts, build choices, scores, or rejection fields.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CharacterPublicMember {
     pub key: String,
@@ -46,6 +46,8 @@ pub struct CharacterPublicMember {
     pub portrait: Option<CharacterPortrait>,
     pub readiness: CharacterPublicReadiness,
     pub progress_label: String,
+    /// Separately filtered public description; never copied from a player draft.
+    pub appearance_summary: Option<String>,
 }
 
 /// An explicitly permitted host offer, already filtered by the server. An empty
@@ -126,6 +128,9 @@ impl CharacterDisplayView {
         for member in &self.members {
             for value in [&member.key, &member.character_name, &member.progress_label] {
                 text(value, false)?;
+            }
+            if let Some(summary) = &member.appearance_summary {
+                text(summary, false)?;
             }
             if !keys.insert(&member.key) {
                 return Err(CharacterValidationError::DuplicateId);
@@ -214,6 +219,7 @@ mod browser {
         name: Element,
         readiness: Element,
         progress: Element,
+        appearance: Element,
         portrait: PortraitSlot,
     }
     type HostCallback = Box<dyn FnMut(CharacterDisplaySubmission)>;
@@ -406,11 +412,19 @@ mod browser {
                         child(&self.document, &root, "p", "display-member-readiness", None)?;
                     let progress =
                         child(&self.document, &root, "p", "display-member-progress", None)?;
+                    let appearance = child(
+                        &self.document,
+                        &root,
+                        "p",
+                        "display-member-appearance",
+                        None,
+                    )?;
                     entry.insert(MemberNodes {
                         root,
                         name,
                         readiness,
                         progress,
+                        appearance,
                         portrait,
                     });
                 }
@@ -418,6 +432,12 @@ mod browser {
                     replace_text(&nodes.name, Some(&member.character_name));
                     replace_text(&nodes.readiness, Some(member.readiness.label()));
                     replace_text(&nodes.progress, Some(&member.progress_label));
+                    replace_text(&nodes.appearance, member.appearance_summary.as_deref());
+                    if member.appearance_summary.is_some() {
+                        nodes.appearance.remove_attribute("hidden")?;
+                    } else {
+                        nodes.appearance.set_attribute("hidden", "")?;
+                    }
                     nodes
                         .root
                         .set_attribute("data-readiness", member.readiness.key())?;
@@ -563,6 +583,7 @@ mod browser {
                     &member.name,
                     &member.readiness,
                     &member.progress,
+                    &member.appearance,
                 ] {
                     scrub_private_dom(node.as_ref());
                 }
@@ -634,6 +655,7 @@ mod tests {
                 portrait: None,
                 readiness: CharacterPublicReadiness::Choosing,
                 progress_label: "Public progress".into(),
+                appearance_summary: None,
             }],
             host_offers: vec![CharacterDisplayHostOffer {
                 id: "offered-host-action".into(),
@@ -665,6 +687,19 @@ mod tests {
             Err(CharacterValidationError::InvalidText)
         );
         data.public_notice.clear();
+        data.members[0].appearance_summary = Some("A silver braid and blue coat".into());
+        assert_eq!(data.validate(limits), Ok(()));
+        data.members[0].appearance_summary = Some("private\nline".into());
+        assert_eq!(
+            data.validate(limits),
+            Err(CharacterValidationError::InvalidText)
+        );
+        data.members[0].appearance_summary = Some("x".repeat(101));
+        assert_eq!(
+            data.validate(limits),
+            Err(CharacterValidationError::ResourceLimit)
+        );
+        data.members[0].appearance_summary = None;
         assert_eq!(
             data.validate(CharacterDisplayLimits {
                 max_members: 0,

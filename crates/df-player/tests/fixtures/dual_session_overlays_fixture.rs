@@ -216,6 +216,7 @@ mod browser {
             editable: true,
             name: "Mara".into(),
             flavor: "PRIVATE-DRAFT-SENTINEL · A lantern that never goes out".into(),
+            appearance: None,
             portrait: Some(CharacterPortrait::Narrator),
             groups: vec![CharacterGroup {
                 id: "synthetic-story".into(),
@@ -266,10 +267,10 @@ mod browser {
             members: vec![
                 CharacterPublicMember { key: "public-mara".into(), character_name: "Mara".into(),
                     portrait: Some(CharacterPortrait::Narrator), readiness: CharacterPublicReadiness::Choosing,
-                    progress_label: "Public report · Choosing".into() },
+                    progress_label: "Public report · Choosing".into(), appearance_summary: None },
                 CharacterPublicMember { key: "public-elian".into(), character_name: "Elian".into(),
                     portrait: Some(CharacterPortrait::Vell), readiness: CharacterPublicReadiness::Ready,
-                    progress_label: "Public report · Ready".into() },
+                    progress_label: "Public report · Ready".into(), appearance_summary: None },
             ],
             host_offers: vec![CharacterDisplayHostOffer { id: "synthetic-host-offer".into(),
                 label: "Advertised host offer · fixture only".into(), enabled: true, pending: false }],
