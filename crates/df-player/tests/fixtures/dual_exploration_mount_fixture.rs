@@ -475,6 +475,22 @@ mod browser {
         let body = document
             .body()
             .ok_or_else(|| JsValue::from_str("body missing"))?;
+        let presentation_style = document.create_element("style")?;
+        presentation_style.set_text_content(Some(
+            r#"
+body{margin:0;background:#141310;color:#f4eddf}
+body > p{width:92%;margin:0 auto;padding:20px 0 14px;font:11px/1.7 system-ui,sans-serif;color:#b4aca0;overflow-wrap:anywhere}
+body > nav[aria-label="Fixture controls"]{width:92%;margin:0 auto 12px;display:flex;flex-wrap:wrap;gap:8px}
+body > nav[aria-label="Fixture controls"] button{min-height:44px;padding:10px 13px;border:1px solid #a98b574d;border-radius:6px;background:#29251e;color:#ede2cb;font:12px/1.5 system-ui,sans-serif;touch-action:manipulation;cursor:pointer;overflow-wrap:anywhere}
+body > nav[aria-label="Fixture controls"] button:hover:enabled{background:#42382a;border-color:#e5bd77}
+body > nav[aria-label="Fixture controls"] button:focus-visible{outline:3px solid #f1d69b;outline-offset:4px}
+#dual-exploration-status{display:block;width:92%;box-sizing:border-box;margin:0 auto 18px;padding:8px 12px;border-left:2px solid #a98b574d;background:#1d1c17;font:11px/1.7 system-ui,sans-serif;color:#b4aca0;overflow-wrap:anywhere}
+body > section[data-client] > h1{width:92%;margin:0 auto;padding:18px 0 12px;border-top:1px solid #d9b77a24;font:10px/1.7 system-ui,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#d9b77a}
+@media(max-width:700px){body > nav[aria-label="Fixture controls"]{display:grid;grid-template-columns:1fr 1fr}body > nav[aria-label="Fixture controls"] button{min-width:0}}
+@media(prefers-reduced-motion:reduce){body > nav[aria-label="Fixture controls"] button{animation:none!important;transition:none!important}}
+"#,
+        ));
+        body.append_child(&presentation_style)?;
         let notice = document.create_element("p")?;
         notice.set_text_content(Some("Synthetic dual-client exploration mounts. Public and private snapshots are supplied separately; no RPC/session authority is claimed."));
         body.append_child(&notice)?;
