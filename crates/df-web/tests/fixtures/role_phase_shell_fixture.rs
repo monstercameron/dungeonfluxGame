@@ -1864,6 +1864,128 @@ mod browser {
             Ok(())
         })
     }
+    struct ProbeFocusTarget(HtmlInputElement);
+    impl Drop for ProbeFocusTarget {
+        fn drop(&mut self) {
+            self.0.remove();
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn shell_check_unrelated_focus() -> Result<(), JsValue> {
+        FIXTURE.with(|owner| {
+            let mut owner = owner.borrow_mut();
+            let fixture = owner
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("fixture disposed"))?;
+            for phase in [2, 3] {
+                fixture.show(phase, fixture.epoch, false, false)?;
+                let draft = fixture
+                    .player
+                    .root()
+                    .query_selector("input")?
+                    .ok_or_else(|| JsValue::from_str("reconnect draft missing"))?
+                    .dyn_into::<HtmlInputElement>()
+                    .map_err(|_| JsValue::from_str("reconnect draft is not input"))?;
+                draft.set_value(PRIVATE);
+                draft.dispatch_event(&Event::new("input")?)?;
+                draft.focus()?;
+                draft.set_selection_range(3, 7)?;
+                fixture
+                    .player
+                    .suspend(SessionConnection::Reconnecting)
+                    .map_err(error)?;
+                let unrelated = ProbeFocusTarget(
+                    fixture
+                        .document
+                        .create_element("input")?
+                        .dyn_into::<HtmlInputElement>()
+                        .map_err(|_| JsValue::from_str("probe focus target is not input"))?,
+                );
+                unrelated
+                    .0
+                    .set_attribute("aria-label", "Owned unrelated focus probe")?;
+                unrelated.0.set_attribute(
+                    "style",
+                    "position:fixed;right:8px;bottom:8px;width:80px;height:30px;z-index:10000",
+                )?;
+                fixture.root.append_child(&unrelated.0)?;
+                unrelated.0.focus()?;
+                require(
+                    fixture
+                        .document
+                        .active_element()
+                        .is_some_and(|active| active.is_same_node(Some(&unrelated.0))),
+                    "owned unrelated focus was not established",
+                )?;
+                fixture.show(phase, fixture.epoch, false, false)?;
+                require(
+                    fixture
+                        .document
+                        .active_element()
+                        .is_some_and(|active| active.is_same_node(Some(&unrelated.0))),
+                    "newer reconnect stole competing user focus",
+                )?;
+                require(
+                    draft.value() == PRIVATE,
+                    "unrelated focus reconnect lost private draft",
+                )?;
+            }
+            fixture
+                .root
+                .set_attribute("data-shell-unrelated-focus", "pass")?;
+            Ok(())
+        })
+    }
+    #[wasm_bindgen]
+    pub fn shell_check_new_scope_focus() -> Result<(), JsValue> {
+        FIXTURE.with(|owner| {
+            let mut owner = owner.borrow_mut();
+            let fixture = owner
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("fixture disposed"))?;
+            for phase in [2, 3] {
+                fixture.show(phase, fixture.epoch, false, false)?;
+                let draft = fixture
+                    .player
+                    .root()
+                    .query_selector("input")?
+                    .ok_or_else(|| JsValue::from_str("epoch focus draft missing"))?
+                    .dyn_into::<HtmlInputElement>()
+                    .map_err(|_| JsValue::from_str("epoch focus draft is not input"))?;
+                draft.set_value(PRIVATE);
+                draft.dispatch_event(&Event::new("input")?)?;
+                draft.focus()?;
+                draft.set_selection_range(3, 7)?;
+                let retained = private_nodes(fixture.player.root())?;
+                fixture
+                    .player
+                    .suspend(SessionConnection::Reconnecting)
+                    .map_err(error)?;
+                let epoch = fixture
+                    .epoch
+                    .checked_add(1)
+                    .ok_or_else(|| JsValue::from_str("fixture epoch exhausted"))?;
+                fixture.show(phase, epoch, false, false)?;
+                require_erased(&retained)?;
+                require(
+                    !draft.is_connected() && draft.value().is_empty(),
+                    "replaced epoch retained old draft node",
+                )?;
+                require(
+                    !fixture
+                        .document
+                        .active_element()
+                        .is_some_and(|active| active.is_same_node(Some(&draft))),
+                    "replaced epoch resurrected old focus",
+                )?;
+            }
+            fixture
+                .root
+                .set_attribute("data-shell-new-scope-focus", "pass")?;
+            Ok(())
+        })
+    }
     #[wasm_bindgen]
     pub fn shell_shutdown() -> Result<(), JsValue> {
         FIXTURE.with(|owner| {

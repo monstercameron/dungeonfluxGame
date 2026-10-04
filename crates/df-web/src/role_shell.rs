@@ -18,7 +18,7 @@ use std::{
     rc::Rc,
 };
 use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{Document, Element, HtmlFieldSetElement};
+use web_sys::{Document, Element, HtmlElement, HtmlFieldSetElement, HtmlInputElement};
 
 #[derive(Debug)]
 pub enum RoleShellError {
@@ -151,6 +151,11 @@ impl Dispatch {
     }
 }
 
+struct SuspendedFocus {
+    element: HtmlElement,
+    selection: Option<(u32, u32)>,
+}
+
 /// One binding's mounted presentation shell. Binding and revision are ordering
 /// correlations, never credentials. Rebinding requires disposal and a fresh shell.
 /// Role/phase replacements retain this root and retire old callback generations
@@ -170,6 +175,7 @@ pub struct RoleShell {
     generation: u64,
     dispatch: Rc<Dispatch>,
     connection: SessionConnection,
+    suspended_focus: Option<SuspendedFocus>,
     disposed: bool,
 }
 impl RoleShell {
@@ -194,9 +200,14 @@ impl RoleShell {
         }
         let root = document.create_element("main")?;
         root.set_attribute("data-role-shell", "")?;
+        root.set_attribute(
+            "style",
+            "min-inline-size:0;color:#d6c7ab;font-family:system-ui,sans-serif",
+        )?;
         let status = document.create_element("p")?;
         status.set_attribute("role", "status")?;
         status.set_attribute("aria-live", "polite")?;
+        status.set_attribute("style", "margin:0;padding:8px 4%;background:#0a1521;color:#c8b992;border-block-end:1px solid #34404a;font-size:12px;line-height:1.5;overflow-wrap:anywhere")?;
         status.set_text_content(Some("Waiting for a permitted view"));
         let slot = document
             .create_element("fieldset")?
@@ -228,6 +239,7 @@ impl RoleShell {
                 callback: RefCell::new(Some(Box::new(on_input))),
             }),
             connection: SessionConnection::Connecting,
+            suspended_focus: None,
             disposed: false,
         })
     }
@@ -309,6 +321,27 @@ impl RoleShell {
             return Ok(admission);
         }
         let player = phase.is_player();
+        if !replaced && self.suspended_focus.is_some() {
+            match self.capture_focus() {
+                Ok(Some(current)) => self.suspended_focus = Some(current),
+                Ok(None) => {}
+                Err(error) => return Err(self.failed(error)),
+            }
+        }
+        // Combat restores its captured focus during update, and exploration
+        // renders into the same owned input. Their ancestor must be enabled now,
+        // after validated admission, with shell dispatch still fenced.
+        // A suspended adapter can retain its own old focus. Keep its ancestor
+        // disabled during update if focus moved elsewhere, so that restoration
+        // cannot steal focus from another visible UI.
+        let competing_focus = self.suspended_focus.as_ref().is_some_and(|focus| {
+            self.document.active_element().is_some_and(|active| {
+                active.tag_name() != "BODY"
+                    && !active.is_same_node(Some(&self.status))
+                    && !active.is_same_node(Some(&focus.element))
+            })
+        });
+        self.slot.set_disabled(competing_focus);
         let result = match self.mounted.as_mut() {
             Some(mounted) => mounted.update(binding, revision, phase),
             None => self.mount_phase(binding, revision, phase, key),
@@ -316,6 +349,7 @@ impl RoleShell {
         if let Err(error) = result {
             return Err(self.failed(error));
         }
+        self.slot.set_disabled(false);
         if let Err(error) = self.apply_overlay(player, overlay) {
             return Err(self.failed(error));
         }
@@ -326,11 +360,13 @@ impl RoleShell {
             SessionConnection::Reconnecting => "Reconnecting · input suspended",
             SessionConnection::Offline => "Offline · input suspended",
         }));
-        // A suspended ancestor must be enabled before the adapter restores its
-        // retained focus; the callback generation remains fenced until success.
-        self.slot.set_disabled(false);
         if let Some(mounted) = &mut self.mounted
             && let Err(error) = mounted.connection(self.connection)
+        {
+            return Err(self.failed(error));
+        }
+        if self.connection == SessionConnection::Connected
+            && let Err(error) = self.restore_suspended_focus()
         {
             return Err(self.failed(error));
         }
@@ -408,6 +444,11 @@ impl RoleShell {
             return Err(RoleShellError::Disposed);
         }
         self.dispatch.enabled.set(false);
+        match self.capture_focus() {
+            Ok(Some(current)) => self.suspended_focus = Some(current),
+            Ok(None) => {}
+            Err(error) => return Err(self.failed(error)),
+        }
         self.connection = if connection == SessionConnection::Connected {
             SessionConnection::Reconnecting
         } else {
@@ -426,6 +467,55 @@ impl RoleShell {
             .set_disabled(!matches!(self.mounted, Some(MountedPhase::Sheet(_))));
         Ok(())
     }
+    fn capture_focus(&self) -> Result<Option<SuspendedFocus>, RoleShellError> {
+        let Some(active) = self
+            .document
+            .active_element()
+            .filter(|active| self.root.contains(Some(active)))
+        else {
+            return Ok(None);
+        };
+        let Ok(element) = active.dyn_into::<HtmlElement>() else {
+            return Ok(None);
+        };
+        let selection = match element.dyn_ref::<HtmlInputElement>() {
+            Some(input) => match (input.selection_start()?, input.selection_end()?) {
+                (Some(start), Some(end)) => Some((start, end)),
+                _ => None,
+            },
+            None => None,
+        };
+        Ok(Some(SuspendedFocus { element, selection }))
+    }
+    fn restore_suspended_focus(&mut self) -> Result<(), RoleShellError> {
+        let Some(focus) = self.suspended_focus.take() else {
+            return Ok(());
+        };
+        if !focus.element.is_connected()
+            || !self.root.contains(Some(&focus.element))
+            || focus.element.offset_width() == 0
+            || focus.element.offset_height() == 0
+            || focus.element.matches(":disabled")?
+            || focus.element.closest("[hidden], [inert]")?.is_some()
+        {
+            return Ok(());
+        }
+        let may_restore = self.document.active_element().is_none_or(|active| {
+            active.tag_name() == "BODY"
+                || active.is_same_node(Some(&self.status))
+                || active.is_same_node(Some(&focus.element))
+        });
+        if !may_restore {
+            return Ok(());
+        }
+        focus.element.focus()?;
+        if let Some((start, end)) = focus.selection
+            && let Some(input) = focus.element.dyn_ref::<HtmlInputElement>()
+        {
+            input.set_selection_range(start, end)?;
+        }
+        Ok(())
+    }
     fn retire_overlay(&mut self) -> Result<(), RoleShellError> {
         self.overlay_generation = None;
         match self.overlay.take() {
@@ -437,6 +527,7 @@ impl RoleShell {
         self.dispatch.generation.set(None);
         self.dispatch.enabled.set(false);
         self.key = None;
+        self.suspended_focus = None;
         let mut failure = self.retire_overlay().err();
         if let Some(mut mounted) = self.mounted.take()
             && let Err(error) = mounted.revoke()

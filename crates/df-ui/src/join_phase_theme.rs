@@ -3,6 +3,8 @@ pub(crate) const STYLES: &str = r#"
 .df-campaign[data-join-phase] .stage{grid-template-columns:minmax(0,1fr) 410px;gap:6vw;align-items:center;padding:85px 0 65px;min-height:640px}
 .df-campaign[data-join-phase] .scene-panel,.df-campaign[data-join-phase] .party-section{display:none}
 .df-campaign[data-join-phase] .lower{grid-template-columns:minmax(0,1fr);max-width:1520px}
+.df-campaign[data-join-phase] .narration{width:100%;min-width:0}
+.df-campaign[data-join-phase] .narration>div{min-width:0;overflow-wrap:anywhere}
 .df-campaign[data-join-phase] h1{max-width:770px;font-size:clamp(50px,6.6vw,102px);letter-spacing:-2.5px}
 .df-campaign[data-join-phase] .description{max-width:550px;color:#eee3d1}
 .df-campaign[data-join-phase] .scene-art{object-position:46% center}
