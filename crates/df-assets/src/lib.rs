@@ -19,3 +19,8 @@ pub use range::{
 
 mod resolution;
 pub use resolution::AssetResolver;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod outcomes;
+#[cfg(not(target_arch = "wasm32"))]
+pub use outcomes::{AssetRange, AssetResolutionError, AssetUnavailable, SelectedAsset, StaleAsset};
