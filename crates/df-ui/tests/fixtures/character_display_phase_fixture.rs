@@ -35,7 +35,7 @@ mod browser {
             chapter: "Prologue · A party takes shape".into(), title: "Every story needs its heroes".into(),
             description: "A lantern in the darkness. A promise waiting to be kept. Together, your stories will become an adventure.".into(),
             readiness: CharacterPublicReadiness::Choosing, progress_label: "Server-supplied public progress · Synthetic roster".into(),
-            public_notice: "Shared-display design fixture · Original concept portraits · No live character builds or private player drafts.".into(),
+            public_notice: "Shared-display design fixture · Concept portraits · includes AI-generated v2 artwork · No live character builds or private player drafts.".into(),
             connection: CharacterDisplayConnection::Connected,
             connection_label: "Synthetic connected view · No production session, RPC adapter or client shell mounted".into(),
             members: vec![

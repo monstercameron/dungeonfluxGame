@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, fmt};
 
-/// Closed presentation artwork from the original ShellHacks asset manifest.
+/// Closed illustrative presentation artwork, including concept-inspired generated art.
 /// These portraits illustrate a choice; they do not imply a generated player portrait.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CharacterPortrait {
@@ -11,13 +11,13 @@ pub enum CharacterPortrait {
 impl CharacterPortrait {
     pub const fn asset_path(self) -> &'static str {
         match self {
-            Self::Narrator => "assets/concept-art/dm-avatar.webp",
+            Self::Narrator => "assets/ui/portraits/lantern-keeper-generated-v2.png",
             Self::Vell => "assets/concept-art/vell-avatar.webp",
         }
     }
     pub const fn description(self) -> &'static str {
         match self {
-            Self::Narrator => "Original concept portrait of a hooded storyteller",
+            Self::Narrator => "AI-generated concept-inspired portrait of a hooded storyteller",
             Self::Vell => "Original concept portrait of Vell the barkeeper",
         }
     }
@@ -867,7 +867,7 @@ mod browser {
                 &aside,
                 "p",
                 "character-art-credit",
-                Some("Original concept portrait · illustrative reference"),
+                Some("Illustrative concept portraits · includes AI-generated artwork"),
             )?;
             let status = child(document, &aside, "h2", "character-status", None)?;
             let message = child(document, &aside, "p", "character-message", None)?;
