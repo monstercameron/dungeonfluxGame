@@ -14,3 +14,8 @@ pub use combat::{CombatMountError, DisplayCombat};
 mod session_overlays;
 #[cfg(target_arch = "wasm32")]
 pub use session_overlays::{DisplaySessionOverlays, SessionOverlayMountError};
+
+mod join;
+pub use join::{DisplayJoinConnection, DisplayJoinInput};
+#[cfg(target_arch = "wasm32")]
+pub use join::{DisplayJoinError, DisplayJoinScreen};

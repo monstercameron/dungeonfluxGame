@@ -325,9 +325,32 @@ mod browser {
                 "retired action submitted in pending/locked",
             )?;
         }
-        let retained: Vec<_> = private_nodes(&root)?
+        // Browser05 identified this exact ownership-independent heading Text,
+        // constructed literally by df-ui, as the only survivor. Preserve it as
+        // persistent UI and continue checking every other retained Text for scrub.
+        let static_heading = required(&root, ".identity-panel > h2")?;
+        let static_heading_text = static_heading
+            .first_child()
+            .ok_or_else(|| JsValue::from_str("static identity heading Text missing"))?;
+        check(
+            static_heading_text.node_type() == Node::TEXT_NODE
+                && static_heading_text.next_sibling().is_none()
+                && static_heading.text_content().as_deref() == Some("Give your story a name"),
+            "identity heading differs from the literal ownership-independent UI",
+        )?;
+        let captured = private_nodes(&root)?;
+        check(
+            captured
+                .iter()
+                .any(|node| node.is_same_node(Some(&static_heading_text))),
+            "scope capture did not include the exact static identity heading",
+        )?;
+        let retained: Vec<_> = captured
             .into_iter()
-            .filter(|node| node.node_type() == Node::TEXT_NODE)
+            .filter(|node| {
+                node.node_type() == Node::TEXT_NODE
+                    && !node.is_same_node(Some(&static_heading_text))
+            })
             .collect();
         data.generation += 1;
         data.owner_key = "synthetic-private-player-two".into();
@@ -340,6 +363,16 @@ mod browser {
         check(
             name.value() == "New owner" && flavor.value() == "New owner flavor",
             "scope replacement retained old draft",
+        )?;
+        let current_heading = required(&root, ".identity-panel > h2")?;
+        check(
+            static_heading.is_connected()
+                && current_heading.is_same_node(Some(&static_heading))
+                && current_heading
+                    .first_child()
+                    .is_some_and(|node| node.is_same_node(Some(&static_heading_text)))
+                && static_heading.text_content().as_deref() == Some("Give your story a name"),
+            "ownership replacement changed the persistent static identity heading",
         )?;
         check(scrubbed(&retained), &remaining_text_diagnostic(&retained))?;
         screen.revoke().map_err(error)?;

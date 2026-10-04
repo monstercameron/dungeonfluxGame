@@ -11,4 +11,4 @@ df-ui = { path = "../df-ui" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "HtmlElement", "HtmlFieldSetElement", "HtmlButtonElement"] }
+web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "HtmlElement", "HtmlFieldSetElement", "HtmlButtonElement", "Event", "EventTarget", "HtmlImageElement"] }

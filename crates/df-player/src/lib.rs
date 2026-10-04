@@ -20,3 +20,8 @@ pub use combat::{CombatMountError, PlayerCombat};
 mod session_overlays;
 #[cfg(target_arch = "wasm32")]
 pub use session_overlays::{PlayerSessionOverlays, SessionOverlayMountError};
+
+mod join;
+pub use join::{PlayerJoinConnection, PlayerJoinInput};
+#[cfg(target_arch = "wasm32")]
+pub use join::{PlayerJoinError, PlayerJoinScreen};

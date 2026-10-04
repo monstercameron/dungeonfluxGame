@@ -11,7 +11,7 @@ df-ui = { path = "../df-ui" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "HtmlElement", "HtmlFieldSetElement", "HtmlButtonElement"] }
+web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "HtmlElement", "HtmlFieldSetElement", "HtmlButtonElement", "Event", "EventTarget", "HtmlImageElement"] }
 [dev-dependencies]
 df-display = { path = "../df-display" }
 
@@ -41,4 +41,9 @@ crate-type = ["cdylib"]
 [[example]]
 name = "dual_session_overlays_fixture"
 path = "tests/fixtures/dual_session_overlays_fixture.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "dual_join_clients_fixture"
+path = "tests/fixtures/dual_join_clients_fixture.rs"
 crate-type = ["cdylib"]
