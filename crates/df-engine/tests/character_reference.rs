@@ -1150,3 +1150,240 @@ fn started_generation_replacement_and_ready_failure_cannot_mutate_newer_sheet() 
         Some(&asset())
     );
 }
+
+/// Supplied valid next-revision records exercise lifecycle continuity; this is not a
+/// source-qualified 2024 advancement handler or proof that a player earned a new choice.
+fn later_activity(
+    current: &Checkpoint,
+    change_choices: bool,
+    assets: &[AssetReference],
+) -> Checkpoint {
+    let mut basis = current.basis();
+    basis.revision = basis.revision.next_sequence().unwrap();
+    let operation = OperationId::from_bytes(&[91; 16]).unwrap();
+    let resource_fact = FactId::from_bytes(&[92; 16]).unwrap();
+    let time_fact = FactId::from_bytes(&[93; 16]).unwrap();
+    let mut state = current.state().clone();
+    let resource = state.resources.first_mut().unwrap();
+    let before = resource.value;
+    resource.value -= 1;
+    let after = resource.value;
+    let before_time = state.logical_time;
+    state.logical_time.ticks += 10;
+    state.facts.push(GameFact {
+        id: resource_fact,
+        revision: basis.revision,
+        operation,
+        ordinal: 0,
+        cause: None,
+        audience: AudienceScope::Members(vec![fixture::member(3)]),
+        value: FactValue::ResourceChanged {
+            entity: fixture::entity(4),
+            resource: label("fixture-resource-1"),
+            before,
+            after,
+            source: fixture::rule(),
+        },
+    });
+    state.facts.push(GameFact {
+        id: time_fact,
+        revision: basis.revision,
+        operation,
+        ordinal: 1,
+        cause: Some(resource_fact),
+        audience: AudienceScope::Members(vec![fixture::member(3)]),
+        value: FactValue::TimeAdvanced {
+            before: before_time,
+            after: state.logical_time,
+        },
+    });
+    state.decisions.push(AcceptedDecision {
+        operation,
+        revision: basis.revision,
+        facts: vec![resource_fact, time_fact],
+        draws: vec![],
+        effects: vec![],
+        source_policy: label("synthetic-post-creation-activity"),
+        semantic_output: None,
+    });
+    if change_choices {
+        state
+            .characters
+            .first_mut()
+            .unwrap()
+            .choices
+            .push(AcceptedChoice {
+                participant: fixture::member(3),
+                offer: label("supplied-later-build-choice"),
+                selected: label("supplied-later-build-option"),
+                source: fixture::rule(),
+            });
+    }
+    make(basis, state, assets).unwrap()
+}
+
+#[test]
+fn later_activity_revision_resource_and_time_preserve_ready_sheet_reuse() {
+    let (ready, _, _, _) = ready();
+    let progressed = later_activity(&ready, false, &[asset()]);
+    assert!(progressed.basis().revision > ready.basis().revision);
+    assert_ne!(progressed.state().resources, ready.state().resources);
+    assert_ne!(progressed.state().logical_time, ready.state().logical_time);
+    assert_eq!(
+        progressed.state().continuity.canonical_packs,
+        ready.state().continuity.canonical_packs
+    );
+    assert_eq!(
+        progressed.state().continuity.asset_jobs,
+        ready.state().continuity.asset_jobs
+    );
+    let (current, original_key) = scene(&progressed);
+    let request = scene_key(&current, &original_key).unwrap();
+    assert_eq!(request.references, vec![asset()]);
+    assert_eq!(request.identity, original_key.identity);
+    assert_eq!(request.parameters, original_key.parameters);
+    assert_eq!(current.state().resources, progressed.state().resources);
+    assert_eq!(
+        current.state().logical_time,
+        progressed.state().logical_time
+    );
+}
+
+#[test]
+fn later_mechanical_choices_preserve_queued_specification_completion_and_scene_reuse() {
+    let (queued, plan) = queue();
+    let progressed = later_activity(&queued, true, &[]);
+    assert_ne!(
+        progressed.state().characters.first().unwrap().choices,
+        progressed
+            .state()
+            .continuity
+            .creation
+            .first()
+            .unwrap()
+            .choices
+    );
+    assert_eq!(
+        progressed.state().continuity.creation,
+        queued.state().continuity.creation
+    );
+    let specification = reference_sheet_specification(&progressed, job_id(), bounds()).unwrap();
+    assert_eq!(
+        specification.appearance.features,
+        "Round face, dark curls, broad shoulders"
+    );
+    assert_eq!(
+        specification.appearance.outfit_revision,
+        plan.demand.key.parameters
+    );
+    let running = started(&progressed, &plan);
+    let completion = completed(
+        &plan,
+        JobOutcome::Media {
+            asset: asset(),
+            demand: plan.demand.id,
+        },
+    );
+    let pack = published_pack();
+    let ready = event(
+        &running,
+        ReferenceSheetEvent::Completed {
+            completion: &completion,
+            canonical_pack: Some(&pack),
+        },
+        &[asset()],
+    )
+    .unwrap();
+    assert_eq!(ready.state().characters, progressed.state().characters);
+    assert_eq!(
+        ready.state().continuity.creation,
+        queued.state().continuity.creation
+    );
+    assert_eq!(ready.state().resources, progressed.state().resources);
+    assert_eq!(ready.state().logical_time, progressed.state().logical_time);
+    let (current, key) = scene(&ready);
+    assert_eq!(scene_key(&current, &key).unwrap().references, vec![asset()]);
+}
+
+#[test]
+fn later_mechanical_choices_preserve_already_ready_sheet_and_environment_request() {
+    let (ready, _, _, _) = ready();
+    let progressed = later_activity(&ready, true, &[asset()]);
+    let (current, original_key) = scene(&progressed);
+    let request = scene_key(&current, &original_key).unwrap();
+    assert_eq!(request.references, vec![asset()]);
+    assert_eq!(request.identity, original_key.identity);
+    assert_eq!(request.model, original_key.model);
+    assert_eq!(request.parameters, original_key.parameters);
+    assert_eq!(scene_key(&current, &request).unwrap(), request);
+    assert_eq!(
+        current.state().continuity.asset_jobs,
+        ready.state().continuity.asset_jobs
+    );
+    assert_eq!(
+        current.state().continuity.canonical_packs,
+        ready.state().continuity.canonical_packs
+    );
+}
+
+#[test]
+fn later_mechanical_choices_do_not_authorize_changed_owner_or_invalid_creation() {
+    let (ready, _, _, _) = ready();
+    let progressed = later_activity(&ready, true, &[asset()]);
+    for mutation in 0..3 {
+        let mut state = progressed.state().clone();
+        match mutation {
+            0 => {
+                state.members.push(MembershipLink {
+                    member: fixture::member(99),
+                    character: Some(fixture::entity(4)),
+                });
+                state.characters.first_mut().unwrap().owner = fixture::member(99);
+            }
+            1 => state.continuity.creation.first_mut().unwrap().phase = CreationPhase::Selecting,
+            _ => state.continuity.creation.clear(),
+        }
+        let changed = make(progressed.basis(), state, &[asset()]).unwrap();
+        let (current, key) = scene(&changed);
+        assert_eq!(
+            scene_key(&current, &key),
+            Err(ReferenceSheetError::AudienceUnavailable)
+        );
+        assert_eq!(
+            changed.state().continuity.asset_jobs,
+            progressed.state().continuity.asset_jobs
+        );
+    }
+}
+
+#[test]
+fn later_mechanical_choices_do_not_authorize_changed_visual_identity_or_outfit() {
+    let (ready, _, _, _) = ready();
+    let progressed = later_activity(&ready, true, &[asset()]);
+    for outfit_changed in [false, true] {
+        let mut state = progressed.state().clone();
+        if outfit_changed {
+            for pack in &mut state.continuity.canonical_packs {
+                pack.identities
+                    .first_mut()
+                    .unwrap()
+                    .character_appearance
+                    .as_mut()
+                    .unwrap()
+                    .outfit_revision = label("new-outfit-v2");
+            }
+        } else {
+            state.entities.first_mut().unwrap().identity_revision = label("new-appearance-v2");
+        }
+        let changed = make(progressed.basis(), state, &[asset()]).unwrap();
+        let (current, key) = scene(&changed);
+        assert_eq!(
+            scene_key(&current, &key),
+            Err(ReferenceSheetError::IdentityChanged)
+        );
+        assert_eq!(
+            changed.state().continuity.asset_jobs,
+            progressed.state().continuity.asset_jobs
+        );
+    }
+}
