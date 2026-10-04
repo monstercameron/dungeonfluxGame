@@ -1302,6 +1302,15 @@ fn run_registered_suite(stage: &std::cell::Cell<&'static str>) -> Result<(), Rep
             port,
             bounds,
             stage,
+        )?;
+        observe_registered_actor_lost_commit_ack(
+            &handle,
+            &mut admin,
+            &configuration,
+            port,
+            proxy_port,
+            bounds,
+            stage,
         )
     });
     if next_cases.is_ok() {
@@ -4000,34 +4009,36 @@ impl
         scope: &crate::native_scope::NativeScope<FixtureMembershipAuthority>,
         checkpoint: &Checkpoint,
     ) -> Result<(), df_session::submission::DeliveryError> {
+        {
+            let mut observed = self
+                .observed
+                .lock()
+                .map_err(|_| df_session::submission::DeliveryError::Unavailable)?;
+            observed[1] = observed[1]
+                .checked_add(1)
+                .ok_or(df_session::submission::DeliveryError::Unavailable)?;
+        }
         if *checkpoint != self.candidate {
             return Err(df_session::submission::DeliveryError::Unavailable);
         }
         self.independently_visible(scope)
-            .map_err(|_| df_session::submission::DeliveryError::Unavailable)?;
-        let mut observed = self
-            .observed
-            .lock()
-            .map_err(|_| df_session::submission::DeliveryError::Unavailable)?;
-        observed[1] = observed[1]
-            .checked_add(1)
-            .ok_or(df_session::submission::DeliveryError::Unavailable)?;
-        Ok(())
+            .map_err(|_| df_session::submission::DeliveryError::Unavailable)
     }
     fn wake_committed_intents(
         &mut self,
         scope: &crate::native_scope::NativeScope<FixtureMembershipAuthority>,
     ) -> Result<(), df_session::submission::DeliveryError> {
+        {
+            let mut observed = self
+                .observed
+                .lock()
+                .map_err(|_| df_session::submission::DeliveryError::Unavailable)?;
+            observed[2] = observed[2]
+                .checked_add(1)
+                .ok_or(df_session::submission::DeliveryError::Unavailable)?;
+        }
         self.independently_visible(scope)
-            .map_err(|_| df_session::submission::DeliveryError::Unavailable)?;
-        let mut observed = self
-            .observed
-            .lock()
-            .map_err(|_| df_session::submission::DeliveryError::Unavailable)?;
-        observed[2] = observed[2]
-            .checked_add(1)
-            .ok_or(df_session::submission::DeliveryError::Unavailable)?;
-        Ok(())
+            .map_err(|_| df_session::submission::DeliveryError::Unavailable)
     }
 }
 
@@ -5360,5 +5371,685 @@ fn observe_registered_forced_driver_join(
     println!(
         "registered physical actual driver JoinPending: actual connected Connection poll held on real worker; other worker drives unchanged bounded close timer; first and second bounded Unavailable/JoinPending communicated with actor still owning repository; all3 poisoned operations refused; parent releases real poll only after second failure; same actor third close joins before parent join/runtime teardown; confirmed receipt/full four-family decision remains unchanged; exact backend absent; blocked preCOMMIT observed in physical11; actor Unknown remains unqualified"
     );
+    Ok(())
+}
+
+// Both canonical host inputs are accepted by this controlled engine. A second
+// reduction would therefore be visible; an engine-specific refusal cannot stand
+// in for the repository/actor uncertainty fence. No real rules mechanics are claimed.
+struct ActorUnknownFixtureEngine {
+    baseline: Checkpoint,
+    candidates: [(Checkpoint, GameInput); 2],
+    observed: std::sync::Arc<std::sync::Mutex<[u64; 3]>>,
+}
+impl
+    df_session::submission::SessionEngine<
+        crate::native_scope::NativeScope<FixtureMembershipAuthority>,
+    > for ActorUnknownFixtureEngine
+{
+    fn decide(
+        &mut self,
+        current: &Checkpoint,
+        scope: &crate::native_scope::NativeScope<FixtureMembershipAuthority>,
+        input: &GameInput,
+    ) -> Result<Checkpoint, RepositoryError> {
+        scope.validate_input(input)?;
+        if *current != self.baseline {
+            return Err(RepositoryError::InvalidCandidate);
+        }
+        let candidate = self
+            .candidates
+            .iter()
+            .find(|(_, admitted)| admitted == input)
+            .map(|(candidate, _)| candidate)
+            .ok_or(RepositoryError::InvalidCandidate)?;
+        let mut observed = self
+            .observed
+            .lock()
+            .map_err(|_| RepositoryError::Unavailable)?;
+        observed[0] = observed[0]
+            .checked_add(1)
+            .ok_or(RepositoryError::Capacity)?;
+        Ok(candidate.clone())
+    }
+    fn validate_recovery(&mut self, checkpoint: &Checkpoint) -> Result<(), RepositoryError> {
+        if *checkpoint == self.baseline
+            || self
+                .candidates
+                .iter()
+                .any(|(candidate, _)| candidate == checkpoint)
+        {
+            Ok(())
+        } else {
+            Err(RepositoryError::InvalidCandidate)
+        }
+    }
+}
+
+/// One controlled SessionEngine reduction commits through the existing registered
+/// proxy. Its lost acknowledgement leaves this SAME actor and repository unresolved;
+/// a separate observer proves the commit without reconnecting or replacing that owner.
+fn observe_registered_actor_lost_commit_ack(
+    handle: &tokio::runtime::Handle,
+    admin: &mut tokio_postgres::Client,
+    configuration: &Config,
+    postgres_port: u16,
+    proxy_port: u16,
+    bounds: TransactionBounds,
+    stage: &std::cell::Cell<&'static str>,
+) -> Result<(), RepositoryError> {
+    let tenant = [80; 16];
+    let principal = [102; 16];
+    let campaign = [82; 16];
+    let fence = [112; 16];
+    let operation = [6; 16];
+    let later_operation = [7; 16];
+    let fingerprint = [70; 32];
+    let later_fingerprint = [71; 32];
+    let namespace = b"fixture/actor-unknown/v1";
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let context = OperationContext {
+        trace_parent: String::new(),
+        build: "persistence-actor-unknown-controlled-ports".to_owned(),
+    };
+    let (baseline, candidate, input) = admitted_case(59);
+    let (_, later_candidate, later_input) =
+        admitted_case_for_operation(59, baseline.basis().revision, 7);
+    let rules = vec![rule()];
+    let entries = vec![content()];
+    let resources = resource_constraints();
+    let inventory = || ReferenceInventory {
+        rules: &rules,
+        content: &entries,
+        resources: &resources,
+        assets: &[],
+    };
+    stage.set("actor Unknown canonical session and two current registered operation proofs");
+    let (proof, later_proof) = actor_block_on(
+        handle,
+        within_deadline(deadline, async {
+            let transaction = admin
+                .transaction()
+                .await
+                .map_err(|_| RepositoryError::Unavailable)?;
+            seed_session(
+                &transaction,
+                &tenant,
+                &fence,
+                &baseline,
+                inventory(),
+                (limits(), codec_limits()),
+                120,
+            )
+            .await?;
+            let grant = || FixtureGrant {
+                service_role: "df_persistence_fixture_runtime_a",
+                tenant: &tenant,
+                principal: &principal,
+                campaign: &campaign,
+                role: b"gm",
+                access_revision: b"fixture-access-1",
+                lifetime_seconds: 120,
+            };
+            seed_grant(&transaction, &grant()).await?;
+            let proof = seed_proof(
+                &transaction,
+                &FixtureProof {
+                    grant: grant(),
+                    basis: baseline.basis(),
+                    operation: &operation,
+                    namespace,
+                    canonical_fingerprint: &fingerprint,
+                    fence: &fence,
+                    mode: 3,
+                    lookup_only: false,
+                },
+            )
+            .await?;
+            let later_proof = seed_proof(
+                &transaction,
+                &FixtureProof {
+                    grant: grant(),
+                    basis: baseline.basis(),
+                    operation: &later_operation,
+                    namespace,
+                    canonical_fingerprint: &later_fingerprint,
+                    fence: &fence,
+                    mode: 3,
+                    lookup_only: false,
+                },
+            )
+            .await?;
+            transaction
+                .commit()
+                .await
+                .map_err(|_| RepositoryError::Unavailable)?;
+            Ok::<_, RepositoryError>((proof, later_proof))
+        }),
+    )?
+    .map_err(|_| RepositoryError::Unavailable)??;
+    let now = fixture_database_now(handle, admin, deadline)?;
+    let listener = actor_block_on(
+        handle,
+        within_deadline(deadline, TcpListener::bind(("127.0.0.1", proxy_port))),
+    )?
+    .map_err(|_| RepositoryError::Unavailable)?
+    .map_err(|_| RepositoryError::Unavailable)?;
+    let mut proxy = OwnedAckProxy {
+        task: Some(handle.spawn(async move {
+            let (frontend, peer) = timeout_at(deadline, listener.accept())
+                .await
+                .map_err(|_| ProxyError::Deadline)?
+                .map_err(|_| ProxyError::Io)?;
+            if !peer.ip().is_loopback() {
+                return Err(ProxyError::Protocol);
+            }
+            drop(listener);
+            let postgres = timeout_at(deadline, TcpStream::connect(("127.0.0.1", postgres_port)))
+                .await
+                .map_err(|_| ProxyError::Deadline)?
+                .map_err(|_| ProxyError::Io)?;
+            drop_commit_acknowledgement(
+                frontend,
+                postgres,
+                ProxyBounds {
+                    maximum_frame_bytes: 4 * 1024 * 1024,
+                    maximum_suppressed_response_bytes: 4096,
+                    deadline,
+                },
+            )
+            .await
+        })),
+    };
+    let observed_case = (|| -> Result<(), RepositoryError> {
+        stage.set("actor Unknown actual proxied authority and three independently produced scopes");
+        let proxied = fixture_lost_ack_configuration(configuration, proxy_port)?;
+        crate::owned_pg_composition_fixture::validate_fixture_composition(
+            codec_limits(),
+            16384,
+            bounds,
+        )?;
+        let mut authority = connect_fixture_authority(handle, &proxied, bounds, &context)?;
+        let produced = (|| {
+            let (scope, verifier) = bind_registered_scope(
+                &mut authority,
+                &proof,
+                FixtureBoundInput {
+                    input: input.clone(),
+                    pins: pins(),
+                },
+                now,
+            )?;
+            let (retry_scope, _) = bind_registered_scope(
+                &mut authority,
+                &proof,
+                FixtureBoundInput {
+                    input: input.clone(),
+                    pins: pins(),
+                },
+                now,
+            )?;
+            let (later_scope, _) = bind_registered_scope(
+                &mut authority,
+                &later_proof,
+                FixtureBoundInput {
+                    input: later_input.clone(),
+                    pins: pins(),
+                },
+                now,
+            )?;
+            if scope.capture_uncertainty_key(16384)?
+                != retry_scope.capture_uncertainty_key(16384)?
+                || scope.capture_uncertainty_key(16384)?
+                    == later_scope.capture_uncertainty_key(16384)?
+            {
+                return Err(RepositoryError::InputBinding);
+            }
+            let client = authority.connection.take_client()?;
+            let identity = actor_block_on(handle, within_deadline(deadline, client.query_one(
+                "SELECT pg_backend_pid(),backend_start::text FROM pg_stat_activity WHERE pid=pg_backend_pid()",
+                &[]))).and_then(|v| v.map_err(|_| RepositoryError::Unavailable))
+                .and_then(|v| v.map_err(|_| RepositoryError::Unavailable));
+            authority.connection.return_client(client)?;
+            let row = identity?;
+            let pid = row
+                .try_get::<_, i32>(0)
+                .map_err(|_| RepositoryError::Unavailable)?;
+            let start = row
+                .try_get::<_, String>(1)
+                .map_err(|_| RepositoryError::Unavailable)?;
+            if pid <= 1 || pid == 80873 || start.is_empty() {
+                return Err(RepositoryError::Unavailable);
+            }
+            // The live SQL connection pins this PID while its OS parent/start are observed.
+            let os_identity = std::process::Command::new("/bin/ps")
+                .args(["-p", &pid.to_string(), "-o", "pid=,ppid=,lstart="])
+                .output()
+                .map_err(|_| RepositoryError::Unavailable)?;
+            let os_identity = if os_identity.status.success() && os_identity.stdout.len() <= 2048 {
+                String::from_utf8(os_identity.stdout).map_err(|_| RepositoryError::Unavailable)?
+            } else {
+                return Err(RepositoryError::Unavailable);
+            };
+            let fields: Vec<&str> = os_identity.split_whitespace().collect();
+            if fields.len() != 7
+                || fields[0].parse::<i32>().ok() != Some(pid)
+                || fields[1].parse::<i32>().is_err()
+            {
+                return Err(RepositoryError::Unavailable);
+            }
+            Ok::<_, RepositoryError>((
+                scope,
+                retry_scope,
+                later_scope,
+                verifier,
+                pid,
+                start,
+                os_identity,
+            ))
+        })();
+        let (scope, retry_scope, later_scope, verifier, backend_pid, backend_start, os_identity) =
+            match produced {
+                Ok(value) => value,
+                Err(error) => {
+                    let first =
+                        actor_block_on(handle, authority.connection.close()).and_then(|v| v);
+                    let retry = if first.is_err() {
+                        Some(actor_block_on(handle, authority.connection.close()).and_then(|v| v))
+                    } else {
+                        None
+                    };
+                    let settled = match retain_fixture_connection_after_retry(
+                        handle,
+                        authority.into_owned_connection(),
+                        first,
+                        retry,
+                    ) {
+                        Ok(value) => value,
+                        Err(pending) => pending.fail_fixture_while_retaining_owner(),
+                    };
+                    settled.first_close?;
+                    if let Some(value) = settled.retry_close {
+                        value?;
+                    }
+                    if let Some(value) = settled.final_cleanup {
+                        value?;
+                    }
+                    return Err(error);
+                }
+            };
+        let mut repository = compose_registered_repository(
+            authority,
+            codec_limits(),
+            16384,
+            verifier,
+            RecoverySource {
+                rules: rules.clone(),
+                content: entries.clone(),
+                resources: resources.clone(),
+                assets: vec![],
+                limits: limits(),
+            },
+            bounds,
+        )?;
+        let (sender, actor_loop) = df_session::inbox::bounded_inbox::<
+            df_session::submission::OwnedInput<
+                crate::native_scope::NativeScope<FixtureMembershipAuthority>,
+            >,
+        >();
+        let (item, receipt) =
+            df_session::submission::OwnedInput::new(context.clone(), scope, input.clone());
+        let first_admission = match sender.try_submit(item) {
+            Ok(value) => value,
+            Err(_) => {
+                let stopped = sender.stop().map_err(|_| RepositoryError::Unavailable);
+                let first = repository.close();
+                let retry = if first.is_err() {
+                    Some(repository.close())
+                } else {
+                    None
+                };
+                let settled = match retain_fixture_repository_after_retry(repository, first, retry)
+                {
+                    Ok(value) => value,
+                    Err(pending) => pending.fail_fixture_while_retaining_owner(),
+                };
+                settled.first_close?;
+                if let Some(value) = settled.retry_close {
+                    value?;
+                }
+                if let Some(value) = settled.final_cleanup {
+                    value?;
+                }
+                stopped?;
+                return Err(RepositoryError::Capacity);
+            }
+        };
+        let admission_has_no_response = matches!(
+            receipt.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Empty)
+        );
+        let observed = std::sync::Arc::new(std::sync::Mutex::new([0_u64; 3]));
+        stage.set(
+            "actor Unknown actual admitted engine decision commits with suppressed acknowledgement",
+        );
+        let read_admin = &*admin;
+        let (parent_observation, stopped, joined) = std::thread::scope(|threads| {
+            let engine = ActorUnknownFixtureEngine {
+                baseline: baseline.clone(),
+                candidates: [
+                    (candidate.clone(), input.clone()),
+                    (later_candidate.clone(), later_input.clone()),
+                ],
+                observed: observed.clone(),
+            };
+            let publication = LifetimeFixturePublication {
+                runtime: handle,
+                administrator: read_admin,
+                candidate: candidate.clone(),
+                deadline,
+                observed: observed.clone(),
+            };
+            let initial = baseline.clone();
+            let actor = threads.spawn(move || {
+                let actor_id = std::thread::current().id();
+                if tokio::runtime::Handle::try_current().is_ok() {
+                    return Err(RepositoryError::Unavailable);
+                }
+                let mut owner = df_session::submission::DurableOwner::new(
+                    repository,
+                    engine,
+                    publication,
+                    initial,
+                    16384,
+                )?;
+                let drained = actor_loop
+                    .run(&mut owner)
+                    .map_err(|_| RepositoryError::Unavailable);
+                let checkpoint = owner.checkpoint().clone();
+                let mut returned = owner.into_repository();
+                let first_close = returned.close();
+                let retry_close = if first_close.is_err() {
+                    Some(returned.close())
+                } else {
+                    None
+                };
+                let cleanup =
+                    retain_fixture_repository_after_retry(returned, first_close, retry_close);
+                Ok::<_, RepositoryError>((
+                    drained,
+                    checkpoint,
+                    cleanup,
+                    actor_id,
+                    std::thread::current().id(),
+                ))
+            });
+            // No early propagation here: stop the inbox and explicitly join this actor
+            // even if a response, proxy observation or independent read fails.
+            let parent_observation = (|| {
+                if first_admission.0 != 1 || !admission_has_no_response {
+                    return Err(RepositoryError::InvalidReceipt);
+                }
+                let wait = deadline
+                    .checked_duration_since(Instant::now())
+                    .ok_or(RepositoryError::Unavailable)?;
+                let first = receipt
+                    .recv_timeout(wait)
+                    .map_err(|_| RepositoryError::InvalidReceipt)?;
+                if first != df_session::submission::SubmissionOutcome::LookupRequired
+                    || *observed.lock().map_err(|_| RepositoryError::Unavailable)? != [1, 0, 0]
+                {
+                    return Err(RepositoryError::InvalidReceipt);
+                }
+                stage.set("actor Unknown actual PostgreSQL COMMIT C and idle Z acknowledgement suppressed");
+                let ack =
+                    actor_block_on(handle, proxy.observe(deadline))?.map_err(proxy_failure)?;
+                if !ack.frontend_commit_forwarded
+                    || !ack.postgres_commit_complete_observed
+                    || !ack.postgres_ready_idle_observed
+                    || ack.suppressed_response_bytes == 0
+                    || ack.suppressed_response_bytes > 4096
+                {
+                    return Err(RepositoryError::InvalidReceipt);
+                }
+                let snapshot = actor_block_on(
+                    handle,
+                    physical_snapshot(
+                        read_admin,
+                        &tenant,
+                        candidate.basis(),
+                        codec_limits().maximum_document_bytes,
+                        deadline,
+                    ),
+                )??;
+                validate_physical_commit(
+                    &snapshot,
+                    &candidate,
+                    inventory(),
+                    limits(),
+                    codec_limits(),
+                )?;
+                // The committed revision has one checkpoint; the complete session
+                // additionally retains its independently seeded baseline checkpoint.
+                if snapshot.family_counts != [1, 1, 1, 1] {
+                    return Err(RepositoryError::InvalidReceipt);
+                }
+                let totals = actor_block_on(handle, within_deadline(deadline, read_admin.query_one(
+                    "SELECT
+                        (SELECT count(*) FROM df_game.checkpoints WHERE tenant_id=$1::bytea AND session_id=$2::bytea),
+                        (SELECT count(*) FROM df_game.facts WHERE tenant_id=$1::bytea AND session_id=$2::bytea),
+                        (SELECT count(*) FROM df_game.operations WHERE tenant_id=$1::bytea AND session_id=$2::bytea),
+                        (SELECT count(*) FROM df_game.intents WHERE tenant_id=$1::bytea AND session_id=$2::bytea)",
+                    &[&tenant.as_slice(), &baseline.basis().session.as_bytes().as_slice()])))?
+                    .map_err(|_| RepositoryError::Unavailable)?
+                    .map_err(|_| RepositoryError::Unavailable)?;
+                let mut family_totals = [0_i64; 4];
+                for (column, count) in family_totals.iter_mut().enumerate() {
+                    *count = totals
+                        .try_get(column)
+                        .map_err(|_| RepositoryError::Unavailable)?;
+                }
+                if family_totals != [2, 1, 1, 1] {
+                    return Err(RepositoryError::InvalidReceipt);
+                }
+                let stored = decode_receipt(
+                    snapshot
+                        .retained_receipt
+                        .as_ref()
+                        .ok_or(RepositoryError::InvalidReceipt)?,
+                    baseline.basis().session,
+                    OperationId::from_bytes(&operation)
+                        .map_err(|_| RepositoryError::InputBinding)?,
+                    16384,
+                    codec_limits(),
+                )
+                .map_err(|_| RepositoryError::InvalidReceipt)?;
+                if stored.basis() != candidate.basis()
+                    || stored.decision() != &candidate.state().decisions[0]
+                {
+                    return Err(RepositoryError::InvalidReceipt);
+                }
+                let committed = retained_fixture_all_family_bytes(
+                    handle,
+                    read_admin,
+                    &tenant,
+                    baseline.basis().session,
+                    deadline,
+                )?;
+                stage.set("actor Unknown same input and different valid input cannot bypass poisoned repository");
+                let (same_item, same_receipt) = df_session::submission::OwnedInput::new(
+                    context.clone(),
+                    retry_scope,
+                    input.clone(),
+                );
+                let second = sender
+                    .try_submit(same_item)
+                    .map_err(|_| RepositoryError::Capacity)?;
+                let (different_item, different_receipt) = df_session::submission::OwnedInput::new(
+                    context.clone(),
+                    later_scope,
+                    later_input,
+                );
+                let third = sender
+                    .try_submit(different_item)
+                    .map_err(|_| RepositoryError::Capacity)?;
+                if second.0 != 2 || third.0 != 3 {
+                    return Err(RepositoryError::InvalidReceipt);
+                }
+                for receipt in [same_receipt, different_receipt] {
+                    let wait = deadline
+                        .checked_duration_since(Instant::now())
+                        .ok_or(RepositoryError::Unavailable)?;
+                    if receipt
+                        .recv_timeout(wait)
+                        .map_err(|_| RepositoryError::InvalidReceipt)?
+                        != df_session::submission::SubmissionOutcome::Refused(
+                            RepositoryError::Unavailable,
+                        )
+                        || *observed.lock().map_err(|_| RepositoryError::Unavailable)? != [1, 0, 0]
+                        || retained_fixture_all_family_bytes(
+                            handle,
+                            read_admin,
+                            &tenant,
+                            baseline.basis().session,
+                            deadline,
+                        )? != committed
+                    {
+                        return Err(RepositoryError::InvalidReceipt);
+                    }
+                }
+                Ok::<_, RepositoryError>((committed, third))
+            })();
+            let stopped = sender.stop().map_err(|_| RepositoryError::Unavailable);
+            // A failed proxy observation still owns the task; close it before joining
+            // the actor so its sockets cannot strand the accepted bounded transaction.
+            let proxy_close = actor_block_on(handle, proxy.close(bounds.driver_join))
+                .and_then(|v| v.map_err(proxy_failure));
+            let proxy_retry = if proxy_close.is_err() {
+                Some(
+                    actor_block_on(handle, proxy.close(bounds.driver_join))
+                        .and_then(|v| v.map_err(proxy_failure)),
+                )
+            } else {
+                None
+            };
+            if proxy.task.is_some() {
+                eprintln!(
+                    "actor Unknown proxy cleanup exhausted with owner retained; ROOT process cleanup required; no joined proof"
+                );
+                std::process::exit(1);
+            }
+            let parent_observation = parent_observation.and_then(|v| {
+                proxy_close?;
+                if let Some(retry) = proxy_retry {
+                    retry?;
+                }
+                Ok(v)
+            });
+            let joined = actor
+                .join()
+                .map_err(|_| RepositoryError::Unavailable)
+                .and_then(|v| v);
+            (parent_observation, stopped, joined)
+        });
+        let (drained, checkpoint, cleanup, actor_id, close_id) = joined?;
+        let settled = match cleanup {
+            Ok(value) => value,
+            Err(pending) => pending.fail_fixture_while_retaining_owner(),
+        };
+        settled.first_close?;
+        if let Some(value) = settled.retry_close {
+            value?;
+        }
+        if let Some(value) = settled.final_cleanup {
+            value?;
+        }
+        stopped?;
+        let (committed, last_admission) = parent_observation?;
+        if actor_id == std::thread::current().id()
+            || actor_id != close_id
+            || checkpoint != baseline
+            || *observed.lock().map_err(|_| RepositoryError::Unavailable)? != [1, 0, 0]
+            || sender
+                .usage()
+                .map_err(|_| RepositoryError::Unavailable)?
+                .accepting
+        {
+            return Err(RepositoryError::InvalidReceipt);
+        }
+        let drained = drained?;
+        if drained.reduced_inputs != 3
+            || drained.last_sequence != Some(last_admission)
+            || retained_fixture_all_family_bytes(
+                handle,
+                admin,
+                &tenant,
+                baseline.basis().session,
+                deadline,
+            )? != committed
+        {
+            return Err(RepositoryError::InvalidReceipt);
+        }
+        stage.set("actor Unknown same actor native driver joined before parent join and exact backend absent");
+        actor_block_on(handle, within_deadline(deadline, async {
+            loop {
+                admin.query_one("SELECT pg_stat_clear_snapshot()", &[]).await.map_err(|_| RepositoryError::Unavailable)?;
+                let row = admin.query_one("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid=$1::integer AND backend_start::text=$2::text AND datname=current_database())",
+                    &[&backend_pid,&backend_start]).await.map_err(|_| RepositoryError::Unavailable)?;
+                if !row.try_get::<_,bool>(0).map_err(|_| RepositoryError::Unavailable)? { break; }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            Ok::<_,RepositoryError>(())
+        }))?.map_err(|_| RepositoryError::Unavailable)??;
+        let after_os = std::process::Command::new("/bin/ps")
+            .args(["-p", &backend_pid.to_string(), "-o", "pid=,ppid=,lstart="])
+            .output()
+            .map_err(|_| RepositoryError::Unavailable)?;
+        if after_os.status.success() {
+            let signature =
+                std::str::from_utf8(&after_os.stdout).map_err(|_| RepositoryError::Unavailable)?;
+            let fields: Vec<&str> = signature.split_whitespace().collect();
+            if signature == os_identity
+                || fields.len() != 7
+                || fields[0].parse::<i32>().ok() != Some(backend_pid)
+                || fields[1].parse::<i32>().is_err()
+                || !after_os.stderr.is_empty()
+            {
+                return Err(RepositoryError::Unavailable);
+            }
+        } else if after_os.status.code() != Some(1)
+            || !after_os.stdout.is_empty()
+            || !after_os.stderr.is_empty()
+        {
+            // Exact ps PID absence is exit1+empty. Other failures prove nothing.
+            return Err(RepositoryError::Unavailable);
+        }
+        println!(
+            "registered physical actual actor lost COMMIT acknowledgement: session59; one engine decision; LookupRequired then same/different Refused(Unavailable); no publication/wake; four-family counts2/1/1/1 and complete codec2/schema1 appearance equal; inbox stop/drain -> same actor native joined close -> parent join; backend_pid={backend_pid} backend_start={backend_start} OSidentity={}; exact actor recovery remains unqualified",
+            os_identity.trim()
+        );
+        Ok(())
+    })();
+    let closed = actor_block_on(handle, proxy.close(bounds.driver_join))
+        .and_then(|v| v.map_err(proxy_failure));
+    let retry = if closed.is_err() {
+        Some(
+            actor_block_on(handle, proxy.close(bounds.driver_join))
+                .and_then(|v| v.map_err(proxy_failure)),
+        )
+    } else {
+        None
+    };
+    if proxy.task.is_some() {
+        eprintln!(
+            "actor Unknown setup proxy cleanup exhausted with owner retained; ROOT cleanup required; no joined proof"
+        );
+        std::process::exit(1);
+    }
+    observed_case?;
+    closed?;
+    if let Some(value) = retry {
+        value?;
+    }
     Ok(())
 }
