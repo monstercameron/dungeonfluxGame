@@ -10,9 +10,10 @@ mod browser {
         CharacterDisplayView, CharacterLimits, CharacterPhaseView, CharacterPublicReadiness,
         CharacterSheetView, CharacterStatus, CombatActor, CombatArt, CombatDraft, CombatFeedback,
         CombatLimits, CombatOffer, CombatOfferKind, CombatPhaseView, CombatRoll, ConceptScene,
-        ExplorationChoice, ExplorationLimits, ExplorationView, JoinFeedback, JoinPhaseView,
-        JoinStage, JoinStamp, SessionConnection, SessionOverlayOffer, SessionOverlayView,
-        SheetLabels, SheetOffer, SheetOwnerGeneration, SheetRow, SheetSection, SheetTab,
+        ExplorationChoice, ExplorationLimits, ExplorationView, FeedbackView, JoinFeedback,
+        JoinPhaseIntent, JoinPhaseView, JoinStage, JoinStamp, SessionConnection,
+        SessionOverlayOffer, SessionOverlayView, SheetLabels, SheetOffer, SheetOwnerGeneration,
+        SheetRow, SheetSection, SheetTab,
     };
     use df_web::{DisplayPhase, PlayerPhase, RoleInput, RolePhase, RoleShell, RoleShellError};
     use std::{
@@ -1403,6 +1404,463 @@ mod browser {
             fixture
                 .root
                 .set_attribute("data-shell-append-failure", "pass")?;
+            Ok(())
+        })
+    }
+    const SERVER_PENDING: &str = "SERVER_SUPPLIED_PENDING";
+    const SERVER_REJECTION: &str = "SERVER_SUPPLIED_REJECTION";
+
+    #[wasm_bindgen]
+    pub fn shell_last_join_invitation() -> Result<String, JsValue> {
+        FIXTURE.with(|owner| {
+            let owner = owner.borrow();
+            let fixture = owner
+                .as_ref()
+                .ok_or_else(|| JsValue::from_str("fixture disposed"))?;
+            let last = fixture.receipt.last.borrow();
+            match last.as_ref() {
+                Some(RoleInput::PlayerJoin(JoinPhaseIntent::Join { invitation, .. })) => {
+                    Ok(invitation.clone())
+                }
+                _ => Err(JsValue::from_str("last actual receipt is not player Join")),
+            }
+        })
+    }
+    #[wasm_bindgen]
+    pub fn shell_last_join_player_name() -> Result<String, JsValue> {
+        FIXTURE.with(|owner| {
+            let owner = owner.borrow();
+            let fixture = owner
+                .as_ref()
+                .ok_or_else(|| JsValue::from_str("fixture disposed"))?;
+            let last = fixture.receipt.last.borrow();
+            match last.as_ref() {
+                Some(RoleInput::PlayerJoin(JoinPhaseIntent::Join { player_name, .. })) => {
+                    Ok(player_name.clone())
+                }
+                _ => Err(JsValue::from_str("last actual receipt is not player Join")),
+            }
+        })
+    }
+    #[wasm_bindgen]
+    pub fn shell_check_join_payload(
+        expected_invitation: &str,
+        expected_name: &str,
+    ) -> Result<(), JsValue> {
+        require(
+            expected_invitation.len() <= 8192 && expected_name.len() <= 8192,
+            "Join payload assertion input exceeds fixture bound",
+        )?;
+        FIXTURE.with(|owner| {
+            let owner = owner.borrow();
+            let fixture = owner
+                .as_ref()
+                .ok_or_else(|| JsValue::from_str("fixture disposed"))?;
+            let last = fixture.receipt.last.borrow();
+            match last.as_ref() {
+                Some(RoleInput::PlayerJoin(JoinPhaseIntent::Join {
+                    invitation,
+                    player_name,
+                    stamp,
+                })) => {
+                    require(
+                        invitation == expected_invitation && player_name == expected_name,
+                        "Join forwarded payload differs from actual supplied input",
+                    )?;
+                    require(
+                        stamp.generation == fixture.epoch && stamp.sequence == fixture.sequence,
+                        "Join forwarded stamp is not current supplied view",
+                    )?;
+                    fixture
+                        .root
+                        .set_attribute("data-shell-join-payload", "pass")?;
+                    Ok(())
+                }
+                _ => Err(JsValue::from_str("last actual receipt is not player Join")),
+            }
+        })
+    }
+
+    // Only the fixture's explicit incoming-view control changes presentation.
+    // An actual selection callback records its typed input and does not invoke
+    // this producer or decide pending/rejection/readiness locally.
+    impl Fixture {
+        fn supplied_state(&mut self, phase: u32, state: u32) -> Result<(), JsValue> {
+            require(
+                phase <= 4 && state <= 2 && !(phase == 4 && state == 2),
+                "unsupported supplied presentation fixture state",
+            )?;
+            if state == 0 {
+                self.show(phase, self.epoch, self.overlay, self.host_offer)?;
+                self.root.set_attribute("data-shell-supplied-state", "0")?;
+                return Ok(());
+            }
+            if self.phase != phase {
+                self.show(phase, self.epoch, self.overlay, self.host_offer)?;
+            }
+            let sequence = self
+                .sequence
+                .checked_add(1)
+                .ok_or_else(|| JsValue::from_str("fixture sequence exhausted"))?;
+            let current_revision = revision(self.epoch, sequence)?;
+            let pending = state == 1;
+            let mut private_overlay = overlay(false, self.epoch, sequence, self.host_offer);
+            let mut public_overlay = overlay(true, self.epoch, sequence, self.host_offer);
+            let overlay_offers = [SessionOverlayOffer {
+                key: "exact-host-offer",
+                label: "Advertised host selection",
+                enabled: true,
+                pending,
+            }];
+            private_overlay.operation = Some(if pending {
+                FeedbackView::Pending(SERVER_PENDING)
+            } else {
+                FeedbackView::Refused(SERVER_REJECTION)
+            });
+            private_overlay.host_offers = if self.host_offer {
+                &overlay_offers
+            } else {
+                &[]
+            };
+            public_overlay.host_offers = if self.host_offer {
+                &overlay_offers
+            } else {
+                &[]
+            };
+            let player_root = self.player.root().clone();
+            let display_root = self.display.root().clone();
+            let (player_result, display_result) = match phase {
+                0 => {
+                    let mut player = join(false, self.epoch, sequence);
+                    player.feedback = if pending {
+                        JoinFeedback::Pending(SERVER_PENDING)
+                    } else {
+                        JoinFeedback::Rejected(SERVER_REJECTION)
+                    };
+                    player.join_enabled = !pending;
+                    let display = join(true, self.epoch, sequence);
+                    (
+                        self.player.present(
+                            self.player_binding,
+                            current_revision,
+                            RolePhase::Player(PlayerPhase::Join {
+                                view: &player,
+                                input: PlayerJoinInput {
+                                    identifier: "shell-player-join",
+                                    invitation: "",
+                                    player_name: "",
+                                },
+                                limits: campaign_limits(),
+                            }),
+                            self.overlay.then_some(&private_overlay),
+                        ),
+                        self.display.present(
+                            self.display_binding,
+                            current_revision,
+                            RolePhase::Display(DisplayPhase::Join {
+                                view: &display,
+                                input: DisplayJoinInput {
+                                    identifier: "shell-display-join",
+                                    invitation: "",
+                                    player_name: "",
+                                },
+                                limits: campaign_limits(),
+                            }),
+                            self.overlay.then_some(&public_overlay),
+                        ),
+                    )
+                }
+                1 => {
+                    let mut player = character(self.epoch, sequence);
+                    player.status = if pending {
+                        CharacterStatus::Pending
+                    } else {
+                        CharacterStatus::Rejected
+                    };
+                    player.status_message = if pending {
+                        SERVER_PENDING
+                    } else {
+                        SERVER_REJECTION
+                    }
+                    .into();
+                    player.editable = !pending;
+                    for action in &mut player.actions {
+                        action.enabled = !pending;
+                    }
+                    let mut display = display_character(self.epoch, sequence, self.host_offer);
+                    for offer in &mut display.host_offers {
+                        offer.pending = pending;
+                    }
+                    (
+                        self.player.present(
+                            self.player_binding,
+                            current_revision,
+                            RolePhase::Player(PlayerPhase::Character {
+                                view: &player,
+                                limits: character_limits(),
+                            }),
+                            self.overlay.then_some(&private_overlay),
+                        ),
+                        self.display.present(
+                            self.display_binding,
+                            current_revision,
+                            RolePhase::Display(DisplayPhase::Character {
+                                view: &display,
+                                limits: display_limits(),
+                            }),
+                            self.overlay.then_some(&public_overlay),
+                        ),
+                    )
+                }
+                2 => {
+                    let choices = [ExplorationChoice {
+                        id: "exact-explore-choice",
+                        label: "Ask about the harbor",
+                        detail: "Supplied choice",
+                        disabled_reason: if pending { Some(SERVER_PENDING) } else { None },
+                    }];
+                    let mut player = exploration(false, self.player_binding, current_revision);
+                    player.choices = &choices;
+                    player.pending = pending.then_some(SERVER_PENDING);
+                    player.rejection = (!pending).then_some(SERVER_REJECTION);
+                    let display = exploration(true, self.display_binding, current_revision);
+                    (
+                        self.player.present(
+                            self.player_binding,
+                            current_revision,
+                            RolePhase::Player(PlayerPhase::Exploration {
+                                view: &player,
+                                limits: explore_limits(),
+                            }),
+                            self.overlay.then_some(&private_overlay),
+                        ),
+                        self.display.present(
+                            self.display_binding,
+                            current_revision,
+                            RolePhase::Display(DisplayPhase::Exploration {
+                                view: &display,
+                                limits: explore_limits(),
+                            }),
+                            self.overlay.then_some(&public_overlay),
+                        ),
+                    )
+                }
+                3 => {
+                    let offer =
+                        RevisionLabel::new(Some("exact-combat-intent")).map_err(|failure| {
+                            JsValue::from_str(&format!("fixture label: {failure:?}"))
+                        })?;
+                    let offers = [CombatOffer {
+                        key: "action-one",
+                        offer: &offer,
+                        option: None,
+                        kind: CombatOfferKind::Action,
+                        label: "Send supplied intent",
+                        explanation: "Server validates the exact proposal",
+                        enabled: true,
+                        pending,
+                    }];
+                    let mut player = combat(false, &offers);
+                    player.feedback = if pending {
+                        CombatFeedback::Pending(SERVER_PENDING)
+                    } else {
+                        CombatFeedback::Refused(SERVER_REJECTION)
+                    };
+                    player.draft = Some(CombatDraft {
+                        key: "private-intent",
+                        label: "Your intent",
+                        enabled: !pending,
+                        feedback: player.feedback,
+                    });
+                    let display = combat(true, &[]);
+                    (
+                        self.player.present(
+                            self.player_binding,
+                            current_revision,
+                            RolePhase::Player(PlayerPhase::Combat {
+                                view: &player,
+                                limits: combat_limits(),
+                            }),
+                            self.overlay.then_some(&private_overlay),
+                        ),
+                        self.display.present(
+                            self.display_binding,
+                            current_revision,
+                            RolePhase::Display(DisplayPhase::Combat {
+                                view: &display,
+                                limits: combat_limits(),
+                            }),
+                            self.overlay.then_some(&public_overlay),
+                        ),
+                    )
+                }
+                4 => {
+                    let offers = [SheetOffer {
+                        id: "exact-sheet-offer",
+                        label: "Advertised equipment selection",
+                        enabled: true,
+                        pending: true,
+                    }];
+                    let rows = [SheetRow {
+                        key: "lantern",
+                        title: "Storm lantern",
+                        value: "Supplied inventory",
+                        summary: PRIVATE,
+                        details: &[],
+                        offers: &offers,
+                    }];
+                    let sections = [SheetSection {
+                        key: "equipment",
+                        tab: SheetTab::Equipment,
+                        title: "Equipment",
+                        caption: "Server-provided inventory",
+                        rows: &rows,
+                    }];
+                    let player = CharacterSheetView {
+                        owner: SheetOwnerGeneration(self.epoch),
+                        revision: sequence,
+                        name: "Mara",
+                        identity: "Supplied character",
+                        subtitle: PRIVATE,
+                        connection: "Current supplied view",
+                        notice: SERVER_PENDING,
+                        labels: SheetLabels {
+                            tabs: ["Character", "Equipment", "Spells", "Journal", "Progression"],
+                            navigation: "Personal character navigation",
+                            filter: "Search your sheet",
+                            no_matches: "No matching supplied rows",
+                            art_fallback: "Portrait unavailable",
+                        },
+                        sections: &sections,
+                    };
+                    let display = combat(true, &[]);
+                    (
+                        self.player.present(
+                            self.player_binding,
+                            current_revision,
+                            RolePhase::Player(PlayerPhase::Sheet(&player)),
+                            self.overlay.then_some(&private_overlay),
+                        ),
+                        self.display.present(
+                            self.display_binding,
+                            current_revision,
+                            RolePhase::Display(DisplayPhase::Combat {
+                                view: &display,
+                                limits: combat_limits(),
+                            }),
+                            self.overlay.then_some(&public_overlay),
+                        ),
+                    )
+                }
+                _ => {
+                    return Err(JsValue::from_str(
+                        "unsupported supplied presentation fixture phase",
+                    ));
+                }
+            };
+            require(
+                player_result.map_err(error)? == ViewAcceptance::Applied
+                    && display_result.map_err(error)? == ViewAcceptance::Applied,
+                "supplied current state was not applied",
+            )?;
+            require(
+                player_root.is_same_node(Some(self.player.root()))
+                    && display_root.is_same_node(Some(self.display.root())),
+                "supplied state recreated persistent role shell",
+            )?;
+            require(
+                !self
+                    .display
+                    .root()
+                    .text_content()
+                    .unwrap_or_default()
+                    .contains(PRIVATE),
+                "private content reached public shell",
+            )?;
+            self.sequence = sequence;
+            self.root
+                .set_attribute("data-shell-supplied-state", &state.to_string())?;
+            self.root
+                .set_attribute("data-shell-sequence", &sequence.to_string())?;
+            Ok(())
+        }
+    }
+    #[wasm_bindgen]
+    pub fn shell_show_supplied_state(phase: u32, state: u32) -> Result<(), JsValue> {
+        FIXTURE.with(|owner| {
+            owner
+                .borrow_mut()
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("fixture disposed"))?
+                .supplied_state(phase, state)
+        })
+    }
+    /// An explicitly supplied public projection replaces the private fixture's
+    /// local role surface. The synthetic caller supplies that authorized input;
+    /// the route/RolePhase itself never grants a real audience permission.
+    #[wasm_bindgen]
+    pub fn shell_check_role_replacement() -> Result<(), JsValue> {
+        FIXTURE.with(|owner| {
+            let mut owner = owner.borrow_mut();
+            let fixture = owner
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("fixture disposed"))?;
+            fixture.show(1, fixture.epoch, false, false)?;
+            let root = fixture.player.root().clone();
+            let retained = private_nodes(&root)?;
+            require(
+                !retained.is_empty(),
+                "role-replacement probe lacks private content",
+            )?;
+            let button = root
+                .query_selector("[data-action-id='exact-character-submit']")?
+                .ok_or_else(|| JsValue::from_str("role-replacement action missing"))?;
+            let count = fixture.receipt.count.get();
+            let sequence = fixture
+                .sequence
+                .checked_add(1)
+                .ok_or_else(|| JsValue::from_str("fixture sequence exhausted"))?;
+            let public_view = display_character(fixture.epoch, sequence, false);
+            let result = fixture
+                .player
+                .present(
+                    fixture.player_binding,
+                    revision(fixture.epoch, sequence)?,
+                    RolePhase::Display(DisplayPhase::Character {
+                        view: &public_view,
+                        limits: display_limits(),
+                    }),
+                    None,
+                )
+                .map_err(error)?;
+            require(
+                result == ViewAcceptance::Applied,
+                "same-binding current role replacement refused",
+            )?;
+            require(
+                root.is_same_node(Some(fixture.player.root())),
+                "role replacement recreated shell",
+            )?;
+            require_erased(&retained)?;
+            button.dispatch_event(&Event::new("click")?)?;
+            require(
+                fixture.receipt.count.get() == count,
+                "old private-role callback remained active",
+            )?;
+            require(
+                root.query_selector("[data-character-client='display']")?
+                    .is_some(),
+                "actual display mount missing from replaced role",
+            )?;
+            require(
+                !root.text_content().unwrap_or_default().contains(PRIVATE),
+                "private content survived supplied public role replacement",
+            )?;
+            fixture.sequence = sequence;
+            fixture.show(1, fixture.epoch, false, false)?;
+            fixture
+                .root
+                .set_attribute("data-shell-role-replacement", "pass")?;
             Ok(())
         })
     }
