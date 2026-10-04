@@ -237,9 +237,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-api"
+version = "0.1.0"
+dependencies = [
+ "df-model",
+ "df-protocol",
+ "df-types",
+ "prost",
+]
+
+[[package]]
 name = "df-assets"
 version = "0.1.0"
 dependencies = [
+ "df-model",
  "df-observe",
  "df-types",
  "sha2 0.10.9",
@@ -256,9 +267,20 @@ dependencies = [
 name = "df-client"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "df-assets",
+ "df-protocol",
+ "df-rpc-bridge",
  "df-types",
+ "futures",
+ "http",
+ "http-body",
+ "http-body-util",
+ "prost",
  "sha2 0.10.9",
+ "tonic",
+ "tonic-prost",
+ "tower-service",
 ]
 
 [[package]]

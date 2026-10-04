@@ -16,3 +16,6 @@ pub use range::{
     AccessFailure, AssetReadAuthority, AssetReadStore, AuthorizedBinding, AuthorizedRange,
     ByteRange, ChunkOutcome, MAX_CHUNK_BYTES, RangeError, open_range,
 };
+
+mod resolution;
+pub use resolution::AssetResolver;

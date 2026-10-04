@@ -8,3 +8,17 @@ license.workspace = true
 df-assets = { path = "../df-assets" }
 df-types = { path = "../df-types" }
 sha2 = { version = "=0.10.9", default-features = false, features = ["std"] }
+
+df-rpc-bridge = { path = "../df-rpc-bridge" }
+prost.workspace = true
+tonic.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+df-protocol = { path = "../df-protocol" }
+bytes.workspace = true
+futures = { workspace = true, features = ["executor"] }
+http.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
+tonic-prost.workspace = true
+tower-service.workspace = true
