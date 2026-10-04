@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "asset_id": "dungeonflux-demo-mara-portrait-v1",
+  "asset_file": "mara-portrait-v1.png",
+  "sha256": "8cdb3f6d16d2a6df3bb92a0296a8f75a7998ef0698d6e81cd4d071dfad189e5d",
+  "dimensions": [
+    1024,
+    1536
+  ],
+  "synthetic": true,
+  "generator": {
+    "tool": "built-in image_gen",
+    "prompt": "Create one high-quality character-card portrait of the fictional adult woman Mara, using two image references in order. Image 1, the approved four-view character sheet, is the exact identity and costume reference. Image 2, the accepted harbor scene, is only the lighting, color and painterly realism reference. Vertical head-and-shoulders portrait; Mara faces the viewer squarely, with the same oval face, gray eyes, light olive complexion, silver braided hairstyle, steady expression and proportions as the sheet. Her small diagonal scar crosses her anatomical LEFT eyebrow, which is the eyebrow on the VIEWER'S RIGHT in this frontal portrait; keep the viewer-left brow unscarred. Render the face and both brows sharply and clearly. She wears exactly the plain navy travel coat with its high open collar over the light ordinary shirt shown on the sheet; no harness, armor, jewelry, backpack, weapon, pouches or props. A softly blurred moonlit canal harbor behind her, with cool blue mist and a few warm amber lantern glows, restrained enough to keep the face prominent. Cinematic painterly realism matching the harbor art, detailed hair and cloth texture, warm rim light and cool fill. No text, frame, UI, logo or watermark.",
+    "references": [
+      {
+        "path": "assets/ui/characters/mara-reference-v2.png",
+        "role": "character_identity",
+        "sha256": "8283601be16ba040c7a1385d5c025d3cd7efcc380dade333e9c58d5c952e7e5c"
+      },
+      {
+        "path": "assets/ui/scenes/mara-harbor-v4.png",
+        "role": "lighting_style",
+        "sha256": "4983bec21d787c4067686a9a4400ec5e05b7c3ddafb6f5a6e18871c6f7765ea2"
+      }
+    ]
+  },
+  "acceptance": {
+    "scope": "Independently reviewed static portrait only",
+    "review_id": "evaluator-portrait-review-01"
+  },
+  "runtime_status": "Static reference-derived asset; character-card wiring and automatic production generation remain pending"
+}
