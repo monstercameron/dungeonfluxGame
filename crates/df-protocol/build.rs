@@ -11,10 +11,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "proto/transport_fixture.proto",
                 "proto/common.proto",
                 "proto/contract_fixture.proto",
+                "proto/gameplay.proto",
             ],
             &["proto"],
         )?;
-    for schema in ["transport_fixture", "common", "contract_fixture"] {
+    for schema in [
+        "transport_fixture",
+        "common",
+        "contract_fixture",
+        "gameplay",
+    ] {
         println!("cargo:rerun-if-changed=proto/{schema}.proto");
     }
     Ok(())

@@ -9,6 +9,8 @@ mod decision_adapter;
 #[cfg(not(target_arch = "wasm32"))]
 mod decision_rows;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod local_demo_scope;
+#[cfg(not(target_arch = "wasm32"))]
 mod native_bridge;
 #[cfg(not(target_arch = "wasm32"))]
 mod native_connection;

@@ -1,0 +1,18 @@
+syntax = "proto3";
+package dungeonflux.public.v1;
+import "common.proto";
+service ActionService { rpc Submit(SubmitActionRequest) returns (SubmitActionResponse); }
+service SessionService { rpc Watch(WatchViewRequest) returns (stream ViewMessage); }
+enum GameplayActionKind { GAMEPLAY_ACTION_KIND_UNSPECIFIED = 0; EXAMINE_HARBOR_SEAL = 1; }
+enum RejectionCode { REJECTION_CODE_UNSPECIFIED = 0; STALE_OFFER = 1; WRONG_TURN = 2; INVALID_SELECTION = 3; PAUSED = 4; RESOURCE_MISSING = 5; CAPABILITY_UNAVAILABLE = 6; RECOVERY_REQUIRED = 7; REVISION_CONFLICT = 8; OPERATION_CONFLICT = 9; OPERATION_EXPIRED = 10; }
+message Rejection { RejectionCode code = 1; }
+message AcceptedAction { AbilityCheckResult check = 1; }
+message SubmitActionRequest { SessionId session_id = 1; RunId run_id = 2; SessionRevision observed_revision = 3; OperationId operation_id = 4; string offer_id = 5; GameplayActionKind action_kind = 6; }
+message AbilityCheckResult { uint32 die = 1; sint32 ability_modifier = 2; uint32 proficiency_bonus = 3; sint32 total = 4; uint32 difficulty_class = 5; bool succeeded = 6; string source_revision = 7; }
+message DecisionReceipt { OperationId operation_id = 1; SessionRevision revision = 2; SessionId session_id = 3; RunId run_id = 4; bool replayed = 5; oneof outcome { AcceptedAction accepted = 6; Rejection rejected = 7; } }
+message WatchViewRequest { SessionId session_id = 1; RunId run_id = 2; ClientBindingId client_binding_id = 3; SessionRevision after_revision = 4; }
+message PlayerGameplayView { string offer_id = 1; string narration = 2; AbilityCheckResult check = 3; string private_clue = 4; bool action_available = 5; }
+message DisplayGameplayView { string narration = 1; string scene_asset = 2; }
+message ViewMessage { SessionRevision revision = 1; oneof audience { PlayerGameplayView player = 2; DisplayGameplayView display = 3; } }
+message OperationObservation { RejectionCode code = 1; }
+message SubmitActionResponse { oneof outcome { DecisionReceipt committed_decision = 1; OperationObservation operation_observation = 2; } }

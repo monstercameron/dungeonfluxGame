@@ -1,12 +1,27 @@
 # Frozen allocations from actual protoc descriptors; retirement retains reserved names/numbers.
 enum dungeonflux.experimental.contract.v1.CapabilityKind
 enum dungeonflux.experimental.transport.v1.Sample.Behavior
+enum dungeonflux.public.v1.GameplayActionKind
+enum dungeonflux.public.v1.RejectionCode
 enum-value dungeonflux.experimental.contract.v1.CapabilityKind 0 CAPABILITY_KIND_UNSPECIFIED
 enum-value dungeonflux.experimental.contract.v1.CapabilityKind 1 COMPOSITE_RECOVERY
 enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 0 BEHAVIOR_UNSPECIFIED
 enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 1 ECHO
 enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 2 REJECT
 enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 3 WAIT
+enum-value dungeonflux.public.v1.GameplayActionKind 0 GAMEPLAY_ACTION_KIND_UNSPECIFIED
+enum-value dungeonflux.public.v1.GameplayActionKind 1 EXAMINE_HARBOR_SEAL
+enum-value dungeonflux.public.v1.RejectionCode 0 REJECTION_CODE_UNSPECIFIED
+enum-value dungeonflux.public.v1.RejectionCode 1 STALE_OFFER
+enum-value dungeonflux.public.v1.RejectionCode 10 OPERATION_EXPIRED
+enum-value dungeonflux.public.v1.RejectionCode 2 WRONG_TURN
+enum-value dungeonflux.public.v1.RejectionCode 3 INVALID_SELECTION
+enum-value dungeonflux.public.v1.RejectionCode 4 PAUSED
+enum-value dungeonflux.public.v1.RejectionCode 5 RESOURCE_MISSING
+enum-value dungeonflux.public.v1.RejectionCode 6 CAPABILITY_UNAVAILABLE
+enum-value dungeonflux.public.v1.RejectionCode 7 RECOVERY_REQUIRED
+enum-value dungeonflux.public.v1.RejectionCode 8 REVISION_CONFLICT
+enum-value dungeonflux.public.v1.RejectionCode 9 OPERATION_CONFLICT
 field dungeonflux.experimental.contract.v1.Capability 1 kind type=14 label=1 presence=true target=.dungeonflux.experimental.contract.v1.CapabilityKind oneof=_kind
 field dungeonflux.experimental.contract.v1.Capability 2 required type=8 label=1 presence=true target=- oneof=_required
 field dungeonflux.experimental.contract.v1.CompatibilityFixture 1 protocol_revision type=13 label=1 presence=true target=- oneof=_protocol_revision
@@ -23,38 +38,91 @@ field dungeonflux.experimental.transport.v1.Sample 2 payload type=12 label=1 pre
 field dungeonflux.experimental.transport.v1.Sample 3 behavior type=14 label=1 presence=false target=.dungeonflux.experimental.transport.v1.Sample.Behavior oneof=-
 field dungeonflux.experimental.transport.v1.Sample 4 active_calls type=13 label=1 presence=false target=- oneof=-
 field dungeonflux.experimental.transport.v1.Sample 5 deadline_calls type=13 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.AbilityCheckResult 1 die type=13 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.AbilityCheckResult 2 ability_modifier type=17 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.AbilityCheckResult 3 proficiency_bonus type=13 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.AbilityCheckResult 4 total type=17 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.AbilityCheckResult 5 difficulty_class type=13 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.AbilityCheckResult 6 succeeded type=8 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.AbilityCheckResult 7 source_revision type=9 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.AcceptedAction 1 check type=11 label=1 presence=false target=.dungeonflux.public.v1.AbilityCheckResult oneof=-
 field dungeonflux.public.v1.BuildIdentity 1 source_revision type=9 label=1 presence=true target=- oneof=_source_revision
 field dungeonflux.public.v1.BuildIdentity 2 native_revision type=9 label=1 presence=true target=- oneof=_native_revision
 field dungeonflux.public.v1.BuildIdentity 3 wasm_revision type=9 label=1 presence=true target=- oneof=_wasm_revision
 field dungeonflux.public.v1.BuildIdentity 4 configuration_revision type=9 label=1 presence=true target=- oneof=_configuration_revision
 field dungeonflux.public.v1.BuildIdentity 5 content_revision type=9 label=1 presence=true target=- oneof=_content_revision
 field dungeonflux.public.v1.ClientBindingId 1 value type=12 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.DecisionReceipt 1 operation_id type=11 label=1 presence=false target=.dungeonflux.public.v1.OperationId oneof=-
+field dungeonflux.public.v1.DecisionReceipt 2 revision type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionRevision oneof=-
+field dungeonflux.public.v1.DecisionReceipt 3 session_id type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionId oneof=-
+field dungeonflux.public.v1.DecisionReceipt 4 run_id type=11 label=1 presence=false target=.dungeonflux.public.v1.RunId oneof=-
+field dungeonflux.public.v1.DecisionReceipt 5 replayed type=8 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.DecisionReceipt 6 accepted type=11 label=1 presence=false target=.dungeonflux.public.v1.AcceptedAction oneof=outcome
+field dungeonflux.public.v1.DecisionReceipt 7 rejected type=11 label=1 presence=false target=.dungeonflux.public.v1.Rejection oneof=outcome
+field dungeonflux.public.v1.DisplayGameplayView 1 narration type=9 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.DisplayGameplayView 2 scene_asset type=9 label=1 presence=false target=- oneof=-
 field dungeonflux.public.v1.MemberId 1 value type=12 label=1 presence=true target=- oneof=_value
 field dungeonflux.public.v1.OperationId 1 value type=12 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.OperationObservation 1 code type=14 label=1 presence=false target=.dungeonflux.public.v1.RejectionCode oneof=-
+field dungeonflux.public.v1.PlayerGameplayView 1 offer_id type=9 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.PlayerGameplayView 2 narration type=9 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.PlayerGameplayView 3 check type=11 label=1 presence=false target=.dungeonflux.public.v1.AbilityCheckResult oneof=-
+field dungeonflux.public.v1.PlayerGameplayView 4 private_clue type=9 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.PlayerGameplayView 5 action_available type=8 label=1 presence=false target=- oneof=-
 field dungeonflux.public.v1.RecoveryEpoch 1 value type=4 label=1 presence=true target=- oneof=_value
+field dungeonflux.public.v1.Rejection 1 code type=14 label=1 presence=false target=.dungeonflux.public.v1.RejectionCode oneof=-
 field dungeonflux.public.v1.RunId 1 value type=12 label=1 presence=true target=- oneof=_value
 field dungeonflux.public.v1.SessionId 1 value type=12 label=1 presence=true target=- oneof=_value
 field dungeonflux.public.v1.SessionRevision 1 epoch type=11 label=1 presence=false target=.dungeonflux.public.v1.RecoveryEpoch oneof=-
 field dungeonflux.public.v1.SessionRevision 2 sequence type=4 label=1 presence=true target=- oneof=_sequence
+field dungeonflux.public.v1.SubmitActionRequest 1 session_id type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionId oneof=-
+field dungeonflux.public.v1.SubmitActionRequest 2 run_id type=11 label=1 presence=false target=.dungeonflux.public.v1.RunId oneof=-
+field dungeonflux.public.v1.SubmitActionRequest 3 observed_revision type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionRevision oneof=-
+field dungeonflux.public.v1.SubmitActionRequest 4 operation_id type=11 label=1 presence=false target=.dungeonflux.public.v1.OperationId oneof=-
+field dungeonflux.public.v1.SubmitActionRequest 5 offer_id type=9 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.SubmitActionRequest 6 action_kind type=14 label=1 presence=false target=.dungeonflux.public.v1.GameplayActionKind oneof=-
+field dungeonflux.public.v1.SubmitActionResponse 1 committed_decision type=11 label=1 presence=false target=.dungeonflux.public.v1.DecisionReceipt oneof=outcome
+field dungeonflux.public.v1.SubmitActionResponse 2 operation_observation type=11 label=1 presence=false target=.dungeonflux.public.v1.OperationObservation oneof=outcome
+field dungeonflux.public.v1.ViewMessage 1 revision type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionRevision oneof=-
+field dungeonflux.public.v1.ViewMessage 2 player type=11 label=1 presence=false target=.dungeonflux.public.v1.PlayerGameplayView oneof=audience
+field dungeonflux.public.v1.ViewMessage 3 display type=11 label=1 presence=false target=.dungeonflux.public.v1.DisplayGameplayView oneof=audience
+field dungeonflux.public.v1.WatchViewRequest 1 session_id type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionId oneof=-
+field dungeonflux.public.v1.WatchViewRequest 2 run_id type=11 label=1 presence=false target=.dungeonflux.public.v1.RunId oneof=-
+field dungeonflux.public.v1.WatchViewRequest 3 client_binding_id type=11 label=1 presence=false target=.dungeonflux.public.v1.ClientBindingId oneof=-
+field dungeonflux.public.v1.WatchViewRequest 4 after_revision type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionRevision oneof=-
 file common.proto dungeonflux.public.v1 proto3
 file contract_fixture.proto dungeonflux.experimental.contract.v1 proto3
+file gameplay.proto dungeonflux.public.v1 proto3
 file transport_fixture.proto dungeonflux.experimental.transport.v1 proto3
 message dungeonflux.experimental.contract.v1.Capability
 message dungeonflux.experimental.contract.v1.CompatibilityFixture
 message dungeonflux.experimental.contract.v1.Identities
 message dungeonflux.experimental.transport.v1.Sample
+message dungeonflux.public.v1.AbilityCheckResult
+message dungeonflux.public.v1.AcceptedAction
 message dungeonflux.public.v1.BuildIdentity
 message dungeonflux.public.v1.ClientBindingId
+message dungeonflux.public.v1.DecisionReceipt
+message dungeonflux.public.v1.DisplayGameplayView
 message dungeonflux.public.v1.MemberId
 message dungeonflux.public.v1.OperationId
+message dungeonflux.public.v1.OperationObservation
+message dungeonflux.public.v1.PlayerGameplayView
 message dungeonflux.public.v1.RecoveryEpoch
+message dungeonflux.public.v1.Rejection
 message dungeonflux.public.v1.RunId
 message dungeonflux.public.v1.SessionId
 message dungeonflux.public.v1.SessionRevision
+message dungeonflux.public.v1.SubmitActionRequest
+message dungeonflux.public.v1.SubmitActionResponse
+message dungeonflux.public.v1.ViewMessage
+message dungeonflux.public.v1.WatchViewRequest
 method dungeonflux.experimental.transport.v1.TransportFixture Bidi .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=true server-stream=true
 method dungeonflux.experimental.transport.v1.TransportFixture ClientStream .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=true server-stream=false
 method dungeonflux.experimental.transport.v1.TransportFixture ServerStream .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=false server-stream=true
 method dungeonflux.experimental.transport.v1.TransportFixture Unary .dungeonflux.experimental.transport.v1.Sample .dungeonflux.experimental.transport.v1.Sample client-stream=false server-stream=false
+method dungeonflux.public.v1.ActionService Submit .dungeonflux.public.v1.SubmitActionRequest .dungeonflux.public.v1.SubmitActionResponse client-stream=false server-stream=false
+method dungeonflux.public.v1.SessionService Watch .dungeonflux.public.v1.WatchViewRequest .dungeonflux.public.v1.ViewMessage client-stream=false server-stream=true
 oneof dungeonflux.experimental.contract.v1.Capability _kind
 oneof dungeonflux.experimental.contract.v1.Capability _required
 oneof dungeonflux.experimental.contract.v1.CompatibilityFixture _protocol_revision
@@ -65,10 +133,15 @@ oneof dungeonflux.public.v1.BuildIdentity _native_revision
 oneof dungeonflux.public.v1.BuildIdentity _source_revision
 oneof dungeonflux.public.v1.BuildIdentity _wasm_revision
 oneof dungeonflux.public.v1.ClientBindingId _value
+oneof dungeonflux.public.v1.DecisionReceipt outcome
 oneof dungeonflux.public.v1.MemberId _value
 oneof dungeonflux.public.v1.OperationId _value
 oneof dungeonflux.public.v1.RecoveryEpoch _value
 oneof dungeonflux.public.v1.RunId _value
 oneof dungeonflux.public.v1.SessionId _value
 oneof dungeonflux.public.v1.SessionRevision _sequence
+oneof dungeonflux.public.v1.SubmitActionResponse outcome
+oneof dungeonflux.public.v1.ViewMessage audience
 service dungeonflux.experimental.transport.v1.TransportFixture
+service dungeonflux.public.v1.ActionService
+service dungeonflux.public.v1.SessionService

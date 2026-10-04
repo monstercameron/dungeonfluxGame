@@ -346,6 +346,14 @@ pub(super) async fn wait_for_cancellation(
 }
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
+    if web_sys::window().is_some_and(|window| {
+        window
+            .location()
+            .pathname()
+            .is_ok_and(|path| path.starts_with("/gameplay"))
+    }) {
+        return crate::gameplay_browser::start();
+    }
     let document = web_sys::window()
         .and_then(|window| window.document())
         .ok_or_else(|| JsValue::from_str("document unavailable"))?;

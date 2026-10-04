@@ -27,13 +27,25 @@ tonic = { workspace = true, features = ["transport", "router"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "time", "signal"] }
 tokio-stream = "0.1"
 tower-http = { version = "0.6", features = ["fs"] }
+df-api = { path = "../df-api" }
+df-auth = { path = "../df-auth" }
+df-content = { path = "../df-content" }
+df-engine = { path = "../df-engine" }
+df-model = { path = "../df-model" }
+df-persistence = { path = "../df-persistence" }
+df-rules = { path = "../df-rules" }
+df-session = { path = "../df-session" }
+df-types = { path = "../df-types" }
+prost.workspace = true
+sha2 = "=0.10.9"
+tokio-postgres = "=0.7.15"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "=0.3.106"
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 gloo-timers = { version = "0.3", features = ["futures"] }
-web-sys = { workspace = true, features = ["Window", "Document", "Element", "HtmlElement", "HtmlButtonElement", "Event", "Location", "Performance", "Navigator", "Request", "RequestInit", "Response"] }
+web-sys = { workspace = true, features = ["Window", "Document", "Element", "HtmlElement", "HtmlButtonElement", "Event", "Location", "Performance", "Navigator", "Request", "RequestInit", "Response", "Crypto"] }
 
 [dev-dependencies]
 df-types = { path = "../df-types" }
