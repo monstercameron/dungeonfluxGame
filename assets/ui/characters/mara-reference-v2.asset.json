@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "asset_id": "dungeonflux-demo-mara-reference-v2",
+  "asset_file": "mara-reference-v2.png",
+  "sha256": "8283601be16ba040c7a1385d5c025d3cd7efcc380dade333e9c58d5c952e7e5c",
+  "dimensions": [
+    1536,
+    1024
+  ],
+  "synthetic": true,
+  "views": [
+    "front_full_body",
+    "side_full_body",
+    "back_full_body",
+    "face_closeup"
+  ],
+  "appearance": {
+    "name": "Mara",
+    "hair": "Silver braid",
+    "scar": "Left eyebrow",
+    "clothing": "Plain navy travel coat, light shirt, dark trousers, brown boots"
+  },
+  "generator": {
+    "tool": "built-in image_gen",
+    "prompt": "Redraw this fantasy character reference illustration as the same four-view sheet. Keep the adult woman's face, small eyebrow scar, silver braid, body proportions, neutral gray background, painterly realism, and front, side, back, close-up arrangement. Her costume is simple ordinary travel clothing in every view: a plain navy long coat over a plain shirt, plain dark trousers, and plain boots. Show the coat's uninterrupted sleeves and back clearly. No backpack or bedroll, no shoulder or chest harness, no arm guards, no thigh straps, no pouches, no carried objects. Ensure the same plain costume appears in front, side and back views. No text.",
+    "input_content_sha256": "57161f91492bea41bfb13d848f268344e101ecbeb56bb375d227a2b9c6afeb1e"
+  },
+  "acceptance": {
+    "component": "Independently reviewed reference sheet only",
+    "review_id": "evaluator-sheet-component-01",
+    "scene_pair": "Not yet approved"
+  },
+  "runtime_status": "Static demo asset; automatic post-creation generation and scene RPC integration remain pending"
+}
