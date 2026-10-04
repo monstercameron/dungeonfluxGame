@@ -159,7 +159,7 @@ mod browser {
     }
     fn view(scene: ConceptScene, members: bool) -> CampaignView<'static> {
         let (chapter, title, description, location, scene_label, narration) = match scene {
-            ConceptScene::Harbor => (
+            ConceptScene::Harbor | ConceptScene::MaraHarbor => (
                 "Act I · The Lamplighter",
                 "The Drowned Lantern",
                 "A flooded town. A missing lamplighter. And questions that don’t like the light.",

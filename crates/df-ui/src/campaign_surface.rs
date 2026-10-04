@@ -4,6 +4,7 @@ use std::{collections::BTreeSet, fmt};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConceptScene {
     Harbor,
+    MaraHarbor,
     Tavern,
     Mountain,
     SunkenHall,
@@ -14,6 +15,7 @@ impl ConceptScene {
     pub const fn asset_path(self) -> &'static str {
         match self {
             Self::Harbor => "assets/concept-art/establishing-harbor-canal-rowboat-bridge.webp",
+            Self::MaraHarbor => "assets/ui/scenes/mara-harbor-v4.png",
             Self::Tavern => "assets/concept-art/scene-tavern-barkeep-talk-rain.webp",
             Self::Mountain => "assets/concept-art/scene-mountain-ruins-snowy-ridge-trek.webp",
             Self::SunkenHall => "assets/concept-art/scene-flooded-hall-party-wading-torchlit.webp",
@@ -23,6 +25,7 @@ impl ConceptScene {
     pub const fn description(self) -> &'static str {
         match self {
             Self::Harbor => "Moonlit harbor with lanterns, a stone bridge and a distant castle",
+            Self::MaraHarbor => "Mara in her navy coat beneath the lanterns of Greyhaven harbor",
             Self::Tavern => "Adventurers talking to a barkeeper in a candlelit tavern",
             Self::Mountain => "Adventurers trekking toward snowy mountain ruins",
             Self::SunkenHall => "A torchlit party wading through a flooded hall",
