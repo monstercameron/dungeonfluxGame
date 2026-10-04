@@ -12,3 +12,11 @@ pub use character_sheet::PlayerSheetScreen;
 mod exploration;
 #[cfg(target_arch = "wasm32")]
 pub use exploration::{ExplorationMountError, PlayerExploration};
+
+mod combat;
+#[cfg(target_arch = "wasm32")]
+pub use combat::{CombatMountError, PlayerCombat};
+
+mod session_overlays;
+#[cfg(target_arch = "wasm32")]
+pub use session_overlays::{PlayerSessionOverlays, SessionOverlayMountError};

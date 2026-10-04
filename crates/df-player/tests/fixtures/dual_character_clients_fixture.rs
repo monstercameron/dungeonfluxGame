@@ -181,6 +181,34 @@ mod browser {
                 && node.node_value().is_none_or(|text| text.is_empty())
         })
     }
+    // Synthetic fixture evidence only: keep the failing predicate intact and
+    // identify up to eight surviving raw Text nodes without dumping a whole view.
+    fn remaining_text_diagnostic(nodes: &[Node]) -> String {
+        let mut details = String::from("scope replacement retained private text nodes");
+        let mut reported = 0;
+        for node in nodes {
+            let value = node.node_value().unwrap_or_default();
+            if value.is_empty() {
+                continue;
+            }
+            if reported == 8 {
+                details.push_str("; additional nonempty Text omitted");
+                break;
+            }
+            let parent = node
+                .parent_element()
+                .map(|element| {
+                    let class: String = element.class_name().chars().take(80).collect();
+                    format!("{} class={class:?}", element.tag_name())
+                })
+                .unwrap_or_else(|| "detached Text".into());
+            let excerpt: String = value.chars().take(160).collect();
+            details.push_str(&format!("; parent={parent}, value={excerpt:?}"));
+            reported += 1;
+        }
+        details
+    }
+
     fn test_player_lifecycle(document: &Document, slot: &Element) -> Result<(), JsValue> {
         let mut data = player_view();
         let deliveries = Rc::new(RefCell::new(Vec::<CharacterSubmission>::new()));
@@ -313,10 +341,7 @@ mod browser {
             name.value() == "New owner" && flavor.value() == "New owner flavor",
             "scope replacement retained old draft",
         )?;
-        check(
-            scrubbed(&retained),
-            "scope replacement retained private text nodes",
-        )?;
+        check(scrubbed(&retained), &remaining_text_diagnostic(&retained))?;
         screen.revoke().map_err(error)?;
         screen.revoke().map_err(error)?;
         action.dispatch_event(&Event::new("click")?)?;
