@@ -8,3 +8,11 @@ license.workspace = true
 [dependencies]
 df-model = { path = "../df-model" }
 df-types = { path = "../df-types" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+df-observe = { path = "../df-observe" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+df-content = { path = "../df-content" }
+df-engine = { path = "../df-engine" }
+df-rules = { path = "../df-rules" }
