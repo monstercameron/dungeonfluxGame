@@ -1,0 +1,29 @@
+[package]
+name = "df-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+autotests = false
+
+[dependencies]
+df-model = { path = "../df-model" }
+df-types = { path = "../df-types" }
+df-rules = { path = "../df-rules" }
+df-world = { path = "../df-world" }
+
+[dev-dependencies]
+df-content = { path = "../df-content" }
+
+[[test]]
+name = "command_entry"
+path = "tests/command_entry.rs"
+
+[[test]]
+name = "director_staging"
+path = "tests/director_staging.rs"
+
+[[test]]
+name = "pending_resumption"
+path = "tests/pending_resumption.rs"
