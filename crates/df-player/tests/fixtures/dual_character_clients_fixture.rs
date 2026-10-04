@@ -119,7 +119,8 @@ mod browser {
             }],
             facts: vec![CharacterFact {
                 label: "View source".into(),
-                value: "Separate synthetic player projection".into(),
+                value: "Separate synthetic player projection · AI-generated v2 lantern-keeper art"
+                    .into(),
             }],
             actions: vec![CharacterAction {
                 id: "synthetic-submit".into(),
@@ -136,7 +137,7 @@ mod browser {
             description: "Your paths are gathering around the fire. A shared adventure waits beyond its light.".into(),
             readiness: CharacterPublicReadiness::Choosing,
             progress_label: "Synthetic server report · Party choosing characters".into(),
-            public_notice: "Separate public projection · No private form, build choices, or rejection details".into(),
+            public_notice: "Separate public projection · AI-generated v2 lantern-keeper art · No private form, build choices, or rejection details".into(),
             connection: CharacterDisplayConnection::Connected,
             connection_label: "Synthetic shared display · Production RPC pending".into(),
             members: vec![

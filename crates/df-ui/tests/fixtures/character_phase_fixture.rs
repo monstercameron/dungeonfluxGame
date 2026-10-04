@@ -87,7 +87,7 @@ mod browser {
             facts: vec![
                 CharacterFact { label: "View source".into(), value: "Synthetic fixture".into() },
                 CharacterFact { label: "Build validation".into(), value: "No rules service connected".into() },
-                CharacterFact { label: "Portrait".into(), value: "Original concept reference".into() },
+                CharacterFact { label: "Portrait".into(), value: "AI-generated v2 concept-inspired portrait".into() },
             ],
             actions: vec![CharacterAction { id: "fixture-review-draft".into(), kind: CharacterActionKind::SubmitDraft, label: "Send draft · fixture only".into(), enabled: true }],
         }
