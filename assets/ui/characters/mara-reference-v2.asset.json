@@ -28,7 +28,8 @@
   "acceptance": {
     "component": "Independently reviewed reference sheet only",
     "review_id": "evaluator-sheet-component-01",
-    "scene_pair": "Not yet approved"
+    "scene_pair": "Independently approved with assets/ui/scenes/mara-harbor-v4.png",
+    "scene_pair_review_id": "evaluator-review-04"
   },
   "runtime_status": "Static demo asset; automatic post-creation generation and scene RPC integration remain pending"
 }
