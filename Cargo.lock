@@ -514,6 +514,7 @@ dependencies = [
  "df-rules",
  "df-session",
  "df-types",
+ "df-ui",
  "futures",
  "gloo-timers",
  "js-sys",

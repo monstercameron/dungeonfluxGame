@@ -1,7 +1,7 @@
 //! Finite private consumer of generated requests against the actual local actor and PG.
 //! Enabled only by the explicit qualification flag; no HTTP route or gameplay UI control.
-use super::{Service, actor, hex, model};
-use df_persistence::local_demo_scope::{PLAYER, TENANT};
+use super::{Service, actor, hex};
+use df_persistence::local_demo_scope::TENANT;
 use df_protocol::common as rpc;
 use prost::Message;
 use sha2::{Digest, Sha256};
@@ -9,8 +9,8 @@ use std::{io, time::Duration};
 use tokio::sync::oneshot;
 use tonic::Request;
 
-const TRIGGER: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/real-gameplay-demo-20261004/qualification-start-01";
-const REPORT: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/real-gameplay-demo-20261004/authority-acceptance-report-01.json";
+const TRIGGER: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/real-next-scene-20261004/qualification-start-01";
+const REPORT: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/real-next-scene-20261004/authority-acceptance-report-01.json";
 fn required(condition: bool) -> Result<(), io::Error> {
     if condition {
         Ok(())
@@ -44,7 +44,7 @@ async fn submit(
 }
 fn committed(response: rpc::SubmitActionResponse) -> Result<rpc::DecisionReceipt, io::Error> {
     match response.outcome {
-        Some(rpc::submit_action_response::Outcome::CommittedDecision(receipt)) => Ok(receipt),
+        Some(rpc::submit_action_response::Outcome::CommittedDecision(receipt)) => Ok(*receipt),
         _ => Err(io::Error::other("qualified decision missing")),
     }
 }
@@ -55,18 +55,6 @@ fn observed(
     required(
         matches!(response.outcome,Some(rpc::submit_action_response::Outcome::OperationObservation(value)) if value.code==code as i32),
     )
-}
-async fn audit(service: &Service) -> Result<(usize, usize, usize, [u8; 32]), io::Error> {
-    let (reply, wait) = oneshot::channel();
-    service
-        .actor
-        .try_submit(actor::Call::Audit { reply })
-        .map_err(|_| io::Error::other("qualification audit admission failed"))?;
-    tokio::time::timeout(Duration::from_secs(5), wait)
-        .await
-        .map_err(|_| io::Error::other("qualification audit timeout"))?
-        .map_err(|_| io::Error::other("qualification audit owner stopped"))?
-        .map_err(|_| io::Error::other("qualification audit refused"))
 }
 #[derive(PartialEq)]
 struct DurableSnapshot {
@@ -101,83 +89,122 @@ async fn durable(
 async fn exercise(
     service: &Service,
     client: &tokio_postgres::Client,
-    player: [u8; 32],
     display: [u8; 32],
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let row=client.query_one("SELECT operation_id FROM df_game.operations WHERE tenant_id=$1 AND session_id=$2 AND principal_id=$3",&[&TENANT.as_slice(),&[0x41_u8;16].as_slice(),&PLAYER.as_slice()]).await?;
-    let operation: Vec<u8> = row.try_get("operation_id")?;
-    required(operation.len() == 16)?;
-    let mut original = rpc::SubmitActionRequest {
-        session_id: Some(rpc::SessionId {
-            value: Some(vec![0x41; 16]),
-        }),
-        run_id: Some(rpc::RunId {
-            value: Some(vec![0x42; 16]),
-        }),
-        observed_revision: Some(rpc::SessionRevision {
-            epoch: Some(rpc::RecoveryEpoch { value: Some(1) }),
-            sequence: Some(0),
-        }),
-        operation_id: Some(rpc::OperationId {
-            value: Some(operation.clone()),
-        }),
-        offer_id: model::OFFER.to_owned(),
-        action_kind: rpc::GameplayActionKind::ExamineHarborSeal as i32,
-    };
-    let before = durable(client, &operation).await?;
+    let (reply, wait) = oneshot::channel();
+    service
+        .actor
+        .try_submit(actor::Call::QualificationInputs { reply })
+        .map_err(|_| io::Error::other("qualification inputs admission failed"))?;
+    let snapshot = tokio::time::timeout(Duration::from_secs(5), wait).await???;
+    required(snapshot.joins.len() == 2)?;
+    let (proof, grant, member) = &snapshot.joins[0];
+    let counts=client.query_one("SELECT (SELECT count(*) FROM df_local_demo.room_grants) AS joins,(SELECT count(*) FROM df_local_demo.grants) AS grants,(SELECT count(*) FROM df_game.operations) AS operations",&[]).await?;
+    let before_counts = (
+        counts.get::<_, i64>("joins"),
+        counts.get::<_, i64>("grants"),
+        counts.get::<_, i64>("operations"),
+    );
+    required(before_counts.0 == 2 && before_counts.1 == 4)?;
+    let replay = rpc::room_service_server::RoomService::join(
+        service,
+        Request::new(rpc::JoinRoomRequest::decode(
+            proof.encode_to_vec().as_slice(),
+        )?),
+    )
+    .await?
+    .into_inner();
     required(
-        before.operations == 1
-            && before.facts == 2
-            && before.checkpoints == 2
-            && before.sequence == "1"
-            && before.fingerprint == Sha256::digest(original.encode_to_vec()).as_slice(),
+        matches!(replay.outcome,Some(rpc::join_room_response::Outcome::Joined(joined)) if joined.local_binding==hex(grant)
+        && joined.client_binding_id.as_ref().and_then(|id|id.value.as_ref())==Some(&member.to_vec())
+        && joined.receipt.as_ref().is_some_and(|receipt|receipt.replayed && receipt.operation_id==proof.operation_id)),
     )?;
-    let first_audit = audit(service).await?;
+    let mut changed = proof.clone();
+    changed.join_secret[0] ^= 1;
+    let conflict = rpc::room_service_server::RoomService::join(service, Request::new(changed))
+        .await?
+        .into_inner();
     required(
-        first_audit.0 == 1
-            && first_audit.1 == 2
-            && first_audit.2 == 1
-            && first_audit.3 == before.checkpoint,
+        matches!(conflict.outcome,Some(rpc::join_room_response::Outcome::Refused(value)) if value.code==rpc::RejectionCode::OperationConflict as i32),
     )?;
-    let saved = committed(submit(service, &original, player).await?)?;
+    let counts=client.query_one("SELECT (SELECT count(*) FROM df_local_demo.room_grants) AS joins,(SELECT count(*) FROM df_local_demo.grants) AS grants,(SELECT count(*) FROM df_game.operations) AS operations",&[]).await?;
     required(
-        saved.replayed
-            && saved.operation_id == original.operation_id
-            && saved.session_id == original.session_id
-            && saved.run_id == original.run_id
-            && saved.revision.as_ref().and_then(|r| r.sequence) == Some(1)
-            && matches!(
-                saved.outcome,
-                Some(rpc::decision_receipt::Outcome::Accepted(_))
+        before_counts
+            == (
+                counts.get::<_, i64>("joins"),
+                counts.get::<_, i64>("grants"),
+                counts.get::<_, i64>("operations"),
             ),
     )?;
-    let mut changed = original.clone();
-    changed.offer_id.push_str("-changed");
+    let inputs = snapshot.actions;
+    let creations = inputs
+        .iter()
+        .filter(|(_, request)| {
+            request.action_kind == rpc::GameplayActionKind::CreateCharacter as i32
+        })
+        .collect::<Vec<_>>();
+    required(creations.len() == 2 && creations[0].0 != creations[1].0)?;
+    for (credential, original) in &creations {
+        let operation = original
+            .operation_id
+            .as_ref()
+            .and_then(|id| id.value.as_ref())
+            .ok_or_else(|| io::Error::other("creation identity absent"))?;
+        let before = durable(client, operation).await?;
+        let receipt = committed(submit(service, original, *credential).await?)?;
+        required(
+            receipt.replayed
+                && receipt.operation_id == original.operation_id
+                && matches!(receipt.outcome,Some(rpc::decision_receipt::Outcome::Accepted(ref accepted)) if accepted.character.is_some())
+                && durable(client, operation).await? == before,
+        )?;
+    }
+    let (player, original) = inputs
+        .iter()
+        .find(|(_, request)| {
+            request.action_kind == rpc::GameplayActionKind::GreatswordAttack as i32
+        })
+        .ok_or_else(|| io::Error::other("recorded real player attack absent"))?;
+    let operation = original
+        .operation_id
+        .as_ref()
+        .and_then(|id| id.value.as_ref())
+        .ok_or_else(|| io::Error::other("attack identity absent"))?;
+    let before = durable(client, operation).await?;
+    required(before.fingerprint == Sha256::digest(original.encode_to_vec()).as_slice())?;
+    let accepted = committed(submit(service, original, *player).await?)?;
+    required(
+        accepted.replayed
+            && matches!(accepted.outcome,Some(rpc::decision_receipt::Outcome::Accepted(ref value)) if !value.combat.is_empty()),
+    )?;
+    let mut conflict = original.clone();
+    conflict.graze = !conflict.graze;
     observed(
-        submit(service, &changed, player).await?,
+        submit(service, &conflict, *player).await?,
         rpc::RejectionCode::OperationConflict,
     )?;
-    let mut stale = original.clone();
+    required(durable(client, operation).await? == before)?;
+    let mut stale = creations[0].1.clone();
     stale.operation_id = Some(rpc::OperationId {
         value: Some(vec![0x95; 16]),
     });
-    let rejection = committed(submit(service, &stale, player).await?)?;
+    let rejected = committed(submit(service, &stale, creations[0].0).await?)?;
     required(
-        matches!(rejection.outcome,Some(rpc::decision_receipt::Outcome::Rejected(ref r)) if r.code==rpc::RejectionCode::StaleOffer as i32),
+        matches!(rejected.outcome,Some(rpc::decision_receipt::Outcome::Rejected(ref value)) if value.code==rpc::RejectionCode::StaleOffer as i32),
     )?;
-    let replayed = committed(submit(service, &stale, player).await?)?;
+    let replay = committed(submit(service, &stale, creations[0].0).await?)?;
     required(
-        replayed.replayed
-            && replayed.outcome == rejection.outcome
-            && replayed.revision == rejection.revision,
+        replay.replayed
+            && replay.outcome == rejected.outcome
+            && replay.revision == rejected.revision,
     )?;
     required(
-        submit(service, &original, display)
+        submit(service, original, display)
             .await
             .is_err_and(|status| status.code() == tonic::Code::PermissionDenied),
     )?;
     required(
-        submit(service, &original, [0; 32])
+        submit(service, original, [0; 32])
             .await
             .is_err_and(|status| status.code() == tonic::Code::PermissionDenied),
     )?;
@@ -185,51 +212,39 @@ async fn exercise(
         session_id: original.session_id.clone(),
         run_id: original.run_id.clone(),
         client_binding_id: Some(rpc::ClientBindingId {
-            value: Some(vec![0x71; 16]),
+            value: Some(vec![0x72; 16]),
         }),
         after_revision: None,
     };
+    let (_, public) = service.view(display, watch.clone()).await?;
+    required(
+        matches!(&public.audience,Some(rpc::view_message::Audience::Display(view)) if view.journey.as_ref().is_some_and(|journey|journey.creation.is_none() && journey.own_character.is_none())),
+    )?;
+    required(!String::from_utf8_lossy(&public.encode_to_vec()).contains("addressed to Vell"))?;
+    watch.client_binding_id = Some(rpc::ClientBindingId {
+        value: Some(vec![0x61; 16]),
+    });
     required(
         service
-            .view(display, watch.clone())
+            .view(display, watch)
             .await
             .is_err_and(|status| status.code() == tonic::Code::PermissionDenied),
     )?;
-    watch.client_binding_id = Some(rpc::ClientBindingId {
-        value: Some(vec![0x72; 16]),
-    });
-    let (_, display_view) = service.view(display, watch).await?;
-    required(matches!(
-        display_view.audience,
-        Some(rpc::view_message::Audience::Display(_))
-    ))?;
-    required(audit(service).await? == first_audit && durable(client, &operation).await? == before)?;
-    let row=client.query_one("SELECT count(*) AS count FROM df_local_demo.rejected_operations WHERE typed_receipt IS NOT NULL",&[]).await?;
-    required(row.try_get::<_, i64>("count")? == 1)?;
-    // Controlled qualification of retention comes last, after captured gameplay and reconnects.
-    required(client.execute("UPDATE df_game.operations SET receipt=NULL WHERE tenant_id=$1 AND session_id=$2 AND operation_id=$3",&[&TENANT.as_slice(),&[0x41_u8;16].as_slice(),&operation]).await?==1)?;
+    required(durable(client, operation).await? == before)?;
+    required(client.execute("UPDATE df_game.operations SET receipt=NULL WHERE tenant_id=$1 AND session_id=$2 AND operation_id=$3",&[&TENANT.as_slice(),&[0x41_u8;16].as_slice(),&operation.as_slice()]).await?==1)?;
     observed(
-        submit(service, &original, player).await?,
-        rpc::RejectionCode::OperationExpired,
-    )?;
-    required(client.execute("INSERT INTO df_game.retired_namespaces (tenant_id,session_id,principal_id,command_namespace,recovery_epoch) VALUES ($1::bytea,$2::bytea,$3::bytea,$4::bytea,1)",&[&TENANT.as_slice(),&[0x41_u8;16].as_slice(),&PLAYER.as_slice(),&b"harbor-ability-check-v1".as_slice()]).await?==1)?;
-    original.operation_id = Some(rpc::OperationId {
-        value: Some(vec![0x96; 16]),
-    });
-    observed(
-        submit(service, &original, player).await?,
+        submit(service, original, *player).await?,
         rpc::RejectionCode::OperationExpired,
     )?;
     Ok(())
 }
 pub(super) async fn run(
     service: Service,
-    player: [u8; 32],
     display: [u8; 32],
     mut cancelled: tokio::sync::oneshot::Receiver<()>,
     database: tokio_postgres::Config,
 ) -> Result<(), io::Error> {
-    for _ in 0..480 {
+    for _ in 0..1040 {
         if let Ok(metadata) = std::fs::symlink_metadata(TRIGGER) {
             required(
                 metadata.is_file() && metadata.len() == 3 && std::fs::read(TRIGGER)? == b"run",
@@ -244,7 +259,7 @@ pub(super) async fn run(
             let driver = tokio::spawn(connection);
             let result = tokio::time::timeout(
                 Duration::from_secs(30),
-                exercise(&service, &client, player, display),
+                exercise(&service, &client, display),
             )
             .await;
             drop(client);
@@ -256,7 +271,7 @@ pub(super) async fn run(
             std::fs::write(
                 REPORT,
                 format!(
-                    "{{\"pass\":{passed},\"actor_calls_limit\":12,\"transport\":\"generated protobuf Service consumer; browser transport assessed separately\",\"retention_qualification\":\"last; expired row remains retained\"}}\n"
+                    "{{\"pass\":{passed},\"actor_calls_limit\":14,\"transport\":\"generated protobuf Service consumer; browser transport assessed separately\",\"retention_qualification\":\"last; expired row remains retained\"}}\n"
                 ),
             )?;
             required(passed)?;

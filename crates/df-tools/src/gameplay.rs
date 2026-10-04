@@ -1,8 +1,10 @@
 //! A finite, explicitly local gameplay slice. Authentication is preconfigured development
 //! membership, not production bootstrap. The action and its outcome use generated RPC.
 mod actor;
+mod journey;
 mod model;
 mod qualification;
+mod room;
 mod wire;
 
 use axum::{
@@ -85,6 +87,18 @@ impl rpc::action_service_server::ActionService for Service {
     ) -> Result<Response<rpc::SubmitActionResponse>, Status> {
         let credential = credential(&request)?;
         let request = request.into_inner();
+        if request.offer_id.len() > 96
+            || request.character.as_ref().is_some_and(|character| {
+                character.name.len() > 48
+                    || character.choices.len() > 16
+                    || character
+                        .choices
+                        .iter()
+                        .any(|choice| choice.group_id.len() > 64 || choice.option_id.len() > 64)
+            })
+        {
+            return Err(Status::invalid_argument("bounded action fields required"));
+        }
         let (reply, wait) = oneshot::channel();
         self.actor
             .try_submit(actor::Call::Submit {
@@ -159,7 +173,8 @@ impl rpc::session_service_server::SessionService for Service {
 struct PageState {
     incoming: NativeAdmission,
     connections: Arc<Semaphore>,
-    player: [u8; 32],
+    campfire: bytes::Bytes,
+    portrait: bytes::Bytes,
     display: [u8; 32],
     glue: bytes::Bytes,
     wasm: bytes::Bytes,
@@ -233,31 +248,49 @@ fn bounded_asset(path: std::path::PathBuf, maximum: u64) -> Result<bytes::Bytes,
     Ok(bytes.into())
 }
 async fn both(State(state): State<PageState>) -> Html<String> {
-    page(Some(state.player), Some(state.display))
+    page(false, Some(state.display))
 }
-async fn player(State(state): State<PageState>) -> Html<String> {
-    page(Some(state.player), None)
+async fn player() -> Html<String> {
+    page(true, None)
 }
 async fn display(State(state): State<PageState>) -> Html<String> {
-    page(None, Some(state.display))
+    page(false, Some(state.display))
 }
-fn page(player: Option<[u8; 32]>, display: Option<[u8; 32]>) -> Html<String> {
-    let roots=[("player",player),("display",display)].into_iter().filter_map(|(role,credential)|credential.map(|credential|format!("<section class=\"client {role}\" id=\"{role}\" data-local-binding=\"{}\"><div class=\"connection\" role=\"status\">Connecting to your game…</div><div class=\"view\"></div></section>",hex(&credential)))).collect::<String>();
-    let layout = if player.is_none() {
-        "clients display-only"
-    } else if display.is_none() {
-        "clients player-only"
-    } else {
-        "clients"
-    };
-    Html(
-        HTML.replace("__ROOTS__", &roots)
-            .replace("__LAYOUT__", layout),
+async fn campfire(State(state): State<PageState>) -> impl IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "image/webp")],
+        state.campfire,
     )
 }
-const HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DungeonFlux — The Broken Seal</title><style>
+async fn portrait(State(state): State<PageState>) -> impl IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "image/webp")],
+        state.portrait,
+    )
+}
+fn page(player: bool, display: Option<[u8; 32]>) -> Html<String> {
+    let roots = if player {
+        format!(
+            "<section class=\"client player\" id=\"player\" data-room=\"{}\"><div class=\"connection\" role=\"status\">Your adventure awaits.</div><div class=\"view\"></div></section>",
+            journey::ROOM_CODE
+        )
+    } else {
+        display.map(|credential|format!("<section class=\"client display\" id=\"display\" data-local-binding=\"{}\"><div class=\"connection\" role=\"status\">Connecting to the room…</div><div class=\"view\"></div></section>",hex(&credential))).unwrap_or_default()
+    };
+    Html(HTML.replace("__ROOTS__", &roots).replace(
+        "__LAYOUT__",
+        if player {
+            "clients player-only"
+        } else {
+            "clients display-only"
+        },
+    ))
+}
+const HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><base href="/"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DungeonFlux — The Broken Seal</title><style>
 *{box-sizing:border-box}body{margin:0;background:#080f17;color:#efe6ce;font-family:Georgia,serif}header{padding:22px 5%;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #bd96653b;background:#0b1720}header strong{font-size:24px;letter-spacing:3px;color:#eac488}header span,.eyebrow{font:11px system-ui;letter-spacing:2px;text-transform:uppercase;color:#aeb7b4}.clients{display:grid;grid-template-columns:minmax(320px,400px) 1fr;min-height:calc(100vh - 76px);gap:24px;padding:24px 4%}.clients.display-only{grid-template-columns:1fr}.clients.player-only{grid-template-columns:minmax(0,400px);justify-content:center}.client{position:relative;border:1px solid #cba46d4d;border-radius:18px;background:#10202ae8;overflow:hidden;box-shadow:0 15px 50px #0008}.connection{padding:10px 18px;background:#081219;color:#a8c9ba;font:12px system-ui;letter-spacing:.4px}.art{width:100%;height:260px;object-fit:cover;object-position:44% 48%;display:block}.display .art{height:calc(100vh - 200px);min-height:400px;object-position:45% 45%}.scene-copy{padding:24px}.display .scene-copy{position:absolute;bottom:0;right:0;left:0;padding:70px 40px 32px;background:linear-gradient(transparent,#061118f7 45%)}h1,h2{margin:8px 0 14px;font-weight:400;line-height:1.1}h1{font-size:54px}.player h2{font-size:30px}.narration{font-size:17px;line-height:1.5;color:#d1d3c6;margin:12px 0 20px}.display .narration{max-width:640px;font-size:22px}.offered{display:block;background:linear-gradient(135deg,#355447,#20392e);border:1px solid #8cb498;color:#f5eedf;border-radius:10px;width:100%;padding:17px 18px;min-height:56px;text-align:left;font:18px Georgia;cursor:pointer;box-shadow:0 5px 16px #0004}.offered small{display:block;color:#bed0bd;font:12px system-ui;margin-top:8px}.offered:disabled{opacity:.5;cursor:default}.tools{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}.tools button{background:#132530;border:1px solid #7c8a825e;border-radius:7px;padding:11px;color:#d7ddd1;min-height:44px;cursor:pointer}.result{border:1px solid #c59b5f77;border-radius:12px;background:#162630;margin:20px 0;padding:20px}.dice{font-size:40px;color:#f2ce90}.check-label{font:12px system-ui;letter-spacing:1px;color:#9fc1ae}.clue{border-left:2px solid #cbaa67;padding-left:16px;color:#eed69a;line-height:1.6}.receipt{font:11px system-ui;color:#8cb5a0;line-height:1.6}.feedback{font:13px system-ui;color:#d9b681;margin-top:12px}.scope{font:11px system-ui;color:#9ba9a3;line-height:1.5;margin-top:20px}footer{padding:18px 4%;font:11px system-ui;color:#899995;line-height:1.5}footer a{color:#aebfb2}button:focus-visible{outline:3px solid #f1c782;outline-offset:3px}@media(max-width:900px){.clients{grid-template-columns:1fr;max-width:680px;margin:auto}.display .art{height:380px;min-height:0}.display .scene-copy{padding:60px 24px 24px}h1{font-size:36px}.display .narration{font-size:17px}}@media(max-width:420px){header{padding:16px}header strong{font-size:18px}header span{font-size:9px;max-width:110px;text-align:right}.clients{padding:14px 10px;gap:14px}.art{height:185px}.scene-copy{padding:18px}.player h2{font-size:27px}.narration{font-size:15px;margin-bottom:16px}.offered{padding:14px;font-size:17px}.result{padding:16px}.display .art{height:330px}.tools{gap:6px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
-</style></head><body><header><strong>DUNGEONFLUX</strong><span>The Broken Seal · a playable investigation</span></header><main class="__LAYOUT__">__ROOTS__</main><footer>Local gameplay slice · preconfigured Mara · one normal Intelligence (Investigation) check · SRD 5.2.1 subset. This work includes material from the System Reference Document 5.2.1 (“SRD 5.2.1”) by Wizards of the Coast LLC, available at <a href="https://www.dndbeyond.com/srd">dndbeyond.com/srd</a>. The SRD 5.2.1 is licensed under the <a href="https://creativecommons.org/licenses/by/4.0/legalcode">Creative Commons Attribution 4.0 International License</a>.</footer><script type="module">import init from '/pkg/df_tools.js'; await init();</script></body></html>"#;
+
+.room-code{font-size:38px;letter-spacing:8px;color:#f2ce90;margin:16px 0}.room-share{border:1px solid #caa56c70;background:#071922d9;border-radius:14px;padding:18px;max-width:450px}.join-link{color:#d9e6be}.party{display:flex;gap:8px;flex-wrap:wrap}.party-member{padding:8px 12px;border:1px solid #78968670;border-radius:999px;font:12px system-ui;background:#122c27}.hero-summary{display:grid;gap:8px;padding:16px;border:1px solid #bd966580;border-radius:12px;background:#102c26}.hero-summary strong{font-size:24px;color:#ead2a0}.hero-summary span,.sheet-facts{font:13px system-ui;line-height:1.6}.dialogue{border:1px solid #c6a87970;border-radius:14px;background:#12222ee8;padding:18px;margin:20px 0;min-height:94px}.speaker-portrait{width:60px;height:60px;object-fit:cover;border-radius:50%;float:left;margin:0 14px 8px 0}.dialogue blockquote{margin:8px 0;font-style:italic;font-size:20px;line-height:1.4}.combat-roster{display:flex;gap:8px;flex-wrap:wrap}.combatant{display:grid;gap:8px;padding:12px;background:#12202de8;border:1px solid #778e8050;border-radius:10px;flex:1;min-width:100px;font:12px system-ui}.combatant.active{border-color:#e7bf6f;box-shadow:0 0 20px #e7bf6f22}.hp{width:100%;height:10px;accent-color:#7eb38a}.battle{margin-top:22px}.combat-history{display:grid;gap:10px;margin:16px 0}.combat-result{position:relative;padding:16px 16px 16px 64px;border:1px solid #bba27460;border-radius:12px;background:#10242eea;font:13px system-ui;animation:reveal-result .65s ease-out}.combat-result p{line-height:1.6}.roll-number{position:absolute;left:12px;top:18px;font:30px Georgia;color:#ecc278;animation:reveal-die .7s ease-out}.attack-option{display:grid;grid-template-columns:1fr 90px;gap:12px;margin:12px 0;font:13px system-ui;color:#bfd0b9}.attack-option select{padding:8px;background:#13272b;color:#efe6ce;border:1px solid #a88e66;border-radius:6px}.offered{margin-top:10px}.display .battle{max-width:860px}.display .scene-copy{max-height:75vh;overflow:auto}.display .art{min-height:650px}.player .view>[data-character-phase]{width:100%}.player .character-reference{display:none}@keyframes reveal-result{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@keyframes reveal-die{from{transform:rotate(-18deg) scale(.8)}to{transform:none}}@media(prefers-reduced-motion:reduce){.roll-number,.combat-result{animation:none}}
+</style></head><body><header><strong>DUNGEONFLUX</strong><span>The Lantern Wharf · your shared adventure</span></header><main class="__LAYOUT__">__ROOTS__</main><footer>Local browser journey · player-created Dwarf Fighter / Soldier · selected SRD 5.2.1 rules. Other character options and mechanics remain in development. Authored concept art illustrates the setting; character artwork is not generated here. This work includes material from the System Reference Document 5.2.1 (“SRD 5.2.1”) by Wizards of the Coast LLC, available at <a href="https://www.dndbeyond.com/srd">dndbeyond.com/srd</a>. The SRD 5.2.1 is licensed under the <a href="https://creativecommons.org/licenses/by/4.0/legalcode">Creative Commons Attribution 4.0 International License</a>.</footer><script type="module">import init from '/pkg/df_tools.js'; await init();</script></body></html>"#;
 
 /// Run a 170-second loopback demonstration using an already owned empty PG cluster.
 pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
@@ -279,14 +312,22 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         std::path::Path::new(&asset_root).join("scenes/mara-harbor-v4.png"),
         16 * 1024 * 1024,
     )?;
+    let campfire_bytes = bounded_asset(
+        std::path::Path::new(&asset_root).join("../concept-art/scene-campfire-under-stars.webp"),
+        4 * 1024 * 1024,
+    )?;
+    let portrait_bytes = bounded_asset(
+        std::path::Path::new(&asset_root).join("../concept-art/vell-avatar.webp"),
+        1024 * 1024,
+    )?;
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 63309)).await?;
     let initial =
-        model::initial().map_err(|_| io::Error::other("gameplay baseline validation failed"))?;
+        journey::initial().map_err(|_| io::Error::other("gameplay baseline validation failed"))?;
     let codec = NativeCodecLimits {
         maximum_document_bytes: 1024 * 1024,
         maximum_allocated_bytes: 2 * 1024 * 1024,
         maximum_collection_items: 1024,
-        maximum_text_bytes: 1024,
+        maximum_text_bytes: 4096,
     };
     let fence = model::random::<16>().map_err(|_| io::Error::other("native fence unavailable"))?;
     let player_credential =
@@ -366,11 +407,26 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .spawn(move || {
             let mut actor = actor::Actor {
                 owner,
+                bootstrap_credential: player_credential,
                 issuer,
                 codec,
                 fenced: false,
                 recovery_wakeup: updates,
                 calls_remaining: 128,
+                qualification_joins: if std::env::args().nth(4).as_deref()
+                    == Some("--qualification")
+                {
+                    Some(Vec::new())
+                } else {
+                    None
+                },
+                qualification_inputs: if std::env::args().nth(4).as_deref()
+                    == Some("--qualification")
+                {
+                    Some(Vec::new())
+                } else {
+                    None
+                },
             };
             let drained = inbox.run(&mut actor);
             let mut repository = actor.owner.into_repository();
@@ -381,7 +437,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let service = Service {
         actor: sender.clone(),
         updates: receiver,
-        streams: Arc::new(Semaphore::new(4)),
+        streams: Arc::new(Semaphore::new(6)),
     };
     let (incoming_sender, incoming) =
         NativeIncoming::bounded(NonZeroUsize::new(4).ok_or("invalid native incoming bound")?)?;
@@ -401,11 +457,17 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
                 .max_decoding_message_size(8192)
                 .max_encoding_message_size(8192),
         )
+        .add_service(
+            rpc::room_service_server::RoomServiceServer::new(service.clone())
+                .max_decoding_message_size(8192)
+                .max_encoding_message_size(8192),
+        )
         .serve_with_incoming(incoming);
     let state = PageState {
         incoming: incoming_sender,
         connections: Arc::new(Semaphore::new(4)),
-        player: player_credential,
+        campfire: campfire_bytes,
+        portrait: portrait_bytes,
         display: display_credential,
         glue: glue_bytes,
         wasm: wasm_bytes,
@@ -419,6 +481,11 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .route("/pkg/df_tools.js", get(glue))
         .route("/pkg/df_tools_bg.wasm", get(wasm))
         .route("/assets/ui/scenes/mara-harbor-v4.png", get(art))
+        .route(
+            "/assets/concept-art/scene-campfire-under-stars.webp",
+            get(campfire),
+        )
+        .route("/assets/concept-art/vell-avatar.webp", get(portrait))
         .with_state(state);
     let qualification = if std::env::args().nth(4).as_deref() == Some("--qualification") {
         let (cancel, cancelled) = oneshot::channel();
@@ -426,7 +493,6 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
             cancel,
             tokio::spawn(qualification::run(
                 service,
-                player_credential,
                 display_credential,
                 cancelled,
                 database,
@@ -438,7 +504,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let outcome: Result<(), Box<dyn std::error::Error>> = {
         tokio::select! {
             result=grpc=>result.map_err(Into::into),result=axum::serve(listener,router)=>result.map_err(Into::into),
-            result=tokio::signal::ctrl_c()=>result.map_err(Into::into),_=tokio::time::sleep(Duration::from_secs(170))=>Ok(()),
+            result=tokio::signal::ctrl_c()=>result.map_err(Into::into),_=tokio::time::sleep(Duration::from_secs(290))=>Ok(()),
         }
     };
     let qualification_outcome = if let Some((cancel, task)) = qualification {

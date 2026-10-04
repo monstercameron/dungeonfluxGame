@@ -149,7 +149,7 @@ impl LocalDemoScopeIssuer {
                     let current_epoch=current.revision.epoch().get().to_string();
                     let current_sequence=current.revision.sequence().to_string();
                     // Recheck the live lease at the write boundary, without advancing game state.
-                    let fence = transaction.query_opt("UPDATE df_game.sessions SET lease_until=lease_until WHERE tenant_id=$1 AND session_id=$2 AND run_id=$3 AND owner_fence=$4 AND recovery_epoch=$5::text::numeric AND in_epoch_sequence=$6::text::numeric AND lease_until>clock_timestamp() RETURNING session_id", &[&scope.tenant.as_slice(),&scope.session.as_bytes().as_slice(),&current.run.as_bytes().as_slice(),&scope.owner_fence.as_slice(),&current_epoch,&current_sequence]).await.map_err(|_|RepositoryError::Unavailable)?;
+                    let fence = transaction.query_opt("UPDATE df_game.sessions SET lease_until=lease_until WHERE tenant_id=$1::bytea AND session_id=$2::bytea AND run_id=$3::bytea AND owner_fence=$4::bytea AND recovery_epoch=$5::text::numeric AND in_epoch_sequence=$6::text::numeric AND lease_until>clock_timestamp() RETURNING session_id", &[&scope.tenant.as_slice(),&scope.session.as_bytes().as_slice(),&current.run.as_bytes().as_slice(),&scope.owner_fence.as_slice(),&current_epoch,&current_sequence]).await.map_err(|_|RepositoryError::Unavailable)?;
                     if fence.is_none() { return Err(RepositoryError::RevisionConflict); }
                     transaction.execute("INSERT INTO df_local_demo.rejected_operations (tenant_id,session_id,principal_id,command_namespace,recovery_epoch,operation_id,fingerprint_version,canonical_fingerprint,checkpoint_epoch,checkpoint_sequence,typed_receipt_version,typed_receipt) VALUES ($1,$2,$3,$4,$5::text::numeric,$6,1,$7,$8::text::numeric,$9::text::numeric,1,$10)", &[&scope.tenant.as_slice(),&scope.session.as_bytes().as_slice(),&scope.principal.as_slice(),&scope.namespace.as_slice(),&epoch,&scope.operation.as_bytes().as_slice(),&scope.fingerprint.as_slice(),&current_epoch,&current_sequence,&bytes]).await.map_err(|_|RepositoryError::Unavailable)?;
                     LocalRejectedLookup::Committed(bytes.to_vec())
@@ -188,10 +188,114 @@ impl LocalDemoScopeIssuer {
             let principal: Vec<u8> = row.try_get("principal_id").map_err(|_| RepositoryError::Unauthorized)?;
             let role: Vec<u8> = row.try_get("effective_role").map_err(|_| RepositoryError::Unauthorized)?;
             match (principal.as_slice(), role.as_slice()) {
-                (p, b"player") if p == PLAYER => Ok(LocalDemoRole::Player),
+                (p, b"player") if p.len() == 16 && p != DISPLAY => Ok(LocalDemoRole::Player),
                 (p, b"display") if p == DISPLAY => Ok(LocalDemoRole::Display),
                 _ => Err(RepositoryError::Unauthorized),
             }
+        })
+    }
+
+    /// Resolve the principal from an actual live native grant, never an RPC role or member.
+    pub fn principal(&self, credential: &[u8; 32]) -> Result<[u8; 16], RepositoryError> {
+        self.authority.runtime.block_on(async {
+            let row = tokio::time::timeout(Duration::from_secs(2), self.authority.client.query_opt(
+                "SELECT principal_id FROM df_local_demo.grants WHERE credential=$1::bytea AND session_id=$2::bytea AND tenant_id=$3::bytea AND campaign_id=$4::bytea AND active AND expires_at>clock_timestamp()",
+                &[&credential.as_slice(),&self.session.as_bytes().as_slice(),&TENANT.as_slice(),&CAMPAIGN.as_slice()]
+            )).await.map_err(|_|RepositoryError::Unavailable)?.map_err(|_|RepositoryError::Unavailable)?
+                .ok_or(RepositoryError::Unauthorized)?;
+            row.try_get::<_,Vec<u8>>("principal_id").map_err(|_|RepositoryError::Unauthorized)?
+                .try_into().map_err(|_|RepositoryError::Unauthorized)
+        })
+    }
+
+    /// Complete only an already committed local-room join on the same serialized actor.
+    /// The join secret itself is never stored: its exact request fingerprint is immutable.
+    pub fn complete_room_join(
+        &mut self,
+        scope: &NativeScope<LocalDemoAuthority>,
+        current: &Checkpoint,
+        member: [u8; 16],
+        entity: [u8; 16],
+        new_credential: [u8; 32],
+        codec: NativeCodecLimits,
+    ) -> Result<[u8; 32], RepositoryError> {
+        if scope.principal != PLAYER
+            || scope.namespace != b"local-room-join-v1"
+            || member == PLAYER
+            || member == DISPLAY
+            || new_credential == [0; 32]
+            || !current.state().members.iter().any(|link| {
+                link.member.as_bytes() == &member
+                    && link.character.is_some_and(|id| id.as_bytes() == &entity)
+            })
+        {
+            return Err(RepositoryError::Unauthorized);
+        }
+        let hex = |bytes: &[u8]| {
+            bytes
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        };
+        let expected = format!("join:{}:{}", hex(&member), hex(&entity));
+        let encoded =
+            encode_checkpoint(current, codec).map_err(|_| RepositoryError::InvalidCandidate)?;
+        let runtime = self.authority.runtime.clone();
+        runtime.block_on(async {
+            tokio::time::timeout(Duration::from_secs(2),async {
+                let statement=self.authority.client.prepare(VERIFY).await.map_err(|_|RepositoryError::Unavailable)?;
+                let verifier=DatabaseBindingVerifier {statement:Some(statement),maximum_binding_bytes:32,
+                    maximum_authority_value_bytes:128,maximum_namespace_bytes:128};
+                let transaction=self.authority.client.transaction().await.map_err(|_|RepositoryError::Unavailable)?;
+                verifier.verify(&transaction,scope).await?;
+                let locked=crate::decision_rows::lock_session(&transaction,scope).await?;
+                verifier.verify(&transaction,scope).await?;
+                locked.validate_new_decision(scope,current.basis())?;
+                let committed=crate::decision_rows::lookup_locked(&transaction,scope,codec,4096).await?;
+                let df_session::submission::OperationLookup::Committed(receipt)=committed else {
+                    return Err(RepositoryError::OperationConflict);
+                };
+                if receipt.decision().source_policy.as_str()!="local-room-join-1"
+                    || receipt.decision().semantic_output.as_deref()!=Some(expected.as_str())
+                { return Err(RepositoryError::InvalidReceipt); }
+                let row=transaction.query_one(crate::sql::LOAD_CURRENT,&[
+                    &scope.tenant.as_slice(),&scope.session.as_bytes().as_slice(),
+                    &(codec.maximum_document_bytes as i64)
+                ]).await.map_err(|_|RepositoryError::Unavailable)?;
+                let actual:Vec<u8>=row.try_get("complete_envelope").map_err(|_|RepositoryError::InvalidCandidate)?;
+                if actual!=encoded {return Err(RepositoryError::RevisionConflict);}
+                let prior=transaction.query_opt(
+                    "SELECT j.canonical_fingerprint,j.principal_id,g.credential FROM df_local_demo.room_grants j JOIN df_local_demo.grants g ON g.credential=j.credential WHERE j.operation_id=$1::bytea AND g.session_id=$2::bytea AND g.active AND g.expires_at>clock_timestamp()",
+                    &[&scope.operation.as_bytes().as_slice(),&scope.session.as_bytes().as_slice()]
+                ).await.map_err(|_|RepositoryError::Unavailable)?;
+                let credential=if let Some(prior)=prior {
+                    let fingerprint:Vec<u8>=prior.try_get("canonical_fingerprint").map_err(|_|RepositoryError::InvalidReceipt)?;
+                    let principal:Vec<u8>=prior.try_get("principal_id").map_err(|_|RepositoryError::InvalidReceipt)?;
+                    if fingerprint!=scope.fingerprint || principal!=member {return Err(RepositoryError::OperationConflict);}
+                    prior.try_get::<_,Vec<u8>>("credential").map_err(|_|RepositoryError::InvalidReceipt)?
+                        .try_into().map_err(|_|RepositoryError::InvalidReceipt)?
+                } else {
+                    // Current lease is checked at the actual write, not only before waiting.
+                    let written=transaction.execute(
+                        "INSERT INTO df_local_demo.grants SELECT $1::bytea,$2::bytea,$3::bytea,$4::bytea,$5::bytea,$6::bytea,$7::bytea,true,lease_until FROM df_game.sessions WHERE tenant_id=$2::bytea AND session_id=$7::bytea AND run_id=$8::bytea AND owner_fence=$9::bytea AND recovery_epoch=$10::text::numeric AND in_epoch_sequence=$11::text::numeric AND lease_until>clock_timestamp()",
+                        &[&new_credential.as_slice(),&TENANT.as_slice(),&member.as_slice(),
+                          &CAMPAIGN.as_slice(),&b"player".as_slice(),&b"local-demo-access-1".as_slice(),
+                          &scope.session.as_bytes().as_slice(),&current.basis().run.as_bytes().as_slice(),
+                          &scope.owner_fence.as_slice(),&current.basis().revision.epoch().get().to_string(),
+                          &current.basis().revision.sequence().to_string()]
+                    ).await.map_err(|_|RepositoryError::Unavailable)?;
+                    if written!=1 {return Err(RepositoryError::ExpiredOwner);}
+                    transaction.execute(
+                        "INSERT INTO df_local_demo.room_grants VALUES ($1::bytea,$2::bytea,$3::bytea,$4::bytea)",
+                        &[&scope.operation.as_bytes().as_slice(),&scope.fingerprint.as_slice(),
+                          &member.as_slice(),&new_credential.as_slice()]
+                    ).await.map_err(|_|RepositoryError::Unavailable)?;
+                    new_credential
+                };
+                verifier.verify(&transaction,scope).await?;
+                transaction.commit().await.map_err(|_|RepositoryError::UnresolvedCommit)?;
+                Ok(credential)
+            }).await.map_err(|_|RepositoryError::UnresolvedCommit)?
         })
     }
 
@@ -211,8 +315,9 @@ impl LocalDemoScopeIssuer {
         let GameInput::Game(command) = &input else {
             return Err(RepositoryError::InputBinding);
         };
+        let principal = self.principal(credential)?;
         if command.basis.session != self.session
-            || command.member.as_bytes() != &PLAYER
+            || command.member.as_bytes() != &principal
             || proof_binding == [0; 32]
         {
             return Err(RepositoryError::InputBinding);
@@ -235,7 +340,7 @@ impl LocalDemoScopeIssuer {
         let capability = authorize_membership(
             &mut self.authority,
             MembershipRequest {
-                principal: &PLAYER,
+                principal: &principal,
                 tenant: &TENANT,
                 campaign: &CAMPAIGN,
                 role: &role,
@@ -247,11 +352,22 @@ impl LocalDemoScopeIssuer {
         let operation = command.operation;
         let epoch = command.basis.revision.epoch();
         let epoch_text = epoch.get().to_string();
-        let namespace = b"harbor-ability-check-v1".to_vec();
+        let namespace = if principal == PLAYER {
+            match &command.command {
+                df_model::checkpoint::GameCommand::ProposeAction { action, .. }
+                    if action.entry.as_str() == "join-room" =>
+                {
+                    b"local-room-join-v1".to_vec()
+                }
+                _ => return Err(RepositoryError::Unauthorized),
+            }
+        } else {
+            b"local-room-journey-v1".to_vec()
+        };
         self.authority.runtime.block_on(async {
             tokio::time::timeout(Duration::from_secs(2), self.authority.client.execute(
                 "INSERT INTO df_local_demo.scope_proofs (binding, credential, tenant_id, principal_id, campaign_id, effective_role, access_revision, session_id, operation_id, command_namespace, recovery_epoch, fingerprint_version, canonical_fingerprint, owner_fence, execution_mode, lookup_only) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1,$12,$13,2,false)",
-                &[&proof_binding.as_slice(), &credential.as_slice(), &TENANT.as_slice(), &PLAYER.as_slice(), &CAMPAIGN.as_slice(), &role.as_slice(), &revision.as_slice(), &self.session.as_bytes().as_slice(), &operation.as_bytes().as_slice(), &namespace.as_slice(), &epoch_text, &fingerprint.as_slice(), &self.fence.as_slice()]))
+                &[&proof_binding.as_slice(), &credential.as_slice(), &TENANT.as_slice(), &principal.as_slice(), &CAMPAIGN.as_slice(), &role.as_slice(), &revision.as_slice(), &self.session.as_bytes().as_slice(), &operation.as_bytes().as_slice(), &namespace.as_slice(), &epoch_text, &fingerprint.as_slice(), &self.fence.as_slice()]))
                 .await.map_err(|_| RepositoryError::Unavailable)?.map_err(|_| RepositoryError::Unavailable)?;
             Ok::<_,RepositoryError>(())
         })?;
@@ -272,7 +388,7 @@ impl LocalDemoScopeIssuer {
             },
             binding: proof_binding.to_vec(),
             tenant: TENANT,
-            principal: PLAYER,
+            principal,
             session: self.session,
             operation,
             namespace,
@@ -347,12 +463,13 @@ pub async fn initialize(
         })?;
     transaction.batch_execute("CREATE SCHEMA df_local_demo; REVOKE ALL ON SCHEMA df_local_demo FROM PUBLIC;
         CREATE TABLE df_local_demo.grants (credential bytea PRIMARY KEY CHECK(octet_length(credential)=32), tenant_id bytea NOT NULL, principal_id bytea NOT NULL, campaign_id bytea NOT NULL, effective_role bytea NOT NULL, access_revision bytea NOT NULL, session_id bytea NOT NULL, active boolean NOT NULL, expires_at timestamptz NOT NULL);
+        CREATE TABLE df_local_demo.room_grants (operation_id bytea PRIMARY KEY CHECK(octet_length(operation_id)=16), canonical_fingerprint bytea NOT NULL CHECK(octet_length(canonical_fingerprint)=32), principal_id bytea NOT NULL UNIQUE CHECK(octet_length(principal_id)=16), credential bytea NOT NULL UNIQUE REFERENCES df_local_demo.grants);
         CREATE TABLE df_local_demo.scope_proofs (binding bytea PRIMARY KEY CHECK(octet_length(binding)=32), credential bytea REFERENCES df_local_demo.grants, tenant_id bytea NOT NULL, principal_id bytea NOT NULL, campaign_id bytea NOT NULL, effective_role bytea NOT NULL, access_revision bytea NOT NULL, session_id bytea NOT NULL, operation_id bytea NOT NULL, command_namespace bytea NOT NULL, recovery_epoch text NOT NULL, fingerprint_version integer NOT NULL, canonical_fingerprint bytea NOT NULL, owner_fence bytea NOT NULL, execution_mode smallint NOT NULL, lookup_only boolean NOT NULL);").await.map_err(|_| DemoInitializationError { stage:"local_schema",class:RepositoryError::Unavailable })?;
     transaction.batch_execute("CREATE TABLE df_local_demo.rejected_operations (tenant_id bytea NOT NULL, session_id bytea NOT NULL, principal_id bytea NOT NULL, command_namespace bytea NOT NULL, recovery_epoch numeric(20,0) NOT NULL, operation_id bytea NOT NULL, fingerprint_version integer NOT NULL CHECK(fingerprint_version=1), canonical_fingerprint bytea NOT NULL CHECK(octet_length(canonical_fingerprint)=32), checkpoint_epoch numeric(20,0) NOT NULL, checkpoint_sequence numeric(20,0) NOT NULL, typed_receipt_version integer NOT NULL CHECK(typed_receipt_version=1), typed_receipt bytea CHECK(octet_length(typed_receipt)<=4096), PRIMARY KEY(tenant_id,session_id,principal_id,command_namespace,recovery_epoch,operation_id), FOREIGN KEY(tenant_id,session_id,checkpoint_epoch,checkpoint_sequence) REFERENCES df_game.checkpoints(tenant_id,session_id,recovery_epoch,in_epoch_sequence));").await.map_err(|_|DemoInitializationError { stage:"rejected_schema",class:RepositoryError::Unavailable })?;
     let basis = checkpoint.basis();
     let epoch = basis.revision.epoch().get().to_string();
     let sequence = basis.revision.sequence().to_string();
-    transaction.execute("INSERT INTO df_game.sessions VALUES ($1::bytea,$2::bytea,$3::bytea,$4::text::numeric,$5::text::numeric,$6::bytea,clock_timestamp()+interval '180 seconds')", &[&TENANT.as_slice(), &basis.session.as_bytes().as_slice(), &basis.run.as_bytes().as_slice(), &epoch, &sequence, &fence.as_slice()]).await.map_err(|_| DemoInitializationError { stage:"session_seed",class:RepositoryError::InputBinding })?;
+    transaction.execute("INSERT INTO df_game.sessions VALUES ($1::bytea,$2::bytea,$3::bytea,$4::text::numeric,$5::text::numeric,$6::bytea,clock_timestamp()+interval '300 seconds')", &[&TENANT.as_slice(), &basis.session.as_bytes().as_slice(), &basis.run.as_bytes().as_slice(), &epoch, &sequence, &fence.as_slice()]).await.map_err(|_| DemoInitializationError { stage:"session_seed",class:RepositoryError::InputBinding })?;
     let bytes =
         encode_checkpoint(checkpoint, codec_limits).map_err(|_| DemoInitializationError {
             stage: "checkpoint_encoding",
@@ -382,7 +499,7 @@ pub async fn initialize(
         (player_credential, PLAYER, LocalDemoRole::Player),
         (display_credential, DISPLAY, LocalDemoRole::Display),
     ] {
-        transaction.execute("INSERT INTO df_local_demo.grants VALUES ($1,$2,$3,$4,$5,$6,$7,true,clock_timestamp()+interval '180 seconds')", &[&credential.as_slice(), &TENANT.as_slice(), &principal.as_slice(), &CAMPAIGN.as_slice(), &role.bytes(), &b"local-demo-access-1".as_slice(), &basis.session.as_bytes().as_slice()]).await.map_err(|_| DemoInitializationError { stage:"grant_seed",class:RepositoryError::Unavailable })?;
+        transaction.execute("INSERT INTO df_local_demo.grants VALUES ($1,$2,$3,$4,$5,$6,$7,true,clock_timestamp()+interval '300 seconds')", &[&credential.as_slice(), &TENANT.as_slice(), &principal.as_slice(), &CAMPAIGN.as_slice(), &role.bytes(), &b"local-demo-access-1".as_slice(), &basis.session.as_bytes().as_slice()]).await.map_err(|_| DemoInitializationError { stage:"grant_seed",class:RepositoryError::Unavailable })?;
     }
     transaction
         .commit()

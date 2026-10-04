@@ -15,10 +15,20 @@ use tokio::sync::{oneshot, watch};
 
 use super::{model, wire};
 
-pub(super) type Audit = (usize, usize, usize, [u8; 32]);
+#[derive(Clone)]
+pub(super) struct QualificationSnapshot {
+    pub actions: Vec<QualificationInput>,
+    pub joins: Vec<QualificationJoin>,
+}
+pub(super) type QualificationJoin = (rpc::JoinRoomRequest, [u8; 32], [u8; 16]);
+pub(super) type QualificationInput = ([u8; 32], rpc::SubmitActionRequest);
 pub(super) enum Call {
-    Audit {
-        reply: oneshot::Sender<Result<Audit, tonic::Status>>,
+    QualificationInputs {
+        reply: oneshot::Sender<Result<QualificationSnapshot, tonic::Status>>,
+    },
+    Join {
+        request: rpc::JoinRoomRequest,
+        reply: oneshot::Sender<Result<rpc::JoinRoomResponse, tonic::Status>>,
     },
     Submit {
         credential: [u8; 32],
@@ -37,18 +47,48 @@ impl ActorInput for Call {
             value.as_ref().map_or(0, Vec::capacity)
         }
         match self {
-            Self::Audit { .. } => Some(0),
-            Self::Submit { request, .. } => request
-                .offer_id
+            Self::Join { request, .. } => request
+                .room_code
                 .capacity()
-                .checked_add(request.session_id.as_ref().map_or(0, |id| bytes(&id.value)))?
-                .checked_add(request.run_id.as_ref().map_or(0, |id| bytes(&id.value)))?
+                .checked_add(request.join_secret.capacity())?
                 .checked_add(
                     request
                         .operation_id
                         .as_ref()
                         .map_or(0, |id| bytes(&id.value)),
                 ),
+            Self::QualificationInputs { .. } => Some(0),
+            Self::Submit { request, .. } => {
+                let character_bytes = if let Some(character) = &request.character {
+                    character.choices.iter().try_fold(
+                        character.name.capacity().checked_add(
+                            character
+                                .choices
+                                .capacity()
+                                .checked_mul(std::mem::size_of::<rpc::JourneyChoice>())?,
+                        )?,
+                        |total, choice| {
+                            total
+                                .checked_add(choice.group_id.capacity())?
+                                .checked_add(choice.option_id.capacity())
+                        },
+                    )?
+                } else {
+                    0
+                };
+                request
+                    .offer_id
+                    .capacity()
+                    .checked_add(request.session_id.as_ref().map_or(0, |id| bytes(&id.value)))?
+                    .checked_add(request.run_id.as_ref().map_or(0, |id| bytes(&id.value)))?
+                    .checked_add(
+                        request
+                            .operation_id
+                            .as_ref()
+                            .map_or(0, |id| bytes(&id.value)),
+                    )?
+                    .checked_add(character_bytes)
+            }
             Self::View { request, .. } => request
                 .session_id
                 .as_ref()
@@ -85,13 +125,16 @@ pub(super) type Owner =
     DurableOwner<PostgresRepository<LocalDemoAuthority>, model::HarborEngine, Publication>;
 pub(super) struct Actor {
     pub owner: Owner,
+    pub bootstrap_credential: [u8; 32],
     pub issuer: LocalDemoScopeIssuer,
     pub codec: NativeCodecLimits,
     pub fenced: bool,
     pub recovery_wakeup: watch::Sender<Checkpoint>,
     pub calls_remaining: u16,
+    pub qualification_inputs: Option<Vec<QualificationInput>>,
+    pub qualification_joins: Option<Vec<QualificationJoin>>,
 }
-fn unavailable(error: RepositoryError) -> tonic::Status {
+pub(super) fn unavailable(error: RepositoryError) -> tonic::Status {
     match error {
         RepositoryError::Unauthorized => {
             tonic::Status::permission_denied("local gameplay binding denied")
@@ -100,7 +143,7 @@ fn unavailable(error: RepositoryError) -> tonic::Status {
     }
 }
 impl Actor {
-    fn fence(&mut self) {
+    pub(super) fn fence(&mut self) {
         self.fenced = true;
         self.recovery_wakeup
             .send_replace(self.owner.checkpoint().clone());
@@ -120,7 +163,15 @@ impl Actor {
                 "display bindings cannot submit player actions",
             ));
         }
-        let input = wire::input(&request)?;
+        let principal = self.issuer.principal(&credential).map_err(unavailable)?;
+        if principal == df_persistence::local_demo_scope::PLAYER {
+            return Err(tonic::Status::permission_denied(
+                "bootstrap scope is not a player client",
+            ));
+        }
+        let member = df_types::MemberId::from_bytes(&principal)
+            .map_err(|_| tonic::Status::permission_denied("member binding invalid"))?;
+        let input = wire::journey_input(&request, member, self.owner.checkpoint())?;
         let GameInput::Game(command) = &input else {
             return Err(tonic::Status::internal("canonical command unavailable"));
         };
@@ -166,19 +217,53 @@ impl Actor {
                 return Ok(wire::observation(rpc::RejectionCode::OperationExpired));
             }
             LocalRejectedLookup::NotRecorded => {
-                let rejection =
-                    if request.action_kind != rpc::GameplayActionKind::ExamineHarborSeal as i32 {
-                        Some(rpc::RejectionCode::InvalidSelection)
-                    } else if request.offer_id != model::OFFER
-                        || !self.owner.checkpoint().state().decisions.is_empty()
-                        || command.basis.run != current.run
-                        || command.basis.revision.epoch() != current.revision.epoch()
-                        || command.observed_revision > current.revision
-                    {
-                        Some(rpc::RejectionCode::StaleOffer)
-                    } else {
-                        None
-                    };
+                let checkpoint = self.owner.checkpoint();
+                let kind = rpc::GameplayActionKind::try_from(request.action_kind)
+                    .map_err(|_| tonic::Status::invalid_argument("unknown action"))?;
+                let rejection = if command.basis.run != current.run
+                    || command.basis.revision.epoch() != current.revision.epoch()
+                    || command.observed_revision > current.revision
+                {
+                    Some(rpc::RejectionCode::StaleOffer)
+                } else if wire::unrelated_payload(&request, kind)
+                    || (kind == rpc::GameplayActionKind::CreateCharacter
+                        && request.character.as_ref().is_none_or(|character| {
+                            let selections = character
+                                .choices
+                                .iter()
+                                .map(|choice| (choice.group_id.as_str(), choice.option_id.as_str()))
+                                .collect::<Vec<_>>();
+                            df_rules::local_journey::validate_character(
+                                &character.name,
+                                &selections,
+                            )
+                            .is_err()
+                        }))
+                {
+                    Some(rpc::RejectionCode::InvalidSelection)
+                } else if super::journey::phase(checkpoint).map_err(unavailable)?
+                    == rpc::JourneyPhase::Combat
+                    && checkpoint
+                        .state()
+                        .encounters
+                        .first()
+                        .and_then(|encounter| encounter.active_turn)
+                        != Some(
+                            super::journey::player_entity(member, checkpoint)
+                                .map_err(unavailable)?,
+                        )
+                {
+                    Some(rpc::RejectionCode::WrongTurn)
+                } else if request.offer_id != super::journey::offer_id(checkpoint, kind)
+                    || !super::journey::offered(checkpoint, member)
+                        .map_err(unavailable)?
+                        .iter()
+                        .any(|(offered, _)| *offered == kind)
+                {
+                    Some(rpc::RejectionCode::StaleOffer)
+                } else {
+                    None
+                };
                 if let Some(code) = rejection {
                     let receipt = wire::rejected(current, operation, code);
                     let bytes = receipt.encode_to_vec();
@@ -217,15 +302,25 @@ impl Actor {
             .map_err(|_| tonic::Status::internal("actor did not produce its outcome"))?;
         match outcome {
             SubmissionOutcome::Confirmed(committed) => {
-                let check = wire::check(self.owner.checkpoint())
-                    .map_err(unavailable)?
-                    .ok_or_else(|| tonic::Status::internal("committed check missing"))?;
+                let accepted =
+                    super::journey::accepted(committed.decision()).map_err(unavailable)?;
+                if let Some(inputs) = self.qualification_inputs.as_mut()
+                    && inputs.len() < 4
+                    && matches!(
+                        rpc::GameplayActionKind::try_from(request.action_kind),
+                        Ok(rpc::GameplayActionKind::CreateCharacter
+                            | rpc::GameplayActionKind::GreatswordAttack)
+                    )
+                    && !inputs.iter().any(|(saved_credential, saved)| {
+                        *saved_credential == credential && saved.action_kind == request.action_kind
+                    })
+                {
+                    inputs.push((credential, request.clone()));
+                }
                 Ok(wire::committed(wire::receipt(
                     committed.basis(),
                     operation,
-                    rpc::decision_receipt::Outcome::Accepted(rpc::AcceptedAction {
-                        check: Some(check),
-                    }),
+                    rpc::decision_receipt::Outcome::Accepted(Box::new(accepted)),
                     committed.basis().revision <= prior_revision,
                 )))
             }
@@ -266,7 +361,7 @@ impl Actor {
         let binding = df_api::client_binding_id(request.client_binding_id.as_ref())
             .map_err(|_| tonic::Status::invalid_argument("required watch binding invalid"))?;
         let expected_binding = match role {
-            LocalDemoRole::Player => [0x71; 16],
+            LocalDemoRole::Player => self.issuer.principal(&credential).map_err(unavailable)?,
             LocalDemoRole::Display => [0x72; 16],
         };
         let current = self.owner.checkpoint();
@@ -287,16 +382,32 @@ impl Actor {
                 ));
             }
         }
-        Ok((role, wire::view(current, role).map_err(unavailable)?))
+        let principal = self.issuer.principal(&credential).map_err(unavailable)?;
+        if principal == df_persistence::local_demo_scope::PLAYER {
+            return Err(tonic::Status::permission_denied(
+                "bootstrap scope cannot watch",
+            ));
+        }
+        let member = df_types::MemberId::from_bytes(&principal)
+            .map_err(|_| tonic::Status::permission_denied("binding invalid"))?;
+        Ok((
+            role,
+            wire::journey_view(current, role, member).map_err(unavailable)?,
+        ))
     }
 }
 impl Reducer<Call> for Actor {
     fn reduce(&mut self, _: AdmissionSequence, call: Call) {
         if self.calls_remaining == 0 {
             match call {
-                Call::Audit { reply } => {
+                Call::QualificationInputs { reply } => {
                     let _ = reply.send(Err(tonic::Status::resource_exhausted(
-                        "finite audit budget exhausted",
+                        "qualification budget exhausted",
+                    )));
+                }
+                Call::Join { reply, .. } => {
+                    let _ = reply.send(Err(tonic::Status::resource_exhausted(
+                        "finite room budget exhausted",
                     )));
                 }
                 Call::Submit { reply, .. } => {
@@ -319,22 +430,18 @@ impl Reducer<Call> for Actor {
         };
         let mut span = df_observe::begin(&context, "gameplay.local_demo_call");
         let delivered = match call {
-            Call::Audit { reply } => {
-                let checkpoint = self.owner.checkpoint();
-                let result = df_persistence::local_demo_scope::encode_owned_demo_checkpoint(
-                    checkpoint, self.codec,
+            Call::QualificationInputs { reply } => reply
+                .send(
+                    self.qualification_inputs
+                        .clone()
+                        .map(|actions| QualificationSnapshot {
+                            actions,
+                            joins: self.qualification_joins.clone().unwrap_or_default(),
+                        })
+                        .ok_or_else(|| tonic::Status::permission_denied("qualification disabled")),
                 )
-                .map(|bytes| {
-                    (
-                        checkpoint.state().draws.len(),
-                        checkpoint.state().facts.len(),
-                        checkpoint.state().decisions.len(),
-                        Sha256::digest(bytes).into(),
-                    )
-                })
-                .map_err(unavailable);
-                reply.send(result).is_ok()
-            }
+                .is_ok(),
+            Call::Join { request, reply } => reply.send(self.join(request)).is_ok(),
             Call::Submit {
                 credential,
                 request,

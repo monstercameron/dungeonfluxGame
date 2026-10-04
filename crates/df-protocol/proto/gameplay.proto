@@ -3,16 +3,39 @@ package dungeonflux.public.v1;
 import "common.proto";
 service ActionService { rpc Submit(SubmitActionRequest) returns (SubmitActionResponse); }
 service SessionService { rpc Watch(WatchViewRequest) returns (stream ViewMessage); }
-enum GameplayActionKind { GAMEPLAY_ACTION_KIND_UNSPECIFIED = 0; EXAMINE_HARBOR_SEAL = 1; }
+enum GameplayActionKind { GAMEPLAY_ACTION_KIND_UNSPECIFIED = 0; EXAMINE_HARBOR_SEAL = 1; CHOOSE_HARBOR_SCENE = 2; CREATE_CHARACTER = 3; BEGIN_STORY = 4; ASK_COURIER = 5; ESCORT_COURIER = 6; DEFEND_COURIER = 7; GREATSWORD_ATTACK = 8; SECOND_WIND = 9; END_TURN = 10; }
 enum RejectionCode { REJECTION_CODE_UNSPECIFIED = 0; STALE_OFFER = 1; WRONG_TURN = 2; INVALID_SELECTION = 3; PAUSED = 4; RESOURCE_MISSING = 5; CAPABILITY_UNAVAILABLE = 6; RECOVERY_REQUIRED = 7; REVISION_CONFLICT = 8; OPERATION_CONFLICT = 9; OPERATION_EXPIRED = 10; }
 message Rejection { RejectionCode code = 1; }
-message AcceptedAction { AbilityCheckResult check = 1; }
-message SubmitActionRequest { SessionId session_id = 1; RunId run_id = 2; SessionRevision observed_revision = 3; OperationId operation_id = 4; string offer_id = 5; GameplayActionKind action_kind = 6; }
+message AcceptedAction { AbilityCheckResult check = 1; GameplayScene scene = 2; CharacterSheet character = 3; repeated CombatOutcome combat = 4; JourneyPhase phase = 5; }
+message SubmitActionRequest { SessionId session_id = 1; RunId run_id = 2; SessionRevision observed_revision = 3; OperationId operation_id = 4; string offer_id = 5; GameplayActionKind action_kind = 6; HarborDestination destination = 7; CharacterSelection character = 8; bool savage_attacker = 9; bool graze = 10; }
 message AbilityCheckResult { uint32 die = 1; sint32 ability_modifier = 2; uint32 proficiency_bonus = 3; sint32 total = 4; uint32 difficulty_class = 5; bool succeeded = 6; string source_revision = 7; }
 message DecisionReceipt { OperationId operation_id = 1; SessionRevision revision = 2; SessionId session_id = 3; RunId run_id = 4; bool replayed = 5; oneof outcome { AcceptedAction accepted = 6; Rejection rejected = 7; } }
 message WatchViewRequest { SessionId session_id = 1; RunId run_id = 2; ClientBindingId client_binding_id = 3; SessionRevision after_revision = 4; }
-message PlayerGameplayView { string offer_id = 1; string narration = 2; AbilityCheckResult check = 3; string private_clue = 4; bool action_available = 5; }
-message DisplayGameplayView { string narration = 1; string scene_asset = 2; }
+message PlayerGameplayView { string offer_id = 1; string narration = 2; AbilityCheckResult check = 3; string private_clue = 4; bool action_available = 5; repeated GameplayActionOffer offers = 6; GameplayScene scene = 7; JourneyView journey = 8; }
+message DisplayGameplayView { string narration = 1; string scene_asset = 2; GameplayScene scene = 3; JourneyView journey = 4; }
 message ViewMessage { SessionRevision revision = 1; oneof audience { PlayerGameplayView player = 2; DisplayGameplayView display = 3; } }
 message OperationObservation { RejectionCode code = 1; }
 message SubmitActionResponse { oneof outcome { DecisionReceipt committed_decision = 1; OperationObservation operation_observation = 2; } }
+
+enum HarborDestination { HARBOR_DESTINATION_UNSPECIFIED = 0; LOADING_PIER = 1; LANTERN_WHARF = 2; HARBOR_INN = 3; }
+message GameplayScene { HarborDestination destination = 1; string title = 2; string scene_asset = 3; }
+message HarborSceneOption { HarborDestination destination = 1; string label = 2; }
+message GameplayActionOffer { string offer_id = 1; GameplayActionKind action_kind = 2; string label = 3; repeated HarborSceneOption destinations = 4; repeated JourneyGroup input_groups = 5; }
+
+service RoomService { rpc Join(JoinRoomRequest) returns (JoinRoomResponse); }
+message JoinRoomRequest { string room_code = 1; OperationId operation_id = 2; bytes join_secret = 3; }
+message JoinedRoom { DecisionReceipt receipt = 1; string local_binding = 2; ClientBindingId client_binding_id = 3; SessionId session_id = 4; RunId run_id = 5; }
+message JoinRoomResponse { oneof outcome { JoinedRoom joined = 1; JoinRefusal refused = 2; } }
+message JoinRefusal { RejectionCode code = 1; }
+enum JourneyPhase { JOURNEY_PHASE_UNSPECIFIED = 0; ROOM = 1; CHARACTER_CREATION = 2; OPENING = 3; DIALOGUE = 4; COMBAT = 5; COMPLETE = 6; }
+message JourneyChoice { string group_id = 1; string option_id = 2; }
+message CharacterSelection { string name = 1; repeated JourneyChoice choices = 2; }
+message JourneyOption { string option_id = 1; string label = 2; string description = 3; }
+message JourneyGroup { string group_id = 1; string label = 2; repeated JourneyOption options = 3; }
+message CharacterCreationOffer { string description = 1; repeated JourneyGroup groups = 2; string source_revision = 3; }
+message CharacterSheet { string name = 1; repeated SheetFact facts = 2; uint32 hit_points = 3; uint32 maximum_hit_points = 4; uint32 armor_class = 5; string source_revision = 6; }
+message SheetFact { string label = 1; string value = 2; }
+message PartyMemberView { string name = 1; bool character_ready = 2; uint32 hit_points = 3; uint32 maximum_hit_points = 4; bool active_turn = 5; bool unconscious = 6; bytes participant_id = 7; }
+message CombatOutcome { string actor_name = 1; string target_name = 2; uint32 attack_die = 3; sint32 attack_modifier = 4; sint32 attack_total = 5; uint32 target_armor_class = 6; bool hit = 7; bool critical = 8; repeated uint32 damage_dice = 9; uint32 damage = 10; uint32 target_hit_points = 11; bool knocked_out = 12; bool grazed = 13; string source_revision = 14; bytes actor_id = 15; bytes target_id = 16; }
+message CombatView { repeated PartyMemberView participants = 1; string active_actor = 2; uint32 round = 3; repeated CombatOutcome outcomes = 4; bool finished = 5; string source_revision = 6; bytes active_participant_id = 7; }
+message JourneyView { JourneyPhase phase = 1; string room_code = 2; string join_path = 3; repeated PartyMemberView party = 4; CharacterCreationOffer creation = 5; CharacterSheet own_character = 6; CombatView combat = 7; string speaker = 8; string dialogue = 9; }

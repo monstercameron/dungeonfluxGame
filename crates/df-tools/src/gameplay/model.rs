@@ -3,7 +3,7 @@ use df_engine::command_entry::{
     CommandEntryContext, CommandEntryLimits, decide_registered_command,
 };
 use df_model::checkpoint::*;
-use df_model::commands::CommandLimits;
+use df_model::commands::{CommandLimits, validate_client_command};
 use df_persistence::local_demo_scope::{LocalDemoAuthority, PLAYER};
 use df_persistence::{NativeRecoverySource, NativeScope};
 use df_rules::ability_check::{AbilityCheckInput, resolve};
@@ -15,9 +15,8 @@ use df_types::{
 use sha2::{Digest, Sha256};
 use std::io::Read;
 
-pub(super) const OFFER: &str = "harbor-seal-investigation-1";
 pub(super) const SOURCE: &[u8] = b"SRD5.2.1 page6 D20 Tests Ability Checks; https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf; Wizards of the Coast LLC; CC BY 4.0; normal single-d20 check only";
-const CONTENT: &[u8] = b"DungeonFlux harbor seal authored challenge: Mara Intelligence modifier +2, Investigation proficiency +2; medium DC15; success reveals loading-pier shipment clue; failure yields obscured seal and no clue; one attempt.";
+const CONTENT: &[u8] = b"DungeonFlux authored local journey3: share Lantern room, two actual independently joined members create source-selected Dwarf Fighter/Soldier heroes; their accepted selections and starting equipment persist. Begin at Lantern Wharf only after both builds; choosing to ask the courier reveals a member-private delivery clue, or escorting elicits a different shared response. Defending begins a normal adjacent nonlethal Bandit encounter with actual initiative, player-selected attacks/SecondWind/endturn, source-qualified damage, unconscious one-HP knockout and no automatic rest completion. Preconfigured Investigation/next-scene draft remains an earlier source lineage, not the active browser room.";
 
 fn invalid<T>(_: T) -> RepositoryError {
     RepositoryError::InvalidCandidate
@@ -27,7 +26,7 @@ pub(super) fn label(value: &str) -> Result<RevisionLabel, RepositoryError> {
 }
 pub(super) fn rule() -> Result<RuleReference, RepositoryError> {
     Ok(RuleReference {
-        catalog: label("srd521-normal-ability-check-1")?,
+        catalog: label("srd521-journey-subset-1")?,
         source: label("srd521-page6")?,
         entry: label("d20-ability-check")?,
         clause: label("normal-proficient-total-versus-dc")?,
@@ -35,7 +34,7 @@ pub(super) fn rule() -> Result<RuleReference, RepositoryError> {
 }
 pub(super) fn content(entry: &str) -> Result<ContentReference, RepositoryError> {
     Ok(ContentReference {
-        package: label("harbor-investigation-demo-1")?,
+        package: label("harbor-investigation-demo-2")?,
         entry: label(entry)?,
     })
 }
@@ -46,29 +45,45 @@ pub(super) fn contents() -> Result<Vec<ContentReference>, RepositoryError> {
         "inspect-seal",
         "clue-loading-pier",
         "seal-obscured",
+        "choose-harbor-scene",
+        "loading-pier",
+        "lantern-wharf",
+        "harbor-inn",
     ]
     .into_iter()
     .map(content)
+    .chain(super::journey::CONTENT_ENTRIES.iter().copied().map(content))
     .collect()
+}
+pub(super) fn source_manifest() -> Vec<u8> {
+    [SOURCE, df_rules::local_journey::SOURCE.as_bytes()].concat()
 }
 pub(super) fn pins() -> Result<CheckpointPins, RepositoryError> {
     Ok(CheckpointPins {
         rules: RulesPins {
             mode: RulesMode::Standard2024,
-            ruleset: label("srd521-normal-ability-check-1")?,
-            catalog: label("srd521-normal-ability-check-1")?,
-            catalog_digest: ContentDigest(Sha256::digest(SOURCE).into()),
-            source_manifest: label("srd521-page6-reviewed-subset")?,
-            source_manifest_digest: ContentDigest(Sha256::digest(SOURCE).into()),
-            handler: label("normal-ability-check-compiled-1")?,
+            ruleset: label("srd521-journey-subset-1")?,
+            catalog: label("srd521-journey-subset-1")?,
+            catalog_digest: ContentDigest(Sha256::digest(source_manifest()).into()),
+            source_manifest: label("srd521-creation-combat-reviewed-subset")?,
+            source_manifest_digest: ContentDigest(Sha256::digest(source_manifest()).into()),
+            handler: label("source-qualified-journey-compiled-1")?,
             handler_digest: ContentDigest(
-                Sha256::digest(include_bytes!("../../../df-rules/src/ability_check.rs")).into(),
+                Sha256::digest(
+                    [
+                        include_bytes!("../../../df-rules/src/ability_check.rs").as_slice(),
+                        include_bytes!("../../../df-rules/src/local_journey.rs").as_slice(),
+                        include_bytes!("journey.rs").as_slice(),
+                    ]
+                    .concat(),
+                )
+                .into(),
             ),
         },
         content: ContentPins {
-            content: label("harbor-investigation-demo-1")?,
+            content: label("harbor-investigation-demo-2")?,
             content_digest: ContentDigest(Sha256::digest(CONTENT).into()),
-            package: label("harbor-investigation-demo-1")?,
+            package: label("harbor-investigation-demo-2")?,
             package_digest: ContentDigest(Sha256::digest(CONTENT).into()),
         },
         build: BuildIdentity::new(
@@ -76,7 +91,7 @@ pub(super) fn pins() -> Result<CheckpointPins, RepositoryError> {
             Some(crate::BUILD_ID),
             Some(crate::BUILD_ID),
             Some("local-gameplay-demo-config-1"),
-            Some("harbor-investigation-demo-1"),
+            Some("harbor-investigation-demo-2"),
         )
         .map_err(invalid)?,
     })
@@ -96,17 +111,17 @@ pub(super) fn member() -> Result<MemberId, RepositoryError> {
 }
 pub(super) fn limits() -> CheckpointLimits {
     CheckpointLimits {
-        maximum_records: 128,
-        maximum_text_bytes: 1024,
-        maximum_total_text_bytes: 8192,
+        maximum_records: 512,
+        maximum_text_bytes: 4096,
+        maximum_total_text_bytes: 65536,
         maximum_retained_bytes: 1024 * 1024,
     }
 }
 pub(super) fn recovery() -> Result<NativeRecoverySource, RepositoryError> {
     Ok(NativeRecoverySource {
-        rules: vec![rule()?],
+        rules: vec![rule()?, super::journey::rule()?],
         content: contents()?,
-        resources: vec![],
+        resources: super::journey::resources()?,
         assets: vec![],
         limits: limits(),
     })
@@ -118,9 +133,9 @@ pub(super) fn checkpoint(basis: Basis, state: GameState) -> Result<Checkpoint, R
         pins()?,
         state,
         ReferenceInventory {
-            rules: &[rule()?],
+            rules: &[rule()?, super::journey::rule()?],
             content: &contents()?,
-            resources: &[],
+            resources: &super::journey::resources()?,
             assets: &[],
         },
         limits(),
@@ -346,7 +361,7 @@ impl RulesCommandHandler for HarborHandler {
             facts: vec![draw_fact, result_fact],
             draws: vec![0],
             effects: vec![],
-            source_policy: label("srd521-normal-ability-check-1")?,
+            source_policy: label("srd521-journey-subset-1")?,
             semantic_output: None,
         });
         state.narrative.remaining_budget = 0;
@@ -355,6 +370,150 @@ impl RulesCommandHandler for HarborHandler {
 }
 
 pub(super) struct HarborEngine;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum HarborScene {
+    Harbor,
+    LoadingPier,
+    LanternWharf,
+    HarborInn,
+}
+impl HarborScene {
+    pub fn entry(self) -> &'static str {
+        match self {
+            Self::Harbor => "harbor",
+            Self::LoadingPier => "loading-pier",
+            Self::LanternWharf => "lantern-wharf",
+            Self::HarborInn => "harbor-inn",
+        }
+    }
+    pub fn from_entry(entry: &str) -> Result<Self, RepositoryError> {
+        match entry {
+            "harbor" => Ok(Self::Harbor),
+            "loading-pier" => Ok(Self::LoadingPier),
+            "lantern-wharf" => Ok(Self::LanternWharf),
+            "harbor-inn" => Ok(Self::HarborInn),
+            _ => Err(RepositoryError::InvalidCandidate),
+        }
+    }
+}
+
+pub(super) fn scene(current: &Checkpoint) -> Result<HarborScene, RepositoryError> {
+    let [active] = current.state().narrative.active_beats.as_slice() else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
+    HarborScene::from_entry(active.entry.as_str())
+}
+
+pub(super) fn investigation_succeeded(
+    current: &Checkpoint,
+) -> Result<Option<bool>, RepositoryError> {
+    if current.state().decisions.is_empty() {
+        return Ok(None);
+    }
+    let result = current
+        .state()
+        .facts
+        .iter()
+        .find(|fact| {
+            matches!(&fact.value, FactValue::ContentEvent { definition, .. }
+            if definition.entry.as_str() == "clue-loading-pier"
+                || definition.entry.as_str() == "seal-obscured")
+        })
+        .ok_or(RepositoryError::InvalidCandidate)?;
+    match &result.value {
+        FactValue::ContentEvent { definition, .. } => {
+            Ok(Some(*definition == content("clue-loading-pier")?))
+        }
+        _ => Err(RepositoryError::InvalidCandidate),
+    }
+}
+
+pub(super) fn destinations(current: &Checkpoint) -> Result<Vec<HarborScene>, RepositoryError> {
+    if scene(current)? != HarborScene::Harbor {
+        return Ok(Vec::new());
+    }
+    match investigation_succeeded(current)? {
+        None => Ok(Vec::new()),
+        Some(true) => Ok(vec![HarborScene::LoadingPier, HarborScene::LanternWharf]),
+        Some(false) => Ok(vec![HarborScene::LanternWharf, HarborScene::HarborInn]),
+    }
+}
+
+fn stage_scene(current: &Checkpoint, input: &GameInput) -> Result<Checkpoint, RepositoryError> {
+    let GameInput::Game(command) = input else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
+    let GameCommand::ProposeAction {
+        actor: who,
+        action,
+        targets,
+        choices,
+    } = &command.command
+    else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
+    let [(input_id, selected)] = choices.as_slice() else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
+    let destination = HarborScene::from_entry(selected.as_str())?;
+    if *who != actor()?
+        || command.member != member()?
+        || *action != content("choose-harbor-scene")?
+        || !targets.is_empty()
+        || *input_id != label("harbor-destination")?
+        || current.state().decisions.len() != 1
+        || !destinations(current)?.contains(&destination)
+    {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    validate_client_command(
+        input,
+        current,
+        ReferenceInventory {
+            rules: &[rule()?],
+            content: &contents()?,
+            resources: &[],
+            assets: &[],
+        },
+        CommandLimits {
+            maximum_records: 16,
+            maximum_text_bytes: 128,
+            maximum_retained_bytes: 8192,
+        },
+    )
+    .map_err(invalid)?;
+    let mut next = current.basis();
+    next.revision = next.revision.next_sequence().map_err(invalid)?;
+    let mut state = current.state().clone();
+    let fact = FactId::from_bytes(&[0x53; 16]).map_err(invalid)?;
+    state.facts.push(GameFact {
+        id: fact,
+        revision: next.revision,
+        operation: command.operation,
+        ordinal: 0,
+        cause: Some(FactId::from_bytes(&[0x52; 16]).map_err(invalid)?),
+        audience: AudienceScope::Shared,
+        value: FactValue::ContentEvent {
+            definition: content(destination.entry())?,
+            subjects: vec![actor()?],
+        },
+    });
+    state.decisions.push(AcceptedDecision {
+        operation: command.operation,
+        revision: next.revision,
+        facts: vec![fact],
+        draws: vec![],
+        effects: vec![],
+        source_policy: label("harbor-authored-scene-choice-1")?,
+        semantic_output: Some(destination.entry().to_owned()),
+    });
+    state.narrative.completed_beats.push(content("harbor")?);
+    state.narrative.active_beats = vec![content(destination.entry())?];
+    state.narrative.accepted_facts.push(fact);
+    checkpoint(next, state)
+}
+
 impl SessionEngine<NativeScope<LocalDemoAuthority>> for HarborEngine {
     fn decide(
         &mut self,
@@ -364,6 +523,23 @@ impl SessionEngine<NativeScope<LocalDemoAuthority>> for HarborEngine {
     ) -> Result<Checkpoint, RepositoryError> {
         use df_session::submission::OperationScope;
         scope.validate_input(input)?;
+        if let GameInput::Game(command) = input
+            && let GameCommand::ProposeAction { action, .. } = &command.command
+        {
+            if action.entry.as_str() == "join-room" {
+                return super::journey::stage_join(current, input);
+            }
+            if super::journey::CONTENT_ENTRIES.contains(&action.entry.as_str()) {
+                return super::journey::stage(current, input);
+            }
+        }
+
+        if matches!(input, GameInput::Game(CommandInput {
+            command: GameCommand::ProposeAction { action, .. }, ..
+        }) if *action == content("choose-harbor-scene")?)
+        {
+            return stage_scene(current, input);
+        }
         // Lookup runs in DurableOwner first, so a retry never reaches this draw owner.
         if !current.state().decisions.is_empty() {
             return Err(RepositoryError::InvalidCandidate);
@@ -375,17 +551,18 @@ impl SessionEngine<NativeScope<LocalDemoAuthority>> for HarborEngine {
         let pins = pins()?;
         let selector = label("harbor-normal-ability-check-1")?;
         let handler = HarborHandler { pins: pins.clone() };
-        let entries = [CatalogEntry::new(&source, SOURCE)];
+        let manifest = source_manifest();
+        let entries = [CatalogEntry::new(&source, &manifest)];
         let catalog = CatalogSnapshot::from_published(
             &pins.rules.catalog,
             &pins,
-            SOURCE,
+            &manifest,
             &entries,
             CatalogLimits {
-                max_complete_bytes: 1024,
+                max_complete_bytes: 4096,
                 max_entries: 1,
-                max_item_bytes: 1024,
-                max_total_item_bytes: 1024,
+                max_item_bytes: 4096,
+                max_total_item_bytes: 4096,
             },
         )
         .map_err(invalid)?;
@@ -517,5 +694,85 @@ mod tests {
             matches!(&failure.state().facts[1].value,FactValue::ContentEvent { definition,.. } if *definition==content("seal-obscured").unwrap())
         );
         assert!(staged(11, 12).is_err());
+    }
+
+    fn choose(
+        current: &Checkpoint,
+        destination: HarborScene,
+    ) -> Result<Checkpoint, RepositoryError> {
+        stage_scene(
+            current,
+            &GameInput::Game(CommandInput {
+                basis: current.basis(),
+                operation: OperationId::from_bytes(&[0x82; 16]).map_err(invalid)?,
+                member: member()?,
+                observed_revision: current.basis().revision,
+                command: GameCommand::ProposeAction {
+                    actor: actor()?,
+                    action: content("choose-harbor-scene")?,
+                    targets: vec![],
+                    choices: vec![(label("harbor-destination")?, label(destination.entry())?)],
+                },
+            }),
+        )
+    }
+
+    #[test]
+    fn each_outcome_has_two_real_scene_choices_and_preserves_original_roll() {
+        for (die, allowed) in [
+            (
+                11,
+                vec![HarborScene::LoadingPier, HarborScene::LanternWharf],
+            ),
+            (10, vec![HarborScene::LanternWharf, HarborScene::HarborInn]),
+        ] {
+            let checked = staged(die, 20).unwrap();
+            assert_eq!(destinations(&checked).unwrap(), allowed);
+            for destination in allowed {
+                let next = choose(&checked, destination).unwrap();
+                assert_eq!(scene(&next).unwrap(), destination);
+                assert_eq!(next.basis().revision.sequence(), 2);
+                assert_eq!(next.state().draws, checked.state().draws);
+                assert_eq!(next.state().logical_time, checked.state().logical_time);
+                assert_eq!(next.state().resources, checked.state().resources);
+                assert_eq!(next.state().facts.len(), 3);
+                assert_eq!(next.state().decisions.len(), 2);
+                assert_eq!(next.state().decisions[0], checked.state().decisions[0]);
+                assert!(next.state().decisions[1].draws.is_empty());
+                assert_eq!(
+                    next.state().decisions[1].semantic_output.as_deref(),
+                    Some(destination.entry())
+                );
+                assert_eq!(next.state().facts[2].audience, AudienceScope::Shared);
+                assert_eq!(
+                    next.state().narrative.completed_beats,
+                    vec![content("harbor").unwrap()]
+                );
+                assert_eq!(
+                    next.state().narrative.accepted_facts,
+                    vec![next.state().facts[2].id]
+                );
+                assert!(destinations(&next).unwrap().is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn failed_seal_does_not_unlock_private_pier_lead() {
+        let checked = staged(10, 20).unwrap();
+        let before = checked.clone();
+        assert!(choose(&checked, HarborScene::LoadingPier).is_err());
+        assert_eq!(checked, before);
+        assert_eq!(investigation_succeeded(&checked).unwrap(), Some(false));
+    }
+
+    #[test]
+    fn next_scene_requires_completed_check_and_cannot_be_selected_twice() {
+        let initial = initial().unwrap();
+        assert!(choose(&initial, HarborScene::LanternWharf).is_err());
+        let checked = staged(11, 20).unwrap();
+        let selected = choose(&checked, HarborScene::LoadingPier).unwrap();
+        assert!(choose(&selected, HarborScene::LanternWharf).is_err());
+        assert_eq!(selected.state().draws, checked.state().draws);
     }
 }
