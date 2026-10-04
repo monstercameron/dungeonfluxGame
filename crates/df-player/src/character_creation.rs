@@ -51,6 +51,7 @@ mod browser {
             let status = document.create_element("p")?;
             status.set_attribute("role", "status")?;
             status.set_attribute("aria-live", "polite")?;
+            status.set_attribute("style", "margin:0;padding:12px 4vw;background:#211d17;color:#ead9b9;border-bottom:1px solid #6c5638;font:13px/1.5 system-ui,sans-serif;overflow-wrap:anywhere")?;
             let fieldset = document
                 .create_element("fieldset")?
                 .dyn_into::<HtmlFieldSetElement>()

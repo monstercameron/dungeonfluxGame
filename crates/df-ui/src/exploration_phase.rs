@@ -393,12 +393,14 @@ mod browser {
     }
     struct ArtListener {
         target: Element,
+        event_name: &'static str,
         active: Rc<Cell<bool>>,
         callback: Option<Closure<dyn FnMut(Event)>>,
     }
     impl ArtListener {
         fn bind(
             target: Element,
+            event_name: &'static str,
             mut operation: impl FnMut() + 'static,
         ) -> Result<Self, ExplorationError> {
             let active = Rc::new(Cell::new(true));
@@ -408,9 +410,11 @@ mod browser {
                     operation();
                 }
             }) as Box<dyn FnMut(Event)>);
-            target.add_event_listener_with_callback("error", callback.as_ref().unchecked_ref())?;
+            target
+                .add_event_listener_with_callback(event_name, callback.as_ref().unchecked_ref())?;
             Ok(Self {
                 target,
+                event_name,
                 active,
                 callback: Some(callback),
             })
@@ -419,7 +423,7 @@ mod browser {
             self.active.set(false);
             if let Some(callback) = &self.callback {
                 self.target.remove_event_listener_with_callback(
-                    "error",
+                    self.event_name,
                     callback.as_ref().unchecked_ref(),
                 )?;
             }
@@ -623,17 +627,51 @@ mod browser {
             phase
                 .listeners
                 .borrow_mut()
-                .push(ArtListener::bind(scene, move || {
+                .push(ArtListener::bind(scene, "error", move || {
                     scene_root.set_class_name("df-campaign df-exploration exploration-art-failed");
                 })?);
             let failed_portrait = phase.portrait.clone();
             phase.listeners.borrow_mut().push(ArtListener::bind(
                 phase.portrait.clone(),
+                "error",
                 move || {
                     failed_portrait
                         .set_class_name("exploration-portrait exploration-portrait-failed");
                 },
             )?);
+            let narration = phase
+                .surface
+                .root()
+                .query_selector(".narration")?
+                .ok_or(ExplorationError::Dom(UiError::WrongElementType))?;
+            let narrator = narration
+                .query_selector(".narrator")?
+                .ok_or(ExplorationError::Dom(UiError::WrongElementType))?;
+            let narrator_fallback =
+                child(document, &narration, "span", "narrator narrator-fallback")?;
+            narrator_fallback.set_attribute("role", "img")?;
+            narrator_fallback.set_attribute("aria-label", "Narrator portrait unavailable")?;
+            narrator_fallback.set_text_content(Some("✦"));
+            narration.insert_before(&narrator_fallback, Some(&narrator))?;
+            let failed_narrator = narrator.clone();
+            let visible_fallback = narrator_fallback.clone();
+            phase.listeners.borrow_mut().push(ArtListener::bind(
+                narrator.clone(),
+                "error",
+                move || {
+                    failed_narrator.set_class_name("narrator narrator-failed");
+                    visible_fallback
+                        .set_class_name("narrator narrator-fallback narrator-fallback-visible");
+                },
+            )?);
+            let recovered_narrator = narrator.clone();
+            phase
+                .listeners
+                .borrow_mut()
+                .push(ArtListener::bind(narrator, "load", move || {
+                    recovered_narrator.set_class_name("narrator");
+                    narrator_fallback.set_class_name("narrator narrator-fallback");
+                })?);
             phase.render(view, DraftUpdate::Replace(""))?;
             Ok(phase)
         }
