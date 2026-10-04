@@ -721,6 +721,25 @@ mod browser {
             .ok_or_else(|| JsValue::from_str("body unavailable"))?;
         let root = element(&document, &body, "main", "")?;
         root.set_attribute("data-dual-character-fixture", "synthetic")?;
+        element(
+            &document,
+            &root,
+            "style",
+            r#"
+body{margin:0;background:#141310}
+[data-dual-character-fixture]{background:#141310!important;color:#f4eddf!important;padding:0!important}
+[data-dual-character-fixture] > h1{width:92%;margin:0 auto;padding:22px 0 10px;font:22px/1.3 Georgia,serif;color:#efce91}
+[data-dual-character-fixture] > p{width:92%;margin:8px auto 16px;font:11px/1.6 system-ui,sans-serif;color:#b4aca0}
+[data-dual-character-fixture] > nav{width:92%;margin:0 auto 12px;display:flex;flex-wrap:wrap;gap:8px}
+[data-dual-character-fixture] > nav button{min-height:44px;padding:10px 13px;border:1px solid #a98b574d;border-radius:6px;background:#29251e;color:#ede2cb;font:12px/1.5 system-ui,sans-serif;touch-action:manipulation;cursor:pointer}
+[data-dual-character-fixture] > nav button:hover:enabled{background:#42382a;border-color:#e5bd77}
+[data-dual-character-fixture] > nav button:focus-visible{outline:3px solid #f1d69b;outline-offset:4px}
+[data-dual-character-fixture] > [data-mount-check-results]{width:92%;max-height:110px;overflow:auto;margin:0 auto 20px;padding:8px 12px;border-left:2px solid #a98b574d;background:#1d1c17;font:10px/1.5 system-ui,sans-serif;color:#b4aca0}
+[data-dual-character-fixture] > [data-mount-check-results] p{margin:4px 0;overflow-wrap:anywhere}
+[data-dual-character-fixture] > section[aria-label] > h2{width:92%;margin:0 auto;padding:18px 0 12px;border-top:1px solid #d9b77a24;font:10px/1.6 system-ui,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#d9b77a}
+@media(max-width:700px){[data-dual-character-fixture] > nav{display:grid;grid-template-columns:1fr 1fr}[data-dual-character-fixture] > h1{font-size:19px}}
+"#,
+        )?;
         root.set_attribute(
             "style",
             "background:#12101a;color:#eee;font:16px system-ui;padding:16px",
