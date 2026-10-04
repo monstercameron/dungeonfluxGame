@@ -568,6 +568,7 @@ mod browser {
         connection: Element,
         notice: Element,
         turn: Element,
+        turn_badge: Element,
         actors_root: Element,
         actors: RefCell<BTreeMap<String, ActorNodes>>,
         action_heading: Element,
@@ -622,6 +623,7 @@ mod browser {
             let story = child(document, &stage, "div", "combat-story")?;
             let chapter = child(document, &story, "p", "combat-overline")?;
             let title = child(document, &story, "h1", "")?;
+            let turn_badge = child(document, &story, "p", "combat-turn-badge")?;
             let narration = child(document, &story, "p", "combat-narration")?;
             let initiative = child(document, &stage, "aside", "combat-initiative")?;
             let turn = child(document, &initiative, "h2", "combat-overline")?;
@@ -656,6 +658,7 @@ mod browser {
                 connection,
                 notice,
                 turn,
+                turn_badge,
                 actors_root,
                 actors: RefCell::new(BTreeMap::new()),
                 action_heading,
@@ -763,6 +766,7 @@ mod browser {
                 (&self.connection, view.connection),
                 (&self.notice, view.notice),
                 (&self.turn, view.turn_label),
+                (&self.turn_badge, view.turn_label),
                 (&self.action_heading, view.action_heading),
                 (&self.roll_heading, view.roll_heading),
             ] {

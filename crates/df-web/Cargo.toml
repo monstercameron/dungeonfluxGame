@@ -22,3 +22,8 @@ web-sys = { workspace = true, features = ["Window", "HtmlElement", "HtmlInputEle
 name = "role_phase_shell_fixture"
 path = "tests/fixtures/role_phase_shell_fixture.rs"
 crate-type = ["cdylib"]
+
+[[example]]
+name = "playable_gameplay_scene_preview"
+path = "tests/fixtures/playable_gameplay_scene_preview.rs"
+crate-type = ["cdylib"]

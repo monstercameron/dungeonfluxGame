@@ -850,6 +850,9 @@ mod browser {
                     });
                 }
                 if let Some(nodes) = mounted.get_mut(section.key) {
+                    nodes
+                        .root
+                        .set_attribute("data-sheet-tab", &section.tab.index().to_string())?;
                     literal(&nodes.title, Some(section.title));
                     literal(&nodes.caption, Some(section.caption));
                     let obsolete: Vec<_> = nodes
