@@ -795,11 +795,12 @@ fn reference_binding(
         .iter()
         .find(|record| record.entity == character)
         .ok_or(ReferenceSheetError::InvalidAcceptedCreation)?;
+    // Creation choices establish origin acceptance; later mechanical choices do not
+    // change the captured cosmetic identity or the current owner/audience fence.
     if !current.state().continuity.creation.iter().any(|record| {
         record.entity == character
             && record.member == character_state.owner
             && record.phase == CreationPhase::Accepted
-            && record.choices == character_state.choices
     }) || !current
         .state()
         .members
