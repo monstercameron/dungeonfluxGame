@@ -79,7 +79,14 @@ mod browser {
             .ok_or_else(|| JsValue::from_str("join fixture node missing"))
     }
     fn field(root: &Element, suffix: &str) -> Result<HtmlInputElement, JsValue> {
-        required(root, &format!("input[id$='-{suffix}']"))?
+        let feedback = required(
+            root,
+            &format!(".join-fields .df-ui-feedback[id$='-{suffix}-feedback']"),
+        )?;
+        let container = feedback
+            .parent_element()
+            .ok_or_else(|| JsValue::from_str("join fixture field container missing"))?;
+        required(&container, "label input")?
             .dyn_into()
             .map_err(|_| JsValue::from_str("join fixture input has wrong type"))
     }
