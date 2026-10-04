@@ -698,6 +698,20 @@ mod browser {
                 Some(RoleInput::DisplayCombat(input)) => {
                     format!("display-combat:{}", input.offer.as_str())
                 }
+                Some(RoleInput::PlayerAftermath(input)) => {
+                    format!("player-aftermath:{}", input.key)
+                }
+                Some(RoleInput::DisplayAftermath(input)) => {
+                    format!("display-aftermath:{}", input.key)
+                }
+                Some(RoleInput::PlayerCampfire(input)) => {
+                    format!("player-campfire:{}", input.offer_id)
+                }
+                Some(RoleInput::DisplayCampfire(input)) => {
+                    format!("display-campfire:{}", input.offer_id)
+                }
+                Some(RoleInput::PlayerTransition(_)) => "player-transition".into(),
+                Some(RoleInput::DisplayTransition(_)) => "display-transition".into(),
                 Some(RoleInput::PlayerOverlay(input)) => format!("player-overlay:{}", input.key),
                 Some(RoleInput::DisplayOverlay(input)) => format!("display-overlay:{}", input.key),
                 None => "none".into(),

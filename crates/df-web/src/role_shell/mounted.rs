@@ -9,8 +9,16 @@ use df_player::{
     PlayerJoinConnection, PlayerJoinScreen, PlayerSheetConnection, PlayerSheetScreen,
 };
 use df_types::{ClientBindingId, SessionRevision};
-use df_ui::{CharacterDisplayConnection, SessionConnection};
-use std::rc::Rc;
+use df_ui::{
+    CampfireSurface, CharacterDisplayConnection, EncounterAftermathSurface, SceneTransitionPhase,
+    SessionConnection,
+};
+use std::{cell::Cell, rc::Rc};
+
+pub(super) struct MountedTransition {
+    surface: SceneTransitionPhase,
+    revision: Rc<Cell<SessionRevision>>,
+}
 use web_sys::{Document, Element};
 
 pub(super) enum MountedPhase {
@@ -23,6 +31,12 @@ pub(super) enum MountedPhase {
     DisplayExploration(DisplayExploration),
     PlayerCombat(PlayerCombat),
     DisplayCombat(DisplayCombat),
+    PlayerAftermath(EncounterAftermathSurface),
+    DisplayAftermath(EncounterAftermathSurface),
+    PlayerCampfire(CampfireSurface),
+    DisplayCampfire(CampfireSurface),
+    PlayerTransition(MountedTransition),
+    DisplayTransition(MountedTransition),
 }
 
 pub(super) fn validate(
@@ -75,6 +89,48 @@ pub(super) fn validate(
             view.validate(*limits).map_err(|error| {
                 df_display::CombatMountError::from(df_ui::CombatError::from(error)).into()
             })
+        }
+        RolePhase::Player(PlayerPhase::Aftermath(view)) => {
+            if view.generation == 0 || view.revision != revision.sequence() {
+                return Err(RoleShellError::SnapshotMismatch);
+            }
+            view.validate()
+                .map_err(|error| df_ui::AftermathError::from(error).into())
+        }
+        RolePhase::Player(PlayerPhase::Campfire(view)) => {
+            if view.revision != revision.sequence() {
+                return Err(RoleShellError::SnapshotMismatch);
+            }
+            view.validate()
+                .map_err(|error| df_ui::CampfireError::from(error).into())
+        }
+        RolePhase::Player(PlayerPhase::Transition { view, generation }) => {
+            if *generation == 0 {
+                return Err(RoleShellError::SnapshotMismatch);
+            }
+            view.validate()
+                .map_err(|error| df_ui::SceneTransitionError::from(error).into())
+        }
+        RolePhase::Display(DisplayPhase::Aftermath(view)) => {
+            if view.generation == 0 || view.revision != revision.sequence() {
+                return Err(RoleShellError::SnapshotMismatch);
+            }
+            view.validate()
+                .map_err(|error| df_ui::AftermathError::from(error).into())
+        }
+        RolePhase::Display(DisplayPhase::Campfire(view)) => {
+            if view.revision != revision.sequence() {
+                return Err(RoleShellError::SnapshotMismatch);
+            }
+            view.validate()
+                .map_err(|error| df_ui::CampfireError::from(error).into())
+        }
+        RolePhase::Display(DisplayPhase::Transition { view, generation }) => {
+            if *generation == 0 {
+                return Err(RoleShellError::SnapshotMismatch);
+            }
+            view.validate()
+                .map_err(|error| df_ui::SceneTransitionError::from(error).into())
         }
     }
 }
@@ -188,6 +244,66 @@ impl MountedPhase {
                     move |input| dispatch.emit(generation, RoleInput::DisplayCombat(input)),
                 )?)
             }
+            RolePhase::Player(PlayerPhase::Aftermath(view)) => {
+                let surface = EncounterAftermathSurface::create(document, view, move |input| {
+                    dispatch.emit(generation, RoleInput::PlayerAftermath(input))
+                })?;
+                slot.append_child(surface.root())?;
+                Self::PlayerAftermath(surface)
+            }
+            RolePhase::Player(PlayerPhase::Campfire(view)) => {
+                let surface = CampfireSurface::create(document, view, move |input| {
+                    dispatch.emit(generation, RoleInput::PlayerCampfire(input))
+                })?;
+                slot.append_child(surface.root())?;
+                Self::PlayerCampfire(surface)
+            }
+            RolePhase::Player(PlayerPhase::Transition { view, .. }) => {
+                let surface = SceneTransitionPhase::create(document, view)?;
+                let current = Rc::new(Cell::new(revision));
+                let callback_revision = Rc::clone(&current);
+                surface.on_continue(move || {
+                    dispatch.emit(
+                        generation,
+                        RoleInput::PlayerTransition(callback_revision.get()),
+                    )
+                })?;
+                slot.append_child(surface.root())?;
+                Self::PlayerTransition(MountedTransition {
+                    surface,
+                    revision: current,
+                })
+            }
+            RolePhase::Display(DisplayPhase::Aftermath(view)) => {
+                let surface = EncounterAftermathSurface::create(document, view, move |input| {
+                    dispatch.emit(generation, RoleInput::DisplayAftermath(input))
+                })?;
+                slot.append_child(surface.root())?;
+                Self::DisplayAftermath(surface)
+            }
+            RolePhase::Display(DisplayPhase::Campfire(view)) => {
+                let surface = CampfireSurface::create(document, view, move |input| {
+                    dispatch.emit(generation, RoleInput::DisplayCampfire(input))
+                })?;
+                slot.append_child(surface.root())?;
+                Self::DisplayCampfire(surface)
+            }
+            RolePhase::Display(DisplayPhase::Transition { view, .. }) => {
+                let surface = SceneTransitionPhase::create(document, view)?;
+                let current = Rc::new(Cell::new(revision));
+                let callback_revision = Rc::clone(&current);
+                surface.on_continue(move || {
+                    dispatch.emit(
+                        generation,
+                        RoleInput::DisplayTransition(callback_revision.get()),
+                    )
+                })?;
+                slot.append_child(surface.root())?;
+                Self::DisplayTransition(MountedTransition {
+                    surface,
+                    revision: current,
+                })
+            }
         })
     }
     pub(super) fn root(&self) -> &Element {
@@ -201,6 +317,12 @@ impl MountedPhase {
             Self::DisplayExploration(mount) => mount.root(),
             Self::PlayerCombat(mount) => mount.root(),
             Self::DisplayCombat(mount) => mount.root(),
+            Self::PlayerAftermath(mount) => mount.root(),
+            Self::PlayerCampfire(mount) => mount.root(),
+            Self::PlayerTransition(mount) => mount.surface.root(),
+            Self::DisplayAftermath(mount) => mount.root(),
+            Self::DisplayCampfire(mount) => mount.root(),
+            Self::DisplayTransition(mount) => mount.surface.root(),
         }
     }
     pub(super) fn update(
@@ -256,6 +378,36 @@ impl MountedPhase {
             }
             (Self::DisplayCombat(mount), RolePhase::Display(DisplayPhase::Combat { view, .. })) => {
                 mount.update(binding, revision, view).map_err(Into::into)
+            }
+            (Self::PlayerAftermath(mount), RolePhase::Player(PlayerPhase::Aftermath(view))) => {
+                mount.update(view).map_err(Into::into)
+            }
+            (Self::PlayerCampfire(mount), RolePhase::Player(PlayerPhase::Campfire(view))) => {
+                mount.update(view).map_err(Into::into)
+            }
+            (
+                Self::PlayerTransition(mount),
+                RolePhase::Player(PlayerPhase::Transition { view, .. }),
+            ) => {
+                mount.surface.set_visible(true)?;
+                mount.surface.update(view)?;
+                mount.revision.set(revision);
+                Ok(())
+            }
+            (Self::DisplayAftermath(mount), RolePhase::Display(DisplayPhase::Aftermath(view))) => {
+                mount.update(view).map_err(Into::into)
+            }
+            (Self::DisplayCampfire(mount), RolePhase::Display(DisplayPhase::Campfire(view))) => {
+                mount.update(view).map_err(Into::into)
+            }
+            (
+                Self::DisplayTransition(mount),
+                RolePhase::Display(DisplayPhase::Transition { view, .. }),
+            ) => {
+                mount.surface.set_visible(true)?;
+                mount.surface.update(view)?;
+                mount.revision.set(revision);
+                Ok(())
             }
             _ => Err(RoleShellError::SnapshotMismatch),
         }
@@ -320,6 +472,24 @@ impl MountedPhase {
             }
             Self::PlayerCombat(mount) if !connected => mount.suspend_input().map_err(Into::into),
             Self::DisplayCombat(mount) if !connected => mount.suspend_input().map_err(Into::into),
+            Self::PlayerAftermath(mount) if !connected => mount.suspend_input().map_err(Into::into),
+            Self::PlayerCampfire(mount) if !connected => {
+                mount.suspend();
+                Ok(())
+            }
+            Self::PlayerTransition(mount) if !connected => {
+                mount.surface.set_visible(false).map_err(Into::into)
+            }
+            Self::DisplayAftermath(mount) if !connected => {
+                mount.suspend_input().map_err(Into::into)
+            }
+            Self::DisplayCampfire(mount) if !connected => {
+                mount.suspend();
+                Ok(())
+            }
+            Self::DisplayTransition(mount) if !connected => {
+                mount.surface.set_visible(false).map_err(Into::into)
+            }
             _ => Ok(()),
         }
     }
@@ -334,6 +504,12 @@ impl MountedPhase {
             Self::DisplayExploration(mount) => mount.revoke().map_err(Into::into),
             Self::PlayerCombat(mount) => mount.revoke().map_err(Into::into),
             Self::DisplayCombat(mount) => mount.revoke().map_err(Into::into),
+            Self::PlayerAftermath(mount) => mount.dispose().map_err(Into::into),
+            Self::PlayerCampfire(mount) => mount.dispose().map_err(Into::into),
+            Self::PlayerTransition(mount) => mount.surface.dispose().map_err(Into::into),
+            Self::DisplayAftermath(mount) => mount.dispose().map_err(Into::into),
+            Self::DisplayCampfire(mount) => mount.dispose().map_err(Into::into),
+            Self::DisplayTransition(mount) => mount.surface.dispose().map_err(Into::into),
         }
     }
 }

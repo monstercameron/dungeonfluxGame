@@ -1,10 +1,12 @@
 use df_display::DisplayJoinInput;
 use df_player::PlayerJoinInput;
+use df_types::SessionRevision;
 use df_ui::{
-    CampaignLimits, CharacterDisplayLimits, CharacterDisplaySubmission, CharacterDisplayView,
-    CharacterLimits, CharacterPhaseView, CharacterSheetView, CharacterSubmission, CombatIntent,
-    CombatLimits, CombatPhaseView, ExplorationInput, ExplorationLimits, ExplorationView,
-    JoinPhaseIntent, JoinPhaseView, SessionOverlaySelection, SheetSubmission,
+    AftermathSelection, CampaignLimits, CampfireSelection, CampfireView, CharacterDisplayLimits,
+    CharacterDisplaySubmission, CharacterDisplayView, CharacterLimits, CharacterPhaseView,
+    CharacterSheetView, CharacterSubmission, CombatIntent, CombatLimits, CombatPhaseView,
+    EncounterAftermathView, ExplorationInput, ExplorationLimits, ExplorationView, JoinPhaseIntent,
+    JoinPhaseView, SceneTransitionView, SessionOverlaySelection, SheetSubmission,
 };
 
 /// Borrowed, already audience-filtered presentation. This is not a wire snapshot,
@@ -28,6 +30,12 @@ pub enum PlayerPhase<'a> {
         view: &'a CombatPhaseView<'a>,
         limits: CombatLimits,
     },
+    Aftermath(&'a EncounterAftermathView<'a>),
+    Campfire(&'a CampfireView<'a>),
+    Transition {
+        view: &'a SceneTransitionView<'a>,
+        generation: u64,
+    },
 }
 
 /// The display owner must supply its separate public projection. The shell never
@@ -50,6 +58,12 @@ pub enum DisplayPhase<'a> {
         view: &'a CombatPhaseView<'a>,
         limits: CombatLimits,
     },
+    Aftermath(&'a EncounterAftermathView<'a>),
+    Campfire(&'a CampfireView<'a>),
+    Transition {
+        view: &'a SceneTransitionView<'a>,
+        generation: u64,
+    },
 }
 
 /// Local composition only. Selecting a role does not create an audience grant.
@@ -70,6 +84,12 @@ pub enum RoleInput {
     DisplayExploration(ExplorationInput),
     PlayerCombat(CombatIntent),
     DisplayCombat(CombatIntent),
+    PlayerAftermath(AftermathSelection),
+    DisplayAftermath(AftermathSelection),
+    PlayerCampfire(CampfireSelection),
+    DisplayCampfire(CampfireSelection),
+    PlayerTransition(SessionRevision),
+    DisplayTransition(SessionRevision),
     PlayerOverlay(SessionOverlaySelection),
     DisplayOverlay(SessionOverlaySelection),
 }
@@ -85,6 +105,12 @@ pub(super) enum ScopeKey {
     DisplayExploration,
     PlayerCombat,
     DisplayCombat,
+    PlayerAftermath(u64),
+    DisplayAftermath(u64),
+    PlayerCampfire(u64),
+    DisplayCampfire(u64),
+    PlayerTransition(u64),
+    DisplayTransition(u64),
 }
 
 impl RolePhase<'_> {
@@ -107,6 +133,24 @@ impl RolePhase<'_> {
             Self::Display(DisplayPhase::Exploration { .. }) => ScopeKey::DisplayExploration,
             Self::Player(PlayerPhase::Combat { .. }) => ScopeKey::PlayerCombat,
             Self::Display(DisplayPhase::Combat { .. }) => ScopeKey::DisplayCombat,
+            Self::Player(PlayerPhase::Aftermath(view)) => {
+                ScopeKey::PlayerAftermath(view.generation)
+            }
+            Self::Player(PlayerPhase::Campfire(view)) => {
+                ScopeKey::PlayerCampfire(view.owner_generation)
+            }
+            Self::Player(PlayerPhase::Transition { generation, .. }) => {
+                ScopeKey::PlayerTransition(*generation)
+            }
+            Self::Display(DisplayPhase::Aftermath(view)) => {
+                ScopeKey::DisplayAftermath(view.generation)
+            }
+            Self::Display(DisplayPhase::Campfire(view)) => {
+                ScopeKey::DisplayCampfire(view.owner_generation)
+            }
+            Self::Display(DisplayPhase::Transition { generation, .. }) => {
+                ScopeKey::DisplayTransition(*generation)
+            }
         }
     }
     pub(super) fn matches_key(&self, current: Option<&ScopeKey>) -> bool {
@@ -137,6 +181,30 @@ impl RolePhase<'_> {
             )
             | (Self::Player(PlayerPhase::Combat { .. }), Some(ScopeKey::PlayerCombat))
             | (Self::Display(DisplayPhase::Combat { .. }), Some(ScopeKey::DisplayCombat)) => true,
+            (
+                Self::Player(PlayerPhase::Aftermath(view)),
+                Some(ScopeKey::PlayerAftermath(generation)),
+            ) => view.generation == *generation,
+            (
+                Self::Player(PlayerPhase::Campfire(view)),
+                Some(ScopeKey::PlayerCampfire(generation)),
+            ) => view.owner_generation == *generation,
+            (
+                Self::Player(PlayerPhase::Transition { generation, .. }),
+                Some(ScopeKey::PlayerTransition(current)),
+            ) => generation == current,
+            (
+                Self::Display(DisplayPhase::Aftermath(view)),
+                Some(ScopeKey::DisplayAftermath(generation)),
+            ) => view.generation == *generation,
+            (
+                Self::Display(DisplayPhase::Campfire(view)),
+                Some(ScopeKey::DisplayCampfire(generation)),
+            ) => view.owner_generation == *generation,
+            (
+                Self::Display(DisplayPhase::Transition { generation, .. }),
+                Some(ScopeKey::DisplayTransition(current)),
+            ) => generation == current,
             _ => false,
         }
     }

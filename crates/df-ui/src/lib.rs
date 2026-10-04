@@ -117,3 +117,24 @@ pub use character_display_phase::{
     CharacterDisplaySubmission, CharacterDisplayView, CharacterPublicMember,
     CharacterPublicReadiness,
 };
+
+mod campfire_phase;
+pub use campfire_phase::{
+    CampfireAction, CampfireMember, CampfireOffer, CampfireSelection, CampfireValidationError,
+    CampfireView,
+};
+#[cfg(target_arch = "wasm32")]
+pub use campfire_phase::{CampfireError, CampfireSurface};
+
+mod encounter_aftermath_phase;
+#[cfg(target_arch = "wasm32")]
+pub use encounter_aftermath_phase::{AftermathError, EncounterAftermathSurface};
+pub use encounter_aftermath_phase::{
+    AftermathNextScene, AftermathPartyMember, AftermathSelection, AftermathValidationError,
+    EncounterAftermathView,
+};
+
+mod scene_transition_phase;
+#[cfg(target_arch = "wasm32")]
+pub use scene_transition_phase::{SceneTransitionError, SceneTransitionPhase};
+pub use scene_transition_phase::{SceneTransitionValidationError, SceneTransitionView};

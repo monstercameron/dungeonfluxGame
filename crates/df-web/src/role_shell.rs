@@ -35,6 +35,9 @@ pub enum RoleShellError {
     DisplayExploration(df_display::ExplorationMountError),
     PlayerCombat(df_player::CombatMountError),
     DisplayCombat(df_display::CombatMountError),
+    Aftermath(df_ui::AftermathError),
+    Campfire(df_ui::CampfireError),
+    Transition(df_ui::SceneTransitionError),
     PlayerOverlay(df_player::SessionOverlayMountError),
     DisplayOverlay(df_display::SessionOverlayMountError),
     Cleanup {
@@ -62,6 +65,9 @@ impl fmt::Display for RoleShellError {
             Self::DisplayExploration(error) => fmt::Display::fmt(error, formatter),
             Self::PlayerCombat(error) => fmt::Display::fmt(error, formatter),
             Self::DisplayCombat(error) => fmt::Display::fmt(error, formatter),
+            Self::Aftermath(error) => fmt::Display::fmt(error, formatter),
+            Self::Campfire(error) => fmt::Display::fmt(error, formatter),
+            Self::Transition(error) => fmt::Display::fmt(error, formatter),
             Self::PlayerOverlay(error) => fmt::Display::fmt(error, formatter),
             Self::DisplayOverlay(error) => fmt::Display::fmt(error, formatter),
             Self::Cleanup { operation, cleanup } => {
@@ -124,6 +130,22 @@ impl From<df_player::SessionOverlayMountError> for RoleShellError {
 impl From<df_display::SessionOverlayMountError> for RoleShellError {
     fn from(error: df_display::SessionOverlayMountError) -> Self {
         Self::DisplayOverlay(error)
+    }
+}
+
+impl From<df_ui::AftermathError> for RoleShellError {
+    fn from(error: df_ui::AftermathError) -> Self {
+        Self::Aftermath(error)
+    }
+}
+impl From<df_ui::CampfireError> for RoleShellError {
+    fn from(error: df_ui::CampfireError) -> Self {
+        Self::Campfire(error)
+    }
+}
+impl From<df_ui::SceneTransitionError> for RoleShellError {
+    fn from(error: df_ui::SceneTransitionError) -> Self {
+        Self::Transition(error)
     }
 }
 

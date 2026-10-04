@@ -3,16 +3,22 @@
 //! creates receipts, persists a character, or dispatches media providers.
 
 #[cfg(target_arch = "wasm32")]
+mod gameplay_scene_art_catalog;
+
+#[cfg(target_arch = "wasm32")]
 mod browser {
+    use super::gameplay_scene_art_catalog::GameplaySceneArt;
     use std::cell::RefCell;
 
     use df_client::revisions::ViewAcceptance;
     use df_types::{ClientBindingId, RecoveryEpoch, RevisionLabel, SessionRevision};
     use df_ui::{
-        ActionView, CampaignLimits, CampaignMember, CampaignView, CharacterSheetView, CombatActor,
-        CombatArt, CombatFeedback, CombatLimits, CombatOffer, CombatOfferKind, CombatPhaseView,
-        ConceptScene, ControlledAction, ExplorationChoice, ExplorationInput, ExplorationLimits,
-        ExplorationNpc, ExplorationPortrait, ExplorationView, SessionConnection, SheetField,
+        ActionView, AftermathNextScene, AftermathPartyMember, CampaignLimits, CampaignMember,
+        CampaignView, CampfireAction, CampfireMember, CampfireOffer, CampfireView,
+        CharacterSheetView, CombatActor, CombatArt, CombatFeedback, CombatLimits, CombatOffer,
+        CombatOfferKind, CombatPhaseView, ConceptScene, ControlledAction, EncounterAftermathView,
+        ExplorationChoice, ExplorationInput, ExplorationLimits, ExplorationNpc,
+        ExplorationPortrait, ExplorationView, SceneTransitionView, SessionConnection, SheetField,
         SheetLabels, SheetOwnerGeneration, SheetRow, SheetSection, SheetTab,
     };
     use df_web::{DisplayPhase, PlayerPhase, RoleInput, RolePhase, RoleShell};
@@ -136,7 +142,28 @@ mod browser {
         Conversation,
         Clue,
         Encounter,
+        Aftermath,
+        Campfire,
+        Transition,
     }
+
+    const AFTERMATH_PARTY: [AftermathPartyMember<'static>; 1] = [AftermathPartyMember {
+        key: "mara",
+        name: "Mara",
+        summary: "Watching the lanterns along the road inland.",
+    }];
+    const PUBLIC_CAMP: [CampfireMember<'static>; 1] = [CampfireMember {
+        key: "mara",
+        name: "Mara",
+        condition: "By the fire",
+        detail: "Keeping watch over the misty valley.",
+    }];
+    const PLAYER_CAMP: [CampfireMember<'static>; 1] = [CampfireMember {
+        key: "mara",
+        name: "Mara",
+        condition: "By the fire",
+        detail: "Your folded harbor letter rests safely inside your coat.",
+    }];
 
     struct Preview {
         root: Element,
@@ -149,6 +176,8 @@ mod browser {
         sheet: bool,
         disconnected: bool,
         input_count: u64,
+        encounter_intent_seen: bool,
+        rest_requested: bool,
         feedback: &'static str,
         status: Element,
         controls: Vec<ControlledAction>,
@@ -198,6 +227,9 @@ mod browser {
                     Scene::Conversation => "The dockkeeper's warning",
                     Scene::Clue => "A seal in the rain",
                     Scene::Encounter => "At the loading pier",
+                    Scene::Aftermath => "Beyond the loading pier",
+                    Scene::Campfire => "Beneath the stars",
+                    Scene::Transition => "The road to Greyhaven",
                 },
                 description: match self.scene {
                     Scene::Harbor => {
@@ -212,6 +244,11 @@ mod browser {
                     Scene::Encounter => {
                         "A lookout steps between your company and the sealed cargo."
                     }
+                    Scene::Aftermath => "The authored story turns toward the road inland.",
+                    Scene::Campfire => {
+                        "A warm fire holds the darkness at the edge of the clearing."
+                    }
+                    Scene::Transition => "Morning waits beyond the mist.",
                 },
                 location: "Greyhaven · Lantern quay",
                 scene_label: "The harbor at midnight",
@@ -226,6 +263,11 @@ mod browser {
                         "The fragment bears the same lantern sigil painted on a crate at the far end of the pier."
                     }
                     Scene::Encounter => "The loading pier disappears into fog beyond the lookout.",
+                    Scene::Aftermath => {
+                        "This authored scene continues without resolving a production encounter."
+                    }
+                    Scene::Campfire => "The company gathers beneath the stars.",
+                    Scene::Transition => "Follow the next authored chapter back to the harbor.",
                 },
                 connection: if self.disconnected {
                     "Preview connection paused"
@@ -294,10 +336,98 @@ mod browser {
                 sections: &SHEET_SECTIONS,
             }
         }
+        fn art(&self) -> GameplaySceneArt {
+            match self.scene {
+                Scene::Harbor | Scene::Conversation | Scene::Clue => {
+                    GameplaySceneArt::HarborExploration
+                }
+                Scene::Encounter | Scene::Aftermath => GameplaySceneArt::HarborEncounter,
+                Scene::Campfire | Scene::Transition => GameplaySceneArt::CampfireRest,
+            }
+        }
+        fn aftermath_view(&self, public: bool) -> EncounterAftermathView<'static> {
+            EncounterAftermathView {
+                generation: 1,
+                revision: self.revision.sequence(),
+                chapter: "Chapter one · Beyond the loading pier",
+                title: "Lanterns along the road",
+                narrative: "The harbor falls behind the company. Beyond the last lantern, a clearing opens beneath the stars.",
+                party_heading: "The company",
+                party: &AFTERMATH_PARTY,
+                next_heading: "Beyond the harbor",
+                next_context: "Gather around the campfire before the next chapter.",
+                next_empty: "The shared display follows the company's story.",
+                next_scene: if public {
+                    None
+                } else {
+                    Some(AftermathNextScene {
+                        key: "preview:campfire",
+                        label: "Gather by the campfire",
+                        enabled: true,
+                        pending: false,
+                    })
+                },
+                feedback: Some(
+                    "Authored scene continuation · no encounter resolution, reward or receipt is confirmed.",
+                ),
+            }
+        }
+        fn campfire_view(&self, public: bool) -> CampfireView<'static> {
+            CampfireView {
+                owner_generation: 1,
+                revision: self.revision.sequence(),
+                title: GameplaySceneArt::CampfireRest.selection().title,
+                location: "Above Greyhaven · The ridge clearing",
+                narration: "A small fire warms the stones. Below the ridge, the harbor lights flicker through the mist. The road will still be there at dawn.",
+                party_label: "Around the fire",
+                notice: if self.rest_requested {
+                    self.feedback
+                } else {
+                    NOTICE
+                },
+                connected: !self.disconnected,
+                members: if public { &PUBLIC_CAMP } else { &PLAYER_CAMP },
+                rest: if public {
+                    None
+                } else {
+                    Some(CampfireOffer {
+                        id: "preview:rest",
+                        label: "Rest by the fire",
+                        enabled: true,
+                        pending: false,
+                    })
+                },
+                continue_action: if public {
+                    None
+                } else {
+                    Some(CampfireOffer {
+                        id: "preview:continue-road",
+                        label: "Continue the journey",
+                        enabled: true,
+                        pending: false,
+                    })
+                },
+            }
+        }
+        fn transition_view(&self, public: bool) -> SceneTransitionView<'static> {
+            SceneTransitionView {
+                scene: ConceptScene::Campfire,
+                location: "The road to Greyhaven",
+                title: "Where the lanterns lead",
+                narration: "The fire settles to embers. With the first light, the company follows the lantern road back toward Greyhaven.",
+                continue_label: if public {
+                    "The company chooses its next scene"
+                } else {
+                    "Return to Greyhaven"
+                },
+                continue_enabled: !public && !self.disconnected,
+                pending: false,
+            }
+        }
         fn inline_feedback(&self, shell: &RoleShell) -> Result<(), JsValue> {
             let Some(actions) = shell
                 .root()
-                .query_selector(".combat-action-rail, .exploration-actions")?
+                .query_selector(".combat-action-rail, .exploration-actions, .camp-actions, .aftermath-panel:last-child, .transition-stage")?
             else {
                 return Ok(());
             };
@@ -328,6 +458,8 @@ mod browser {
                 .map_err(|failure| JsValue::from_str(&format!("preview label: {failure:?}")))?;
             let lookout = RevisionLabel::new(Some("preview:lookout"))
                 .map_err(|failure| JsValue::from_str(&format!("preview label: {failure:?}")))?;
+            let aftermath = RevisionLabel::new(Some("preview:aftermath"))
+                .map_err(|failure| JsValue::from_str(&format!("preview label: {failure:?}")))?;
             let crate_target = RevisionLabel::new(Some("preview:crate"))
                 .map_err(|failure| JsValue::from_str(&format!("preview label: {failure:?}")))?;
             let offers = [
@@ -351,67 +483,95 @@ mod browser {
                     enabled: true,
                     pending: false,
                 },
+                CombatOffer {
+                    key: "preview-next-scene",
+                    offer: &action,
+                    option: Some(&aftermath),
+                    kind: CombatOfferKind::Action,
+                    label: "Preview the next scene",
+                    explanation: "Authored story continuation · no encounter outcome is resolved",
+                    enabled: self.encounter_intent_seen,
+                    pending: false,
+                },
             ];
             let sheet = self.sheet_view();
             let private_exploration = self.exploration(false);
             let public_exploration = self.exploration(true);
             let private_combat = self.combat(&offers);
             let public_combat = self.combat(&[]);
-            let player_result = if self.sheet {
-                self.player.present(
-                    self.player_binding,
-                    self.revision,
-                    RolePhase::Player(PlayerPhase::Sheet(&sheet)),
-                    None,
-                )
-            } else if self.scene == Scene::Encounter {
-                self.player.present(
-                    self.player_binding,
-                    self.revision,
-                    RolePhase::Player(PlayerPhase::Combat {
+            let private_aftermath = self.aftermath_view(false);
+            let public_aftermath = self.aftermath_view(true);
+            let private_campfire = self.campfire_view(false);
+            let public_campfire = self.campfire_view(true);
+            let private_transition = self.transition_view(false);
+            let public_transition = self.transition_view(true);
+            let player_phase = if self.sheet {
+                PlayerPhase::Sheet(&sheet)
+            } else {
+                match self.scene {
+                    Scene::Encounter => PlayerPhase::Combat {
                         view: &private_combat,
                         limits: combat_limits(),
-                    }),
-                    None,
-                )
-            } else {
-                self.player.present(
-                    self.player_binding,
-                    self.revision,
-                    RolePhase::Player(PlayerPhase::Exploration {
+                    },
+                    Scene::Aftermath => PlayerPhase::Aftermath(&private_aftermath),
+                    Scene::Campfire => PlayerPhase::Campfire(&private_campfire),
+                    Scene::Transition => PlayerPhase::Transition {
+                        view: &private_transition,
+                        generation: 1,
+                    },
+                    _ => PlayerPhase::Exploration {
                         view: &private_exploration,
                         limits: exploration_limits(),
-                    }),
+                    },
+                }
+            };
+            let player_result = self
+                .player
+                .present(
+                    self.player_binding,
+                    self.revision,
+                    RolePhase::Player(player_phase),
                     None,
                 )
-            }
-            .map_err(error)?;
-            let display_result = if self.scene == Scene::Encounter {
-                self.display.present(
+                .map_err(error)?;
+            let display_phase = match self.scene {
+                Scene::Encounter => DisplayPhase::Combat {
+                    view: &public_combat,
+                    limits: combat_limits(),
+                },
+                Scene::Aftermath => DisplayPhase::Aftermath(&public_aftermath),
+                Scene::Campfire => DisplayPhase::Campfire(&public_campfire),
+                Scene::Transition => DisplayPhase::Transition {
+                    view: &public_transition,
+                    generation: 1,
+                },
+                _ => DisplayPhase::Exploration {
+                    view: &public_exploration,
+                    limits: exploration_limits(),
+                },
+            };
+            let display_result = self
+                .display
+                .present(
                     self.display_binding,
                     self.revision,
-                    RolePhase::Display(DisplayPhase::Combat {
-                        view: &public_combat,
-                        limits: combat_limits(),
-                    }),
+                    RolePhase::Display(display_phase),
                     None,
                 )
-            } else {
-                self.display.present(
-                    self.display_binding,
-                    self.revision,
-                    RolePhase::Display(DisplayPhase::Exploration {
-                        view: &public_exploration,
-                        limits: exploration_limits(),
-                    }),
-                    None,
-                )
-            }
-            .map_err(error)?;
+                .map_err(error)?;
             if player_result != ViewAcceptance::Applied || display_result != ViewAcceptance::Applied
             {
                 return Err(JsValue::from_str("preview projection was not applied"));
             }
+            let art = self.art().selection();
+            self.root
+                .set_attribute("data-preview-art", art.asset_path)?;
+            self.root
+                .set_attribute("data-preview-art-title", art.title)?;
+            self.root
+                .set_attribute("data-preview-art-description", art.image_description)?;
+            self.root
+                .set_attribute("data-preview-art-fallback", art.fallback_label)?;
             self.status.set_text_content(Some(self.feedback));
             self.inline_feedback(&self.player)?;
             self.inline_feedback(&self.display)?;
@@ -422,6 +582,9 @@ mod browser {
                     Scene::Conversation => "conversation",
                     Scene::Clue => "clue",
                     Scene::Encounter => "encounter",
+                    Scene::Aftermath => "aftermath",
+                    Scene::Campfire => "campfire",
+                    Scene::Transition => "transition",
                 },
             )?;
             self.root
@@ -491,7 +654,10 @@ mod browser {
                 RoleInput::PlayerExploration(ExplorationInput::Draft { id, revision, .. })
                     if revision == self.revision
                         && id == "preview:free-intent"
-                        && self.scene != Scene::Encounter =>
+                        && matches!(
+                            self.scene,
+                            Scene::Harbor | Scene::Conversation | Scene::Clue
+                        ) =>
                 {
                     self.feedback = "Your preview intent was received. The draft remains editable; no game outcome is confirmed.";
                 }
@@ -504,13 +670,55 @@ mod browser {
                 {
                     self.feedback = match intent.option.as_ref().map(RevisionLabel::as_str) {
                         Some("preview:lookout") => {
+                            self.encounter_intent_seen = true;
                             "Preview intent received · confront the dockside lookout. No attack, roll or damage was resolved."
                         }
                         Some("preview:crate") => {
+                            self.encounter_intent_seen = true;
                             "Preview intent received · investigate the sealed crate. No check or discovery was resolved."
+                        }
+                        Some("preview:aftermath") if self.encounter_intent_seen => {
+                            self.scene = Scene::Aftermath;
+                            "Authored chapter cut · the company gathers on the road inland. No production encounter outcome or reward was applied."
                         }
                         _ => "That preview target is not offered. No outcome was applied.",
                     };
+                }
+                RoleInput::PlayerAftermath(selection)
+                    if self.scene == Scene::Aftermath
+                        && selection.generation == 1
+                        && selection.revision == self.revision.sequence()
+                        && selection.key == "preview:campfire" =>
+                {
+                    self.scene = Scene::Campfire;
+                    self.feedback = "Authored scene preview · the company gathers by the campfire. No travel time or resources were changed.";
+                }
+                RoleInput::PlayerCampfire(selection)
+                    if self.scene == Scene::Campfire
+                        && selection.owner_generation == 1
+                        && selection.revision == self.revision.sequence() =>
+                {
+                    match (selection.action, selection.offer_id.as_str()) {
+                        (CampfireAction::Rest, "preview:rest") => {
+                            self.rest_requested = true;
+                            self.feedback = "Preview rest intent received · Mara settles beside the fire. No time, hit points, spells or other resources were changed.";
+                        }
+                        (CampfireAction::Continue, "preview:continue-road") => {
+                            self.scene = Scene::Transition;
+                            self.feedback = "Authored scene preview · follow the lantern road toward Greyhaven. No persisted journey was advanced.";
+                        }
+                        _ => {
+                            self.feedback = "That preview campfire offer is no longer current. No outcome was applied.";
+                        }
+                    }
+                }
+                RoleInput::PlayerTransition(revision)
+                    if self.scene == Scene::Transition && revision == self.revision =>
+                {
+                    self.scene = Scene::Harbor;
+                    self.encounter_intent_seen = false;
+                    self.rest_requested = false;
+                    self.feedback = "Returned to the lantern quay in this authored preview. Your role shells remain mounted; no persisted campaign was reset.";
                 }
                 _ => {
                     self.feedback =
@@ -641,6 +849,8 @@ body{margin:0;background:#121311;color:#eadfc9}#gameplay-scene-preview{max-width
             sheet: false,
             disconnected: false,
             input_count: 0,
+            encounter_intent_seen: false,
+            rest_requested: false,
             feedback: "Begin at the lantern quay. Speak with Vell or inspect the broken seal on your player client.",
             status,
             controls: Vec::new(),
@@ -668,7 +878,7 @@ body{margin:0;background:#121311;color:#eadfc9}#gameplay-scene-preview{max-width
                 match operation {
                     0 => { preview.sheet = true; preview.feedback = "Your personal sheet is open. The shared display retains the public scene."; }
                     1 => { preview.sheet = false; preview.feedback = "Returned to the current scene. No game action was submitted by navigation."; }
-                    2 => { preview.sheet = false; preview.scene = Scene::Harbor; preview.feedback = "Authored preview restarted at the harbor. No persisted campaign was reset."; }
+                    2 => { preview.sheet = false; preview.scene = Scene::Harbor; preview.encounter_intent_seen = false; preview.rest_requested = false; preview.feedback = "Authored preview restarted at the harbor. No persisted campaign was reset."; }
                     3 => {
                         preview.disconnected = !preview.disconnected;
                         if preview.disconnected {
