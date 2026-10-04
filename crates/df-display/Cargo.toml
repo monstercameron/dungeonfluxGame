@@ -5,8 +5,10 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+df-client = { path = "../df-client" }
+df-types = { path = "../df-types" }
 df-ui = { path = "../df-ui" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "HtmlElement", "HtmlFieldSetElement"] }
+web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "HtmlElement", "HtmlFieldSetElement", "HtmlButtonElement"] }

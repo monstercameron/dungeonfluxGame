@@ -205,6 +205,8 @@ dependencies = [
 name = "df-display"
 version = "0.1.0"
 dependencies = [
+ "df-client",
+ "df-types",
  "df-ui",
  "wasm-bindgen",
  "web-sys",
@@ -281,7 +283,9 @@ dependencies = [
 name = "df-player"
 version = "0.1.0"
 dependencies = [
+ "df-client",
  "df-display",
+ "df-types",
  "df-ui",
  "wasm-bindgen",
  "web-sys",
