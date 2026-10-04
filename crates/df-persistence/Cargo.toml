@@ -1,0 +1,16 @@
+[package]
+name = "df-persistence"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+publish = false
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+df-types = { path = "../df-types" }
+df-model = { path = "../df-model" }
+df-session = { path = "../df-session" }
+df-auth = { path = "../df-auth" }
+df-observe = { path = "../df-observe" }
+tokio-postgres = { version = "=0.7.15", default-features = true }
+tokio = { version = "=1.53.1", default-features = false, features = ["rt-multi-thread", "net", "time", "sync"] }
