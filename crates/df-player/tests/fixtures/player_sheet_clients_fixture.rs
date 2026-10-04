@@ -486,6 +486,24 @@ mod browser {
         child(
             &document,
             &root,
+            "style",
+            r#"
+html,body{margin:0;background:#141310;color:#f4eddf}
+[data-fixture="player-sheet-client"]{font:13px/1.6 system-ui,sans-serif}
+[data-fixture="player-sheet-client"]>h2{font:400 22px/1.3 Georgia,serif;color:#e8d7b3;margin:22px 5% 8px;overflow-wrap:anywhere}
+[data-fixture="player-sheet-client"]>p{margin:8px 5% 14px;max-width:900px;color:#b4aca0;font-size:12px;overflow-wrap:anywhere}
+[data-fixture="player-sheet-client"]>div:first-of-type{display:flex;flex-wrap:wrap;gap:8px;margin:0 5% 14px;padding:14px 0;border-top:1px solid #d9b77a24;border-bottom:1px solid #d9b77a24}
+[data-fixture="player-sheet-client"]>div:first-of-type button{min-height:44px;max-width:100%;padding:10px 13px;border:1px solid #a98b574d;border-radius:6px;background:#1d1c17;color:#c5b99e;font:12px/1.5 system-ui,sans-serif;white-space:normal;overflow-wrap:anywhere;cursor:pointer;touch-action:manipulation}
+[data-fixture="player-sheet-client"]>div:first-of-type button:hover:enabled{background:#30291f;border-color:#cba466;color:#f4eddf}
+[data-fixture="player-sheet-client"] button:focus-visible,[data-fixture="player-sheet-client"] [tabindex]:focus-visible{outline:3px solid #f1d69b;outline-offset:4px}
+[data-fixture="player-sheet-client"] [data-player-client="character-sheet"]>p{margin:0;padding:10px 5%;background:#1c1a15;color:#d8cbb2;font:12px/1.6 system-ui,sans-serif;border-top:1px solid #d9b77a24;overflow-wrap:anywhere}
+@media(max-width:700px){[data-fixture="player-sheet-client"]>h2{font-size:20px;margin-top:18px}[data-fixture="player-sheet-client"]>div:first-of-type{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}[data-fixture="player-sheet-client"]>div:first-of-type button{width:100%;font-size:11px}}
+@media(prefers-reduced-motion:reduce){[data-fixture="player-sheet-client"] *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+"#,
+        )?;
+        child(
+            &document,
+            &root,
             "h2",
             "Player client · Persistent personal sheet",
         )?;
