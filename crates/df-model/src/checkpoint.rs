@@ -1823,10 +1823,18 @@ pub struct AssetDependency {
     pub asset: AssetReference,
     pub prerequisites: Vec<AssetReference>,
 }
+/// Accepted cosmetic descriptions only; they never establish rules or equipment statistics.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CharacterAppearance {
+    pub features: String,
+    pub outfit: String,
+    pub outfit_revision: RevisionLabel,
+}
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EntityIdentityRevision {
     pub entity: EntityId,
     pub revision: RevisionLabel,
+    pub character_appearance: Option<CharacterAppearance>,
     pub source_facts: Vec<FactId>,
     pub appearances: Vec<AssetReference>,
     pub voice: Option<AssetReference>,
@@ -2635,6 +2643,14 @@ fn validate_continuity(
             count!(&identity.source_facts);
             count!(&identity.appearances);
             count!(&identity.sound);
+            if let Some(appearance) = &identity.character_appearance {
+                require(
+                    !appearance.features.trim().is_empty() && !appearance.outfit.trim().is_empty(),
+                    CheckpointError::InvalidReference,
+                )?;
+                text!(&appearance.features);
+                text!(&appearance.outfit);
+            }
             for id in &identity.source_facts {
                 fact(*id)?;
             }
@@ -2906,7 +2922,8 @@ record_heap!(NarrativeMoment; characters, facts, attributed_claims, audience, se
 record_heap!(AssetDemand; key, budget_reservation, policy);
 record_heap!(AssetJobState; published);
 record_heap!(AssetDependency; asset, prerequisites);
-record_heap!(EntityIdentityRevision; revision, source_facts, appearances, voice, sound);
+record_heap!(CharacterAppearance; features, outfit, outfit_revision);
+record_heap!(EntityIdentityRevision; revision, character_appearance, source_facts, appearances, voice, sound);
 record_heap!(VisualBible; revision, definition, palette, style, references);
 record_heap!(CanonicalPack; revision, bible, identities);
 record_heap!(PerformanceHint; definition, voice, emphasis_facts);

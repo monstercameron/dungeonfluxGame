@@ -427,3 +427,6 @@ fn canonical_handler_output_passes_to_directors_without_another_revision_or_mech
     assert_eq!(current, checkpoint(state()).unwrap());
     assert_eq!(handler.calls.get(), 1);
 }
+
+#[path = "character_reference.rs"]
+mod character_reference;
