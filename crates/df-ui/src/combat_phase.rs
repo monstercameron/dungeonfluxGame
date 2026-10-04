@@ -881,10 +881,9 @@ mod browser {
             if draft
                 .as_ref()
                 .is_some_and(|owner| view.is_none_or(|view| view.key != owner.key))
+                && let Some(owner) = draft.take()
             {
-                if let Some(owner) = draft.take() {
-                    owner.control.dispose()?;
-                }
+                owner.control.dispose()?;
             }
             if let Some(view) = view {
                 let input_view = TextInputView {

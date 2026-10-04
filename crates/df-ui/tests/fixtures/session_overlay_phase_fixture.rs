@@ -401,9 +401,9 @@ mod browser {
             let event = KeyboardEventInit::new();
             event.set_key("Escape");
             event.set_bubbles(true);
-            drawer.dispatch_event(&KeyboardEvent::new_with_keyboard_event_init_dict(
-                "keydown", &event,
-            )?)?;
+            let keyboard_event: web_sys::Event =
+                KeyboardEvent::new_with_keyboard_event_init_dict("keydown", &event)?.into();
+            drawer.dispatch_event(&keyboard_event)?;
             if !drawer.has_attribute("hidden")
                 || !document
                     .active_element()

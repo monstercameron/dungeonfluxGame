@@ -626,7 +626,17 @@ mod browser {
             )
             .map_err(error)?;
             action.on_activate(move || {
-                if operation == 7 { if let Err(e) = shutdown() { if let Some(document) = web_sys::window().and_then(|window| window.document()) { if let Some(body) = document.body() { body.set_text_content(Some(&format!("Fixture disposal failed: {}", e.as_string().unwrap_or_default()))); } } } return; }
+                if operation == 7 {
+                    if let Err(e) = shutdown()
+                        && let Some(document) = web_sys::window().and_then(|window| window.document())
+                        && let Some(body) = document.body()
+                    {
+                        body.set_text_content(Some(&format!(
+                            "Fixture disposal failed: {}", e.as_string().unwrap_or_default()
+                        )));
+                    }
+                    return;
+                }
                 FIXTURE.with(|slot| {
                     if let Some(fixture) = slot.borrow().as_ref() {
                         let result = match operation {
