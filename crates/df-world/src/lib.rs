@@ -7,3 +7,8 @@ pub use schedule_advancement::{
     AdmittedScheduleDestination, ScheduleAdvancement, ScheduleAdvancementError,
     ScheduleAdvancementLimits, ScheduledLocationChange, stage_schedule_advancement,
 };
+pub mod environmental_delta;
+pub use environmental_delta::{
+    AdmittedEnvironmentalChange, EnvironmentalDelta, EnvironmentalDeltaError,
+    EnvironmentalDeltaLimits, stage_environmental_delta,
+};

@@ -195,6 +195,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-combat"
+version = "0.1.0"
+dependencies = [
+ "df-content",
+ "df-model",
+ "df-rules",
+ "df-types",
+]
+
+[[package]]
 name = "df-content"
 version = "0.1.0"
 dependencies = [
@@ -220,6 +230,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-engine"
+version = "0.1.0"
+dependencies = [
+ "df-content",
+ "df-model",
+ "df-rules",
+ "df-types",
+ "df-world",
+]
+
+[[package]]
 name = "df-experience"
 version = "0.1.0"
 dependencies = [
@@ -230,6 +251,9 @@ dependencies = [
 name = "df-intent"
 version = "0.1.0"
 dependencies = [
+ "df-content",
+ "df-model",
+ "df-rules",
  "df-types",
 ]
 

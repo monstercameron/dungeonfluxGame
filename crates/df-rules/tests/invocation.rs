@@ -3,8 +3,9 @@ use df_content::catalog::{CatalogEntry, CatalogLimits, CatalogSnapshot};
 use df_model::commands::{CommandLimits, validate_client_command};
 use df_rules::{
     DispatchError, DispatchRegistry, HandlerRegistration, InvocationError, RulesCommandHandler,
+    RulesCommandInput,
 };
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 include!("fixtures.rs");
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -17,6 +18,7 @@ struct FixtureHandler {
     candidate: Checkpoint,
     reject: bool,
     calls: Cell<usize>,
+    observed_draws: RefCell<Vec<ActualDraw>>,
 }
 
 impl RulesCommandHandler for FixtureHandler {
@@ -26,8 +28,13 @@ impl RulesCommandHandler for FixtureHandler {
         &self.supplied_pins
     }
 
-    fn stage(&self, _: &GameInput, _: &Checkpoint) -> Result<Checkpoint, Self::Rejection> {
+    fn stage(
+        &self,
+        input: RulesCommandInput<'_>,
+        _: &Checkpoint,
+    ) -> Result<Checkpoint, Self::Rejection> {
         self.calls.set(self.calls.get() + 1);
+        self.observed_draws.replace(input.supplied_draws.to_vec());
         if self.reject {
             Err(FixtureRejection::UnsupportedMechanic)
         } else {
@@ -50,6 +57,13 @@ fn input() -> GameInput {
     })
 }
 
+fn without_draws(command: &GameInput) -> RulesCommandInput<'_> {
+    RulesCommandInput {
+        command,
+        supplied_draws: &[],
+    }
+}
+
 fn candidate_with(
     current: &Checkpoint,
     candidate_basis: Basis,
@@ -57,6 +71,9 @@ fn candidate_with(
     decision: bool,
 ) -> Checkpoint {
     let mut supplied = current.state().clone();
+    for pending in &mut supplied.pending {
+        pending.basis = candidate_basis;
+    }
     if decision {
         supplied.decisions.push(AcceptedDecision {
             operation: OperationId::from_bytes(&[6; 16]).unwrap(),
@@ -92,6 +109,7 @@ fn fixture(current: &Checkpoint) -> FixtureHandler {
         candidate: candidate_with(current, next, current.pins().clone(), true),
         reject: false,
         calls: Cell::new(0),
+        observed_draws: RefCell::new(vec![]),
     }
 }
 
@@ -149,7 +167,7 @@ fn canonical_admission_then_exact_source_selection_invokes_one_compiled_handler(
             current.pins(),
             &selector,
             &source,
-            &request,
+            without_draws(&request),
             &current,
             1024 * 1024,
         )
@@ -180,7 +198,7 @@ fn unknown_or_unsupported_source_never_invokes_the_known_handler() {
             current.pins(),
             &label("unknown"),
             &source,
-            &input(),
+            without_draws(&input()),
             &current,
             1024 * 1024,
         ),
@@ -191,7 +209,7 @@ fn unknown_or_unsupported_source_never_invokes_the_known_handler() {
             current.pins(),
             &selector,
             &other,
-            &input(),
+            without_draws(&input()),
             &current,
             1024 * 1024,
         ),
@@ -219,7 +237,7 @@ fn registry_or_handler_pin_mismatch_refuses_before_invocation() {
             &changed,
             &selector,
             &source,
-            &input(),
+            without_draws(&input()),
             &current,
             1024 * 1024,
         ),
@@ -230,7 +248,7 @@ fn registry_or_handler_pin_mismatch_refuses_before_invocation() {
             current.pins(),
             &selector,
             &source,
-            &input(),
+            without_draws(&input()),
             &current,
             1024 * 1024,
         ),
@@ -256,7 +274,7 @@ fn typed_mechanical_rejection_returns_no_candidate_or_mutation() {
             current.pins(),
             &selector,
             &source,
-            &input(),
+            without_draws(&input()),
             &current,
             1024 * 1024,
         ),
@@ -310,7 +328,7 @@ fn malformed_candidate_basis_decision_pins_and_capacity_are_explicit_refusals() 
                 current.pins(),
                 &selector,
                 &source,
-                &input(),
+                without_draws(&input()),
                 &current,
                 maximum,
             ),
@@ -341,7 +359,7 @@ fn earlier_same_epoch_input_remains_admissible_but_future_input_never_invokes() 
                 current.pins(),
                 &selector,
                 &source,
-                &request,
+                without_draws(&request),
                 &current,
                 1024 * 1024,
             )
@@ -356,7 +374,7 @@ fn earlier_same_epoch_input_remains_admissible_but_future_input_never_invokes() 
             current.pins(),
             &selector,
             &source,
-            &request,
+            without_draws(&request),
             &current,
             1024 * 1024,
         ),
@@ -376,7 +394,14 @@ fn zero_output_bound_refuses_before_any_handler_invocation() {
     let registry = registry(current.pins(), &entries, &registrations);
 
     assert_eq!(
-        registry.stage(current.pins(), &selector, &source, &input(), &current, 0,),
+        registry.stage(
+            current.pins(),
+            &selector,
+            &source,
+            without_draws(&input()),
+            &current,
+            0,
+        ),
         Err(InvocationError::Capacity)
     );
     assert_eq!(handler.calls.get(), 0);
@@ -398,7 +423,7 @@ fn previously_accepted_operation_is_never_staged_again() {
             current.pins(),
             &selector,
             &source,
-            &input(),
+            without_draws(&input()),
             &current,
             1024 * 1024,
         ),
@@ -425,7 +450,7 @@ fn revision_exhaustion_refuses_before_handler_invocation() {
             current.pins(),
             &selector,
             &source,
-            &input(),
+            without_draws(&input()),
             &current,
             1024 * 1024,
         ),
@@ -434,4 +459,560 @@ fn revision_exhaustion_refuses_before_handler_invocation() {
         ))
     );
     assert_eq!(handler.calls.get(), 0);
+}
+
+fn roll_input() -> GameInput {
+    let mut request = input();
+    if let GameInput::Game(command) = &mut request {
+        command.command = GameCommand::SubmitRoll {
+            resolution: ResolutionId::from_bytes(&[10; 16]).unwrap(),
+            window: WindowId::from_bytes(&[11; 16]).unwrap(),
+        };
+    }
+    request
+}
+
+fn draw(ordinal: u32, sides: u32, value: u32) -> ActualDraw {
+    ActualDraw {
+        operation: OperationId::from_bytes(&[6; 16]).unwrap(),
+        ordinal,
+        resolution: ResolutionId::from_bytes(&[10; 16]).unwrap(),
+        window: WindowId::from_bytes(&[11; 16]).unwrap(),
+        sides,
+        value,
+        source: rule(),
+    }
+}
+
+fn roll_current(retained: Vec<ActualDraw>) -> Checkpoint {
+    let mut supplied = state();
+    let cause = FactId::from_bytes(&[12; 16]).unwrap();
+    supplied.facts.push(GameFact {
+        id: cause,
+        revision: basis().revision,
+        operation: OperationId::from_bytes(&[7; 16]).unwrap(),
+        ordinal: 0,
+        cause: None,
+        audience: AudienceScope::Shared,
+        value: FactValue::ContentEvent {
+            definition: content(),
+            subjects: vec![],
+        },
+    });
+    for (index, record) in retained.iter().enumerate() {
+        supplied.facts.push(GameFact {
+            id: FactId::from_bytes(&[30 + u8::try_from(index).unwrap(); 16]).unwrap(),
+            revision: basis().revision,
+            operation: record.operation,
+            ordinal: record.ordinal,
+            cause: Some(cause),
+            audience: AudienceScope::Shared,
+            value: FactValue::DrawAccepted {
+                operation: record.operation,
+                ordinal: record.ordinal,
+            },
+        });
+    }
+    supplied.draws = retained;
+    supplied.pending.push(PendingResolution {
+        id: ResolutionId::from_bytes(&[10; 16]).unwrap(),
+        basis: basis(),
+        continuation: label("fixture-roll-continuation"),
+        window: ResolutionWindow {
+            id: WindowId::from_bytes(&[11; 16]).unwrap(),
+            phase: TriggerPhase::BeforeDraw,
+            causal_fact: cause,
+            source: rule(),
+            timer: None,
+        },
+        next: PendingInput::Roll {
+            participant: member(3),
+            sides: vec![20, 6],
+            source: rule(),
+        },
+        choices: vec![],
+        draw_ordinals: supplied
+            .draws
+            .iter()
+            .map(|record| (record.operation, record.ordinal))
+            .collect(),
+        spent: vec![],
+        rulings: vec![],
+    });
+    checkpoint(supplied).unwrap()
+}
+
+fn draw_candidate(current: &Checkpoint, supplied_draws: &[ActualDraw]) -> Checkpoint {
+    let mut next = current.basis();
+    next.revision = next.revision.next_sequence().unwrap();
+    let operation = OperationId::from_bytes(&[6; 16]).unwrap();
+    let mut supplied = current.state().clone();
+    supplied.pending.clear();
+    let mut fact_ids = vec![];
+    let first_fact_ordinal = u32::try_from(
+        supplied
+            .facts
+            .iter()
+            .filter(|fact| fact.operation == operation)
+            .count(),
+    )
+    .unwrap();
+    for (index, record) in supplied_draws.iter().enumerate() {
+        let id = FactId::from_bytes(&[60 + u8::try_from(index).unwrap(); 16]).unwrap();
+        supplied.facts.push(GameFact {
+            id,
+            revision: next.revision,
+            operation,
+            ordinal: first_fact_ordinal
+                .checked_add(u32::try_from(index).unwrap())
+                .unwrap(),
+            cause: None,
+            audience: AudienceScope::Shared,
+            value: FactValue::DrawAccepted {
+                operation,
+                ordinal: record.ordinal,
+            },
+        });
+        fact_ids.push(id);
+    }
+    supplied.draws.extend_from_slice(supplied_draws);
+    supplied.decisions.push(AcceptedDecision {
+        operation,
+        revision: next.revision,
+        facts: fact_ids,
+        draws: supplied
+            .draws
+            .iter()
+            .filter(|record| record.operation == operation)
+            .map(|record| record.ordinal)
+            .collect(),
+        effects: vec![],
+        source_policy: label("fixture-source-policy"),
+        semantic_output: None,
+    });
+    rebuilt(current, next, supplied)
+}
+
+fn rebuilt(current: &Checkpoint, basis: Basis, state: GameState) -> Checkpoint {
+    Checkpoint::new(
+        CHECKPOINT_SCHEMA,
+        basis,
+        current.pins().clone(),
+        state,
+        ReferenceInventory {
+            rules: &[rule()],
+            content: &[content()],
+            resources: &resource_constraints(),
+            assets: &[],
+        },
+        limits(),
+    )
+    .unwrap()
+}
+
+fn invoke_roll(
+    handler: &FixtureHandler,
+    current: &Checkpoint,
+    request: &GameInput,
+    draws: &[ActualDraw],
+    maximum: usize,
+) -> Result<Checkpoint, InvocationError<FixtureRejection>> {
+    let selector = label("fixture-selector");
+    let source = rule();
+    let entries = [CatalogEntry::new(&source, b"source")];
+    let registrations = [HandlerRegistration::new(&selector, &source, handler)];
+    registry(current.pins(), &entries, &registrations).stage(
+        current.pins(),
+        &selector,
+        &source,
+        RulesCommandInput {
+            command: request,
+            supplied_draws: draws,
+        },
+        current,
+        maximum,
+    )
+}
+
+#[test]
+fn supplied_roll_reaches_handler_and_is_accounted_once_without_mutating_current() {
+    let current = roll_current(vec![]);
+    let before = current.clone();
+    let draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+    let mut handler = fixture(&current);
+    handler.candidate = draw_candidate(&current, &draws);
+    let first = invoke_roll(&handler, &current, &roll_input(), &draws, 1024 * 1024).unwrap();
+    let second = invoke_roll(&handler, &current, &roll_input(), &draws, 1024 * 1024).unwrap();
+    assert_eq!(first, second);
+    assert_eq!(*handler.observed_draws.borrow(), draws);
+    assert_eq!(first.state().draws, draws);
+    assert_eq!(first.state().decisions.last().unwrap().draws, vec![0, 1]);
+    assert_eq!(
+        first
+            .state()
+            .facts
+            .iter()
+            .filter(|fact| matches!(fact.value, FactValue::DrawAccepted { .. }))
+            .count(),
+        2
+    );
+    assert_eq!(current, before);
+    assert_eq!(first.state().resources, current.state().resources);
+}
+
+#[test]
+fn accepted_roll_retry_never_invokes_or_consumes_again() {
+    let initial = roll_current(vec![]);
+    let draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+    let mut handler = fixture(&initial);
+    handler.candidate = draw_candidate(&initial, &draws);
+    let current = handler.candidate.clone();
+    assert_eq!(
+        invoke_roll(&handler, &current, &roll_input(), &draws, 1024 * 1024),
+        Err(InvocationError::AlreadyAccepted)
+    );
+    assert_eq!(handler.calls.get(), 0);
+}
+
+#[test]
+fn malformed_supplied_draws_refuse_before_invocation_and_preserve_current() {
+    let current = roll_current(vec![]);
+    let before = current.clone();
+    for case in 0..10 {
+        let handler = fixture(&current);
+        let mut draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+        let expected = match case {
+            0 => {
+                draws[0].operation = OperationId::from_bytes(&[90; 16]).unwrap();
+                InvocationError::DrawOperationMismatch
+            }
+            1 => {
+                draws[0].source.catalog = label("foreign-catalog");
+                InvocationError::DrawSourceMismatch
+            }
+            2 => {
+                draws[0].value = 0;
+                InvocationError::InvalidDrawInput
+            }
+            3 => {
+                draws[0].value = 21;
+                InvocationError::InvalidDrawInput
+            }
+            4 => {
+                draws[0].sides = 0;
+                InvocationError::InvalidDrawInput
+            }
+            5 => {
+                draws[1].ordinal = 0;
+                InvocationError::DrawAlreadyConsumed
+            }
+            6 => {
+                draws[1].ordinal = 2;
+                InvocationError::DrawOrderMismatch
+            }
+            7 => {
+                draws[0].resolution = ResolutionId::from_bytes(&[90; 16]).unwrap();
+                InvocationError::RollInputMismatch
+            }
+            8 => {
+                draws[0].source.clause = label("foreign-clause");
+                InvocationError::RollInputMismatch
+            }
+            _ => {
+                draws[0].window = WindowId::from_bytes(&[90; 16]).unwrap();
+                InvocationError::RollInputMismatch
+            }
+        };
+        assert_eq!(
+            invoke_roll(&handler, &current, &roll_input(), &draws, 1024 * 1024),
+            Err(expected),
+            "case {case}"
+        );
+        assert_eq!(handler.calls.get(), 0);
+        assert_eq!(current, before);
+    }
+}
+
+#[test]
+fn pending_roll_participant_window_kind_count_and_sides_are_authoritative() {
+    let current = roll_current(vec![]);
+    for case in 0..7 {
+        let mut request = roll_input();
+        let mut draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+        let mut state = current.state().clone();
+        match case {
+            0 => {
+                if let GameInput::Game(command) = &mut request {
+                    command.member = member(90);
+                }
+            }
+            1 => {
+                if let GameInput::Game(command) = &mut request {
+                    command.command = GameCommand::SubmitRoll {
+                        resolution: ResolutionId::from_bytes(&[90; 16]).unwrap(),
+                        window: draws[0].window,
+                    };
+                }
+            }
+            2 => {
+                state.pending.clear();
+            }
+            3 => {
+                state.pending[0].next = PendingInput::Choice {
+                    remaining: vec![OfferedResponse {
+                        participant: member(3),
+                        offer: label("fixture-offer"),
+                        options: vec![label("fixture-choice")],
+                        source: rule(),
+                    }],
+                };
+            }
+            4 => {
+                draws.pop();
+            }
+            5 => {
+                draws[0].sides = 19;
+            }
+            _ => {
+                draws.clear();
+            }
+        }
+        let current = rebuilt(&current, current.basis(), state);
+        let handler = fixture(&current);
+        assert_eq!(
+            invoke_roll(&handler, &current, &request, &draws, 1024 * 1024),
+            Err(InvocationError::RollInputMismatch),
+            "case {case}"
+        );
+        assert_eq!(handler.calls.get(), 0);
+    }
+}
+
+#[test]
+fn candidate_cannot_drop_add_or_alter_explicit_draws() {
+    let current = roll_current(vec![]);
+    let before = current.clone();
+    let draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+    for case in 0..3 {
+        let mut handler = fixture(&current);
+        let mut candidate_draws = draws.clone();
+        match case {
+            0 => {
+                candidate_draws.pop();
+            }
+            1 => {
+                candidate_draws.push(draw(2, 8, 3));
+            }
+            _ => {
+                candidate_draws[0].value = 1;
+            }
+        }
+        handler.candidate = draw_candidate(&current, &candidate_draws);
+        assert_eq!(
+            invoke_roll(&handler, &current, &roll_input(), &draws, 1024 * 1024),
+            Err(InvocationError::CandidateDrawMismatch)
+        );
+        assert_eq!(handler.calls.get(), 1);
+        assert_eq!(current, before);
+    }
+}
+
+#[test]
+fn candidate_must_link_each_new_draw_once_to_its_decision_and_facts() {
+    let current = roll_current(vec![]);
+    let draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+    for case in 0..5 {
+        let mut handler = fixture(&current);
+        let candidate = draw_candidate(&current, &draws);
+        let mut state = candidate.state().clone();
+        match case {
+            0 => {
+                state.decisions[0].draws.pop();
+            }
+            1 => {
+                state.decisions[0].draws.reverse();
+            }
+            2 => {
+                state.decisions[0].facts.pop();
+            }
+            3 => {
+                state.facts.last_mut().unwrap().value = FactValue::DrawAccepted {
+                    operation: draws[0].operation,
+                    ordinal: 0,
+                };
+            }
+            _ => {
+                state.facts.last_mut().unwrap().value = FactValue::ContentEvent {
+                    definition: content(),
+                    subjects: vec![],
+                };
+            }
+        }
+        handler.candidate = rebuilt(&current, candidate.basis(), state);
+        assert_eq!(
+            invoke_roll(&handler, &current, &roll_input(), &draws, 1024 * 1024),
+            Err(InvocationError::CandidateDrawAccountingMismatch),
+            "case {case}"
+        );
+    }
+}
+
+#[test]
+fn retained_same_operation_draws_continue_and_are_not_recorded_as_new_facts() {
+    let retained = vec![draw(0, 8, 5)];
+    let current = roll_current(retained.clone());
+    let draws = vec![draw(1, 20, 17), draw(2, 6, 4)];
+    let mut handler = fixture(&current);
+    handler.candidate = draw_candidate(&current, &draws);
+    let candidate = invoke_roll(&handler, &current, &roll_input(), &draws, 1024 * 1024).unwrap();
+    assert_eq!(
+        candidate.state().decisions.last().unwrap().draws,
+        vec![0, 1, 2]
+    );
+    assert!(candidate.state().facts.starts_with(&current.state().facts));
+    assert_eq!(
+        candidate.state().facts.len(),
+        current.state().facts.len() + 2
+    );
+    assert!(candidate.state().draws.starts_with(&retained));
+    let reused = vec![draw(0, 20, 17), draw(1, 6, 4)];
+    assert_eq!(
+        invoke_roll(&handler, &current, &roll_input(), &reused, 1024 * 1024),
+        Err(InvocationError::DrawAlreadyConsumed)
+    );
+    assert_eq!(handler.calls.get(), 1);
+}
+
+#[test]
+fn retained_other_operation_draws_cannot_be_rewritten_by_a_new_roll() {
+    let mut prior = draw(0, 8, 5);
+    prior.operation = OperationId::from_bytes(&[9; 16]).unwrap();
+    let current = roll_current(vec![prior]);
+    let draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+    let mut handler = fixture(&current);
+    handler.candidate = draw_candidate(&current, &draws);
+    assert!(invoke_roll(&handler, &current, &roll_input(), &draws, 1024 * 1024).is_ok());
+    let mut state = handler.candidate.state().clone();
+    state.draws[0].value = 1;
+    handler.candidate = rebuilt(&current, handler.candidate.basis(), state);
+    assert_eq!(
+        invoke_roll(&handler, &current, &roll_input(), &draws, 1024 * 1024),
+        Err(InvocationError::CandidateDrawMismatch)
+    );
+}
+
+#[test]
+fn supplied_draw_memory_budget_refuses_before_handler_invocation() {
+    let current = roll_current(vec![]);
+    let draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+    let handler = fixture(&current);
+    let record_bytes = std::mem::size_of_val(draws.as_slice());
+    for maximum in [record_bytes - 1, record_bytes] {
+        assert_eq!(
+            invoke_roll(&handler, &current, &roll_input(), &draws, maximum),
+            Err(InvocationError::Capacity)
+        );
+    }
+    assert_eq!(handler.calls.get(), 0);
+}
+
+fn current_with_accepted_history() -> Checkpoint {
+    let mut prior = draw(0, 8, 5);
+    prior.operation = OperationId::from_bytes(&[9; 16]).unwrap();
+    let current = roll_current(vec![prior]);
+    let mut state = current.state().clone();
+    state.decisions.push(AcceptedDecision {
+        operation: OperationId::from_bytes(&[9; 16]).unwrap(),
+        revision: current.basis().revision,
+        facts: vec![FactId::from_bytes(&[30; 16]).unwrap()],
+        draws: vec![0],
+        effects: vec![],
+        source_policy: label("fixture-source-policy"),
+        semantic_output: Some("retained-server-outcome".into()),
+    });
+    rebuilt(&current, current.basis(), state)
+}
+
+#[test]
+fn new_roll_preserves_accepted_history_and_prior_retry_never_reaches_handler() {
+    let current = current_with_accepted_history();
+    let before = current.clone();
+    let draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+    let mut handler = fixture(&current);
+    handler.candidate = draw_candidate(&current, &draws);
+    let candidate = invoke_roll(&handler, &current, &roll_input(), &draws, 1024 * 1024).unwrap();
+    assert!(
+        candidate
+            .state()
+            .decisions
+            .starts_with(&current.state().decisions)
+    );
+    assert_eq!(
+        candidate.state().decisions.len(),
+        current.state().decisions.len() + 1
+    );
+    assert_eq!(current, before);
+    let mut retry = roll_input();
+    if let GameInput::Game(command) = &mut retry {
+        command.operation = OperationId::from_bytes(&[9; 16]).unwrap();
+    }
+    assert_eq!(
+        invoke_roll(&handler, &candidate, &retry, &[], 1024 * 1024),
+        Err(InvocationError::AlreadyAccepted)
+    );
+    assert_eq!(handler.calls.get(), 1);
+}
+
+#[test]
+fn canonically_valid_candidate_cannot_drop_an_earlier_accepted_decision() {
+    let current = current_with_accepted_history();
+    let before = current.clone();
+    let draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+    let mut handler = fixture(&current);
+    let candidate = draw_candidate(&current, &draws);
+    let mut state = candidate.state().clone();
+    state.decisions.remove(0);
+    handler.candidate = rebuilt(&current, candidate.basis(), state);
+    assert_eq!(handler.candidate.state().draws, candidate.state().draws);
+    assert_eq!(handler.candidate.state().facts, candidate.state().facts);
+    assert_eq!(
+        invoke_roll(&handler, &current, &roll_input(), &draws, 1024 * 1024),
+        Err(InvocationError::CandidateDecisionHistoryMismatch)
+    );
+    assert_eq!(handler.calls.get(), 1);
+    assert_eq!(current, before);
+}
+
+#[test]
+fn canonically_valid_candidate_cannot_rewrite_accepted_decision_provenance() {
+    let current = current_with_accepted_history();
+    let before = current.clone();
+    let draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+    for case in 0..4 {
+        let mut handler = fixture(&current);
+        let candidate = draw_candidate(&current, &draws);
+        let mut state = candidate.state().clone();
+        match case {
+            0 => {
+                state.decisions[0].semantic_output = Some("changed-server-outcome".into());
+            }
+            1 => {
+                state.decisions[0].source_policy = label("changed-source-policy");
+            }
+            2 => {
+                state.decisions[0].draws.clear();
+            }
+            _ => {
+                state.decisions[0].facts.clear();
+            }
+        }
+        handler.candidate = rebuilt(&current, candidate.basis(), state);
+        assert_eq!(
+            invoke_roll(&handler, &current, &roll_input(), &draws, 1024 * 1024),
+            Err(InvocationError::CandidateDecisionHistoryMismatch),
+            "case {case}"
+        );
+        assert_eq!(handler.calls.get(), 1);
+        assert_eq!(current, before);
+    }
 }

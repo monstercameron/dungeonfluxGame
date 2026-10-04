@@ -1,7 +1,20 @@
 //! One compiled handler contract and source-pinned invocation boundary.
 use crate::dispatch::{DispatchError, DispatchRegistry};
-use df_model::checkpoint::{Checkpoint, CheckpointError, CheckpointPins, GameInput, RuleReference};
-use df_types::{RevisionError, RevisionLabel};
+use df_model::checkpoint::{
+    ActualDraw, Checkpoint, CheckpointError, CheckpointPins, FactValue, GameCommand, GameInput,
+    PendingInput, RuleReference,
+};
+use df_types::{OperationId, RevisionError, RevisionLabel};
+use std::collections::BTreeSet;
+
+/// Canonical command and actual outcomes supplied by the trusted session owner.
+/// Clients request a roll; they cannot supply these outcomes. Borrowing this input neither
+/// consumes durable dice nor grants source, membership, or commit authority.
+#[derive(Clone, Copy)]
+pub struct RulesCommandInput<'a> {
+    pub command: &'a GameInput,
+    pub supplied_draws: &'a [ActualDraw],
+}
 
 /// Compiled source-qualified mechanics supplied by the rules owner.
 ///
@@ -14,7 +27,7 @@ pub trait RulesCommandHandler {
     fn pins(&self) -> &CheckpointPins;
     fn stage(
         &self,
-        input: &GameInput,
+        input: RulesCommandInput<'_>,
         checkpoint: &Checkpoint,
     ) -> Result<Checkpoint, Self::Rejection>;
 }
@@ -39,6 +52,15 @@ pub enum InvocationError<Rejection> {
     CandidateBuildMismatch,
     CandidateCheckpoint(CheckpointError),
     MissingAcceptedDecision,
+    InvalidDrawInput,
+    DrawOperationMismatch,
+    DrawSourceMismatch,
+    DrawOrderMismatch,
+    DrawAlreadyConsumed,
+    RollInputMismatch,
+    CandidateDrawMismatch,
+    CandidateDrawAccountingMismatch,
+    CandidateDecisionHistoryMismatch,
     Capacity,
 }
 
@@ -48,7 +70,7 @@ pub enum InvocationError<Rejection> {
 pub fn stage_handler<Handler: RulesCommandHandler>(
     handler: &Handler,
     expected_pins: &CheckpointPins,
-    input: &GameInput,
+    input: RulesCommandInput<'_>,
     current: &Checkpoint,
     maximum_candidate_bytes: usize,
 ) -> Result<Checkpoint, InvocationError<Handler::Rejection>> {
@@ -58,7 +80,7 @@ pub fn stage_handler<Handler: RulesCommandHandler>(
     current
         .validate_resume(current.basis(), expected_pins)
         .map_err(InvocationError::CurrentCheckpoint)?;
-    let (input_basis, operation) = match input {
+    let (input_basis, operation) = match input.command {
         GameInput::Game(command) => (command.basis, command.operation),
         GameInput::Host(command) => (command.basis, command.operation),
         _ => return Err(InvocationError::UnsupportedInput),
@@ -82,6 +104,7 @@ pub fn stage_handler<Handler: RulesCommandHandler>(
     if maximum_candidate_bytes == 0 {
         return Err(InvocationError::Capacity);
     }
+    validate_draw_input(input, current, operation, maximum_candidate_bytes)?;
     let handler_pins = handler.pins();
     if handler_pins.rules != expected_pins.rules {
         return Err(InvocationError::HandlerRulesMismatch);
@@ -130,7 +153,190 @@ pub fn stage_handler<Handler: RulesCommandHandler>(
     {
         return Err(InvocationError::Capacity);
     }
+    validate_draw_accounting(input.supplied_draws, current, &candidate, operation)?;
     Ok(candidate)
+}
+
+fn validate_draw_input<Rejection>(
+    input: RulesCommandInput<'_>,
+    current: &Checkpoint,
+    operation: OperationId,
+    maximum_bytes: usize,
+) -> Result<(), InvocationError<Rejection>> {
+    // Bound the count before traversing supplied records or comparing retained history.
+    let mut bytes = input
+        .supplied_draws
+        .len()
+        .checked_add(current.state().draws.len())
+        .and_then(|count| count.checked_mul(std::mem::size_of::<ActualDraw>()))
+        .filter(|bytes| *bytes <= maximum_bytes)
+        .ok_or(InvocationError::Capacity)?;
+    for draw in input.supplied_draws {
+        for label in [
+            &draw.source.catalog,
+            &draw.source.source,
+            &draw.source.entry,
+            &draw.source.clause,
+        ] {
+            bytes = bytes
+                .checked_add(label.retained_heap_bytes())
+                .filter(|bytes| *bytes <= maximum_bytes)
+                .ok_or(InvocationError::Capacity)?;
+        }
+    }
+    let mut next_ordinal = 0;
+    for draw in current
+        .state()
+        .draws
+        .iter()
+        .filter(|draw| draw.operation == operation)
+    {
+        next_ordinal = draw
+            .ordinal
+            .checked_add(1)
+            .ok_or(InvocationError::DrawOrderMismatch)?;
+    }
+    for draw in input.supplied_draws {
+        if draw.operation != operation {
+            return Err(InvocationError::DrawOperationMismatch);
+        }
+        if draw.source.catalog != current.pins().rules.catalog {
+            return Err(InvocationError::DrawSourceMismatch);
+        }
+        if draw.sides == 0 || draw.value == 0 || draw.value > draw.sides {
+            return Err(InvocationError::InvalidDrawInput);
+        }
+        if draw.ordinal < next_ordinal {
+            return Err(InvocationError::DrawAlreadyConsumed);
+        }
+        if draw.ordinal != next_ordinal {
+            return Err(InvocationError::DrawOrderMismatch);
+        }
+        next_ordinal = next_ordinal
+            .checked_add(1)
+            .ok_or(InvocationError::DrawOrderMismatch)?;
+    }
+    if let GameInput::Game(command) = input.command
+        && let GameCommand::SubmitRoll { resolution, window } = &command.command
+    {
+        if current
+            .state()
+            .pending
+            .len()
+            .checked_mul(std::mem::size_of::<df_model::checkpoint::PendingResolution>())
+            .filter(|bytes| *bytes <= maximum_bytes)
+            .is_none()
+        {
+            return Err(InvocationError::Capacity);
+        }
+        let pending = current
+            .state()
+            .pending
+            .iter()
+            .find(|pending| pending.id == *resolution && pending.window.id == *window)
+            .ok_or(InvocationError::RollInputMismatch)?;
+        let PendingInput::Roll {
+            participant,
+            sides,
+            source,
+        } = &pending.next
+        else {
+            return Err(InvocationError::RollInputMismatch);
+        };
+        if *participant != command.member || sides.len() != input.supplied_draws.len() {
+            return Err(InvocationError::RollInputMismatch);
+        }
+        for (draw, sides) in input.supplied_draws.iter().zip(sides) {
+            if draw.resolution != *resolution
+                || draw.window != *window
+                || draw.source != *source
+                || draw.sides != *sides
+            {
+                return Err(InvocationError::RollInputMismatch);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_draw_accounting<Rejection>(
+    supplied: &[ActualDraw],
+    current: &Checkpoint,
+    candidate: &Checkpoint,
+    operation: OperationId,
+) -> Result<(), InvocationError<Rejection>> {
+    // A mechanics handler cannot compact accepted history or erase retry provenance.
+    if !candidate
+        .state()
+        .decisions
+        .starts_with(&current.state().decisions)
+    {
+        return Err(InvocationError::CandidateDecisionHistoryMismatch);
+    }
+    let mut candidate_draws = candidate.state().draws.iter();
+    for prior in &current.state().draws {
+        if candidate_draws.next() != Some(prior) {
+            return Err(InvocationError::CandidateDrawMismatch);
+        }
+    }
+    if !candidate_draws.eq(supplied.iter()) {
+        return Err(InvocationError::CandidateDrawMismatch);
+    }
+    let decision = candidate
+        .state()
+        .decisions
+        .iter()
+        .find(|decision| decision.operation == operation)
+        .ok_or(InvocationError::MissingAcceptedDecision)?;
+    let retained_ordinals = current
+        .state()
+        .draws
+        .iter()
+        .filter(|draw| draw.operation == operation)
+        .map(|draw| draw.ordinal);
+    if !decision
+        .draws
+        .iter()
+        .copied()
+        .eq(retained_ordinals.chain(supplied.iter().map(|draw| draw.ordinal)))
+    {
+        return Err(InvocationError::CandidateDrawAccountingMismatch);
+    }
+    // Canonical facts retain chronological order. The bounded set checks their decision
+    // ownership without scanning the full decision inventory separately for every draw.
+    let decision_facts: BTreeSet<_> = decision.facts.iter().copied().collect();
+    if !candidate.state().facts.starts_with(&current.state().facts) {
+        return Err(InvocationError::CandidateDrawAccountingMismatch);
+    }
+    let mut expected = supplied.iter();
+    for fact in candidate
+        .state()
+        .facts
+        .iter()
+        .skip(current.state().facts.len())
+    {
+        if let FactValue::DrawAccepted {
+            operation: draw_operation,
+            ordinal,
+        } = fact.value
+        {
+            let draw = expected
+                .next()
+                .ok_or(InvocationError::CandidateDrawAccountingMismatch)?;
+            if draw_operation != operation
+                || draw.ordinal != ordinal
+                || fact.operation != operation
+                || fact.revision != decision.revision
+                || !decision_facts.contains(&fact.id)
+            {
+                return Err(InvocationError::CandidateDrawAccountingMismatch);
+            }
+        }
+    }
+    if expected.next().is_some() {
+        return Err(InvocationError::CandidateDrawAccountingMismatch);
+    }
+    Ok(())
 }
 
 impl<Handler: RulesCommandHandler> DispatchRegistry<'_, Handler> {
@@ -142,7 +348,7 @@ impl<Handler: RulesCommandHandler> DispatchRegistry<'_, Handler> {
         expected_pins: &CheckpointPins,
         selector: &RevisionLabel,
         source: &RuleReference,
-        input: &GameInput,
+        input: RulesCommandInput<'_>,
         current: &Checkpoint,
         maximum_candidate_bytes: usize,
     ) -> Result<Checkpoint, InvocationError<Handler::Rejection>> {
