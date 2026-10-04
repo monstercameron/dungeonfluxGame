@@ -4,6 +4,8 @@
 //! callers retain server-authorized view, action, focus, and resource ownership.
 
 mod campaign_surface;
+mod scene_image;
+pub use scene_image::{CampaignSceneAssets, SceneImageError, SceneImageLimits};
 #[cfg(target_arch = "wasm32")]
 mod campaign_theme;
 #[cfg(target_arch = "wasm32")]
