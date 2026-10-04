@@ -508,6 +508,13 @@ mod browser {
             if let Some(lower) = surface.root().query_selector(".lower")? {
                 surface.root().insert_before(&interaction, Some(&lower))?;
             }
+            // The existing narrator stays mounted; its scene overlay shares the stage's
+            // audience-text erasure and CampaignSurface update ownership.
+            if let Some(stage) = surface.root().query_selector(".stage")?
+                && let Some(narration) = surface.root().query_selector(".narration")?
+            {
+                stage.append_child(&narration)?;
+            }
             let npc = child(document, &interaction, "article", "exploration-npc")?;
             let portrait = child(document, &npc, "img", "exploration-portrait")?;
             let identity = child(document, &npc, "div", "exploration-npc-text")?;
@@ -823,6 +830,21 @@ mod browser {
             } else {
                 InputFeedback::None
             };
+            // An absent offer is waiting presentation, while the original empty,
+            // read-only control remains available for privacy/lifecycle verification.
+            self.field.root().set_attribute(
+                "data-draft-offered",
+                if view.draft_offer_id.is_some() {
+                    "true"
+                } else {
+                    "false"
+                },
+            )?;
+            if view.draft_offer_id.is_some() {
+                self.submit.element().remove_attribute("hidden")?;
+            } else {
+                self.submit.element().set_attribute("hidden", "")?;
+            }
             erase_text(self.field.root());
             self.field.update(
                 TextInputView {
