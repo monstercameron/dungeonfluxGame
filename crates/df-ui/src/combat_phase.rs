@@ -310,7 +310,8 @@ mod browser {
         collections::BTreeMap,
         rc::Rc,
     };
-    use web_sys::{Document, Element};
+    use wasm_bindgen::{JsCast, closure::Closure};
+    use web_sys::{Document, Element, Event, EventTarget, HtmlElement};
 
     #[derive(Debug)]
     pub enum CombatError {
@@ -380,6 +381,141 @@ mod browser {
         key: String,
         control: Rc<ControlledTextInput>,
     }
+    struct SceneImageListener {
+        target: EventTarget,
+        name: &'static str,
+        active: Rc<Cell<bool>>,
+        callback: Option<Closure<dyn FnMut(Event)>>,
+    }
+    impl SceneImageListener {
+        fn bind(
+            image: &HtmlElement,
+            name: &'static str,
+            loaded: bool,
+            url: &'static str,
+            active: &Rc<Cell<bool>>,
+        ) -> Result<Self, CombatError> {
+            let target: EventTarget = image.clone().into();
+            let callback_image = image.clone();
+            let callback_active = Rc::clone(active);
+            let callback = Closure::wrap(Box::new(move |_: Event| {
+                // Every URL owns a distinct image and active generation token.
+                // Queued events on a revoked image cannot affect its replacement.
+                if callback_active.get()
+                    && callback_image.get_attribute("src").as_deref() == Some(url)
+                {
+                    callback_image.set_hidden(!loaded);
+                }
+            }) as Box<dyn FnMut(Event)>);
+            target.add_event_listener_with_callback(name, callback.as_ref().unchecked_ref())?;
+            Ok(Self {
+                target,
+                name,
+                active: Rc::clone(active),
+                callback: Some(callback),
+            })
+        }
+        fn dispose(&mut self) -> Result<(), CombatError> {
+            self.active.set(false);
+            if let Some(callback) = self.callback.as_ref() {
+                self.target.remove_event_listener_with_callback(
+                    self.name,
+                    callback.as_ref().unchecked_ref(),
+                )?;
+            }
+            self.callback = None;
+            Ok(())
+        }
+    }
+    impl Drop for SceneImageListener {
+        fn drop(&mut self) {
+            // A failed browser removal must retain only an inert closure rather
+            // than leave a registered callback pointing at freed WASM code.
+            if self.dispose().is_err()
+                && let Some(callback) = self.callback.take()
+            {
+                callback.forget();
+            }
+        }
+    }
+    struct SceneImage {
+        element: HtmlElement,
+        url: &'static str,
+        active: Rc<Cell<bool>>,
+        listeners: Vec<SceneImageListener>,
+        disposed: bool,
+    }
+    impl SceneImage {
+        fn create(document: &Document, art: CombatArt) -> Result<Self, CombatError> {
+            let element = document
+                .create_element("img")?
+                .dyn_into::<HtmlElement>()
+                .map_err(|_| CombatError::Dom(UiError::WrongElementType))?;
+            element.set_class_name("combat-art");
+            // Keep the optional bitmap hidden until its own successful load.
+            // The stable host supplies the scene artwork's accessible label.
+            element.set_hidden(true);
+            element.set_attribute("alt", "")?;
+            element.set_attribute("aria-hidden", "true")?;
+            element.set_attribute("fetchpriority", "high")?;
+            let url = art.asset_path();
+            let active = Rc::new(Cell::new(true));
+            let mut listeners = Vec::with_capacity(2);
+            for (name, loaded) in [("load", true), ("error", false)] {
+                listeners.push(SceneImageListener::bind(
+                    &element, name, loaded, url, &active,
+                )?);
+            }
+            element.set_attribute("src", url)?;
+            Ok(Self {
+                element,
+                url,
+                active,
+                listeners,
+                disposed: false,
+            })
+        }
+        fn dispose(&mut self) -> Result<(), CombatError> {
+            if self.disposed {
+                return Ok(());
+            }
+            self.disposed = true;
+            self.active.set(false);
+            self.element.set_hidden(true);
+            let mut failure = None;
+            for listener in &mut self.listeners {
+                if let Err(error) = listener.dispose()
+                    && failure.is_none()
+                {
+                    failure = Some(error);
+                }
+            }
+            if let Err(error) = self.element.remove_attribute("src")
+                && failure.is_none()
+            {
+                failure = Some(error.into());
+            }
+            if let Some(parent) = self.element.parent_node()
+                && let Err(error) = parent.remove_child(&self.element)
+                && failure.is_none()
+            {
+                failure = Some(error.into());
+            }
+            match failure {
+                Some(error) => Err(error),
+                None => Ok(()),
+            }
+        }
+    }
+    impl Drop for SceneImage {
+        fn drop(&mut self) {
+            // Explicit scope disposal reports cleanup errors. Drop still hides
+            // the bitmap and fences all callbacks if DOM cleanup cannot finish.
+            if self.dispose().is_err() {
+                self.element.set_hidden(true);
+            }
+        }
+    }
     fn child(
         document: &Document,
         parent: &Element,
@@ -423,7 +559,8 @@ mod browser {
     pub struct CombatPhaseSurface {
         document: Document,
         root: Element,
-        art: Element,
+        art_host: Element,
+        art: RefCell<Option<SceneImage>>,
         chapter: Element,
         title: Element,
         location: Element,
@@ -475,8 +612,8 @@ mod browser {
             root.set_class_name("df-combat");
             let style = child(document, &root, "style", "")?;
             style.set_text_content(Some(crate::combat_phase_theme::STYLES));
-            let art = child(document, &root, "img", "combat-art")?;
-            art.set_attribute("fetchpriority", "high")?;
+            let art_host = child(document, &root, "div", "combat-art-host")?;
+            art_host.set_attribute("role", "img")?;
             let header = child(document, &root, "header", "combat-topbar")?;
             child(document, &header, "div", "combat-brand")?.set_text_content(Some("DungeonFlux"));
             let location = child(document, &header, "p", "combat-location")?;
@@ -510,7 +647,8 @@ mod browser {
             let surface = Self {
                 document: document.clone(),
                 root,
-                art,
+                art_host,
+                art: RefCell::new(None),
                 chapter,
                 title,
                 location,
@@ -616,8 +754,7 @@ mod browser {
             Ok(outcome)
         }
         fn publish(&self, view: &CombatPhaseView<'_>) -> Result<(), CombatError> {
-            self.art.set_attribute("src", view.art.asset_path())?;
-            self.art.set_attribute("alt", view.art.description())?;
+            self.publish_art(view.art)?;
             for (node, value) in [
                 (&self.chapter, view.chapter),
                 (&self.title, view.title),
@@ -673,6 +810,26 @@ mod browser {
             };
             set_text(&self.feedback, message);
             self.feedback.set_attribute("data-state", state)?;
+            Ok(())
+        }
+        fn publish_art(&self, view: CombatArt) -> Result<(), CombatError> {
+            self.art_host
+                .set_attribute("aria-label", view.description())?;
+            let mut art = self.art.borrow_mut();
+            if art
+                .as_ref()
+                .is_some_and(|image| image.url == view.asset_path())
+            {
+                return Ok(());
+            }
+            // URL replacement revokes its listeners before admitting a new image.
+            // Same-scene updates reuse the bounded owner without another fetch.
+            if let Some(mut obsolete) = art.take() {
+                obsolete.dispose()?;
+            }
+            let image = SceneImage::create(&self.document, view)?;
+            self.art_host.append_child(&image.element)?;
+            *art = Some(image);
             Ok(())
         }
         fn publish_actors(&self, view: &CombatPhaseView<'_>) -> Result<(), CombatError> {
@@ -939,10 +1096,11 @@ mod browser {
             }
             self.actors.borrow_mut().clear();
             self.rolls.borrow_mut().clear();
-            if let Err(error) = self.art.remove_attribute("src")
+            if let Some(mut art) = self.art.borrow_mut().take()
+                && let Err(error) = art.dispose()
                 && failure.is_none()
             {
-                failure = Some(error.into());
+                failure = Some(error);
             }
             self.root.set_text_content(None);
             if let Some(parent) = self.root.parent_node()
