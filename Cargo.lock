@@ -191,7 +191,9 @@ dependencies = [
 name = "df-client"
 version = "0.1.0"
 dependencies = [
+ "df-assets",
  "df-types",
+ "sha2",
 ]
 
 [[package]]
