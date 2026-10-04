@@ -240,9 +240,11 @@ impl OfferFence {
 mod browser {
     use super::*;
     use crate::{
-        ActionView, CampaignError, CampaignSurface, ControlError, ControlledAction,
-        ControlledTextInput, DraftUpdate, InputFeedback, TextInputView, UiError,
+        ActionView, CampaignError, CampaignSceneAssets, CampaignSurface, ControlError,
+        ControlledAction, ControlledTextInput, DraftUpdate, InputFeedback, SceneImageLimits,
+        TextInputView, UiError,
     };
+    use df_client::cache::{CacheScope, FetchToken};
     use std::{
         cell::{Cell, RefCell},
         collections::BTreeMap,
@@ -603,12 +605,6 @@ mod browser {
                 listeners: RefCell::new(Vec::new()),
                 limits,
             };
-            let scene = phase
-                .surface
-                .root()
-                .query_selector(".scene-art")?
-                .ok_or(ExplorationError::Dom(UiError::WrongElementType))?;
-            let scene_root = phase.surface.root().clone();
             let fallback = child(
                 document,
                 phase.surface.root(),
@@ -624,12 +620,6 @@ mod browser {
                     .root()
                     .insert_before(&fallback, Some(&stage))?;
             }
-            phase
-                .listeners
-                .borrow_mut()
-                .push(ArtListener::bind(scene, "error", move || {
-                    scene_root.set_class_name("df-campaign df-exploration exploration-art-failed");
-                })?);
             let failed_portrait = phase.portrait.clone();
             phase.listeners.borrow_mut().push(ArtListener::bind(
                 phase.portrait.clone(),
@@ -694,46 +684,122 @@ mod browser {
             *self.callback.borrow_mut() = Some(Box::new(callback));
             Ok(())
         }
+        pub fn enable_scene_assets(
+            &self,
+            scope: CacheScope,
+            limits: SceneImageLimits,
+        ) -> Result<(), ExplorationError> {
+            if self.fence.borrow().disposed {
+                return Err(ExplorationValidationError::Disposed.into());
+            }
+            if scope.binding != self.fence.borrow().binding {
+                return Err(ExplorationValidationError::WrongBinding.into());
+            }
+            self.surface
+                .enable_scene_assets(scope, limits)
+                .map_err(Into::into)
+        }
+        pub fn validate_scene_assets(
+            &self,
+            view: &ExplorationView<'_>,
+            assets: &CampaignSceneAssets<'_>,
+        ) -> Result<(), ExplorationError> {
+            view.validate(self.limits)?;
+            self.fence.borrow().require_newer(view)?;
+            if assets.scope.binding != view.binding {
+                return Err(ExplorationValidationError::WrongBinding.into());
+            }
+            if assets.revision != view.revision {
+                return Err(ExplorationValidationError::StaleView.into());
+            }
+            self.surface
+                .validate_scene_assets(*assets)
+                .map_err(Into::into)
+        }
+        pub fn complete_scene_asset(
+            &self,
+            token: &FetchToken,
+            bytes: Vec<u8>,
+        ) -> Result<(), ExplorationError> {
+            if self.fence.borrow().disposed {
+                return Err(ExplorationValidationError::Disposed.into());
+            }
+            self.surface
+                .complete_scene_asset(token, bytes)
+                .map_err(Into::into)
+        }
+        pub fn update_with_scene_assets(
+            &self,
+            view: &ExplorationView<'_>,
+            assets: CampaignSceneAssets<'_>,
+        ) -> Result<Option<FetchToken>, ExplorationError> {
+            self.validate_scene_assets(view, &assets)?;
+            self.update_owned(view, Some(assets))
+        }
         /// Caller supplies only newer accepted snapshots for this binding. Old or
         /// duplicate revisions are rejected before any node or draft is changed.
         pub fn update(&self, view: &ExplorationView<'_>) -> Result<(), ExplorationError> {
             view.validate(self.limits)?;
             self.fence.borrow().require_newer(view)?;
-            let changed_epoch = self.fence.borrow().revision.epoch() != view.revision.epoch();
-            let changed_draft = self.fence.borrow().draft.as_deref() != view.draft_offer_id;
-            if changed_epoch {
-                for nodes in self.choices.borrow_mut().values() {
-                    nodes.dispose()?;
+            self.update_owned(view, None).map(|_| ())
+        }
+        fn update_owned(
+            &self,
+            view: &ExplorationView<'_>,
+            assets: Option<CampaignSceneAssets<'_>>,
+        ) -> Result<Option<FetchToken>, ExplorationError> {
+            let result = (|| {
+                let changed_epoch = self.fence.borrow().revision.epoch() != view.revision.epoch();
+                let changed_draft = self.fence.borrow().draft.as_deref() != view.draft_offer_id;
+                if changed_epoch {
+                    for nodes in self.choices.borrow_mut().values() {
+                        nodes.dispose()?;
+                    }
+                    self.choices.borrow_mut().clear();
                 }
-                self.choices.borrow_mut().clear();
+                self.fence.borrow_mut().replace(view);
+                self.render_owned(
+                    view,
+                    if changed_epoch || changed_draft {
+                        DraftUpdate::Replace("")
+                    } else {
+                        DraftUpdate::Preserve
+                    },
+                    assets,
+                )
+            })();
+            if result.is_err() {
+                // An accepted snapshot cannot leave obsolete optional artwork visible
+                // after any later UI failure. The existing legacy path fences it.
+                self.surface.update(&view.campaign)?;
             }
-            self.fence.borrow_mut().replace(view);
-            self.render(
-                view,
-                if changed_epoch || changed_draft {
-                    DraftUpdate::Replace("")
-                } else {
-                    DraftUpdate::Preserve
-                },
-            )
+            result
         }
         fn render(
             &self,
             view: &ExplorationView<'_>,
             draft: DraftUpdate<'_>,
         ) -> Result<(), ExplorationError> {
-            let previous_scene = self
-                .surface
-                .root()
-                .query_selector(".scene-art")?
-                .and_then(|node| node.get_attribute("src"));
+            self.render_owned(view, draft, None).map(|_| ())
+        }
+        fn render_owned(
+            &self,
+            view: &ExplorationView<'_>,
+            draft: DraftUpdate<'_>,
+            assets: Option<CampaignSceneAssets<'_>>,
+        ) -> Result<Option<FetchToken>, ExplorationError> {
             erase_campaign_replaced_text(&self.surface)?;
-            self.surface.update(&view.campaign)?;
-            if previous_scene.as_deref() != Some(view.campaign.scene.asset_path()) {
-                self.surface
-                    .root()
-                    .set_class_name("df-campaign df-exploration");
-            }
+            let fetch = match assets {
+                Some(assets) => self
+                    .surface
+                    .update_with_scene_assets(&view.campaign, assets)?,
+                None => {
+                    self.surface.update(&view.campaign)?;
+                    None
+                }
+            };
+            // CampaignSurface owns current concept identity and image failure state.
+            // Preserve its restored fallback flag and unrelated phase classes.
             replace_text(&self.heading, Some(view.heading));
             if let Some(npc) = &view.npc {
                 self.npc.remove_attribute("hidden")?;
@@ -913,7 +979,7 @@ mod browser {
                     && self.fence.borrow().visible,
                 pending: view.pending.is_some(),
             })?;
-            Ok(())
+            Ok(fetch)
         }
         /// Presentation suspension only. It grants no permissions on return; the
         /// shell must reconcile its current accepted server view before resuming.

@@ -13,6 +13,7 @@ df-ui = { path = "../df-ui" }
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "HtmlElement", "HtmlFieldSetElement", "HtmlButtonElement", "Event", "EventTarget", "HtmlImageElement"] }
 [dev-dependencies]
+df-assets = { path = "../df-assets" }
 df-display = { path = "../df-display" }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
@@ -46,4 +47,9 @@ crate-type = ["cdylib"]
 [[example]]
 name = "dual_join_clients_fixture"
 path = "tests/fixtures/dual_join_clients_fixture.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "dual_scene_image_fixture"
+path = "tests/fixtures/dual_scene_image_fixture.rs"
 crate-type = ["cdylib"]

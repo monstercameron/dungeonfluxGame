@@ -7,10 +7,10 @@ mod browser {
     use df_display::DisplayCharacterScreen;
     use df_player::{PlayerCharacterConnection, PlayerCharacterScreen};
     use df_ui::{
-        ActionView, CharacterAction, CharacterActionKind, CharacterChoice,
-        CharacterDisplayConnection, CharacterDisplayHostOffer, CharacterDisplayLimits,
-        CharacterDisplaySubmission, CharacterDisplayView, CharacterFact, CharacterGroup,
-        CharacterLimits, CharacterOption, CharacterPhaseView, CharacterPortrait,
+        ActionView, CharacterAction, CharacterActionKind, CharacterAppearanceDraft,
+        CharacterChoice, CharacterDisplayConnection, CharacterDisplayHostOffer,
+        CharacterDisplayLimits, CharacterDisplaySubmission, CharacterDisplayView, CharacterFact,
+        CharacterGroup, CharacterLimits, CharacterOption, CharacterPhaseView, CharacterPortrait,
         CharacterPublicMember, CharacterPublicReadiness, CharacterStatus, CharacterSubmission,
         ControlledAction,
     };
@@ -92,6 +92,10 @@ mod browser {
             editable: true,
             name: "Mara".into(),
             flavor: "PRIVATE-DRAFT-SENTINEL · A lantern that never goes out".into(),
+            appearance: Some(CharacterAppearanceDraft {
+                features: "PRIVATE-FEATURES-SENTINEL · A scar across one brow".into(),
+                outfit: "PRIVATE-OUTFIT-SENTINEL · A green travel cloak".into(),
+            }),
             portrait: Some(CharacterPortrait::Narrator),
             groups: vec![CharacterGroup {
                 id: "synthetic-story".into(),
@@ -143,10 +147,10 @@ mod browser {
             members: vec![
                 CharacterPublicMember { key: "public-mara".into(), character_name: "Mara".into(),
                     portrait: Some(CharacterPortrait::Narrator), readiness: CharacterPublicReadiness::Choosing,
-                    progress_label: "Public report · Choosing".into() },
+                    progress_label: "Public report · Choosing".into(), appearance_summary: None },
                 CharacterPublicMember { key: "public-elian".into(), character_name: "Elian".into(),
                     portrait: Some(CharacterPortrait::Vell), readiness: CharacterPublicReadiness::Ready,
-                    progress_label: "Public report · Ready".into() },
+                    progress_label: "Public report · Ready".into(), appearance_summary: Some("A silver braid and blue travel coat".into()) },
             ],
             host_offers: vec![CharacterDisplayHostOffer { id: "synthetic-host-offer".into(),
                 label: "Advertised host offer · fixture only".into(), enabled: true, pending: false }],
@@ -168,6 +172,7 @@ mod browser {
             ".character-facts",
             ".character-actions",
             ".identity-panel",
+            ".character-appearance",
             ".character-connection",
         ] {
             if let Some(node) = root.query_selector(selector)? {
@@ -228,10 +233,22 @@ mod browser {
         let surface = required(&root, ".df-character")?;
         let name = input(&root, ".identity-panel input")?;
         let flavor = input(&root, ".identity-panel .df-ui-field:last-child input")?;
+        let features = input(
+            &root,
+            ".character-appearance .df-ui-field:first-of-type input",
+        )?;
+        let outfit = input(
+            &root,
+            ".character-appearance .df-ui-field:nth-of-type(2) input",
+        )?;
         name.set_value("Local private draft");
         name.dispatch_event(&Event::new("input")?)?;
         flavor.set_value("Local private flavor");
         flavor.dispatch_event(&Event::new("input")?)?;
+        features.set_value("Local private features");
+        features.dispatch_event(&Event::new("input")?)?;
+        outfit.set_value("Local private outfit");
+        outfit.dispatch_event(&Event::new("input")?)?;
         name.focus()?;
         required(&root, "[data-option-id='harbor']")?.dispatch_event(&Event::new("click")?)?;
         for _ in 0..64 {
@@ -247,7 +264,10 @@ mod browser {
             "same-phase replaced input",
         )?;
         check(
-            name.value() == "Local private draft" && flavor.value() == "Local private flavor",
+            name.value() == "Local private draft"
+                && flavor.value() == "Local private flavor"
+                && features.value() == "Local private features"
+                && outfit.value() == "Local private outfit",
             "same-phase discarded drafts",
         )?;
         check(
@@ -288,6 +308,8 @@ mod browser {
             .map_err(error)?;
         check(
             name.value() == "Local private draft"
+                && features.value() == "Local private features"
+                && outfit.value() == "Local private outfit"
                 && document
                     .active_element()
                     .is_some_and(|node| node.is_same_node(Some(&name))),
@@ -308,12 +330,74 @@ mod browser {
                     }],
                     name: "Local private draft".into(),
                     flavor: "Local private flavor".into(),
+                    appearance: Some(CharacterAppearanceDraft {
+                        features: "Local private features".into(),
+                        outfit: "Local private outfit".into(),
+                    }),
                 }],
             "player callback changed exact advertised submission",
         )?;
         check(
             surface.get_attribute("data-status").as_deref() == Some("editing"),
             "click inferred readiness",
+        )?;
+        data.revision += 1;
+        data.status = CharacterStatus::Pending;
+        screen.update(&data).map_err(error)?;
+        check(
+            features.read_only()
+                && outfit.read_only()
+                && features.value() == "Local private features",
+            "pending appearance was lost or remained editable",
+        )?;
+        action.dispatch_event(&Event::new("click")?)?;
+        check(
+            deliveries.borrow().len() == 1,
+            "pending appearance submitted",
+        )?;
+        data.revision += 1;
+        data.status = CharacterStatus::Rejected;
+        data.status_message = "Synthetic server rejection · revise the visual draft".into();
+        screen.update(&data).map_err(error)?;
+        check(
+            !features.read_only()
+                && !outfit.read_only()
+                && features.value() == "Local private features"
+                && outfit.value() == "Local private outfit",
+            "rejected appearance lost editable drafts",
+        )?;
+        outfit.set_value("Revised local outfit");
+        outfit.dispatch_event(&Event::new("input")?)?;
+        action.dispatch_event(&Event::new("click")?)?;
+        check(
+            deliveries.borrow().len() == 2
+                && deliveries.borrow()[1].revision == data.revision
+                && deliveries.borrow()[1]
+                    .appearance
+                    .as_ref()
+                    .is_some_and(|appearance| {
+                        appearance.features == "Local private features"
+                            && appearance.outfit == "Revised local outfit"
+                    }),
+            "rejected appearance did not resubmit current scoped draft",
+        )?;
+        data.revision += 1;
+        data.status = CharacterStatus::Ready;
+        data.name = "Confirmed Mara".into();
+        data.flavor = "Confirmed story".into();
+        data.appearance = Some(CharacterAppearanceDraft {
+            features: "Confirmed silver braid".into(),
+            outfit: "Confirmed blue travel coat".into(),
+        });
+        screen.update(&data).map_err(error)?;
+        check(
+            name.value() == "Confirmed Mara"
+                && flavor.value() == "Confirmed story"
+                && features.value() == "Confirmed silver braid"
+                && outfit.value() == "Confirmed blue travel coat"
+                && features.read_only()
+                && outfit.read_only(),
+            "ready view did not adopt server-confirmed identity and appearance",
         )?;
         for status in [CharacterStatus::Pending, CharacterStatus::Locked] {
             data.revision += 1;
@@ -322,7 +406,7 @@ mod browser {
             screen.update(&data).map_err(error)?;
             action.dispatch_event(&Event::new("click")?)?;
             check(
-                deliveries.borrow().len() == 1,
+                deliveries.borrow().len() == 2,
                 "retired action submitted in pending/locked",
             )?;
         }
@@ -359,10 +443,29 @@ mod browser {
         data.status = CharacterStatus::Editing;
         data.name = "New owner".into();
         data.flavor = "New owner flavor".into();
+        data.appearance = Some(CharacterAppearanceDraft {
+            features: "New owner features".into(),
+            outfit: "New owner outfit".into(),
+        });
         data.groups.clear();
         screen.update(&data).map_err(error)?;
         check(
-            name.value() == "New owner" && flavor.value() == "New owner flavor",
+            name.value() == "New owner"
+                && flavor.value() == "New owner flavor"
+                && features.value().is_empty()
+                && outfit.value().is_empty()
+                && input(
+                    &root,
+                    ".character-appearance .df-ui-field:first-of-type input",
+                )?
+                .value()
+                    == "New owner features"
+                && input(
+                    &root,
+                    ".character-appearance .df-ui-field:nth-of-type(2) input",
+                )?
+                .value()
+                    == "New owner outfit",
             "scope replacement retained old draft",
         )?;
         let current_heading = required(&root, ".identity-panel > h2")?;
@@ -376,11 +479,38 @@ mod browser {
             "ownership replacement changed the persistent static identity heading",
         )?;
         check(scrubbed(&retained), &remaining_text_diagnostic(&retained))?;
+        let withdrawn_features = input(
+            &root,
+            ".character-appearance .df-ui-field:first-of-type input",
+        )?;
+        let withdrawn_outfit = input(
+            &root,
+            ".character-appearance .df-ui-field:nth-of-type(2) input",
+        )?;
+        data.revision += 1;
+        data.appearance = None;
+        data.actions = player_view().actions;
+        screen.update(&data).map_err(error)?;
+        check(
+            root.query_selector(".character-appearance")?.is_none()
+                && withdrawn_features.value().is_empty()
+                && withdrawn_outfit.value().is_empty(),
+            "appearance withdrawal retained private controls",
+        )?;
+        required(&root, ".character-actions button")?.dispatch_event(&Event::new("click")?)?;
+        check(
+            deliveries.borrow().len() == 3 && deliveries.borrow()[2].appearance.is_none(),
+            "legacy appearance-free submission changed",
+        )?;
         screen.revoke().map_err(error)?;
         screen.revoke().map_err(error)?;
         action.dispatch_event(&Event::new("click")?)?;
         check(
-            !root.is_connected() && name.value().is_empty() && flavor.value().is_empty(),
+            !root.is_connected()
+                && name.value().is_empty()
+                && flavor.value().is_empty()
+                && features.value().is_empty()
+                && outfit.value().is_empty(),
             "revoke retained private mount or draft",
         )?;
         check(
@@ -390,7 +520,7 @@ mod browser {
                     .is_err(),
             "revoked scope reactivated",
         )?;
-        check(deliveries.borrow().len() == 1, "revoked callback delivered")
+        check(deliveries.borrow().len() == 3, "revoked callback delivered")
     }
     fn test_invalid_replacement_and_drop(
         document: &Document,
@@ -454,10 +584,22 @@ mod browser {
             "private form entered public mount",
         )?;
         check(
-            !root
-                .text_content()
-                .is_some_and(|text| text.contains("PRIVATE-DRAFT-SENTINEL")),
-            "private flavor entered public mount",
+            !root.text_content().is_some_and(|text| {
+                text.contains("PRIVATE-DRAFT-SENTINEL")
+                    || text.contains("PRIVATE-FEATURES-SENTINEL")
+                    || text.contains("PRIVATE-OUTFIT-SENTINEL")
+            }),
+            "private identity or appearance entered public mount",
+        )?;
+        check(
+            required(
+                &root,
+                "[data-member-key='public-elian'] .display-member-appearance:not([hidden])",
+            )?
+            .text_content()
+            .as_deref()
+                == Some("A silver braid and blue travel coat"),
+            "explicit public appearance summary missing",
         )?;
         let member = required(&root, ".display-member")?;
         let action = required(&root, ".display-host-offers button")?;
@@ -481,6 +623,20 @@ mod browser {
         check(
             screen.update(&conflict).is_err() && root.is_connected(),
             "same-scope public conflict replaced valid mount",
+        )?;
+        data.revision += 1;
+        data.members[1].appearance_summary = None;
+        screen.update(&data).map_err(error)?;
+        check(
+            required(
+                &root,
+                "[data-member-key='public-elian'] .display-member-appearance",
+            )?
+            .has_attribute("hidden")
+                && !root
+                    .text_content()
+                    .is_some_and(|text| text.contains("A silver braid and blue travel coat")),
+            "withdrawn public summary remained visible",
         )?;
         for connection in [
             CharacterDisplayConnection::Offline,
@@ -681,6 +837,76 @@ mod browser {
                         .update(&fixture.display_view)
                         .map_err(error)?;
                 }
+                "rejected" => {
+                    fixture.player_view.revision += 1;
+                    fixture.player_view.status = CharacterStatus::Rejected;
+                    fixture.player_view.status_message =
+                        "Synthetic server rejection · revise your visual draft".into();
+                    fixture.player_view.actions = player_view().actions;
+                    fixture.player.update(&fixture.player_view).map_err(error)?;
+                }
+                "ready" => {
+                    fixture.player_view.revision += 1;
+                    fixture.player_view.status = CharacterStatus::Ready;
+                    fixture.player_view.status_message =
+                        "Synthetic server confirmation · reference sheet follows creation".into();
+                    fixture.player_view.name = "Mara · confirmed".into();
+                    fixture.player_view.flavor = "Lantern story · confirmed".into();
+                    fixture.player_view.appearance = Some(CharacterAppearanceDraft {
+                        features: "Silver braid · confirmed".into(),
+                        outfit: "Blue travel coat · confirmed".into(),
+                    });
+                    fixture.player_view.actions.clear();
+                    fixture.display_view.revision += 1;
+                    fixture.display_view.readiness = CharacterPublicReadiness::Ready;
+                    fixture.display_view.progress_label =
+                        "Synthetic server report · Party ready".into();
+                    let member = fixture
+                        .display_view
+                        .members
+                        .get_mut(0)
+                        .ok_or_else(|| JsValue::from_str("synthetic public member missing"))?;
+                    member.character_name = "Mara · confirmed".into();
+                    member.readiness = CharacterPublicReadiness::Ready;
+                    member.progress_label = "Public report · Ready".into();
+                    member.appearance_summary = Some("Silver braid and blue travel coat".into());
+                    fixture.player.update(&fixture.player_view).map_err(error)?;
+                    fixture
+                        .display
+                        .update(&fixture.display_view)
+                        .map_err(error)?;
+                }
+                "appearance-withdraw" | "appearance-reoffer" => {
+                    fixture.player_view.revision += 1;
+                    fixture.player_view.status = CharacterStatus::Editing;
+                    fixture.player_view.status_message =
+                        "Synthetic editable view · current appearance offer controls the form"
+                            .into();
+                    fixture.player_view.actions = player_view().actions;
+                    fixture.player_view.appearance = if name == "appearance-withdraw" {
+                        None
+                    } else {
+                        player_view().appearance
+                    };
+                    fixture.player.update(&fixture.player_view).map_err(error)?;
+                }
+                "summary-withdraw" | "summary-reoffer" => {
+                    fixture.display_view.revision += 1;
+                    let member = fixture
+                        .display_view
+                        .members
+                        .get_mut(1)
+                        .ok_or_else(|| JsValue::from_str("synthetic public member missing"))?;
+                    member.appearance_summary = if name == "summary-withdraw" {
+                        None
+                    } else {
+                        Some("A silver braid and blue travel coat".into())
+                    };
+                    fixture
+                        .display
+                        .update(&fixture.display_view)
+                        .map_err(error)?;
+                }
                 "replace" => {
                     let generation = fixture.player_view.generation + 1;
                     fixture.player_view = player_view();
@@ -794,11 +1020,12 @@ body{margin:0;background:#141310}
             &player_data,
             player_limits(),
             PlayerCharacterConnection::Connected,
-            move |_| {
+            move |submission| {
                 player_deliveries.set(player_deliveries.get().saturating_add(1));
                 player_count.set_text_content(Some(&format!(
-                    "Player advertised submissions observed: {} · no gameplay action completed",
-                    player_deliveries.get()
+                    "Player advertised submissions observed: {} · appearance {} · no gameplay action completed",
+                    player_deliveries.get(),
+                    if submission.appearance.is_some() { "included" } else { "omitted" },
                 )));
             },
         )
@@ -827,7 +1054,13 @@ body{margin:0;background:#141310}
             ("reconnecting", "Reconnecting"),
             ("connected", "Reconnect"),
             ("pending", "Server reports pending"),
+            ("rejected", "Server rejects draft"),
+            ("ready", "Server confirms character"),
             ("locked", "Server reports locked"),
+            ("appearance-withdraw", "Withdraw appearance offer"),
+            ("appearance-reoffer", "Reoffer appearance input"),
+            ("summary-withdraw", "Withdraw public appearance"),
+            ("summary-reoffer", "Reoffer public appearance"),
             ("replace", "Replace ownership scopes"),
             ("retry", "Retry optional portraits"),
             ("revoke", "Revoke both mounts"),

@@ -409,6 +409,7 @@ dependencies = [
 name = "df-player"
 version = "0.1.0"
 dependencies = [
+ "df-assets",
  "df-client",
  "df-display",
  "df-types",
@@ -531,6 +532,7 @@ version = "0.1.0"
 dependencies = [
  "df-client",
  "df-types",
+ "js-sys",
  "wasm-bindgen",
  "web-sys",
 ]

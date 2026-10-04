@@ -4,9 +4,9 @@
 #[cfg(target_arch = "wasm32")]
 mod browser {
     use df_ui::{
-        ActionView, CharacterAction, CharacterActionKind, CharacterFact, CharacterGroup,
-        CharacterLimits, CharacterOption, CharacterPhaseSurface, CharacterPhaseView,
-        CharacterPortrait, CharacterStatus, ControlledAction,
+        ActionView, CharacterAction, CharacterActionKind, CharacterAppearanceDraft, CharacterFact,
+        CharacterGroup, CharacterLimits, CharacterOption, CharacterPhaseSurface,
+        CharacterPhaseView, CharacterPortrait, CharacterStatus, ControlledAction,
     };
     use std::{
         cell::{Cell, RefCell},
@@ -69,6 +69,7 @@ mod browser {
             status: CharacterStatus::Editing,
             status_message: "Review these synthetic choices and draft your identity. Sending input does not create a character.".into(),
             editable: true, name: "Mara".into(), flavor: "Carries a lantern that never quite goes out".into(),
+            appearance: Some(CharacterAppearanceDraft { features: "Freckled cheeks and a silver braid".into(), outfit: "A weathered green cloak over travel clothes".into() }),
             portrait: Some(CharacterPortrait::Narrator),
             groups: vec![
                 CharacterGroup { id: "story-calling".into(), label: "Choose a story calling".into(),
@@ -114,6 +115,7 @@ mod browser {
             ".character-actions",
             ".df-ui-field",
             ".identity-panel .df-ui-field:last-child",
+            ".character-appearance",
         ] {
             if let Some(element) = root.query_selector(selector)? {
                 retain_descendants(element.as_ref(), &mut retained);
@@ -139,6 +141,10 @@ mod browser {
         data.status_message = "Private synthetic feedback".into();
         data.name = "Private synthetic name".into();
         data.flavor = "Private synthetic flavor".into();
+        data.appearance = Some(CharacterAppearanceDraft {
+            features: "Private synthetic features".into(),
+            outfit: "Private synthetic outfit".into(),
+        });
         data
     }
     fn check_cleanup(document: &Document, implicit: bool) -> Result<(), JsValue> {
@@ -160,6 +166,16 @@ mod browser {
         let retained = retained_private_nodes(&root)?;
         let name = surface.name_input().input().clone();
         let flavor = surface.flavor_input().input().clone();
+        let features = surface
+            .features_input()
+            .ok_or_else(|| JsValue::from_str("features missing"))?
+            .input()
+            .clone();
+        let outfit = surface
+            .outfit_input()
+            .ok_or_else(|| JsValue::from_str("outfit missing"))?
+            .input()
+            .clone();
         let button = root
             .query_selector(".character-actions button")?
             .ok_or_else(|| JsValue::from_str("action missing"))?;
@@ -173,6 +189,8 @@ mod browser {
         if root.is_connected()
             || !name.value().is_empty()
             || !flavor.value().is_empty()
+            || !features.value().is_empty()
+            || !outfit.value().is_empty()
             || retained.iter().any(|node| {
                 node.text_content().is_some_and(|text| !text.is_empty())
                     || node.node_value().is_some_and(|text| !text.is_empty())
@@ -241,6 +259,16 @@ mod browser {
         let retained = retained_private_nodes(surface.root())?;
         let name = surface.name_input().input().clone();
         let flavor = surface.flavor_input().input().clone();
+        let features = surface
+            .features_input()
+            .ok_or_else(|| JsValue::from_str("features missing"))?
+            .input()
+            .clone();
+        let outfit = surface
+            .outfit_input()
+            .ok_or_else(|| JsValue::from_str("outfit missing"))?
+            .input()
+            .clone();
         let action = surface
             .root()
             .query_selector(".character-actions button")?
@@ -255,6 +283,8 @@ mod browser {
         action.dispatch_event(&Event::new("click")?)?;
         if !name.value().is_empty()
             || !flavor.value().is_empty()
+            || !features.value().is_empty()
+            || !outfit.value().is_empty()
             || surface.root().is_connected()
             || deliveries.get() != 0
             || retained
@@ -283,14 +313,20 @@ mod browser {
         .map_err(error)?;
         surface.update(&initial).map_err(error)?;
         let name = surface.name_input().input();
+        let features = surface
+            .features_input()
+            .ok_or_else(|| JsValue::from_str("features missing"))?;
         name.set_value("Retained draft");
         name.dispatch_event(&Event::new("input")?)?;
+        features.input().set_value("Retained visual draft");
+        features.input().dispatch_event(&Event::new("input")?)?;
         let mut conflict = initial.clone();
         conflict.status = CharacterStatus::Locked;
         conflict.actions.clear();
         conflict.title = "Conflicting title".into();
         if surface.update(&conflict).is_ok()
             || surface.name_input().draft() != "Retained draft"
+            || features.draft() != "Retained visual draft"
             || surface.root().get_attribute("data-status").as_deref() != Some("editing")
         {
             return Err(JsValue::from_str("equal revision conflict mutated view"));
@@ -305,6 +341,10 @@ mod browser {
                 && request.owner_key == initial.owner_key
                 && request.revision == initial.revision
                 && request.name == "Retained draft"
+                && request
+                    .appearance
+                    .as_ref()
+                    .is_some_and(|appearance| appearance.features == "Retained visual draft")
         });
         surface.dispose().map_err(error)?;
         if correct {
@@ -578,6 +618,14 @@ mod browser {
             control.on_activate(move || {
                 let mut next = updated_model.borrow().clone();
                 next.revision += 1; next.status = status; next.status_message = message.into();
+                if matches!(status, CharacterStatus::Ready | CharacterStatus::Locked) {
+                    next.name = "Mara · server confirmed".into();
+                    next.flavor = "Carries a lantern · server confirmed".into();
+                    next.appearance = Some(CharacterAppearanceDraft {
+                        features: "Silver braid · server confirmed".into(),
+                        outfit: "Weathered green cloak · server confirmed".into(),
+                    });
+                }
                 next.actions = match status {
                     CharacterStatus::Ready => vec![CharacterAction { id: "fixture-mark-ready".into(), kind: CharacterActionKind::MarkReady, label: "Confirm readiness · fixture only".into(), enabled: true }],
                     CharacterStatus::Locked => vec![],

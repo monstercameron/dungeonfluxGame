@@ -11,10 +11,12 @@ mod browser {
         fmt,
     };
 
+    use df_client::cache::{CacheScope, FetchToken};
     use df_client::revisions::{ViewAcceptance, ViewStore};
     use df_types::SessionRevision;
     use df_ui::{
-        ExplorationError, ExplorationInput, ExplorationLimits, ExplorationPhase, ExplorationView,
+        CampaignSceneAssets, ExplorationError, ExplorationInput, ExplorationLimits,
+        ExplorationPhase, ExplorationView, SceneImageLimits,
     };
     use web_sys::{Document, Element};
 
@@ -116,6 +118,57 @@ mod browser {
                 return Err(error.into());
             }
             Ok(())
+        }
+
+        pub fn enable_scene_assets(
+            &self,
+            scope: CacheScope,
+            limits: SceneImageLimits,
+        ) -> Result<(), ExplorationMountError> {
+            if self.revoked.get() {
+                return Err(ExplorationMountError::Revoked);
+            }
+            self.phase
+                .enable_scene_assets(scope, limits)
+                .map_err(Into::into)
+        }
+        pub fn update_with_scene_assets(
+            &self,
+            view: &ExplorationView<'_>,
+            assets: CampaignSceneAssets<'_>,
+        ) -> Result<Option<FetchToken>, ExplorationMountError> {
+            if self.revoked.get() {
+                return Err(ExplorationMountError::Revoked);
+            }
+            view.validate(self.limits).map_err(ExplorationError::from)?;
+            self.phase.validate_scene_assets(view, &assets)?;
+            let admission = self
+                .order
+                .borrow_mut()
+                .accept(view.binding, view.revision, ());
+            if admission != ViewAcceptance::Applied {
+                return Err(ExplorationMountError::Admission(admission));
+            }
+            self.phase.set_visible(true)?;
+            match self.phase.update_with_scene_assets(view, assets) {
+                Ok(fetch) => Ok(fetch),
+                Err(error) => {
+                    self.phase.set_visible(false)?;
+                    Err(error.into())
+                }
+            }
+        }
+        pub fn complete_scene_asset(
+            &self,
+            token: &FetchToken,
+            bytes: Vec<u8>,
+        ) -> Result<(), ExplorationMountError> {
+            if self.revoked.get() {
+                return Err(ExplorationMountError::Revoked);
+            }
+            self.phase
+                .complete_scene_asset(token, bytes)
+                .map_err(Into::into)
         }
 
         /// Connection/presentation suspension preserves valid drafts and nodes but

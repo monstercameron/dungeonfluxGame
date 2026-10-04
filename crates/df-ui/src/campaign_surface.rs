@@ -136,11 +136,16 @@ impl CampaignView<'_> {
 #[cfg(target_arch = "wasm32")]
 mod browser {
     use super::*;
-    use crate::UiError;
+    use crate::scene_image::browser::SceneImageOwner;
+    use crate::{CampaignSceneAssets, SceneImageError, SceneImageLimits, UiError};
+    use df_client::cache::{CacheScope, FetchToken};
+    use std::rc::Rc;
     use std::{
         cell::{Cell, RefCell},
         collections::BTreeMap,
     };
+    use wasm_bindgen::{JsCast, closure::Closure};
+    use web_sys::Event;
     use web_sys::{Document, Element};
 
     #[derive(Debug)]
@@ -148,6 +153,7 @@ mod browser {
         InvalidView(CampaignValidationError),
         Dom(UiError),
         Disposed,
+        SceneImage(SceneImageError),
     }
     impl fmt::Display for CampaignError {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -155,6 +161,7 @@ mod browser {
                 Self::InvalidView(e) => fmt::Display::fmt(e, f),
                 Self::Dom(e) => fmt::Display::fmt(e, f),
                 Self::Disposed => f.write_str("campaign surface is disposed"),
+                Self::SceneImage(error) => write!(f, "scene image refused: {error:?}"),
             }
         }
     }
@@ -170,6 +177,8 @@ mod browser {
         }
     }
 
+    type ArtworkCallback = Closure<dyn FnMut(Event)>;
+
     struct MemberNodes {
         root: Element,
         name: Element,
@@ -182,7 +191,7 @@ mod browser {
     pub struct CampaignSurface {
         document: Document,
         root: Element,
-        art: Element,
+        art: RefCell<Element>,
         toolbar: Element,
         chapter: Element,
         title: Element,
@@ -198,6 +207,9 @@ mod browser {
         objective_nodes: RefCell<Vec<Element>>,
         limits: CampaignLimits,
         disposed: Cell<bool>,
+        scene_assets: RefCell<Option<Rc<RefCell<SceneImageOwner>>>>,
+        art_listener: RefCell<Option<ArtworkCallback>>,
+        art_identity: Rc<RefCell<Option<Rc<()>>>>,
     }
     fn element(
         doc: &Document,
@@ -291,7 +303,7 @@ mod browser {
             let surface = Self {
                 document: document.clone(),
                 root,
-                art,
+                art: RefCell::new(art),
                 toolbar,
                 chapter,
                 title,
@@ -307,6 +319,9 @@ mod browser {
                 objective_nodes: RefCell::new(Vec::new()),
                 limits,
                 disposed: Cell::new(false),
+                scene_assets: RefCell::new(None),
+                art_listener: RefCell::new(None),
+                art_identity: Rc::new(RefCell::new(None)),
             };
             surface.update(view)?;
             Ok(surface)
@@ -322,8 +337,160 @@ mod browser {
                 return Err(CampaignError::Disposed);
             }
             view.validate(self.limits)?;
-            self.art.set_attribute("src", view.scene.asset_path())?;
-            self.art.set_attribute("alt", view.scene.description())?;
+            if let Some(owner) = self.scene_assets.borrow().as_ref() {
+                owner.borrow_mut().legacy()?;
+            }
+            self.update_content(view)
+        }
+        pub fn enable_scene_assets(
+            &self,
+            scope: CacheScope,
+            limits: SceneImageLimits,
+        ) -> Result<(), CampaignError> {
+            if self.disposed.get() {
+                return Err(CampaignError::Disposed);
+            }
+            let owner = SceneImageOwner::new(scope, limits, &self.root, &self.art.borrow())?;
+            if let Some(old) = self.scene_assets.borrow_mut().take() {
+                old.borrow_mut().dispose()?;
+            }
+            *self.scene_assets.borrow_mut() = Some(owner);
+            Ok(())
+        }
+        pub(crate) fn validate_scene_assets(
+            &self,
+            assets: CampaignSceneAssets<'_>,
+        ) -> Result<(), CampaignError> {
+            if self.disposed.get() {
+                return Err(CampaignError::Disposed);
+            }
+            self.scene_assets
+                .borrow()
+                .as_ref()
+                .ok_or(CampaignError::SceneImage(SceneImageError::NotEnabled))?
+                .borrow()
+                .validate(assets)
+        }
+        pub fn update_with_scene_assets(
+            &self,
+            view: &CampaignView<'_>,
+            assets: CampaignSceneAssets<'_>,
+        ) -> Result<Option<FetchToken>, CampaignError> {
+            view.validate(self.limits)?;
+            self.validate_scene_assets(assets)?;
+            let owner = self
+                .scene_assets
+                .borrow()
+                .as_ref()
+                .cloned()
+                .ok_or(CampaignError::SceneImage(SceneImageError::NotEnabled))?;
+            owner.borrow_mut().take_failure()?;
+            let token = SceneImageOwner::reconcile(&owner, assets)?;
+            if let Err(error) = self.update_content(view) {
+                owner.borrow_mut().legacy()?;
+                return Err(error);
+            }
+            Ok(token)
+        }
+        pub fn complete_scene_asset(
+            &self,
+            token: &FetchToken,
+            bytes: Vec<u8>,
+        ) -> Result<(), CampaignError> {
+            if self.disposed.get() {
+                return Err(CampaignError::Disposed);
+            }
+            let owner = self
+                .scene_assets
+                .borrow()
+                .as_ref()
+                .cloned()
+                .ok_or(CampaignError::SceneImage(SceneImageError::NotEnabled))?;
+            owner.borrow_mut().take_failure()?;
+            SceneImageOwner::complete(&owner, token, bytes)
+        }
+        fn update_concept_art(&self, scene: ConceptScene) -> Result<(), CampaignError> {
+            let old = self.art.borrow().clone();
+            if old.get_attribute("src").as_deref() == Some(scene.asset_path()) {
+                return Ok(());
+            }
+            // A separate browser image owns each concept request. An old network event
+            // targets its old image even while its replacement is still loading.
+            let next = element(&self.document, "img", "scene-art", None)?;
+            next.set_attribute("alt", scene.description())?;
+            next.set_attribute("fetchpriority", "high")?;
+            let identity = Rc::new(());
+            let callback_identity = identity.clone();
+            let active = self.art_identity.clone();
+            let fallback = next.clone();
+            let root = self.root.clone();
+            let source = scene.asset_path();
+            let callback = Closure::wrap(Box::new(move |_: Event| {
+                let current = active
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|current| Rc::ptr_eq(current, &callback_identity));
+                if current
+                    && fallback.parent_node().is_some()
+                    && fallback.get_attribute("src").as_deref() == Some(source)
+                {
+                    let classes = root.class_name();
+                    if !classes
+                        .split_whitespace()
+                        .any(|name| name == "exploration-art-failed")
+                    {
+                        root.set_class_name(&format!("{classes} exploration-art-failed"));
+                    }
+                }
+            }) as Box<dyn FnMut(Event)>);
+            next.add_event_listener_with_callback("error", callback.as_ref().unchecked_ref())?;
+            if let Some(parent) = old.parent_node()
+                && let Err(error) = parent.replace_child(&next, &old)
+            {
+                next.remove_event_listener_with_callback(
+                    "error",
+                    callback.as_ref().unchecked_ref(),
+                )?;
+                return Err(error.into());
+            }
+            *self.art_identity.borrow_mut() = Some(identity);
+            let old_listener = self.art_listener.borrow_mut().replace(callback);
+            *self.art.borrow_mut() = next.clone();
+            if let Some(owner) = self.scene_assets.borrow().as_ref() {
+                owner.borrow_mut().replace_fallback(&next);
+            }
+            let mut failure = None;
+            if let Some(listener) = old_listener
+                && let Err(error) = old
+                    .remove_event_listener_with_callback("error", listener.as_ref().unchecked_ref())
+            {
+                failure = Some(CampaignError::from(error));
+            }
+            old.remove();
+            if let Err(error) = old.remove_attribute("src")
+                && failure.is_none()
+            {
+                failure = Some(error.into());
+            }
+            let classes: Vec<_> = self
+                .root
+                .class_name()
+                .split_whitespace()
+                .filter(|name| *name != "exploration-art-failed")
+                .map(str::to_owned)
+                .collect();
+            self.root.set_class_name(&classes.join(" "));
+            next.set_attribute("src", source)?;
+            match failure {
+                Some(error) => Err(error),
+                None => Ok(()),
+            }
+        }
+        fn update_content(&self, view: &CampaignView<'_>) -> Result<(), CampaignError> {
+            self.update_concept_art(view.scene)?;
+            if let Some(owner) = self.scene_assets.borrow().as_ref() {
+                owner.borrow().set_description(view.scene.description());
+            }
             for (node, text) in [
                 (&self.chapter, view.chapter),
                 (&self.title, view.title),
@@ -399,17 +566,43 @@ mod browser {
             }
             Ok(())
         }
-        /// Terminal, repeatable removal. No callbacks or timers are owned here.
+        /// Terminal, repeatable removal of artwork URLs, leases and listeners, then the shell.
         pub fn dispose(&self) -> Result<(), CampaignError> {
             self.disposed.set(true);
-            if let Some(parent) = self.root.parent_node() {
-                parent.remove_child(&self.root)?;
+            let mut failure = None;
+            if let Some(owner) = self.scene_assets.borrow_mut().take()
+                && let Err(error) = owner.borrow_mut().dispose()
+            {
+                failure = Some(error);
             }
-            self.art.remove_attribute("src")?;
+            self.art_identity.borrow_mut().take();
+            if let Some(listener) = self.art_listener.borrow_mut().take()
+                && let Err(error) = self
+                    .art
+                    .borrow()
+                    .remove_event_listener_with_callback("error", listener.as_ref().unchecked_ref())
+                && failure.is_none()
+            {
+                failure = Some(error.into());
+            }
+            self.root.remove();
+            if let Err(error) = self.art.borrow().remove_attribute("src")
+                && failure.is_none()
+            {
+                failure = Some(error.into());
+            }
             self.members.borrow_mut().clear();
             self.objective_nodes.borrow_mut().clear();
             self.root.set_text_content(None);
-            Ok(())
+            match failure {
+                Some(error) => Err(error),
+                None => Ok(()),
+            }
+        }
+    }
+    impl Drop for CampaignSurface {
+        fn drop(&mut self) {
+            let _cleanup = self.dispose();
         }
     }
 }

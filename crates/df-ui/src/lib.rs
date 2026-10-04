@@ -4,6 +4,8 @@
 //! callers retain server-authorized view, action, focus, and resource ownership.
 
 mod campaign_surface;
+mod scene_image;
+pub use scene_image::{CampaignSceneAssets, SceneImageError, SceneImageLimits};
 #[cfg(target_arch = "wasm32")]
 mod campaign_theme;
 #[cfg(target_arch = "wasm32")]
@@ -47,9 +49,9 @@ mod character_phase;
 #[cfg(target_arch = "wasm32")]
 mod character_phase_theme;
 pub use character_phase::{
-    CharacterAction, CharacterActionKind, CharacterChoice, CharacterFact, CharacterGroup,
-    CharacterLimits, CharacterOption, CharacterPhaseView, CharacterPortrait, CharacterStatus,
-    CharacterSubmission, CharacterValidationError,
+    CharacterAction, CharacterActionKind, CharacterAppearanceDraft, CharacterChoice, CharacterFact,
+    CharacterGroup, CharacterLimits, CharacterOption, CharacterPhaseView, CharacterPortrait,
+    CharacterStatus, CharacterSubmission, CharacterValidationError,
 };
 #[cfg(target_arch = "wasm32")]
 pub use character_phase::{CharacterPhaseError, CharacterPhaseSurface};

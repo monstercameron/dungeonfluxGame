@@ -10,7 +10,8 @@ df-types = { path = "../df-types" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "Event", "EventTarget", "HtmlElement", "HtmlButtonElement", "HtmlInputElement", "KeyboardEvent", "KeyboardEventInit"] }
+js-sys = "=0.3.106"
+web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "Event", "EventTarget", "HtmlElement", "HtmlButtonElement", "HtmlInputElement", "KeyboardEvent", "KeyboardEventInit", "Blob", "BlobPropertyBag", "Url", "HtmlImageElement"] }
 
 [[example]]
 name = "ui_browser_fixture"

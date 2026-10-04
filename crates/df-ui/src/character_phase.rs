@@ -114,11 +114,21 @@ pub struct CharacterPhaseView {
     pub editable: bool,
     pub name: String,
     pub flavor: String,
+    /// Offered cosmetic draft. Absence removes appearance controls and local values.
+    pub appearance: Option<CharacterAppearanceDraft>,
     pub portrait: Option<CharacterPortrait>,
     pub groups: Vec<CharacterGroup>,
     /// Complete server-provided summary values; no local stat calculations.
     pub facts: Vec<CharacterFact>,
     pub actions: Vec<CharacterAction>,
+}
+
+/// Visual details for a reference sheet created after character confirmation.
+/// These descriptions do not grant rules, equipment, or inventory.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CharacterAppearanceDraft {
+    pub features: String,
+    pub outfit: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -139,6 +149,7 @@ pub struct CharacterSubmission {
     pub choices: Vec<CharacterChoice>,
     pub name: String,
     pub flavor: String,
+    pub appearance: Option<CharacterAppearanceDraft>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -205,6 +216,14 @@ impl CharacterPhaseView {
             validate_text(draft, limits.max_text_bytes, true)?;
             if draft.encode_utf16().count() > crate::MAX_DRAFT_UTF16_UNITS {
                 return Err(CharacterValidationError::ResourceLimit);
+            }
+        }
+        if let Some(appearance) = &self.appearance {
+            for draft in [&appearance.features, &appearance.outfit] {
+                validate_text(draft, limits.max_text_bytes, true)?;
+                if draft.encode_utf16().count() > crate::MAX_DRAFT_UTF16_UNITS {
+                    return Err(CharacterValidationError::ResourceLimit);
+                }
             }
         }
         let mut groups = BTreeSet::new();
@@ -371,6 +390,7 @@ impl CharacterDraftState {
         action_id: &str,
         name: String,
         flavor: String,
+        appearance: Option<CharacterAppearanceDraft>,
         limits: CharacterLimits,
     ) -> Result<CharacterSubmission, CharacterValidationError> {
         if self.disposed {
@@ -391,6 +411,18 @@ impl CharacterDraftState {
                 return Err(CharacterValidationError::ResourceLimit);
             }
         }
+        let appearance = if self.view.appearance.is_some() {
+            let appearance = appearance.ok_or(CharacterValidationError::Unavailable)?;
+            for text in [&appearance.features, &appearance.outfit] {
+                validate_text(text, limits.max_text_bytes, true)?;
+                if text.encode_utf16().count() > crate::MAX_DRAFT_UTF16_UNITS {
+                    return Err(CharacterValidationError::ResourceLimit);
+                }
+            }
+            Some(appearance)
+        } else {
+            None
+        };
         Ok(CharacterSubmission {
             generation: self.view.generation,
             owner_key: self.view.owner_key.clone(),
@@ -407,6 +439,7 @@ impl CharacterDraftState {
                 .collect(),
             name,
             flavor,
+            appearance,
         })
     }
     fn dispose(&mut self) {
@@ -415,6 +448,11 @@ impl CharacterDraftState {
         self.dirty_groups.clear();
         self.view.name.clear();
         self.view.flavor.clear();
+        if let Some(appearance) = self.view.appearance.as_mut() {
+            appearance.features.clear();
+            appearance.outfit.clear();
+        }
+        self.view.appearance = None;
         self.view.groups.clear();
         self.view.actions.clear();
         self.view.facts.clear();
@@ -494,6 +532,11 @@ mod browser {
         description: Element,
         options_root: Element,
         options: BTreeMap<String, OptionNodes>,
+    }
+    struct AppearanceInputs {
+        root: Element,
+        features: Rc<ControlledTextInput>,
+        outfit: Rc<ControlledTextInput>,
     }
     type SubmissionCallback = Box<dyn FnMut(CharacterSubmission)>;
 
@@ -724,6 +767,9 @@ mod browser {
         actions_root: Element,
         name: Rc<ControlledTextInput>,
         flavor: Rc<ControlledTextInput>,
+        workshop: Element,
+        identifier: String,
+        appearance: Rc<RefCell<Option<AppearanceInputs>>>,
         groups: RefCell<BTreeMap<String, GroupNodes>>,
         facts: RefCell<Vec<(Element, Element, Element)>>,
         actions: RefCell<BTreeMap<String, ControlledAction>>,
@@ -919,6 +965,9 @@ mod browser {
                 actions_root,
                 name,
                 flavor,
+                workshop,
+                identifier: identifier.to_owned(),
+                appearance: Rc::new(RefCell::new(None)),
                 groups: RefCell::new(BTreeMap::new()),
                 facts: RefCell::new(Vec::new()),
                 actions: RefCell::new(BTreeMap::new()),
@@ -937,6 +986,18 @@ mod browser {
         }
         pub fn flavor_input(&self) -> &ControlledTextInput {
             &self.flavor
+        }
+        pub fn features_input(&self) -> Option<Rc<ControlledTextInput>> {
+            self.appearance
+                .borrow()
+                .as_ref()
+                .map(|inputs| Rc::clone(&inputs.features))
+        }
+        pub fn outfit_input(&self) -> Option<Rc<ControlledTextInput>> {
+            self.appearance
+                .borrow()
+                .as_ref()
+                .map(|inputs| Rc::clone(&inputs.outfit))
         }
 
         /// Explicit presentation retry for currently failed optional portraits.
@@ -994,7 +1055,12 @@ mod browser {
             scrub_text(self.flavor.root().as_ref());
             self.name.update(
                 input_view("Character name", view),
-                if replaced {
+                if replaced
+                    || matches!(
+                        view.status,
+                        CharacterStatus::Ready | CharacterStatus::Locked
+                    )
+                {
                     DraftUpdate::Replace(&view.name)
                 } else {
                     DraftUpdate::Preserve
@@ -1002,12 +1068,18 @@ mod browser {
             )?;
             self.flavor.update(
                 input_view("A detail that makes you memorable", view),
-                if replaced {
+                if replaced
+                    || matches!(
+                        view.status,
+                        CharacterStatus::Ready | CharacterStatus::Locked
+                    )
+                {
                     DraftUpdate::Replace(&view.flavor)
                 } else {
                     DraftUpdate::Preserve
                 },
             )?;
+            self.update_appearance(view, replaced)?;
             for (node, text) in [
                 (&self.chapter, view.chapter.as_str()),
                 (&self.title, &view.title),
@@ -1045,6 +1117,114 @@ mod browser {
                 && let Some(element) = node.dyn_ref::<HtmlElement>()
             {
                 element.focus()?;
+            }
+            Ok(())
+        }
+
+        fn update_appearance(
+            &self,
+            view: &CharacterPhaseView,
+            replaced: bool,
+        ) -> Result<(), CharacterPhaseError> {
+            let mut mounted = self.appearance.borrow_mut();
+            if (replaced || view.appearance.is_none())
+                && let Some(inputs) = mounted.take()
+            {
+                scrub_private_dom(inputs.root.as_ref());
+                inputs.features.dispose()?;
+                inputs.outfit.dispose()?;
+                inputs.root.remove();
+            }
+            let Some(appearance) = &view.appearance else {
+                return Ok(());
+            };
+            if mounted.is_none() {
+                let root = child(
+                    &self.document,
+                    &self.workshop,
+                    "section",
+                    "character-panel character-appearance",
+                    None,
+                )?;
+                child(
+                    &self.document,
+                    &root,
+                    "p",
+                    "character-overline",
+                    Some("Appearance"),
+                )?;
+                child(&self.document, &root, "h2", "", Some("How do you look?"))?;
+                child(
+                    &self.document,
+                    &root,
+                    "p",
+                    "character-group-description",
+                    Some(
+                        "Describe visual features and clothing for your character reference sheet. These details do not change abilities or equipment.",
+                    ),
+                )?;
+                let features = Rc::new(ControlledTextInput::create(
+                    &self.document,
+                    &format!("{}-features", self.identifier),
+                    input_view("Visual features", view),
+                    &appearance.features,
+                )?);
+                features.input().set_attribute("autocomplete", "off")?;
+                let outfit = Rc::new(ControlledTextInput::create(
+                    &self.document,
+                    &format!("{}-outfit", self.identifier),
+                    input_view("Clothing and outfit", view),
+                    &appearance.outfit,
+                )?);
+                outfit.input().set_attribute("autocomplete", "off")?;
+                root.append_child(features.root())?;
+                root.append_child(outfit.root())?;
+                child(
+                    &self.document,
+                    &root,
+                    "p",
+                    "character-appearance-note",
+                    Some(
+                        "After your character is created, a saved reference sheet is generated in the background and reused in future scenes.",
+                    ),
+                )?;
+                self.workshop
+                    .insert_before(&root, Some(&self.groups_root))?;
+                *mounted = Some(AppearanceInputs {
+                    root,
+                    features,
+                    outfit,
+                });
+                return Ok(());
+            }
+            if let Some(inputs) = mounted.as_ref() {
+                for (input, value, label) in [
+                    (
+                        &inputs.features,
+                        appearance.features.as_str(),
+                        "Visual features",
+                    ),
+                    (
+                        &inputs.outfit,
+                        appearance.outfit.as_str(),
+                        "Clothing and outfit",
+                    ),
+                ] {
+                    scrub_text(input.root().as_ref());
+                    input.update(
+                        input_view(label, view),
+                        if replaced
+                            || matches!(
+                                view.status,
+                                CharacterStatus::Ready | CharacterStatus::Locked
+                            )
+                        {
+                            DraftUpdate::Replace(value)
+                        } else {
+                            DraftUpdate::Preserve
+                        },
+                    )?;
+                }
             }
             Ok(())
         }
@@ -1258,6 +1438,7 @@ mod browser {
                     let callback = Rc::clone(&self.callback);
                     let name = Rc::clone(&self.name);
                     let flavor = Rc::clone(&self.flavor);
+                    let appearance = Rc::clone(&self.appearance);
                     let action_id = offered.id.clone();
                     let limits = self.limits;
                     let message = self.message.clone();
@@ -1266,6 +1447,13 @@ mod browser {
                             &action_id,
                             name.draft(),
                             flavor.draft(),
+                            appearance
+                                .borrow()
+                                .as_ref()
+                                .map(|inputs| CharacterAppearanceDraft {
+                                    features: inputs.features.draft(),
+                                    outfit: inputs.outfit.draft(),
+                                }),
                             limits,
                         );
                         match submission {
@@ -1314,7 +1502,18 @@ mod browser {
             ] {
                 scrub_private_dom(node.as_ref());
             }
-            let mut failure = None;
+            let mut appearance_failure = None;
+            if let Some(inputs) = self.appearance.borrow_mut().take() {
+                scrub_private_dom(inputs.root.as_ref());
+                if let Err(error) = inputs.features.dispose() {
+                    appearance_failure = Some(CharacterPhaseError::from(error));
+                }
+                if let Err(error) = inputs.outfit.dispose() {
+                    appearance_failure.get_or_insert_with(|| CharacterPhaseError::from(error));
+                }
+                inputs.root.remove();
+            }
+            let mut failure = appearance_failure;
             let mut record = |result: Result<(), CharacterPhaseError>| {
                 if let Err(error) = result
                     && failure.is_none()
@@ -1419,6 +1618,7 @@ mod tests {
             editable: true,
             name: "Name".into(),
             flavor: String::new(),
+            appearance: None,
             portrait: None,
             groups: vec![CharacterGroup {
                 id: "group".into(),
@@ -1470,6 +1670,7 @@ mod tests {
                 "submit-offer",
                 "local name".into(),
                 "local flavor".into(),
+                None,
                 limits(),
             )
             .expect("draft");
@@ -1507,7 +1708,7 @@ mod tests {
         view.revision += 1;
         state.reconcile(&view).expect("revoked action");
         assert_eq!(
-            state.submission("submit-offer", "".into(), "".into(), limits()),
+            state.submission("submit-offer", "".into(), "".into(), None, limits()),
             Err(CharacterValidationError::UnknownSelection)
         );
     }
@@ -1517,14 +1718,14 @@ mod tests {
         let mut state = CharacterDraftState::create(&view);
         state.choose("group", "second").expect("offered");
         state
-            .submission("submit-offer", "Name".into(), "".into(), limits())
+            .submission("submit-offer", "Name".into(), "".into(), None, limits())
             .expect("input");
         assert_eq!(state.view.status, CharacterStatus::Editing);
         view.status = CharacterStatus::Pending;
         view.revision += 1;
         state.reconcile(&view).expect("pending");
         assert_eq!(
-            state.submission("submit-offer", "Name".into(), "".into(), limits()),
+            state.submission("submit-offer", "Name".into(), "".into(), None, limits()),
             Err(CharacterValidationError::Unavailable)
         );
         view.status = CharacterStatus::Locked;
@@ -1594,9 +1795,90 @@ mod tests {
         );
         assert_eq!(state.view.revision, 1);
         assert_eq!(
-            state.submission("submit-offer", "x\n".into(), "".into(), limits()),
+            state.submission("submit-offer", "x\n".into(), "".into(), None, limits()),
             Err(CharacterValidationError::InvalidText)
         );
+    }
+    #[test]
+    fn appearance_is_bounded_optional_and_scoped_to_current_offer() {
+        let mut data = view();
+        data.appearance = Some(CharacterAppearanceDraft {
+            features: "Silver braid".into(),
+            outfit: "Blue travel coat".into(),
+        });
+        assert_eq!(data.validate(limits()), Ok(()));
+        let mut state = CharacterDraftState::create(&data);
+        let draft = CharacterAppearanceDraft {
+            features: "Freckled cheeks".into(),
+            outfit: "Green cloak".into(),
+        };
+        let submitted = state
+            .submission(
+                "submit-offer",
+                "Mara".into(),
+                "Story".into(),
+                Some(draft.clone()),
+                limits(),
+            )
+            .expect("offered appearance");
+        assert_eq!(submitted.appearance, Some(draft.clone()));
+        assert_eq!(submitted.revision, 1);
+        assert_eq!(state.view.status, CharacterStatus::Editing);
+        let mut invalid = data.clone();
+        invalid.appearance.as_mut().expect("offered").features = "bad\ntext".into();
+        assert_eq!(
+            invalid.validate(limits()),
+            Err(CharacterValidationError::InvalidText)
+        );
+        invalid.appearance.as_mut().expect("offered").features = "😀".repeat(2049);
+        assert_eq!(
+            invalid.validate(limits()),
+            Err(CharacterValidationError::ResourceLimit)
+        );
+        let oversized = CharacterAppearanceDraft {
+            features: "x".repeat(4097),
+            outfit: String::new(),
+        };
+        assert_eq!(
+            state.submission(
+                "submit-offer",
+                "Mara".into(),
+                "".into(),
+                Some(oversized),
+                limits()
+            ),
+            Err(CharacterValidationError::ResourceLimit)
+        );
+        data.revision += 1;
+        data.appearance = None;
+        state.reconcile(&data).expect("withdrawn");
+        assert_eq!(
+            state
+                .submission(
+                    "submit-offer",
+                    "Mara".into(),
+                    "".into(),
+                    Some(draft),
+                    limits()
+                )
+                .expect("legacy submission")
+                .appearance,
+            None
+        );
+        data.revision += 1;
+        data.appearance = Some(CharacterAppearanceDraft {
+            features: "Confirmed".into(),
+            outfit: "Wool cloak".into(),
+        });
+        data.status = CharacterStatus::Locked;
+        state.reconcile(&data).expect("locked view");
+        assert_eq!(state.view.appearance, data.appearance);
+        data.owner_key = "new-owner".into();
+        data.revision = 1;
+        state.reconcile(&data).expect("owner replacement");
+        assert_eq!(state.view.owner_key, "new-owner");
+        state.dispose();
+        assert!(state.view.appearance.is_none());
     }
     #[test]
     fn identical_duplicate_is_idempotent_but_equal_revision_conflicts_are_rejected() {

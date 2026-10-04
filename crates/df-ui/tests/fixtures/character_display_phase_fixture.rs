@@ -39,10 +39,10 @@ mod browser {
             connection: CharacterDisplayConnection::Connected,
             connection_label: "Synthetic connected view · No production session, RPC adapter or client shell mounted".into(),
             members: vec![
-                CharacterPublicMember { key: "public-mara".into(), character_name: "Mara".into(), portrait: Some(CharacterPortrait::Narrator), readiness: CharacterPublicReadiness::Choosing, progress_label: "Public report · Choosing character".into() },
-                CharacterPublicMember { key: "public-elian".into(), character_name: "Elian".into(), portrait: Some(CharacterPortrait::Vell), readiness: CharacterPublicReadiness::Reviewing, progress_label: "Public report · Awaiting review".into() },
-                CharacterPublicMember { key: "public-aster".into(), character_name: "Aster".into(), portrait: Some(CharacterPortrait::Narrator), readiness: CharacterPublicReadiness::Ready, progress_label: "Public report · Ready".into() },
-                CharacterPublicMember { key: "public-rowan".into(), character_name: "Rowan".into(), portrait: Some(CharacterPortrait::Vell), readiness: CharacterPublicReadiness::Locked, progress_label: "Public report · Locked".into() },
+                CharacterPublicMember { key: "public-mara".into(), character_name: "Mara".into(), portrait: Some(CharacterPortrait::Narrator), readiness: CharacterPublicReadiness::Choosing, progress_label: "Public report · Choosing character".into(), appearance_summary: None },
+                CharacterPublicMember { key: "public-elian".into(), character_name: "Elian".into(), portrait: Some(CharacterPortrait::Vell), readiness: CharacterPublicReadiness::Reviewing, progress_label: "Public report · Awaiting review".into(), appearance_summary: None },
+                CharacterPublicMember { key: "public-aster".into(), character_name: "Aster".into(), portrait: Some(CharacterPortrait::Narrator), readiness: CharacterPublicReadiness::Ready, progress_label: "Public report · Ready".into(), appearance_summary: Some("A silver braid and blue travel coat".into()) },
+                CharacterPublicMember { key: "public-rowan".into(), character_name: "Rowan".into(), portrait: Some(CharacterPortrait::Vell), readiness: CharacterPublicReadiness::Locked, progress_label: "Public report · Locked".into(), appearance_summary: None },
             ], host_offers: vec![] }
     }
     fn host_offer() -> CharacterDisplayHostOffer {
