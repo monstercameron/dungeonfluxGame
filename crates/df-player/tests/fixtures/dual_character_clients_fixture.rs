@@ -859,6 +859,17 @@ mod browser {
                     fixture.player_view.actions.clear();
                     fixture.display_view.revision += 1;
                     fixture.display_view.readiness = CharacterPublicReadiness::Ready;
+                    fixture.display_view.progress_label =
+                        "Synthetic server report · Party ready".into();
+                    let member = fixture
+                        .display_view
+                        .members
+                        .get_mut(0)
+                        .ok_or_else(|| JsValue::from_str("synthetic public member missing"))?;
+                    member.character_name = "Mara · confirmed".into();
+                    member.readiness = CharacterPublicReadiness::Ready;
+                    member.progress_label = "Public report · Ready".into();
+                    member.appearance_summary = Some("Silver braid and blue travel coat".into());
                     fixture.player.update(&fixture.player_view).map_err(error)?;
                     fixture
                         .display
