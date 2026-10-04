@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/df-types", "crates/df-protocol", "crates/df-rpc-bridge", "crates/df-observe", "crates/df-tools", "crates/df-telemetry", "crates/df-locale", "crates/df-auth", "crates/df-client", "crates/df-knowledge", "crates/df-interaction", "crates/df-ai", "crates/df-media", "crates/df-content", "crates/df-encounter", "crates/df-experience", "crates/df-intent", "crates/df-testkit", "crates/df-model", "crates/df-assets", "crates/df-session", "crates/df-world", "crates/df-ui", "crates/df-rules"]
+members = ["crates/df-types", "crates/df-protocol", "crates/df-rpc-bridge", "crates/df-observe", "crates/df-tools", "crates/df-telemetry", "crates/df-locale", "crates/df-auth", "crates/df-client", "crates/df-knowledge", "crates/df-interaction", "crates/df-ai", "crates/df-media", "crates/df-content", "crates/df-encounter", "crates/df-experience", "crates/df-intent", "crates/df-testkit", "crates/df-model", "crates/df-assets", "crates/df-session", "crates/df-world", "crates/df-ui", "crates/df-rules", "crates/df-player", "crates/df-display"]
 resolver = "3"
 exclude = ["crates/df-rpc-bridge/vendor/h2"]
 

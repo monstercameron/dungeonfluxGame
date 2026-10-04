@@ -202,6 +202,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-display"
+version = "0.1.0"
+dependencies = [
+ "df-ui",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "df-encounter"
 version = "0.1.0"
 dependencies = [
@@ -266,6 +275,16 @@ dependencies = [
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "prost",
+]
+
+[[package]]
+name = "df-player"
+version = "0.1.0"
+dependencies = [
+ "df-display",
+ "df-ui",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
