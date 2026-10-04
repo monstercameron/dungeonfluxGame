@@ -17,28 +17,51 @@ mod browser {
     const PRIVATE_DRAFT: &str = "PRIVATE_COMBAT_DRAFT_SENTINEL";
     const RESOURCES: [CombatResource<'static>; 1] = [CombatResource {
         label: "Movement",
-        value: "Supplied by server · not calculated",
+        value: "30 ft available",
     }];
     const PRIVATE_ACTORS: [CombatActor<'static>; 1] = [CombatActor {
         key: "corin",
         name: "Corin Vale",
-        initiative: "First in supplied order",
+        initiative: "18",
         status: PRIVATE_TEXT,
         resources: &RESOURCES,
     }];
-    const PUBLIC_ACTORS: [CombatActor<'static>; 1] = [CombatActor {
+    const PLAYER_ACTORS: [CombatActor<'static>; 1] = [CombatActor {
         key: "corin",
         name: "Corin Vale",
-        initiative: "First in supplied order",
-        status: "Party member",
-        resources: &[],
+        initiative: "18",
+        status: "Your turn · ranger",
+        resources: &RESOURCES,
     }];
+    const PARTY_ACTORS: [CombatActor<'static>; 3] = [
+        CombatActor {
+            key: "corin",
+            name: "Corin Vale",
+            initiative: "18",
+            status: "Taking aim",
+            resources: &[],
+        },
+        CombatActor {
+            key: "mira",
+            name: "Mira Ashford",
+            initiative: "14",
+            status: "Waiting in the shadows",
+            resources: &[],
+        },
+        CombatActor {
+            key: "dockwarden",
+            name: "Dockwarden",
+            initiative: "11",
+            status: "At the broken pier",
+            resources: &[],
+        },
+    ];
     const ROLLS: [CombatRoll<'static>; 1] = [CombatRoll {
         key: "roll-1",
-        label: "Committed roll",
+        label: "Longbow · attack roll",
         value: "17",
-        explanation: "13 + 4 · supplied result",
-        source: "Synthetic supplied server receipt",
+        explanation: "13 on the die + 4 attack bonus",
+        source: "Resolved · Corin Vale",
     }];
 
     fn error(failure: impl std::fmt::Display) -> JsValue {
@@ -110,11 +133,15 @@ mod browser {
                 option: Some(&option),
                 kind: CombatOfferKind::Action,
                 label: if public {
-                    "Continue supplied public scene"
+                    "Continue the encounter"
                 } else {
-                    "Submit supplied action"
+                    "Loose an arrow"
                 },
-                explanation: "Server validates this proposal",
+                explanation: if public {
+                    "Bring the next moment into view"
+                } else {
+                    "Take aim at the dockwarden"
+                },
                 enabled,
                 pending,
             },
@@ -123,8 +150,8 @@ mod browser {
                 offer: &reaction,
                 option: None,
                 kind: CombatOfferKind::Reaction,
-                label: "Supplied reaction",
-                explanation: "Only the advertised offer is forwarded",
+                label: "Take a reaction",
+                explanation: "When an opening appears",
                 enabled: enabled && mode == Mode::Reaction,
                 pending,
             },
@@ -133,8 +160,8 @@ mod browser {
                 offer: &roll,
                 option: None,
                 kind: CombatOfferKind::Roll,
-                label: "Request supplied server roll",
-                explanation: "Dice are resolved by the server",
+                label: "Roll the dice",
+                explanation: "Await the result",
                 enabled: enabled && mode == Mode::Ready,
                 pending,
             },
@@ -144,40 +171,40 @@ mod browser {
         }
         let view = CombatPhaseView {
             art: CombatArt::Harbor,
-            chapter: "Synthetic encounter",
+            chapter: "The drowned lantern · encounter",
             title: "Lanterns at the docks",
             location: "Greyhaven Harbor",
             narration: if public {
-                "The party watches the lanterns sway."
+                "A bowstring breaks the silence. Beyond the lanterns, the dockwarden steps into the light."
             } else if reordered {
                 "PRIVATE_COMBAT_SENTINEL · Updated private observation"
-            } else {
+            } else if mode == Mode::Ready {
                 PRIVATE_TEXT
+            } else {
+                "The dockwarden is in the open. This is your moment."
             },
-            connection: "Synthetic role fixture · no RPC/session connected",
-            notice: "Separately supplied presentation props · not a wire projection",
-            turn_label: "Round and turn supplied by server",
+            connection: "Greyhaven Harbor",
+            notice: "Synthetic demo · offline",
+            turn_label: "Round 2 · initiative",
             active_actor: Some("corin"),
             actors: if public {
-                &PUBLIC_ACTORS
-            } else {
+                &PARTY_ACTORS
+            } else if reordered || mode == Mode::Ready {
                 &PRIVATE_ACTORS
-            },
-            action_heading: if public {
-                "Explicit public host offers"
             } else {
-                "Your offered actions"
+                &PLAYER_ACTORS
             },
+            action_heading: if public { "The next move" } else { "Your move" },
             action_empty: "No current offers",
             offers: &offers,
-            roll_heading: "Confirmed server results",
-            roll_empty: "No committed result supplied",
+            roll_heading: "The dice have spoken",
+            roll_empty: "Your next roll will appear here.",
             rolls: if mode == Mode::Resolved { &ROLLS } else { &[] },
             reaction: if mode == Mode::Reaction {
                 Some(CombatReaction {
-                    heading: "Advertised reaction window",
-                    timing: "Server-supplied window · no local countdown",
-                    explanation: "No turn timing is inferred here",
+                    heading: "An opening appears",
+                    timing: "Reaction available",
+                    explanation: "Choose your response before the moment passes.",
                 })
             } else {
                 None
@@ -187,19 +214,19 @@ mod browser {
             } else {
                 Some(CombatDraft {
                     key: "same-draft-owner",
-                    label: "Your action detail",
+                    label: "Describe your approach",
                     enabled: enabled && !pending,
                     feedback: if mode == Mode::Refused {
-                        CombatFeedback::Refused("Supplied refusal leaves the draft editable")
+                        CombatFeedback::Refused("Choose another approach. Your words are saved.")
                     } else {
                         CombatFeedback::None
                     },
                 })
             },
             feedback: if pending {
-                CombatFeedback::Pending("Proposal pending · outcome unconfirmed")
+                CombatFeedback::Pending("Your move is being considered…")
             } else if mode == Mode::Refused {
-                CombatFeedback::Refused("Server-supplied refusal")
+                CombatFeedback::Refused("That move is no longer available.")
             } else {
                 CombatFeedback::None
             },
@@ -288,7 +315,7 @@ mod browser {
     fn mount_pair(fixture: &mut Fixture) -> Result<(), JsValue> {
         let private = Rc::clone(&fixture.private);
         fixture.player = Some(
-            supplied(false, Mode::Ready, false, |view| {
+            supplied(false, Mode::Resolved, false, |view| {
                 PlayerCombat::mount(
                     &fixture.document,
                     &fixture.player_parent,
@@ -303,7 +330,7 @@ mod browser {
         );
         let public = Rc::clone(&fixture.public);
         fixture.display = Some(
-            supplied(true, Mode::Ready, false, |view| {
+            supplied(true, Mode::Resolved, false, |view| {
                 DisplayCombat::mount(
                     &fixture.document,
                     &fixture.display_parent,
@@ -644,6 +671,18 @@ mod browser {
         })
     }
     #[wasm_bindgen]
+    pub fn show_demo_combat() -> Result<(), JsValue> {
+        apply_mode(Mode::Resolved, "demo")
+    }
+    #[wasm_bindgen]
+    pub fn show_ready_combat() -> Result<(), JsValue> {
+        apply_mode(Mode::Ready, "ready")
+    }
+    #[wasm_bindgen]
+    pub fn show_refused_combat() -> Result<(), JsValue> {
+        apply_mode(Mode::Refused, "refused")
+    }
+    #[wasm_bindgen]
     pub fn show_pending_combat() -> Result<(), JsValue> {
         apply_mode(Mode::Pending, "pending")
     }
@@ -754,7 +793,7 @@ mod browser {
             .body()
             .ok_or_else(|| JsValue::from_str("body absent"))?;
         let notice = document.create_element("p")?;
-        notice.set_text_content(Some("Synthetic dual-client combat mounts. Public/private props are independently supplied; no RPC, permission, dice or turn authority is claimed."));
+        notice.set_text_content(Some("DungeonFlux browser showcase"));
         body.append_child(&notice)?;
         let controls_root = document.create_element("nav")?;
         controls_root.set_attribute("aria-label", "Fixture controls")?;
