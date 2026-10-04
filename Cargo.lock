@@ -406,6 +406,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-web"
+version = "0.1.0"
+dependencies = [
+ "df-client",
+ "df-display",
+ "df-player",
+ "df-types",
+ "df-ui",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "df-world"
 version = "0.1.0"
 dependencies = [

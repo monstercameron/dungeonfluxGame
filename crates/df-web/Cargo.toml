@@ -1,0 +1,24 @@
+[package]
+name = "df-web"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+df-client = { path = "../df-client" }
+df-types = { path = "../df-types" }
+df-ui = { path = "../df-ui" }
+df-player = { path = "../df-player" }
+df-display = { path = "../df-display" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+web-sys = { workspace = true, features = ["Document", "Element", "Node", "HtmlFieldSetElement"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+web-sys = { workspace = true, features = ["Window", "HtmlElement", "HtmlInputElement", "HtmlButtonElement", "Event"] }
+
+[[example]]
+name = "role_phase_shell_fixture"
+path = "tests/fixtures/role_phase_shell_fixture.rs"
+crate-type = ["cdylib"]
