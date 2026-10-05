@@ -21,6 +21,7 @@ pub(super) struct QualificationSnapshot {
     pub joins: Vec<QualificationJoin>,
     pub checkpoint: Checkpoint,
     pub codec: NativeCodecLimits,
+    pub calls_remaining: u16,
     #[cfg(test)]
     pub fenced: bool,
     #[cfg(test)]
@@ -519,6 +520,7 @@ impl Reducer<Call> for Actor {
                             joins: self.qualification_joins.clone().unwrap_or_default(),
                             checkpoint: self.owner.checkpoint().clone(),
                             codec: self.codec,
+                            calls_remaining: self.calls_remaining,
                             #[cfg(test)]
                             fenced: self.fenced,
                             #[cfg(test)]

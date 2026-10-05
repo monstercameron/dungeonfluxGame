@@ -197,14 +197,18 @@ impl<A: MembershipAuthority> PostgresRepository<A> {
     /// Runtime-worker invocation refuses without issuing database work.
     pub fn close(&mut self) -> Result<(), RepositoryError> {
         let runtime = self.runtime.clone();
-        actor_block_on(&runtime, async {
-            self.adapter.close().await?;
-            if let Some(failure) = self.pending_setup.as_mut() {
-                failure.close().await?;
-            }
-            self.pending_setup.take();
-            Ok(())
-        })?
+        actor_block_on(&runtime, self.close_owned())?
+    }
+
+    /// Setup/shutdown on the native root may join before the serialization actor starts.
+    /// A failed close retains the repository and every pending driver for another attempt.
+    pub async fn close_owned(&mut self) -> Result<(), RepositoryError> {
+        self.adapter.close().await?;
+        if let Some(failure) = self.pending_setup.as_mut() {
+            failure.close().await?;
+        }
+        self.pending_setup.take();
+        Ok(())
     }
 }
 impl<A: MembershipAuthority> SessionRepository for PostgresRepository<A>

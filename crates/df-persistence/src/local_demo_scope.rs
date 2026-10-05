@@ -1,6 +1,9 @@
 //! Explicitly local-development grants for the single gameplay demonstration.
 //! The caller owns a dedicated loopback database, connection driver, and actor thread.
 //! No production bootstrap, arbitrary scope constructor, or hosted identity is provided.
+mod startup;
+pub use startup::{DemoStartup, DemoStartupIdentity, admit_startup, release_owner};
+
 use std::time::Duration;
 
 use df_auth::membership::{
@@ -96,6 +99,17 @@ pub struct LocalDemoScopeIssuer {
     fence: [u8; 16],
 }
 impl LocalDemoScopeIssuer {
+    /// Call only after the serialization inbox has stopped admission and drained.
+    pub fn release_owner(&mut self) -> Result<(), RepositoryError> {
+        let runtime = self.authority.runtime.clone();
+        runtime.block_on(self.release_owner_owned())
+    }
+
+    /// Native setup failure owns this issuer before it has entered an actor thread.
+    pub async fn release_owner_owned(&mut self) -> Result<(), RepositoryError> {
+        release_owner(&self.authority.client, self.session, self.fence).await
+    }
+
     /// Same actor operation key as accepted decisions. New rejected bytes are an already
     /// mapped typed RPC receipt; persistence stores them immutably without inventing facts.
     /// Any uncertain transaction stops the native owner; it must not submit another key.

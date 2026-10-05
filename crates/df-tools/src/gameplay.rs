@@ -6,6 +6,7 @@ mod model;
 mod qualification;
 #[cfg(test)]
 mod recovery_qualification;
+mod restart_qualification;
 mod room;
 mod wire;
 
@@ -322,8 +323,11 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         std::path::Path::new(&asset_root).join("../concept-art/vell-avatar.webp"),
         1024 * 1024,
     )?;
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 63309)).await?;
-    let initial =
+    let restart_phase = restart_qualification::phase();
+    let restart_budget = restart_phase
+        .map(restart_qualification::call_budget)
+        .transpose()?;
+    let cold =
         journey::initial().map_err(|_| io::Error::other("gameplay baseline validation failed"))?;
     let codec = NativeCodecLimits {
         maximum_document_bytes: 1024 * 1024,
@@ -331,43 +335,107 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         maximum_collection_items: 1024,
         maximum_text_bytes: 4096,
     };
+    let recovery =
+        model::recovery().map_err(|_| io::Error::other("source recovery inventory invalid"))?;
     let fence = model::random::<16>().map_err(|_| io::Error::other("native fence unavailable"))?;
     let player_credential =
         model::random::<32>().map_err(|_| io::Error::other("local grant unavailable"))?;
     let display_credential =
         model::random::<32>().map_err(|_| io::Error::other("local grant unavailable"))?;
     let database = database_config()?;
-    let (mut grant_client, grant_connection) = database.connect(tokio_postgres::NoTls).await?;
+    let (mut grant_client, grant_connection) = tokio::time::timeout(
+        Duration::from_secs(2),
+        database.connect(tokio_postgres::NoTls),
+    )
+    .await
+    .map_err(|_| io::Error::other("grant connect handshake deadline"))??;
     let grant_driver = tokio::spawn(grant_connection);
     let initialization = tokio::time::timeout(
         Duration::from_secs(5),
-        df_persistence::local_demo_scope::initialize(
+        df_persistence::local_demo_scope::admit_startup(
             &mut grant_client,
-            &initial,
-            fence,
-            player_credential,
-            display_credential,
+            &cold,
+            df_persistence::local_demo_scope::DemoStartupIdentity {
+                fence,
+                player_credential,
+                display_credential,
+            },
             codec,
+            &recovery,
+            |checkpoint| {
+                df_session::submission::SessionEngine::<
+                    df_persistence::NativeScope<LocalDemoAuthority>,
+                >::validate_recovery(&mut model::HarborEngine, checkpoint)
+            },
         ),
     )
     .await;
-    if !matches!(initialization, Ok(Ok(()))) {
-        drop(grant_client);
-        grant_driver.await??;
-        return Err(io::Error::other(format!(
-            "owned gameplay database initialization refused: {initialization:?}"
-        ))
-        .into());
+    let admitted = match initialization {
+        Ok(Ok(admitted)) => admitted,
+        failure => {
+            let refusal_report = if restart_phase == Some(restart_qualification::Phase::Contender)
+                && let Ok(Err(error)) = &failure
+            {
+                restart_qualification::refusal(error)
+            } else {
+                Ok(())
+            };
+            drop(grant_client);
+            join_grant_driver(grant_driver).await?;
+            refusal_report?;
+            return Err(io::Error::other(format!(
+                "owned gameplay admission refused: {}",
+                match failure {
+                    Ok(Err(error)) => format!("{} {:?}", error.stage, error.class),
+                    _ => "startup_timeout".to_owned(),
+                }
+            ))
+            .into());
+        }
+    };
+    if let Some(phase) = restart_phase {
+        let expected = phase == restart_qualification::Phase::B;
+        if admitted.restored != expected {
+            let released = df_persistence::local_demo_scope::release_owner(
+                &grant_client,
+                admitted.checkpoint.basis().session,
+                fence,
+            )
+            .await;
+            drop(grant_client);
+            join_grant_driver(grant_driver).await?;
+            released.map_err(|_| io::Error::other("wrong-phase exact-fence release failed"))?;
+            return Err(io::Error::other("restart phase admission kind refused").into());
+        }
     }
+    let initial = admitted.checkpoint;
+    let player_credential = admitted.player_credential;
+    let display_credential = admitted.display_credential;
     let runtime = tokio::runtime::Handle::current();
-    let issuer = LocalDemoScopeIssuer::new(
-        runtime.clone(),
-        grant_client,
-        initial.basis().session,
-        fence,
+    let (client, connection) = match tokio::time::timeout(
+        Duration::from_secs(2),
+        database.connect(tokio_postgres::NoTls),
     )
-    .map_err(|_| io::Error::other("local issuer construction refused"))?;
-    let (client, connection) = database.connect(tokio_postgres::NoTls).await?;
+    .await
+    {
+        Ok(Ok(connected)) => connected,
+        failure => {
+            let released = df_persistence::local_demo_scope::release_owner(
+                &grant_client,
+                initial.basis().session,
+                fence,
+            )
+            .await;
+            drop(grant_client);
+            join_grant_driver(grant_driver).await?;
+            released.map_err(|_| io::Error::other("setup exact-fence release failed"))?;
+            return Err(io::Error::other(match failure {
+                Ok(Err(_)) => "repository connect handshake refused",
+                _ => "repository connect handshake deadline",
+            })
+            .into());
+        }
+    };
     let context = OperationContext {
         trace_parent: String::new(),
         build: crate::BUILD_ID.to_owned(),
@@ -381,22 +449,76 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         codec_limits: codec,
         maximum_receipt_bytes: 4096,
         verifier: Some(df_persistence::local_demo_scope::verifier()),
-        recovery: Some(
-            model::recovery().map_err(|_| io::Error::other("source recovery inventory invalid"))?,
-        ),
+        recovery: Some(recovery),
     };
-    let mut repository = PostgresRepository::<LocalDemoAuthority>::from_connected_no_tls(
+    let repository_setup = PostgresRepository::<LocalDemoAuthority>::from_connected_no_tls(
         runtime.clone(),
         client,
         connection,
         repository_options.clone(),
         &context,
     )
-    .await
-    .map_err(|_| io::Error::other("native repository setup failed"))?;
-    repository
+    .await;
+    let mut repository = match repository_setup {
+        Ok(repository) => repository,
+        Err(mut failure) => {
+            let closed = failure.close().await;
+            let released = df_persistence::local_demo_scope::release_owner(
+                &grant_client,
+                initial.basis().session,
+                fence,
+            )
+            .await;
+            drop(grant_client);
+            join_grant_driver(grant_driver).await?;
+            closed.map_err(|_| io::Error::other("native setup driver close failed"))?;
+            released.map_err(|_| io::Error::other("setup exact-fence release failed"))?;
+            return Err(io::Error::other("native repository setup refused").into());
+        }
+    };
+    if repository
         .configure_reconnect(database.clone(), repository_options)
-        .map_err(|_| io::Error::other("native repository recovery setup failed"))?;
+        .is_err()
+    {
+        let closed = repository.close_owned().await;
+        let released = df_persistence::local_demo_scope::release_owner(
+            &grant_client,
+            initial.basis().session,
+            fence,
+        )
+        .await;
+        drop(grant_client);
+        join_grant_driver(grant_driver).await?;
+        closed.map_err(|_| io::Error::other("native setup driver close failed"))?;
+        released.map_err(|_| io::Error::other("setup exact-fence release failed"))?;
+        return Err(io::Error::other("native recovery configuration refused").into());
+    }
+    let listener = match tokio::net::TcpListener::bind(("127.0.0.1", 63309)).await {
+        Ok(listener) => listener,
+        Err(error) => {
+            let closed = repository.close_owned().await;
+            let released = df_persistence::local_demo_scope::release_owner(
+                &grant_client,
+                initial.basis().session,
+                fence,
+            )
+            .await;
+            drop(grant_client);
+            join_grant_driver(grant_driver).await?;
+            closed.map_err(|_| io::Error::other("native listener failure driver close failed"))?;
+            released
+                .map_err(|_| io::Error::other("listener failure exact-fence release failed"))?;
+            return Err(error.into());
+        }
+    };
+    let issuer = LocalDemoScopeIssuer::new(
+        runtime.clone(),
+        grant_client,
+        initial.basis().session,
+        fence,
+    )
+    .map_err(|_| io::Error::other("local issuer construction refused"))?;
+
     let (updates, receiver) = watch::channel(initial.clone());
     let owner = DurableOwner::new(
         repository,
@@ -407,38 +529,67 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     )
     .map_err(|_| io::Error::other("canonical owner setup refused"))?;
     let (sender, inbox) = bounded_inbox::<actor::Call>();
-    let thread = std::thread::Builder::new()
+    let actor = actor::Actor {
+        owner,
+        bootstrap_credential: player_credential,
+        issuer,
+        codec,
+        fenced: false,
+        recovery_wakeup: updates,
+        calls_remaining: restart_budget.unwrap_or(128),
+        qualification_joins: if restart_phase.is_some()
+            || std::env::args().nth(4).as_deref() == Some("--qualification")
+        {
+            Some(Vec::new())
+        } else {
+            None
+        },
+        qualification_inputs: if restart_phase.is_some()
+            || std::env::args().nth(4).as_deref() == Some("--qualification")
+        {
+            Some(Vec::new())
+        } else {
+            None
+        },
+    };
+    let (startup_send, startup_receive) = std::sync::mpsc::sync_channel::<actor::Actor>(1);
+    let thread_setup = std::thread::Builder::new()
         .name("df-real-gameplay-owner".to_owned())
         .spawn(move || {
-            let mut actor = actor::Actor {
-                owner,
-                bootstrap_credential: player_credential,
-                issuer,
-                codec,
-                fenced: false,
-                recovery_wakeup: updates,
-                calls_remaining: 128,
-                qualification_joins: if std::env::args().nth(4).as_deref()
-                    == Some("--qualification")
-                {
-                    Some(Vec::new())
-                } else {
-                    None
-                },
-                qualification_inputs: if std::env::args().nth(4).as_deref()
-                    == Some("--qualification")
-                {
-                    Some(Vec::new())
-                } else {
-                    None
-                },
-            };
+            let mut actor = startup_receive
+                .recv_timeout(Duration::from_secs(2))
+                .map_err(|_| io::Error::other("actor startup handoff deadline"))?;
             let drained = inbox.run(&mut actor);
+            let released = if drained.is_ok() {
+                actor.issuer.release_owner()
+            } else {
+                Err(df_session::submission::RepositoryError::Unavailable)
+            };
+            let remaining = actor.calls_remaining;
             let mut repository = actor.owner.into_repository();
             let closed = repository.close();
             drop(actor.issuer);
-            (drained, closed)
-        })?;
+            Ok::<_, io::Error>((drained, released, closed, remaining))
+        });
+    let thread = match thread_setup {
+        Ok(thread) => thread,
+        Err(error) => {
+            close_unstarted_actor(actor, grant_driver).await?;
+            return Err(error.into());
+        }
+    };
+    if let Err(error) = startup_send.send(actor) {
+        let closed = close_unstarted_actor(error.0, grant_driver).await;
+        let joined = tokio::task::spawn_blocking(move || thread.join()).await?;
+        closed?;
+        if joined
+            .map_err(|_| io::Error::other("failed actor startup thread join failed"))?
+            .is_ok()
+        {
+            return Err(io::Error::other("failed handoff unexpectedly ran actor").into());
+        }
+        return Err(io::Error::other("actor startup handoff refused").into());
+    }
     let service = Service {
         actor: sender.clone(),
         updates: receiver,
@@ -492,6 +643,16 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route("/assets/concept-art/vell-avatar.webp", get(portrait))
         .with_state(state);
+    let restart = restart_phase.map(|phase| {
+        tokio::spawn(restart_qualification::run(
+            service.clone(),
+            display_credential,
+            codec,
+            database.clone(),
+            phase,
+            fence,
+        ))
+    });
     let qualification = if std::env::args().nth(4).as_deref() == Some("--qualification") {
         let (cancel, cancelled) = oneshot::channel();
         Some((
@@ -521,17 +682,75 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Ok(())
     };
+    let restart_outcome = if let Some(mut task) = restart {
+        match tokio::time::timeout(Duration::from_secs(47), &mut task).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(io::Error::other(
+                "restart consumer panicked; cleanup required",
+            )),
+            Err(_) => {
+                task.abort();
+                let joined = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
+                Err(io::Error::other(if joined.is_ok() {
+                    "restart consumer deadline; aborted task joined"
+                } else {
+                    "restart consumer deadline; join pending"
+                }))
+            }
+        }
+    } else {
+        Ok(())
+    };
     sender
         .stop()
         .map_err(|_| io::Error::other("gameplay inbox stop failed"))?;
-    let (drained, closed) = tokio::task::spawn_blocking(move || thread.join())
+    let (drained, released, closed, remaining) = tokio::task::spawn_blocking(move || thread.join())
         .await?
-        .map_err(|_| io::Error::other("gameplay actor join failed"))?;
+        .map_err(|_| io::Error::other("gameplay actor join failed"))??;
+    let grant_closed = join_grant_driver(grant_driver).await;
     drained.map_err(|_| io::Error::other("gameplay actor drain failed"))?;
+    released.map_err(|_| io::Error::other("gameplay exact-fence release failed"))?;
     closed.map_err(|_| io::Error::other("gameplay repository close failed"))?;
-    grant_driver.await??;
+    grant_closed?;
     qualification_outcome?;
+    restart_outcome?;
+    if let Some(phase) = restart_phase {
+        restart_qualification::closed(phase, remaining)?;
+    }
     outcome
+}
+
+async fn close_unstarted_actor(
+    mut actor: actor::Actor,
+    grant_driver: tokio::task::JoinHandle<Result<(), tokio_postgres::Error>>,
+) -> Result<(), io::Error> {
+    let released = actor.issuer.release_owner_owned().await;
+    let mut repository = actor.owner.into_repository();
+    let closed = repository.close_owned().await;
+    drop(actor.issuer);
+    let joined = join_grant_driver(grant_driver).await;
+    released.map_err(|_| io::Error::other("unstarted actor exact-fence release failed"))?;
+    closed.map_err(|_| io::Error::other("unstarted actor repository close failed"))?;
+    joined
+}
+
+async fn join_grant_driver(
+    mut driver: tokio::task::JoinHandle<Result<(), tokio_postgres::Error>>,
+) -> Result<(), io::Error> {
+    match tokio::time::timeout(Duration::from_secs(2), &mut driver).await {
+        Ok(result) => result
+            .map_err(|_| io::Error::other("grant driver join failed"))?
+            .map_err(|_| io::Error::other("grant driver protocol failed")),
+        Err(_) => {
+            driver.abort();
+            let joined = tokio::time::timeout(Duration::from_secs(2), &mut driver).await;
+            Err(io::Error::other(if joined.is_ok() {
+                "grant driver deadline; aborted task joined"
+            } else {
+                "grant driver deadline; join pending"
+            }))
+        }
+    }
 }
 
 fn database_config() -> Result<tokio_postgres::Config, io::Error> {

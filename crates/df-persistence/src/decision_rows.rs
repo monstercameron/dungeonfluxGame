@@ -433,14 +433,41 @@ pub(crate) async fn load_current<A: df_auth::membership::MembershipAuthority>(
         .await
         .map_err(|_| RepositoryError::Unavailable)?
         .ok_or(RepositoryError::Unavailable)?;
+    decode_current_row(
+        &row,
+        scope.session(),
+        current_basis,
+        scope.admitted_pins(),
+        inventory,
+        checkpoint_limits,
+        codec_limits,
+    )
+}
+
+pub(crate) fn current_row_basis(
+    row: &Row,
+    session: df_types::SessionId,
+) -> Result<Basis, RepositoryError> {
     let run_bytes: Vec<u8> = row
         .try_get("run_id")
         .map_err(|_| RepositoryError::InvalidCandidate)?;
-    let expected = Basis {
+    Ok(Basis {
         session,
         run: RunId::from_bytes(&run_bytes).map_err(|_| RepositoryError::InvalidCandidate)?,
-        revision: decode_revision(&row, "recovery_epoch", "in_epoch_sequence")?,
-    };
+        revision: decode_revision(row, "recovery_epoch", "in_epoch_sequence")?,
+    })
+}
+
+pub(crate) fn decode_current_row(
+    row: &Row,
+    session: df_types::SessionId,
+    current_basis: Basis,
+    pins: &df_model::checkpoint::CheckpointPins,
+    inventory: df_model::checkpoint::ReferenceInventory<'_>,
+    checkpoint_limits: df_model::checkpoint::CheckpointLimits,
+    codec_limits: CodecLimits,
+) -> Result<Checkpoint, RepositoryError> {
+    let expected = current_row_basis(row, session)?;
     if expected != current_basis {
         return Err(RepositoryError::InvalidCandidate);
     }
@@ -461,7 +488,7 @@ pub(crate) async fn load_current<A: df_auth::membership::MembershipAuthority>(
     crate::checkpoint_codec::decode_checkpoint(
         &document,
         expected,
-        scope.admitted_pins(),
+        pins,
         inventory,
         checkpoint_limits,
         codec_limits,
