@@ -16,7 +16,7 @@ const MEMBERS: [[u8; 16]; 2] = [[0x61; 16], [0x62; 16]];
 const ENTITIES: [[u8; 16]; 2] = [[0x63; 16], [0x64; 16]];
 const BANDIT: [u8; 16] = [0x65; 16];
 const ENCOUNTER: [u8; 16] = [0x66; 16];
-pub(super) const THREAD_POLICY: &str = "local-journey-rpc-3-threads-1-rest-1";
+pub(super) const THREAD_POLICY: &str = "local-journey-rpc-3-threads-1-rest-1-inn-1";
 const PACKET_THREAD: &str = "sealed-packet-delivery-thread";
 const THREAT_THREAD: &str = "dockside-threat-thread";
 // This fixed authored slice admits one causal event to one thread. Packet delivery is outside
@@ -25,6 +25,7 @@ const THREAD_EVENTS: &[(&str, &str)] = &[
     ("begin-story", PACKET_THREAD),
     ("private-courier-note", PACKET_THREAD),
     ("escort-courier", PACKET_THREAD),
+    ("harbor-inn", PACKET_THREAD),
     ("defend-courier", THREAT_THREAD),
     ("greatsword-attack", THREAT_THREAD),
     ("second-wind", THREAT_THREAD),
@@ -47,6 +48,8 @@ pub(super) const CONTENT_ENTRIES: &[&str] = &[
     "defend-courier",
     "combat",
     "complete",
+    "choose-harbor-scene",
+    "harbor-inn",
     "bandit",
     "greatsword-attack",
     "second-wind",
@@ -146,7 +149,7 @@ pub(super) fn phase(current: &Checkpoint) -> Result<rpc::JourneyPhase, Repositor
                 Ok(rpc::JourneyPhase::Dialogue)
             }
             "combat" => Ok(rpc::JourneyPhase::Combat),
-            "complete" => Ok(rpc::JourneyPhase::Complete),
+            "complete" | "harbor-inn" => Ok(rpc::JourneyPhase::Complete),
             _ => Err(RepositoryError::InvalidCandidate),
         },
         _ => Err(RepositoryError::InvalidCandidate),
@@ -346,6 +349,14 @@ fn beat(state: &mut GameState, next: &str) -> Result<(), RepositoryError> {
     Ok(())
 }
 pub(super) fn offer_id(current: &Checkpoint, kind: rpc::GameplayActionKind) -> String {
+    if kind == rpc::GameplayActionKind::ChooseHarborScene {
+        return format!(
+            "journey-inn-{}-{}-{}",
+            current.basis().revision.epoch().get(),
+            current.basis().revision.sequence(),
+            current.state().logical_time.ticks
+        );
+    }
     if kind == rpc::GameplayActionKind::ShortRest {
         return format!(
             "journey-rest-{}-{}-{}",
@@ -439,14 +450,94 @@ pub(super) fn offered(
         }
         rpc::JourneyPhase::Complete => {
             prepare_short_rest(current)?;
-            vec![(
+            let mut result = vec![(
                 rpc::GameplayActionKind::ShortRest,
                 "Short Rest · 1 hour, no Hit Point Dice",
-            )]
+            )];
+            if inn_source(current)?.is_some() && value(current.state(), who, "unconscious")? == 0 {
+                result.push((
+                    rpc::GameplayActionKind::ChooseHarborScene,
+                    "Continue with the courier",
+                ));
+            }
+            result
         }
         _ => return Err(RepositoryError::InvalidCandidate),
     };
     Ok(result)
+}
+// The authored invitation follows the accepted victory, including after an admitted rest.
+// It changes only the scene beat; no travel duration, geometry or delivery is inferred.
+fn inn_source(current: &Checkpoint) -> Result<Option<FactId>, RepositoryError> {
+    let state = current.state();
+    if state.narrative.active_beats.as_slice() != [model::content("complete")?]
+        || !combat_victory(state)?
+        || !state
+            .narrative
+            .open_threads
+            .contains(&model::content(PACKET_THREAD)?)
+        || participants(current).len() != 2
+        || state.characters.len() != 2
+    {
+        return Ok(None);
+    }
+    for link in participants(current) {
+        let who = link.character.ok_or(RepositoryError::InvalidCandidate)?;
+        if !state
+            .characters
+            .iter()
+            .any(|character| character.entity == who)
+        {
+            return Ok(None);
+        }
+    }
+    let bandit = entity(BANDIT)?;
+    let unconscious = model::label("unconscious")?;
+    let source_rule = rule()?;
+    let attack = model::content("greatsword-attack")?;
+    for decision in &state.decisions {
+        if decision.source_policy.as_str() != THREAD_POLICY {
+            continue;
+        }
+        let accepted = accepted(decision)?;
+        if accepted.phase != rpc::JourneyPhase::Complete as i32
+            || !accepted.combat.iter().any(|outcome| {
+                outcome.knocked_out && outcome.target_id.as_slice() == bandit.as_bytes()
+            })
+        {
+            continue;
+        }
+        let Some(knockout) = state.facts.iter().find(|fact| {
+            decision.facts.contains(&fact.id)
+                && fact.operation == decision.operation
+                && fact.revision == decision.revision
+                && matches!(&fact.value, FactValue::ResourceChanged {
+                    entity, resource, before: 0, after: 1, source
+                } if *entity == bandit && *resource == unconscious && *source == source_rule)
+        }) else {
+            continue;
+        };
+        let Some(event) = state.facts.iter().find(|fact| {
+            decision.facts.contains(&fact.id)
+                && fact.operation == decision.operation
+                && fact.revision == decision.revision
+                && fact.ordinal > knockout.ordinal
+                && matches!(&fact.value, FactValue::ContentEvent { definition, .. }
+                    if definition == &attack)
+        }) else {
+            continue;
+        };
+        return Ok(Some(event.id));
+    }
+    Ok(None)
+}
+
+pub(super) fn inn_scene() -> rpc::GameplayScene {
+    rpc::GameplayScene {
+        destination: rpc::HarborDestination::HarborInn as i32,
+        title: "The Harbor Inn".to_owned(),
+        scene_asset: "assets/concept-art/scene-tavern-barkeep-talk-rain.webp".to_owned(),
+    }
 }
 pub(super) fn accepted(
     decision: &AcceptedDecision,
@@ -789,14 +880,25 @@ fn finish(
         revision: basis.revision,
         operation,
         ordinal: facts.len() as u32,
-        cause: facts
-            .last()
-            .copied()
-            .or_else(|| current.state().facts.last().map(|fact| fact.id)),
+        cause: if entry == "harbor-inn" {
+            Some(inn_source(current)?.ok_or(RepositoryError::InvalidCandidate)?)
+        } else {
+            facts
+                .last()
+                .copied()
+                .or_else(|| current.state().facts.last().map(|fact| fact.id))
+        },
         audience,
         value: FactValue::ContentEvent {
             definition: model::content(entry)?,
-            subjects: Vec::new(),
+            subjects: if entry == "harbor-inn" {
+                participants(current)
+                    .into_iter()
+                    .map(|link| link.character.ok_or(RepositoryError::InvalidCandidate))
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                Vec::new()
+            },
         },
     });
     facts.push(fact_id);
@@ -879,7 +981,15 @@ fn stage_authored_threads(
             target_time: candidate.state().logical_time,
             paused: false,
             deadline_remaining: Duration::from_secs(1),
-            policy: &candidate.state().narrative.definition,
+            // A scene continuation must honor the admitted schedule cursor's policy.
+            // Replacing it with a narrative definition makes a valid post-Rest cursor stale.
+            policy: candidate
+                .state()
+                .continuity
+                .catch_up
+                .as_ref()
+                .map(|cursor| &cursor.policy)
+                .unwrap_or(&candidate.state().narrative.definition),
         },
         None,
         ThreadCheckpointRequest {
@@ -1788,6 +1898,19 @@ fn stage_using(
                 u32::from(economy.bonus_action_used),
             )?;
         }
+        rpc::GameplayActionKind::ChooseHarborScene => {
+            if choices.as_slice()
+                != [(
+                    model::label("harbor-destination")?,
+                    model::label("harbor-inn")?,
+                )]
+                || inn_source(current)?.is_none()
+                || value(&state, *who, "unconscious")? != 0
+            {
+                return Err(RepositoryError::InvalidCandidate);
+            }
+            beat(&mut state, "harbor-inn")?;
+        }
         rpc::GameplayActionKind::ShortRest => {
             if !choices.is_empty() {
                 return Err(RepositoryError::InvalidCandidate);
@@ -1811,7 +1934,11 @@ fn stage_using(
     }
     let result = rpc::AcceptedAction {
         check: None,
-        scene: None,
+        scene: if kind == rpc::GameplayActionKind::ChooseHarborScene {
+            Some(inn_scene())
+        } else {
+            None
+        },
         character: if kind == rpc::GameplayActionKind::CreateCharacter {
             Some(character_sheet(&state, *who)?)
         } else {
@@ -1823,6 +1950,8 @@ fn stage_using(
     let semantic = Some(hex(&result.encode_to_vec()));
     let entry = if private {
         "private-courier-note"
+    } else if kind == rpc::GameplayActionKind::ChooseHarborScene {
+        "harbor-inn"
     } else {
         action.entry.as_str()
     };
@@ -1860,7 +1989,7 @@ fn phase_from_state(state: &GameState) -> Result<rpc::JourneyPhase, RepositoryEr
         Some("opening") => Ok(rpc::JourneyPhase::Opening),
         Some("courier-answer-seal" | "courier-answer-escort") => Ok(rpc::JourneyPhase::Dialogue),
         Some("combat") => Ok(rpc::JourneyPhase::Combat),
-        Some("complete") => Ok(rpc::JourneyPhase::Complete),
+        Some("complete" | "harbor-inn") => Ok(rpc::JourneyPhase::Complete),
         _ => Err(RepositoryError::InvalidCandidate),
     }
 }
@@ -2676,5 +2805,464 @@ mod tests {
         invalid = input(&rest, member, 11, "short-rest", vec![]);
         let second = stage_with_supplier(&rest, &invalid, &mut |_| panic!("fresh rest")).unwrap();
         assert_rest_preserves_battle(&rest, &second);
+    }
+
+    fn inn_victory() -> Checkpoint {
+        let member = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let opening = opening_story();
+        let private = stage_with_supplier(
+            &opening,
+            &input(&opening, member, 6, "ask-courier", vec![]),
+            &mut |_| panic!("no dialogue dice"),
+        )
+        .unwrap();
+        let mut draw_index = 0;
+        let combat = stage_with_supplier(
+            &private,
+            &input(&private, member, 7, "defend-courier", vec![]),
+            &mut |_| {
+                draw_index += 1;
+                Ok(if draw_index == 1 { 20 } else { 1 })
+            },
+        )
+        .unwrap();
+        stage_with_supplier(
+            &combat,
+            &input(
+                &combat,
+                member,
+                8,
+                "greatsword-attack",
+                vec![
+                    (
+                        model::label("savage-attacker").unwrap(),
+                        model::label("no").unwrap(),
+                    ),
+                    (model::label("graze").unwrap(), model::label("no").unwrap()),
+                ],
+            ),
+            &mut |sides| Ok(if sides == 20 { 20 } else { 6 }),
+        )
+        .unwrap()
+    }
+    fn inn_command(current: &Checkpoint, member: MemberId, operation: u8) -> GameInput {
+        input(
+            current,
+            member,
+            operation,
+            "choose-harbor-scene",
+            vec![(
+                model::label("harbor-destination").unwrap(),
+                model::label("harbor-inn").unwrap(),
+            )],
+        )
+    }
+    fn inn_preserves(before: &Checkpoint, after: &Checkpoint) {
+        assert_eq!(
+            after.basis().revision,
+            before.basis().revision.next_sequence().unwrap()
+        );
+        assert_eq!(after.pins(), before.pins());
+        let mut comparable = after.state().clone();
+        comparable.facts = before.state().facts.clone();
+        comparable.decisions = before.state().decisions.clone();
+        comparable.narrative = before.state().narrative.clone();
+        assert_eq!(
+            &comparable,
+            before.state(),
+            "all mechanical, world, private and sibling records remain exact"
+        );
+        assert_eq!(after.state().facts.len(), before.state().facts.len() + 1);
+        assert_eq!(
+            after.state().decisions.len(),
+            before.state().decisions.len() + 1
+        );
+        let event = after.state().facts.last().unwrap();
+        assert_eq!(event.cause, inn_source(before).unwrap());
+        assert_eq!(event.audience, AudienceScope::Shared);
+        assert!(
+            matches!(&event.value, FactValue::ContentEvent { definition, subjects }
+            if *definition == model::content("harbor-inn").unwrap()
+                && *subjects == participants(before).into_iter().map(|link| link.character.unwrap()).collect::<Vec<_>>())
+        );
+        assert_eq!(
+            after.state().narrative.active_beats,
+            vec![model::content("harbor-inn").unwrap()]
+        );
+        assert_eq!(
+            after.state().narrative.open_threads,
+            before.state().narrative.open_threads
+        );
+        let mut expected_narrative = before.state().narrative.clone();
+        expected_narrative
+            .completed_beats
+            .extend(expected_narrative.active_beats.clone());
+        expected_narrative.active_beats = vec![model::content("harbor-inn").unwrap()];
+        expected_narrative.accepted_facts.push(event.id);
+        assert_eq!(after.state().narrative, expected_narrative);
+        let decision = after.state().decisions.last().unwrap();
+        assert_eq!(decision.source_policy.as_str(), THREAD_POLICY);
+        assert_eq!(decision.facts, vec![event.id]);
+        assert!(decision.draws.is_empty() && decision.effects.is_empty());
+        assert_eq!(accepted(decision).unwrap().scene, Some(inn_scene()));
+    }
+    #[test]
+    fn actual_victory_inn_is_voluntary_for_either_member_before_or_after_rest_without_mechanical_effects()
+     {
+        let victory = inn_victory();
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let rest = stage_with_supplier(
+            &victory,
+            &input(&victory, first, 9, "short-rest", vec![]),
+            &mut |_| panic!("rest dice"),
+        )
+        .unwrap();
+        for current in [&victory, &rest] {
+            for bytes in MEMBERS {
+                let member = MemberId::from_bytes(&bytes).unwrap();
+                let offers = offered(current, member).unwrap();
+                assert!(
+                    offers
+                        .iter()
+                        .any(|(kind, _)| *kind == rpc::GameplayActionKind::ShortRest)
+                );
+                assert!(
+                    offers
+                        .iter()
+                        .any(|(kind, _)| *kind == rpc::GameplayActionKind::ChooseHarborScene)
+                );
+                let before = current.clone();
+                let command = inn_command(current, member, 10);
+                let arrived =
+                    stage_with_supplier(current, &command, &mut |_| panic!("scene cannot draw"))
+                        .unwrap();
+                inn_preserves(current, &arrived);
+                assert_eq!(current, &before);
+                assert!(
+                    !offered(&arrived, member)
+                        .unwrap()
+                        .iter()
+                        .any(|(kind, _)| *kind == rpc::GameplayActionKind::ChooseHarborScene)
+                );
+                assert!(
+                    stage_with_supplier(
+                        &arrived,
+                        &inn_command(&arrived, member, 11),
+                        &mut |_| panic!("duplicate scene")
+                    )
+                    .is_err()
+                );
+                assert_eq!(
+                    stage_with_supplier(current, &command, &mut |_| panic!(
+                        "same supplied transition"
+                    ))
+                    .unwrap(),
+                    arrived
+                );
+            }
+        }
+        assert_ne!(
+            offer_id(&victory, rpc::GameplayActionKind::ChooseHarborScene),
+            offer_id(&rest, rpc::GameplayActionKind::ChooseHarborScene)
+        );
+    }
+    #[test]
+    fn inn_refuses_unfinished_defeated_incapacitated_and_missing_victory_source_without_candidate_escape()
+     {
+        let victory = inn_victory();
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let opening = opening_story();
+        assert!(
+            stage_with_supplier(
+                &opening,
+                &inn_command(&opening, first, 20),
+                &mut |_| panic!("unfinished")
+            )
+            .is_err()
+        );
+        let mut defeated = victory.state().clone();
+        defeated.encounters[0].objectives = vec![model::content("combat-defeat").unwrap()];
+        let defeated = model::checkpoint(victory.basis(), defeated).unwrap();
+        let mut no_source = victory.state().clone();
+        let op = inn_source(&victory).unwrap().unwrap();
+        let source_operation = no_source
+            .facts
+            .iter()
+            .find(|fact| fact.id == op)
+            .unwrap()
+            .operation;
+        no_source
+            .decisions
+            .iter_mut()
+            .find(|decision| decision.operation == source_operation)
+            .unwrap()
+            .source_policy = model::label("foreign-invitation-policy").unwrap();
+        let no_source = model::checkpoint(victory.basis(), no_source).unwrap();
+        let mut incapacitated = victory.state().clone();
+        set(
+            &mut incapacitated,
+            player_entity(first, &victory).unwrap(),
+            "unconscious",
+            1,
+        )
+        .unwrap();
+        // This is a canonical negative input, not an admitted unconscious rules transition.
+        let incapacitated = model::checkpoint(victory.basis(), incapacitated).unwrap();
+        for current in [&defeated, &no_source, &incapacitated] {
+            let before = current.clone();
+            assert!(!offered(current, first).is_ok_and(|offers| {
+                offers
+                    .iter()
+                    .any(|(kind, _)| *kind == rpc::GameplayActionKind::ChooseHarborScene)
+            }));
+            assert!(
+                stage_with_supplier(current, &inn_command(current, first, 21), &mut |_| panic!(
+                    "invalid scene"
+                ))
+                .is_err()
+            );
+            assert_eq!(current, &before);
+        }
+    }
+    #[test]
+    fn inn_generated_destination_rejects_forgery_extra_choices_wrong_actor_stale_basis_and_source_pins()
+     {
+        let victory = inn_victory();
+        let member = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let basis = victory.basis();
+        let mut request = rpc::SubmitActionRequest {
+            session_id: Some(rpc::SessionId {
+                value: Some(basis.session.as_bytes().to_vec()),
+            }),
+            run_id: Some(rpc::RunId {
+                value: Some(basis.run.as_bytes().to_vec()),
+            }),
+            observed_revision: Some(wire::revision(basis.revision)),
+            operation_id: Some(rpc::OperationId {
+                value: Some(vec![30; 16]),
+            }),
+            offer_id: offer_id(&victory, rpc::GameplayActionKind::ChooseHarborScene),
+            action_kind: rpc::GameplayActionKind::ChooseHarborScene as i32,
+            destination: rpc::HarborDestination::HarborInn as i32,
+            ..Default::default()
+        };
+        assert!(!wire::unrelated_payload(
+            &request,
+            rpc::GameplayActionKind::ChooseHarborScene
+        ));
+        let exact = wire::journey_input(&request, member, &victory).unwrap();
+        let arrived = stage_with_supplier(&victory, &exact, &mut |_| panic!("scene dice")).unwrap();
+        inn_preserves(&victory, &arrived);
+        for destination in [0, 1, 2, 99] {
+            request.destination = destination;
+            assert!(wire::unrelated_payload(
+                &request,
+                rpc::GameplayActionKind::ChooseHarborScene
+            ));
+            let forged = wire::journey_input(&request, member, &victory).unwrap();
+            assert!(
+                stage_with_supplier(&victory, &forged, &mut |_| panic!("forged destination"))
+                    .is_err()
+            );
+        }
+        let mut extra = exact.clone();
+        if let GameInput::Game(CommandInput {
+            command: GameCommand::ProposeAction { choices, .. },
+            ..
+        }) = &mut extra
+        {
+            choices.push((model::label("elapsed").unwrap(), model::label("1").unwrap()));
+        }
+        let mut wrong_actor = exact.clone();
+        if let GameInput::Game(CommandInput {
+            command: GameCommand::ProposeAction { actor, .. },
+            ..
+        }) = &mut wrong_actor
+        {
+            *actor = entity(ENTITIES[1]).unwrap();
+        }
+        for invalid in [extra, wrong_actor] {
+            assert!(
+                stage_with_supplier(&victory, &invalid, &mut |_| panic!("invalid binding"))
+                    .is_err()
+            );
+        }
+        assert!(stage_with_supplier(&arrived, &exact, &mut |_| panic!("stale basis")).is_err());
+        let mut pins = victory.pins().clone();
+        pins.content.package_digest = ContentDigest([0x90; 32]);
+        let stale_source = Checkpoint::new(
+            CHECKPOINT_SCHEMA,
+            victory.basis(),
+            pins,
+            victory.state().clone(),
+            ReferenceInventory {
+                rules: &[model::rule().unwrap(), rule().unwrap()],
+                content: &model::contents().unwrap(),
+                resources: &resources().unwrap(),
+                assets: &[],
+            },
+            model::limits(),
+        )
+        .unwrap();
+        assert!(
+            stage_with_supplier(
+                &stale_source,
+                &inn_command(&stale_source, member, 31),
+                &mut |_| panic!("stale source")
+            )
+            .is_err()
+        );
+        assert_eq!(
+            victory.state().narrative.active_beats,
+            vec![model::content("complete").unwrap()]
+        );
+    }
+    #[test]
+    fn inn_last_constructor_capacity_and_due_world_pending_leave_original_checkpoint_exact() {
+        let victory = inn_victory();
+        let member = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let mut state = victory.state().clone();
+        let mut full = victory.clone();
+        for _ in 0..512 {
+            state
+                .narrative
+                .completed_beats
+                .push(model::content("opening").unwrap());
+            match model::checkpoint(victory.basis(), state.clone()) {
+                Ok(candidate) => full = candidate,
+                Err(_) => break,
+            }
+        }
+        assert!(
+            full.state().narrative.completed_beats.len()
+                > victory.state().narrative.completed_beats.len()
+        );
+        let before = full.clone();
+        assert!(
+            stage_with_supplier(&full, &inn_command(&full, member, 40), &mut |_| panic!(
+                "capacity"
+            ))
+            .is_err()
+        );
+        assert_eq!(full, before);
+        let mut due_state = victory.state().clone();
+        due_state.logical_time = due_state.schedules[0].due;
+        let due = model::checkpoint(victory.basis(), due_state).unwrap();
+        let before = due.clone();
+        assert!(
+            stage_with_supplier(&due, &inn_command(&due, member, 41), &mut |_| panic!(
+                "World prerequisite"
+            ))
+            .is_err()
+        );
+        assert_eq!(due, before);
+    }
+    #[test]
+    fn inn_safe_views_keep_actual_party_and_private_courier_records_with_only_server_destination_offers()
+     {
+        use df_persistence::local_demo_scope::LocalDemoRole;
+        let victory = inn_victory();
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let second = MemberId::from_bytes(&MEMBERS[1]).unwrap();
+        let offered_view = wire::journey_view(&victory, LocalDemoRole::Player, first).unwrap();
+        let Some(rpc::view_message::Audience::Player(view)) = offered_view.audience else {
+            panic!("player");
+        };
+        let offer = view
+            .offers
+            .iter()
+            .find(|offer| offer.action_kind == rpc::GameplayActionKind::ChooseHarborScene as i32)
+            .unwrap();
+        assert_eq!(
+            offer.destinations,
+            vec![rpc::HarborSceneOption {
+                destination: rpc::HarborDestination::HarborInn as i32,
+                label: "Harbor Inn".to_owned()
+            }]
+        );
+        let arrived =
+            stage_with_supplier(&victory, &inn_command(&victory, second, 50), &mut |_| {
+                panic!("scene")
+            })
+            .unwrap();
+        inn_preserves(&victory, &arrived);
+        for (role, principal) in [
+            (LocalDemoRole::Player, first),
+            (LocalDemoRole::Player, second),
+            (LocalDemoRole::Display, bootstrap_member().unwrap()),
+        ] {
+            let projected = wire::journey_view(&arrived, role, principal).unwrap();
+            match projected.audience.unwrap() {
+                rpc::view_message::Audience::Player(view) => {
+                    assert_eq!(view.scene, Some(inn_scene()));
+                    assert_eq!(view.journey.unwrap().party.len(), 2);
+                    assert!(!view.narration.contains("Vell"));
+                    assert!(!view.offers.iter().any(|offer| offer.action_kind
+                        == rpc::GameplayActionKind::ChooseHarborScene as i32));
+                }
+                rpc::view_message::Audience::Display(view) => {
+                    assert_eq!(view.scene, Some(inn_scene()));
+                    assert!(!view.narration.contains("Vell"));
+                }
+            }
+        }
+        assert!(arrived.state().facts.iter().any(|fact| matches!(&fact.value, FactValue::ContentEvent { definition, .. } if definition.entry.as_str() == "private-courier-note") && fact.audience == AudienceScope::Members(vec![first])));
+    }
+
+    #[test]
+    fn post_rest_inn_preserves_real_cursor_and_refuses_forged_policy_time_or_pending_queue() {
+        let victory = inn_victory();
+        let member = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let rested = stage_with_supplier(
+            &victory,
+            &input(&victory, member, 60, "short-rest", vec![]),
+            &mut |_| panic!("rest dice"),
+        )
+        .unwrap();
+        let cursor = rested.state().continuity.catch_up.as_ref().unwrap();
+        assert_eq!(cursor.policy, model::content("short-rest").unwrap());
+        let arrived = stage_with_supplier(&rested, &inn_command(&rested, member, 61), &mut |_| {
+            panic!("scene dice")
+        })
+        .unwrap();
+        inn_preserves(&rested, &arrived);
+        assert_eq!(arrived.state().continuity.catch_up.as_ref(), Some(cursor));
+        for variant in 0..3 {
+            let mut state = rested.state().clone();
+            let cursor = state.continuity.catch_up.as_mut().unwrap();
+            match variant {
+                0 => cursor.policy = model::content("harbor-inn").unwrap(),
+                1 => cursor.time.ticks += 1,
+                _ => cursor.pending_events.push(state.schedules[0].id),
+            }
+            let forged = model::checkpoint(rested.basis(), state).unwrap();
+            assert_eq!(
+                df_world::select_due_events(
+                    &forged,
+                    forged.pins(),
+                    df_world::DueSelectionRequest {
+                        expected_basis: forged.basis(),
+                        target_time: forged.state().logical_time,
+                        paused: false,
+                        deadline_remaining: Duration::from_secs(1),
+                        policy: &model::content("short-rest").unwrap(),
+                    },
+                    df_world::DueSelectionLimits {
+                        queue_events: 8,
+                        selected_events: 8,
+                        output_bytes: 65536
+                    },
+                ),
+                Err(df_world::DueSelectionError::StaleCursor)
+            );
+            let before = forged.clone();
+            assert!(
+                stage_with_supplier(&forged, &inn_command(&forged, member, 62), &mut |_| panic!(
+                    "forged cursor"
+                ))
+                .is_err()
+            );
+            assert_eq!(forged, before);
+        }
     }
 }

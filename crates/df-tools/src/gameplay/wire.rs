@@ -71,6 +71,7 @@ pub(super) fn action_kind(entry: &str) -> Option<rpc::GameplayActionKind> {
         "second-wind" => rpc::GameplayActionKind::SecondWind,
         "end-turn" => rpc::GameplayActionKind::EndTurn,
         "short-rest" => rpc::GameplayActionKind::ShortRest,
+        "choose-harbor-scene" => rpc::GameplayActionKind::ChooseHarborScene,
         _ => return None,
     })
 }
@@ -85,6 +86,7 @@ pub(super) fn action_entry(kind: rpc::GameplayActionKind) -> Option<&'static str
         rpc::GameplayActionKind::SecondWind => "second-wind",
         rpc::GameplayActionKind::EndTurn => "end-turn",
         rpc::GameplayActionKind::ShortRest => "short-rest",
+        rpc::GameplayActionKind::ChooseHarborScene => "choose-harbor-scene",
         _ => return None,
     })
 }
@@ -92,8 +94,11 @@ pub(super) fn unrelated_payload(
     request: &rpc::SubmitActionRequest,
     kind: rpc::GameplayActionKind,
 ) -> bool {
-    request.destination != rpc::HarborDestination::Unspecified as i32
-        || (kind != rpc::GameplayActionKind::CreateCharacter && request.character.is_some())
+    (if kind == rpc::GameplayActionKind::ChooseHarborScene {
+        request.destination != rpc::HarborDestination::HarborInn as i32
+    } else {
+        request.destination != rpc::HarborDestination::Unspecified as i32
+    }) || (kind != rpc::GameplayActionKind::CreateCharacter && request.character.is_some())
         || (kind != rpc::GameplayActionKind::GreatswordAttack
             && (request.savage_attacker || request.graze))
 }
@@ -116,6 +121,18 @@ pub(super) fn journey_input(
         return Err(tonic::Status::invalid_argument("offer exceeds bound"));
     }
     let mut choices = Vec::new();
+    if kind == rpc::GameplayActionKind::ChooseHarborScene {
+        let selected = match rpc::HarborDestination::try_from(request.destination) {
+            Ok(rpc::HarborDestination::HarborInn) => "harbor-inn",
+            Ok(rpc::HarborDestination::LoadingPier) => "loading-pier",
+            Ok(rpc::HarborDestination::LanternWharf) => "lantern-wharf",
+            _ => "invalid-destination",
+        };
+        choices.push((
+            model::label("harbor-destination").map_err(|_| invalid())?,
+            model::label(selected).map_err(|_| invalid())?,
+        ));
+    }
     if let Some(character) = &request.character {
         if character.name.len() > 48 || character.choices.len() > 16 {
             return Err(tonic::Status::invalid_argument(
@@ -305,7 +322,14 @@ pub(super) fn journey_view(
                 offer_id: journey::offer_id(current, kind),
                 action_kind: kind as i32,
                 label: label.to_owned(),
-                destinations: Vec::new(),
+                destinations: if kind == rpc::GameplayActionKind::ChooseHarborScene {
+                    vec![rpc::HarborSceneOption {
+                        destination: rpc::HarborDestination::HarborInn as i32,
+                        label: "Harbor Inn".to_owned(),
+                    }]
+                } else {
+                    Vec::new()
+                },
                 input_groups: if kind == rpc::GameplayActionKind::GreatswordAttack {
                     vec![
                         attack_group(
@@ -401,6 +425,16 @@ pub(super) fn journey_view(
             "Bandit",
             "Hand over the packet. Last warning.",
         ),
+        rpc::JourneyPhase::Complete
+            if state.narrative.active_beats.as_slice() == [model::content("harbor-inn")?] =>
+        {
+            (
+                "The Harbor Inn",
+                "Warm lamplight frames the next chapter with your party and the courier. The sealed packet remains unresolved.",
+                "Courier",
+                "We'll keep the packet close. Its journey isn't over.",
+            )
+        }
         rpc::JourneyPhase::Complete => {
             let rested = state
                 .narrative
@@ -447,11 +481,16 @@ pub(super) fn journey_view(
         speaker: speaker.to_owned(),
         dialogue: dialogue.to_owned(),
     };
-    let scene = rpc::GameplayScene {
-        destination: rpc::HarborDestination::Unspecified as i32,
-        title: title.to_owned(),
-        scene_asset: "assets/ui/scenes/mara-harbor-v4.png".to_owned(),
+    let scene = if state.narrative.active_beats.as_slice() == [model::content("harbor-inn")?] {
+        journey::inn_scene()
+    } else {
+        rpc::GameplayScene {
+            destination: rpc::HarborDestination::Unspecified as i32,
+            title: title.to_owned(),
+            scene_asset: "assets/ui/scenes/mara-harbor-v4.png".to_owned(),
+        }
     };
+
     let audience = match role {
         LocalDemoRole::Display => rpc::view_message::Audience::Display(rpc::DisplayGameplayView {
             narration: narration.to_owned(),

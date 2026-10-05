@@ -411,6 +411,7 @@ fn prepare(
     character: Option<rpc::CharacterSelection>,
     savage: bool,
     graze: bool,
+    destination: i32,
 ) -> Result<rpc::SubmitActionRequest, String> {
     let state = client.borrow();
     if state.busy || (!state.last_confirmed && state.last_request.is_some()) {
@@ -423,7 +424,7 @@ fn prepare(
         operation_id: Some(operation()?),
         offer_id: offer.offer_id.clone(),
         action_kind: offer.action_kind,
-        destination: rpc::HarborDestination::Unspecified as i32,
+        destination,
         character,
         savage_attacker: savage,
         graze,
@@ -621,7 +622,14 @@ fn creation(
                     })
                     .collect(),
             };
-            match prepare(&client, &offered, Some(selection), false, false) {
+            match prepare(
+                &client,
+                &offered,
+                Some(selection),
+                false,
+                false,
+                rpc::HarborDestination::Unspecified as i32,
+            ) {
                 Ok(body) => send(client, body, false),
                 Err(error) => feedback(&client.borrow(), &error),
             }
@@ -656,6 +664,21 @@ fn action_button(
         }
         inputs.push((group.group_id.clone(), select));
     }
+    if offer.destinations.len() > 4 {
+        return Err(JsValue::from_str("offered destinations exceed bound"));
+    }
+    let destination = if offer.destinations.is_empty() {
+        None
+    } else {
+        let label = node(&document, parent, "label", "attack-option", "Destination")?;
+        let select = node(&document, &label, "select", "", "")?.dyn_into::<HtmlSelectElement>()?;
+        select.set_attribute("data-input", "destination")?;
+        for option in &offer.destinations {
+            let item = node(&document, select.as_ref(), "option", "", &option.label)?;
+            item.set_attribute("value", &option.destination.to_string())?;
+        }
+        Some(select)
+    };
     let offered = offer.clone();
     let button = button(client, parent, &offer.label, move |client| {
         let mut savage = false;
@@ -678,7 +701,24 @@ fn action_button(
                 }
             }
         }
-        match prepare(&client, &offered, None, savage, graze) {
+        let selected = if let Some(select) = &destination {
+            let Ok(selected) = select.value().parse::<i32>() else {
+                feedback(&client.borrow(), "Choose an offered destination.");
+                return;
+            };
+            if !offered
+                .destinations
+                .iter()
+                .any(|option| option.destination == selected)
+            {
+                feedback(&client.borrow(), "Choose an offered destination.");
+                return;
+            }
+            selected
+        } else {
+            rpc::HarborDestination::Unspecified as i32
+        };
+        match prepare(&client, &offered, None, savage, graze, selected) {
             Ok(body) => send(client, body, false),
             Err(error) => feedback(&client.borrow(), &error),
         }
@@ -766,12 +806,17 @@ fn render(client: &Rc<RefCell<Client>>, view: rpc::ViewMessage) -> Result<(), Js
     }
     surface.set_text_content(None);
     let scene = scene.ok_or_else(|| JsValue::from_str("server scene missing"))?;
-    if scene.scene_asset != "assets/ui/scenes/mara-harbor-v4.png" {
+    if !matches!(
+        scene.scene_asset.as_str(),
+        "assets/ui/scenes/mara-harbor-v4.png"
+            | "assets/concept-art/scene-tavern-barkeep-talk-rain.webp"
+    ) {
         return Err(JsValue::from_str("unknown required scene asset"));
     }
     let art = node(&document, &surface, "img", "art", "")?;
     art.set_attribute("src", &format!("/{}", scene.scene_asset))?;
-    art.set_attribute("alt", "Lantern Wharf, illustrated harbor concept artwork")?;
+    art.set_attribute("alt", "Authored scene concept illustration")?;
+    surface.set_attribute("data-destination", &scene.destination.to_string())?;
     let body = node(&document, &surface, "div", "scene-copy", "")?;
     node(
         &document,

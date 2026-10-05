@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use std::io::Read;
 
 pub(super) const SOURCE: &[u8] = b"SRD5.2.1 page6 D20 Tests Ability Checks; https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf; Wizards of the Coast LLC; CC BY 4.0; normal single-d20 check only";
-const CONTENT: &[u8] = b"DungeonFlux authored local journey4: share Lantern room, two actual independently joined members create source-selected Dwarf Fighter/Soldier heroes; their accepted selections and starting equipment persist. Begin at Lantern Wharf only after both builds; choosing to ask the courier reveals a member-private delivery clue, or escorting elicits a different shared response. Defending begins a normal adjacent nonlethal Bandit encounter with actual initiative, player-selected attacks/SecondWind/endturn, source-qualified damage, unconscious one-HP knockout and no wall-time rest completion. Source knockout starts persist due schedules; after combat a joined member may propose an uninterrupted campaign Short Rest (one hour, no Hit Point Dice/HP healing, Fighter one-use SecondWind recharge capped2). Knockout waking retains Prone and dropped held gear, and preserves the accepted battle outcome. Versioned local-journey-rpc-3-threads-1-rest-1 maps begin-story/private-courier-note/escort-courier events to continued sealed-packet-delivery-thread; defend-courier/greatsword-attack/second-wind/end-turn events continue dockside-threat-thread, resolving it only on the current operation accepted bandit unconscious transition. Delivery remains unresolved after combat; unmapped events consume no narrative source. Preconfigured Investigation/next-scene draft remains an earlier source lineage, not the active browser room.";
+const CONTENT: &[u8] = b"DungeonFlux authored local journey4: share Lantern room, two actual independently joined members create source-selected Dwarf Fighter/Soldier heroes; their accepted selections and starting equipment persist. Begin at Lantern Wharf only after both builds; choosing to ask the courier reveals a member-private delivery clue, or escorting elicits a different shared response. Defending begins a normal adjacent nonlethal Bandit encounter with actual initiative, player-selected attacks/SecondWind/endturn, source-qualified damage, unconscious one-HP knockout and no wall-time rest completion. Source knockout starts persist due schedules; after combat a joined member may propose an uninterrupted campaign Short Rest (one hour, no Hit Point Dice/HP healing, Fighter one-use SecondWind recharge capped2). Knockout waking retains Prone and dropped held gear, and preserves the accepted battle outcome. Versioned local-journey-rpc-3-threads-1-rest-1-inn-1 maps begin-story/private-courier-note/escort-courier events to continued sealed-packet-delivery-thread; defend-courier/greatsword-attack/second-wind/end-turn events continue dockside-threat-thread, resolving it only on the current operation accepted bandit unconscious transition. A conscious joined hero may accept the courier victory invitation and select Harbor Inn, before or after Short Rest, only from the current source-bound offer. The admitted harbor-inn ContentEvent continues the unresolved packet thread and retains every party, knowledge, resource, encounter and schedule record at unchanged logical time; this is authored scene continuation, not timed physical travel or delivery. Delivery remains unresolved after combat; unmapped events consume no narrative source. Preconfigured Investigation/next-scene draft remains an earlier source lineage, not the active browser room.";
 
 fn invalid<T>(_: T) -> RepositoryError {
     RepositoryError::InvalidCandidate
@@ -34,7 +34,7 @@ pub(super) fn rule() -> Result<RuleReference, RepositoryError> {
 }
 pub(super) fn content(entry: &str) -> Result<ContentReference, RepositoryError> {
     Ok(ContentReference {
-        package: label("harbor-investigation-demo-4-threads-1-rest-1")?,
+        package: label("harbor-investigation-demo-4-threads-1-rest-1-inn-1")?,
         entry: label(entry)?,
     })
 }
@@ -45,10 +45,8 @@ pub(super) fn contents() -> Result<Vec<ContentReference>, RepositoryError> {
         "inspect-seal",
         "clue-loading-pier",
         "seal-obscured",
-        "choose-harbor-scene",
         "loading-pier",
         "lantern-wharf",
-        "harbor-inn",
     ]
     .into_iter()
     .map(content)
@@ -86,12 +84,12 @@ pub(super) fn pins() -> Result<CheckpointPins, RepositoryError> {
             ),
         },
         content: ContentPins {
-            content: label("harbor-investigation-demo-4-threads-1-rest-1")?,
+            content: label("harbor-investigation-demo-4-threads-1-rest-1-inn-1")?,
             content_digest: ContentDigest(
                 Sha256::digest([CONTENT, include_bytes!("courier_ai.rs").as_slice()].concat())
                     .into(),
             ),
-            package: label("harbor-investigation-demo-4-threads-1-rest-1")?,
+            package: label("harbor-investigation-demo-4-threads-1-rest-1-inn-1")?,
             package_digest: ContentDigest(
                 Sha256::digest([CONTENT, include_bytes!("courier_ai.rs").as_slice()].concat())
                     .into(),
@@ -102,7 +100,7 @@ pub(super) fn pins() -> Result<CheckpointPins, RepositoryError> {
             Some(crate::BUILD_ID),
             Some(crate::BUILD_ID),
             Some("local-gameplay-demo-config-1"),
-            Some("harbor-investigation-demo-4-threads-1-rest-1"),
+            Some("harbor-investigation-demo-4-threads-1-rest-1-inn-1"),
         )
         .map_err(invalid)?,
     })

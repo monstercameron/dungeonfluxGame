@@ -3,6 +3,7 @@
 mod actor;
 mod courier_ai;
 mod courier_process_qualification;
+mod inn_qualification;
 mod journey;
 mod model;
 mod qualification;
@@ -180,6 +181,7 @@ struct PageState {
     incoming: NativeAdmission,
     connections: Arc<Semaphore>,
     campfire: bytes::Bytes,
+    inn: Option<bytes::Bytes>,
     portrait: bytes::Bytes,
     display: [u8; 32],
     glue: bytes::Bytes,
@@ -268,6 +270,13 @@ async fn campfire(State(state): State<PageState>) -> impl IntoResponse {
         state.campfire,
     )
 }
+async fn inn(State(state): State<PageState>) -> axum::response::Response {
+    match state.inn {
+        Some(bytes) => ([(axum::http::header::CONTENT_TYPE, "image/webp")], bytes).into_response(),
+        None => axum::response::Redirect::temporary("/assets/ui/scenes/mara-harbor-v4.png")
+            .into_response(),
+    }
+}
 async fn portrait(State(state): State<PageState>) -> impl IntoResponse {
     (
         [(axum::http::header::CONTENT_TYPE, "image/webp")],
@@ -326,6 +335,17 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         std::path::Path::new(&asset_root).join("../concept-art/vell-avatar.webp"),
         1024 * 1024,
     )?;
+    let inn_bytes = match bounded_asset(
+        std::path::Path::new(&asset_root)
+            .join("../concept-art/scene-tavern-barkeep-talk-rain.webp"),
+        4 * 1024 * 1024,
+    ) {
+        Ok(bytes) => Some(bytes),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.into()),
+    };
+    let inn_phase = inn_qualification::phase();
+    let inn_budget = inn_phase.map(inn_qualification::call_budget).transpose()?;
     let courier_phase = courier_process_qualification::phase();
     let courier_budget = courier_phase
         .map(courier_process_qualification::call_budget)
@@ -450,6 +470,20 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         join_grant_driver(grant_driver).await?;
         released.map_err(|_| io::Error::other("courier wrong-phase exact-fence release failed"))?;
         return Err(io::Error::other("courier phase admission kind refused").into());
+    }
+    if let Some(phase) = inn_phase
+        && admitted.restored != (phase == inn_qualification::Phase::B)
+    {
+        let released = df_persistence::local_demo_scope::release_owner(
+            &grant_client,
+            admitted.checkpoint.basis().session,
+            fence,
+        )
+        .await;
+        drop(grant_client);
+        join_grant_driver(grant_driver).await?;
+        released.map_err(|_| io::Error::other("inn wrong-phase exact-fence release failed"))?;
+        return Err(io::Error::other("inn phase admission kind refused").into());
     }
     let initial = admitted.checkpoint;
     let player_credential = admitted.player_credential;
@@ -582,11 +616,13 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         fenced: false,
         recovery_wakeup: updates,
         intent_notifications,
-        calls_remaining: courier_budget
+        calls_remaining: inn_budget
+            .or(courier_budget)
             .or(restart_budget)
             .or(rest_budget)
             .unwrap_or(128),
-        qualification_joins: if courier_phase.is_some()
+        qualification_joins: if inn_phase.is_some()
+            || courier_phase.is_some()
             || rest_phase.is_some()
             || restart_phase.is_some()
             || std::env::args().nth(4).as_deref() == Some("--qualification")
@@ -595,7 +631,8 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             None
         },
-        qualification_inputs: if courier_phase.is_some()
+        qualification_inputs: if inn_phase.is_some()
+            || courier_phase.is_some()
             || rest_phase.is_some()
             || restart_phase.is_some()
             || std::env::args().nth(4).as_deref() == Some("--qualification")
@@ -696,6 +733,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         incoming: incoming_sender,
         connections: Arc::new(Semaphore::new(4)),
         campfire: campfire_bytes,
+        inn: inn_bytes,
         portrait: portrait_bytes,
         display: display_credential,
         glue: glue_bytes,
@@ -715,7 +753,21 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
             get(campfire),
         )
         .route("/assets/concept-art/vell-avatar.webp", get(portrait))
+        .route(
+            "/assets/concept-art/scene-tavern-barkeep-talk-rain.webp",
+            get(inn),
+        )
         .with_state(state);
+    let inn = inn_phase.map(|phase| {
+        tokio::spawn(inn_qualification::run(
+            service.clone(),
+            display_credential,
+            codec,
+            database.clone(),
+            phase,
+            fence,
+        ))
+    });
     let courier = courier_phase.map(|phase| {
         tokio::spawn(courier_process_qualification::run(
             service.clone(),
@@ -828,6 +880,23 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Ok(())
     };
+    let inn_outcome = if let Some(mut task) = inn {
+        match tokio::time::timeout(Duration::from_secs(47), &mut task).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(io::Error::other("inn consumer panicked; cleanup required")),
+            Err(_) => {
+                task.abort();
+                let joined = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
+                Err(io::Error::other(if joined.is_ok() {
+                    "inn consumer deadline; aborted task joined"
+                } else {
+                    "inn consumer deadline; join pending"
+                }))
+            }
+        }
+    } else {
+        Ok(())
+    };
     sender
         .stop()
         .map_err(|_| io::Error::other("gameplay inbox stop failed"))?;
@@ -845,6 +914,10 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     qualification_outcome?;
     restart_outcome?;
     rest_outcome?;
+    inn_outcome?;
+    if let Some(phase) = inn_phase {
+        inn_qualification::closed(phase, remaining)?;
+    }
     if let Some(phase) = restart_phase {
         restart_qualification::closed(phase, remaining)?;
     }
