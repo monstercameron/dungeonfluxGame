@@ -1,6 +1,7 @@
 //! Explicitly local-development grants for the single gameplay demonstration.
 //! The caller owns a dedicated loopback database, connection driver, and actor thread.
 //! No production bootstrap, arbitrary scope constructor, or hosted identity is provided.
+mod recovery;
 mod startup;
 pub use startup::{DemoStartup, DemoStartupIdentity, admit_startup, release_owner};
 
@@ -62,7 +63,15 @@ pub fn verifier() -> NativeVerifierSource {
 /// This authority reads actual configured grant rows, never request-owned role claims.
 pub struct LocalDemoAuthority {
     runtime: Handle,
-    client: Client,
+    client: Option<Client>,
+}
+impl LocalDemoAuthority {
+    fn client(&self) -> Result<&Client, RepositoryError> {
+        self.client.as_ref().ok_or(RepositoryError::Unavailable)
+    }
+    fn client_mut(&mut self) -> Result<&mut Client, RepositoryError> {
+        self.client.as_mut().ok_or(RepositoryError::Unavailable)
+    }
 }
 impl MembershipAuthority for LocalDemoAuthority {
     type Principal = [u8; 16];
@@ -76,7 +85,7 @@ impl MembershipAuthority for LocalDemoAuthority {
         request: MembershipRequest<'_, Self>,
     ) -> Result<Option<MembershipRecord<Self>>, RepositoryError> {
         self.runtime.block_on(async {
-            let row = tokio::time::timeout(Duration::from_secs(2), self.client.query_opt(
+            let row = tokio::time::timeout(Duration::from_secs(2), self.client()?.query_opt(
                 "SELECT principal_id, tenant_id, campaign_id, effective_role, access_revision, active, extract(epoch from expires_at)::bigint AS expires_unix FROM df_local_demo.grants WHERE tenant_id = $1::bytea AND principal_id = $2::bytea AND campaign_id = $3::bytea AND effective_role = $4::bytea LIMIT 1",
                 &[&request.tenant.as_slice(), &request.principal.as_slice(), &request.campaign.as_slice(), &request.role.as_slice()]))
                 .await.map_err(|_| RepositoryError::Unavailable)?
@@ -99,6 +108,8 @@ pub struct LocalDemoScopeIssuer {
     authority: LocalDemoAuthority,
     session: SessionId,
     fence: [u8; 16],
+    reconnect: Option<tokio_postgres::Config>,
+    driver: Option<tokio::task::JoinHandle<Result<(), tokio_postgres::Error>>>,
 }
 struct LocalInputBinding {
     principal: [u8; 16],
@@ -119,7 +130,8 @@ impl LocalDemoScopeIssuer {
 
     /// Native setup failure owns this issuer before it has entered an actor thread.
     pub async fn release_owner_owned(&mut self) -> Result<(), RepositoryError> {
-        release_owner(&self.authority.client, self.session, self.fence).await
+        self.reconnect_owned().await?;
+        release_owner(self.authority.client()?, self.session, self.fence).await
     }
 
     /// Same actor operation key as accepted decisions. New rejected bytes are an already
@@ -138,10 +150,10 @@ impl LocalDemoScopeIssuer {
         let runtime = self.authority.runtime.clone();
         runtime.block_on(async {
             let result = tokio::time::timeout(Duration::from_secs(2), async {
-                let statement = self.authority.client.prepare(VERIFY).await.map_err(|_| RepositoryError::Unavailable)?;
+                let statement = self.authority.client()?.prepare(VERIFY).await.map_err(|_| RepositoryError::Unavailable)?;
                 let verifier = DatabaseBindingVerifier { statement:Some(statement), maximum_binding_bytes:32,
                     maximum_authority_value_bytes:128, maximum_namespace_bytes:128 };
-                let transaction = self.authority.client.transaction().await.map_err(|_| RepositoryError::Unavailable)?;
+                let transaction = self.authority.client_mut()?.transaction().await.map_err(|_| RepositoryError::Unavailable)?;
                 verifier.verify(&transaction,scope).await?;
                 let locked = crate::decision_rows::lock_session(&transaction,scope).await?;
                 // A grant can expire or be revoked while this transaction waits for the row.
@@ -197,16 +209,21 @@ impl LocalDemoScopeIssuer {
             return Err(RepositoryError::Unauthorized);
         }
         Ok(Self {
-            authority: LocalDemoAuthority { runtime, client },
+            authority: LocalDemoAuthority {
+                runtime,
+                client: Some(client),
+            },
             session,
             fence,
+            reconnect: None,
+            driver: None,
         })
     }
 
     /// Validate a server-issued credential against its actual current grant row.
     pub fn authenticate(&self, credential: &[u8; 32]) -> Result<LocalDemoRole, RepositoryError> {
         self.authority.runtime.block_on(async {
-            let row = tokio::time::timeout(Duration::from_secs(2), self.authority.client.query_opt(
+            let row = tokio::time::timeout(Duration::from_secs(2), self.authority.client()?.query_opt(
                 "SELECT principal_id, effective_role FROM df_local_demo.grants WHERE credential = $1::bytea AND session_id = $2::bytea AND tenant_id = $3::bytea AND campaign_id = $4::bytea AND active AND expires_at > clock_timestamp()",
                 &[&credential.as_slice(), &self.session.as_bytes().as_slice(), &TENANT.as_slice(), &CAMPAIGN.as_slice()]))
                 .await.map_err(|_| RepositoryError::Unavailable)?.map_err(|_| RepositoryError::Unavailable)?
@@ -224,7 +241,7 @@ impl LocalDemoScopeIssuer {
     /// Resolve the principal from an actual live native grant, never an RPC role or member.
     pub fn principal(&self, credential: &[u8; 32]) -> Result<[u8; 16], RepositoryError> {
         self.authority.runtime.block_on(async {
-            let row = tokio::time::timeout(Duration::from_secs(2), self.authority.client.query_opt(
+            let row = tokio::time::timeout(Duration::from_secs(2), self.authority.client()?.query_opt(
                 "SELECT principal_id FROM df_local_demo.grants WHERE credential=$1::bytea AND session_id=$2::bytea AND tenant_id=$3::bytea AND campaign_id=$4::bytea AND active AND expires_at>clock_timestamp()",
                 &[&credential.as_slice(),&self.session.as_bytes().as_slice(),&TENANT.as_slice(),&CAMPAIGN.as_slice()]
             )).await.map_err(|_|RepositoryError::Unavailable)?.map_err(|_|RepositoryError::Unavailable)?
@@ -269,10 +286,10 @@ impl LocalDemoScopeIssuer {
         let runtime = self.authority.runtime.clone();
         runtime.block_on(async {
             tokio::time::timeout(Duration::from_secs(2),async {
-                let statement=self.authority.client.prepare(VERIFY).await.map_err(|_|RepositoryError::Unavailable)?;
+                let statement=self.authority.client()?.prepare(VERIFY).await.map_err(|_|RepositoryError::Unavailable)?;
                 let verifier=DatabaseBindingVerifier {statement:Some(statement),maximum_binding_bytes:32,
                     maximum_authority_value_bytes:128,maximum_namespace_bytes:128};
-                let transaction=self.authority.client.transaction().await.map_err(|_|RepositoryError::Unavailable)?;
+                let transaction=self.authority.client_mut()?.transaction().await.map_err(|_|RepositoryError::Unavailable)?;
                 verifier.verify(&transaction,scope).await?;
                 let locked=crate::decision_rows::lock_session(&transaction,scope).await?;
                 verifier.verify(&transaction,scope).await?;
@@ -413,7 +430,7 @@ impl LocalDemoScopeIssuer {
         // Read a server-owned active grant and original durable declaration. Neither an
         // inbox item nor a caller-provided checkpoint can fabricate this causal association.
         let credential: [u8; 32] = self.authority.runtime.block_on(async {
-            let row = tokio::time::timeout(Duration::from_secs(2), self.authority.client.query_opt(
+            let row = tokio::time::timeout(Duration::from_secs(2), self.authority.client()?.query_opt(
                 "SELECT g.credential FROM df_local_demo.grants AS g JOIN df_game.intents AS i ON i.tenant_id=g.tenant_id AND i.session_id=g.session_id AND i.principal_id=g.principal_id WHERE g.tenant_id=$1::bytea AND g.session_id=$2::bytea AND g.principal_id=$3::bytea AND g.campaign_id=$4::bytea AND g.effective_role=$5::bytea AND g.active AND g.expires_at>clock_timestamp() AND i.effect_id=$6::bytea AND i.job_id=$7::bytea AND i.operation_id=$8::bytea AND i.run_id=$9::bytea AND i.process_generation=$10::text::numeric AND i.execution_mode=2 AND i.intent_kind=1 AND i.recovery_epoch=$11::text::numeric AND i.committed_epoch=$11::text::numeric AND i.committed_sequence=$12::text::numeric",
                 &[&TENANT.as_slice(), &self.session.as_bytes().as_slice(), &principal.as_slice(), &CAMPAIGN.as_slice(), &b"player".as_slice(), &intent.id.as_bytes().as_slice(), &completion.job.as_bytes().as_slice(), &completion.operation.as_bytes().as_slice(), &completion.basis.run.as_bytes().as_slice(), &completion.generation.to_string(), &completion.basis.revision.epoch().get().to_string(), &completion.basis.revision.sequence().to_string()]
             )).await.map_err(|_| RepositoryError::Unavailable)?.map_err(|_| RepositoryError::Unavailable)?.ok_or(RepositoryError::Unauthorized)?;
@@ -459,7 +476,7 @@ impl LocalDemoScopeIssuer {
         let now = self.authority.runtime.block_on(async {
             tokio::time::timeout(
                 Duration::from_secs(2),
-                self.authority.client.query_one(
+                self.authority.client()?.query_one(
                     "SELECT extract(epoch from clock_timestamp())::bigint AS now",
                     &[],
                 ),
@@ -480,11 +497,14 @@ impl LocalDemoScopeIssuer {
             },
             u64::try_from(now).map_err(|_| RepositoryError::Unavailable)?,
         )
-        .map_err(|_| RepositoryError::Unauthorized)?;
+        .map_err(|error| match error {
+            df_auth::membership::MembershipError::Source(error) => error,
+            _ => RepositoryError::Unauthorized,
+        })?;
         let revision = capability.revision().clone();
         let epoch_text = epoch.get().to_string();
         self.authority.runtime.block_on(async {
-            tokio::time::timeout(Duration::from_secs(2), self.authority.client.execute(
+            tokio::time::timeout(Duration::from_secs(2), self.authority.client()?.execute(
                 "INSERT INTO df_local_demo.scope_proofs (binding, credential, tenant_id, principal_id, campaign_id, effective_role, access_revision, session_id, operation_id, command_namespace, recovery_epoch, fingerprint_version, canonical_fingerprint, owner_fence, execution_mode, lookup_only) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1,$12,$13,2,false)",
                 &[&proof_binding.as_slice(), &credential.as_slice(), &TENANT.as_slice(), &principal.as_slice(), &CAMPAIGN.as_slice(), &role.as_slice(), &revision.as_slice(), &self.session.as_bytes().as_slice(), &operation.as_bytes().as_slice(), &namespace.as_slice(), &epoch_text, &fingerprint.as_slice(), &self.fence.as_slice()]))
                 .await.map_err(|_| RepositoryError::Unavailable)?.map_err(|_| RepositoryError::Unavailable)?;

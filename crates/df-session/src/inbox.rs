@@ -2,6 +2,7 @@ use df_model::checkpoint::GameInput;
 use std::collections::VecDeque;
 use std::mem::size_of;
 use std::sync::{Arc, Condvar, Mutex};
+use std::time::Instant;
 
 pub const MAX_INBOX_ITEMS: usize = 256;
 pub const MAX_INBOX_BYTES: usize = 2 * 1024 * 1024;
@@ -216,25 +217,58 @@ impl<I: ActorInput> InboxHandle<I> {
 
 impl<I: ActorInput> ActorLoop<I> {
     pub fn run<R: Reducer<I>>(self, reducer: &mut R) -> Result<DrainOutcome, InboxFailure> {
+        self.run_with_owner_wake(reducer, |_| None, |_| {})
+    }
+
+    /// Run with a monotonic deadline owned by the same reducer. Both callbacks run
+    /// outside the queue lock; early/spurious notifications recheck the deadline.
+    /// Owner work creates no admission sequence and does not reorder accepted inputs.
+    /// Stop cancels future wakes and drains accepted inputs as in `run`. The caller
+    /// still owns the bounded callback lifetime, shutdown and thread join.
+    pub fn run_with_owner_wake<R: Reducer<I>>(
+        self,
+        reducer: &mut R,
+        next_wake: impl Fn(&R) -> Option<Instant>,
+        mut wake: impl FnMut(&mut R),
+    ) -> Result<DrainOutcome, InboxFailure> {
         let mut outcome = DrainOutcome {
             reduced_inputs: 0,
             last_sequence: None,
         };
         loop {
+            let deadline = next_wake(reducer);
             let mut queue = self
                 .shared
                 .queue
                 .lock()
                 .map_err(|_| InboxFailure::Poisoned)?;
             while queue.inputs.is_empty() && queue.usage.accepting {
-                queue = self
-                    .shared
-                    .ready
-                    .wait(queue)
-                    .map_err(|_| InboxFailure::Poisoned)?;
+                if let Some(deadline) = deadline {
+                    let now = Instant::now();
+                    if now >= deadline {
+                        break;
+                    }
+                    queue = self
+                        .shared
+                        .ready
+                        .wait_timeout(queue, deadline - now)
+                        .map_err(|_| InboxFailure::Poisoned)?
+                        .0;
+                } else {
+                    queue = self
+                        .shared
+                        .ready
+                        .wait(queue)
+                        .map_err(|_| InboxFailure::Poisoned)?;
+                }
             }
             let Some(queued) = queue.inputs.pop_front() else {
-                return Ok(outcome);
+                if !queue.usage.accepting {
+                    return Ok(outcome);
+                }
+                drop(queue);
+                wake(reducer);
+                continue;
             };
             drop(queue);
             // Neither queue lock nor mutable state reference escapes to producers.

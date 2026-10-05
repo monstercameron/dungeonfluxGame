@@ -1,4 +1,4 @@
-use df_model::checkpoint::{Checkpoint, GameInput};
+use df_model::checkpoint::{Checkpoint, EffectId, GameInput};
 use df_observe::OperationContext;
 use df_persistence::local_demo_scope::{
     LocalDemoAuthority, LocalDemoRole, LocalDemoScopeIssuer, LocalRejectedLookup,
@@ -11,6 +11,7 @@ use df_session::submission::{
 };
 use prost::Message;
 use sha2::{Digest, Sha256};
+use std::time::{Duration, Instant};
 use tokio::sync::{oneshot, watch};
 
 use super::{model, wire};
@@ -217,6 +218,53 @@ impl df_session::submission::SessionEngine<NativeScope<LocalDemoAuthority>> for 
     }
 }
 pub(super) type Owner = DurableOwner<PostgresRepository<LocalDemoAuthority>, Engine, Publication>;
+const COMPLETION_ATTEMPTS: u8 = 8;
+const COMPLETION_RETRY_LIFETIME: Duration = Duration::from_secs(30);
+
+pub(super) struct CompletionRetry {
+    intent: EffectId,
+    started: Instant,
+    attempts: u8,
+    next: Option<Instant>,
+}
+#[cfg(test)]
+pub(super) type CompletionObserver =
+    std::sync::mpsc::SyncSender<(Result<(), RepositoryError>, u16)>;
+impl CompletionRetry {
+    fn ready(&mut self, now: Instant) -> bool {
+        if now.saturating_duration_since(self.started) >= COMPLETION_RETRY_LIFETIME {
+            self.next = None;
+        }
+        self.next.is_some_and(|due| now >= due)
+    }
+
+    fn failed(&mut self, now: Instant, error: RepositoryError) -> &'static str {
+        self.attempts = self.attempts.saturating_add(1);
+        self.next = None;
+        if !matches!(
+            error,
+            RepositoryError::Unavailable
+                | RepositoryError::UnresolvedCommit
+                | RepositoryError::RevisionConflict
+        ) {
+            return "completion_refused_retained_pending";
+        }
+        if self.attempts >= COMPLETION_ATTEMPTS
+            || now.saturating_duration_since(self.started) >= COMPLETION_RETRY_LIFETIME
+        {
+            return "completion_retry_exhausted_retained_pending";
+        }
+        let delay = Duration::from_millis(250 * (1u64 << (self.attempts - 1).min(3)));
+        self.next = now.checked_add(delay).filter(|next| {
+            next.saturating_duration_since(self.started) <= COMPLETION_RETRY_LIFETIME
+        });
+        if self.next.is_some() {
+            "completion_retry_scheduled"
+        } else {
+            "completion_retry_exhausted_retained_pending"
+        }
+    }
+}
 pub(super) struct Actor {
     pub owner: Owner,
     pub bootstrap_credential: [u8; 32],
@@ -228,6 +276,9 @@ pub(super) struct Actor {
     pub calls_remaining: u16,
     pub qualification_inputs: Option<Vec<QualificationInput>>,
     pub qualification_joins: Option<Vec<QualificationJoin>>,
+    pub completion_retry: Option<CompletionRetry>,
+    #[cfg(test)]
+    pub completion_observer: Option<CompletionObserver>,
 }
 pub(super) fn unavailable(error: RepositoryError) -> tonic::Status {
     match error {
@@ -238,24 +289,85 @@ pub(super) fn unavailable(error: RepositoryError) -> tonic::Status {
     }
 }
 impl Actor {
+    pub(super) fn next_completion_wake(&self) -> Option<Instant> {
+        self.completion_retry.as_ref().and_then(|retry| retry.next)
+    }
+
+    pub(super) fn wake_completion(&mut self) {
+        if self
+            .next_completion_wake()
+            .is_some_and(|due| Instant::now() >= due)
+        {
+            self.run_committed_intents();
+        }
+    }
     /// Called on startup and at input boundaries by this same serialization owner.
     /// Notification loss cannot erase the backlog: work comes from a validated
     /// durable reload, while terminal state comes from the committed checkpoint.
     pub(super) fn run_committed_intents(&mut self) {
+        let pending = self
+            .owner
+            .checkpoint()
+            .state()
+            .intents
+            .iter()
+            .find(|intent| {
+                intent.kind == df_model::checkpoint::EffectKind::RunAi
+                    && intent.status == df_model::checkpoint::DurableStatus::Pending
+            })
+            .map(|intent| intent.id);
+        let now = Instant::now();
+        if let Some(intent) = pending {
+            if self
+                .completion_retry
+                .as_ref()
+                .is_none_or(|retry| retry.intent != intent)
+            {
+                self.completion_retry = Some(CompletionRetry {
+                    intent,
+                    started: now,
+                    attempts: 0,
+                    next: Some(now),
+                });
+            }
+            // Player/view traffic cannot bypass spacing or restart a refused/exhausted
+            // intent's lifetime. A different durable intent gets its own finite budget.
+            if self
+                .completion_retry
+                .as_mut()
+                .is_some_and(|retry| !retry.ready(now))
+            {
+                return;
+            }
+        }
         let context = OperationContext {
             trace_parent: String::new(),
             build: crate::BUILD_ID.to_owned(),
         };
         let mut span = df_observe::begin(&context, "gameplay.courier_intents");
         let result = self.complete_courier(&context);
-        span.finish_unmeasured(match result {
-            Ok(()) => "durable_work_checked",
-            Err(RepositoryError::Unauthorized) => "recipient_access_unavailable",
-            Err(RepositoryError::InvalidCandidate | RepositoryError::InputBinding) => {
-                "recording_or_source_refused"
+        let outcome = match (result, pending) {
+            (Err(error), Some(_)) => {
+                let now = Instant::now();
+                match self.completion_retry.as_mut() {
+                    Some(retry) => retry.failed(now, error),
+                    None => "completion_retry_exhausted_retained_pending",
+                }
             }
-            Err(_) => "durable_completion_pending",
-        });
+            (Err(_), None) => "durable_completion_pending",
+            (Ok(()), _) => {
+                self.completion_retry = None;
+                "durable_work_checked"
+            }
+        };
+        #[cfg(test)]
+        if let Some(observer) = &self.completion_observer
+            && observer.try_send((result, self.calls_remaining)).is_err()
+        {
+            span.finish_unmeasured("qualification_completion_observation_lost");
+            return;
+        }
+        span.finish_unmeasured(outcome);
     }
 
     fn complete_courier(&mut self, context: &OperationContext) -> Result<(), RepositoryError> {
@@ -287,6 +399,7 @@ impl Actor {
             .map_err(|_| RepositoryError::InvalidCandidate)?;
         let fingerprint = super::courier_ai::completion_fingerprint(&completion)
             .map_err(|_| RepositoryError::InvalidCandidate)?;
+        self.issuer.reconnect_if_closed()?;
         let scope = self.issuer.issue_completion(
             self.owner.checkpoint(),
             completion.clone(),
@@ -333,6 +446,16 @@ impl Actor {
         match outcome {
             SubmissionOutcome::Confirmed(_) if self.owner.is_current() => {
                 self.fenced = false;
+                // Receipt recovery reloads canonical state without redispatching a
+                // committed effect. Publish that restored state to existing watches.
+                self.recovery_wakeup.send_if_modified(|published| {
+                    if published == self.owner.checkpoint() {
+                        false
+                    } else {
+                        *published = self.owner.checkpoint().clone();
+                        true
+                    }
+                });
                 Ok(())
             }
             SubmissionOutcome::Refused(error) => Err(error),
@@ -694,6 +817,102 @@ impl Reducer<Call> for Actor {
 #[cfg(test)]
 mod qualification_tests {
     use super::*;
+
+    #[test]
+    fn completion_retry_has_controlled_spacing_and_terminal_exhaustion() {
+        let start = Instant::now();
+        let mut retry = CompletionRetry {
+            intent: EffectId::from_bytes(&[1; 16]).unwrap(),
+            started: start,
+            attempts: 0,
+            next: None,
+        };
+        let mut now = start;
+        for attempt in 1..COMPLETION_ATTEMPTS {
+            assert_eq!(
+                retry.failed(now, RepositoryError::Unavailable),
+                "completion_retry_scheduled"
+            );
+            let due = retry.next.unwrap();
+            let delay = Duration::from_millis(250 * (1u64 << (attempt - 1).min(3)));
+            assert_eq!(due.duration_since(now), delay);
+            assert!(now < due);
+            now = due;
+        }
+        assert_eq!(
+            retry.failed(now, RepositoryError::UnresolvedCommit),
+            "completion_retry_exhausted_retained_pending"
+        );
+        assert!(retry.next.is_none());
+        assert_eq!(retry.attempts, COMPLETION_ATTEMPTS);
+    }
+
+    #[test]
+    fn permanent_refusals_and_lifetime_expiry_leave_no_idle_wake() {
+        let start = Instant::now();
+        for error in [
+            RepositoryError::Unauthorized,
+            RepositoryError::InputBinding,
+            RepositoryError::InvalidCandidate,
+            RepositoryError::StaleFence,
+            RepositoryError::ExpiredOwner,
+            RepositoryError::InvalidReceipt,
+        ] {
+            let mut retry = CompletionRetry {
+                intent: EffectId::from_bytes(&[1; 16]).unwrap(),
+                started: start,
+                attempts: 0,
+                next: Some(start),
+            };
+            assert_eq!(
+                retry.failed(start, error),
+                "completion_refused_retained_pending"
+            );
+            assert!(retry.next.is_none());
+        }
+        let mut retry = CompletionRetry {
+            intent: EffectId::from_bytes(&[1; 16]).unwrap(),
+            started: start,
+            attempts: 0,
+            next: None,
+        };
+        assert_eq!(
+            retry.failed(
+                start + COMPLETION_RETRY_LIFETIME,
+                RepositoryError::Unavailable
+            ),
+            "completion_retry_exhausted_retained_pending"
+        );
+        assert!(retry.next.is_none());
+    }
+
+    #[test]
+    fn input_boundaries_cannot_bypass_spacing_or_restart_terminal_retry() {
+        let start = Instant::now();
+        let mut retry = CompletionRetry {
+            intent: EffectId::from_bytes(&[1; 16]).unwrap(),
+            started: start,
+            attempts: 0,
+            next: Some(start),
+        };
+        assert!(retry.ready(start));
+        retry.failed(start, RepositoryError::Unavailable);
+        for offset in [0, 1, 100, 249] {
+            assert!(!retry.ready(start + Duration::from_millis(offset)));
+        }
+        assert!(retry.ready(start + Duration::from_millis(250)));
+        retry.failed(
+            start + Duration::from_millis(250),
+            RepositoryError::Unauthorized,
+        );
+        assert!(!retry.ready(start + Duration::from_secs(5)));
+        assert!(!retry.ready(start + Duration::from_secs(60)));
+        assert_eq!(retry.attempts, 2);
+
+        retry.next = Some(start + Duration::from_secs(29));
+        assert!(!retry.ready(start + COMPLETION_RETRY_LIFETIME));
+        assert!(retry.next.is_none());
+    }
 
     #[test]
     fn retained_inputs_cover_authored_verifier_and_replay_with_a_fixed_bound() {

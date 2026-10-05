@@ -588,25 +588,53 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
             return Err(error.into());
         }
     };
-    let issuer = LocalDemoScopeIssuer::new(
+    let mut issuer = match LocalDemoScopeIssuer::new(
         runtime.clone(),
         grant_client,
         initial.basis().session,
         fence,
-    )
-    .map_err(|_| io::Error::other("local issuer construction refused"))?;
+    ) {
+        Ok(issuer) => issuer,
+        Err(_) => {
+            // The rejected constructor drops its client; observe its original driver
+            // and the repository even though startup has already checked the fence.
+            let closed = repository.close_owned().await;
+            let joined = join_grant_driver(grant_driver).await;
+            closed.map_err(|_| io::Error::other("issuer construction repository close failed"))?;
+            joined?;
+            return Err(io::Error::other("local issuer construction refused").into());
+        }
+    };
+    if let Err((_, driver)) = issuer.configure_reconnect(database.clone(), grant_driver) {
+        let released = issuer.release_owner_owned().await;
+        let closed = repository.close_owned().await;
+        let grants = issuer.close_owned().await;
+        join_grant_driver(driver).await?;
+        released.map_err(|_| io::Error::other("issuer setup exact-fence release failed"))?;
+        closed.map_err(|_| io::Error::other("issuer setup repository close failed"))?;
+        grants.map_err(|_| io::Error::other("issuer setup grant close failed"))?;
+        return Err(io::Error::other("issuer recovery configuration refused").into());
+    }
 
     let (updates, receiver) = watch::channel(initial.clone());
     let (publication, intent_notifications) = actor::Publication::new(updates.clone());
     let courier_reductions = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let owner = DurableOwner::new(
+    let owner = match DurableOwner::new(
         repository,
         actor::Engine(courier_phase.map(|_| courier_reductions.clone())),
         publication,
         initial,
         4096,
-    )
-    .map_err(|_| io::Error::other("canonical owner setup refused"))?;
+    ) {
+        Ok(owner) => owner,
+        Err(_) => {
+            let released = issuer.release_owner_owned().await;
+            let closed = issuer.close_owned().await;
+            released.map_err(|_| io::Error::other("owner setup exact-fence release failed"))?;
+            closed.map_err(|_| io::Error::other("owner setup grant close failed"))?;
+            return Err(io::Error::other("canonical owner setup refused").into());
+        }
+    };
     let (sender, inbox) = bounded_inbox::<actor::Call>();
     let actor = actor::Actor {
         owner,
@@ -631,6 +659,9 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             None
         },
+        completion_retry: None,
+        #[cfg(test)]
+        completion_observer: None,
         qualification_inputs: if inn_phase.is_some()
             || courier_phase.is_some()
             || rest_phase.is_some()
@@ -653,7 +684,11 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
                 .recv_timeout(Duration::from_secs(2))
                 .map_err(|_| io::Error::other("actor startup handoff deadline"))?;
             actor.run_committed_intents();
-            let drained = inbox.run(&mut actor);
+            let drained = inbox.run_with_owner_wake(
+                &mut actor,
+                actor::Actor::next_completion_wake,
+                actor::Actor::wake_completion,
+            );
             let courier_committed = if drained.is_ok() {
                 courier_phase
                     .map(|phase| {
@@ -678,18 +713,26 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
             let remaining = actor.calls_remaining;
             let mut repository = actor.owner.into_repository();
             let closed = repository.close();
+            let grant_closed = actor.issuer.close();
             drop(actor.issuer);
-            Ok::<_, io::Error>((drained, released, closed, remaining, courier_committed))
+            Ok::<_, io::Error>((
+                drained,
+                released,
+                closed,
+                grant_closed,
+                remaining,
+                courier_committed,
+            ))
         });
     let thread = match thread_setup {
         Ok(thread) => thread,
         Err(error) => {
-            close_unstarted_actor(actor, grant_driver).await?;
+            close_unstarted_actor(actor).await?;
             return Err(error.into());
         }
     };
     if let Err(error) = startup_send.send(actor) {
-        let closed = close_unstarted_actor(error.0, grant_driver).await;
+        let closed = close_unstarted_actor(error.0).await;
         let joined = tokio::task::spawn_blocking(move || thread.join()).await?;
         closed?;
         if joined
@@ -900,15 +943,14 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     sender
         .stop()
         .map_err(|_| io::Error::other("gameplay inbox stop failed"))?;
-    let (drained, released, closed, remaining, courier_committed) =
+    let (drained, released, closed, grant_closed, remaining, courier_committed) =
         tokio::task::spawn_blocking(move || thread.join())
             .await?
             .map_err(|_| io::Error::other("gameplay actor join failed"))??;
-    let grant_closed = join_grant_driver(grant_driver).await;
     drained.map_err(|_| io::Error::other("gameplay actor drain failed"))?;
     released.map_err(|_| io::Error::other("gameplay exact-fence release failed"))?;
     closed.map_err(|_| io::Error::other("gameplay repository close failed"))?;
-    grant_closed?;
+    grant_closed.map_err(|_| io::Error::other("gameplay grant close failed"))?;
     courier_committed?;
     courier_outcome?;
     qualification_outcome?;
@@ -934,18 +976,14 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     outcome
 }
 
-async fn close_unstarted_actor(
-    mut actor: actor::Actor,
-    grant_driver: tokio::task::JoinHandle<Result<(), tokio_postgres::Error>>,
-) -> Result<(), io::Error> {
+async fn close_unstarted_actor(mut actor: actor::Actor) -> Result<(), io::Error> {
     let released = actor.issuer.release_owner_owned().await;
     let mut repository = actor.owner.into_repository();
     let closed = repository.close_owned().await;
-    drop(actor.issuer);
-    let joined = join_grant_driver(grant_driver).await;
+    let joined = actor.issuer.close_owned().await;
     released.map_err(|_| io::Error::other("unstarted actor exact-fence release failed"))?;
     closed.map_err(|_| io::Error::other("unstarted actor repository close failed"))?;
-    joined
+    joined.map_err(|_| io::Error::other("unstarted actor grant close failed"))
 }
 
 async fn join_grant_driver(

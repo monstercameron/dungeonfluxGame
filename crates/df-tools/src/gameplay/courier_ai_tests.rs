@@ -411,6 +411,7 @@ struct Stored {
     receipts: Vec<(OperationId, Vec<u8>, DecisionReceipt)>,
     commit: Commit,
     events: Vec<&'static str>,
+    unavailable_lookups: usize,
 }
 struct Repository(Rc<RefCell<Stored>>);
 impl SessionRepository for Repository {
@@ -420,7 +421,11 @@ impl SessionRepository for Repository {
         scope: &Scope,
         _: &OperationContext,
     ) -> Result<OperationLookup, RepositoryError> {
-        let stored = self.0.borrow();
+        let mut stored = self.0.borrow_mut();
+        if stored.unavailable_lookups > 0 {
+            stored.unavailable_lookups -= 1;
+            return Err(RepositoryError::Unavailable);
+        }
         Ok(
             match stored
                 .receipts
@@ -577,6 +582,7 @@ fn source_commit_precedes_wake_and_execution_and_refused_commit_never_wakes() {
         receipts: vec![],
         commit: Commit::Refuse,
         events: vec![],
+        unavailable_lookups: 0,
     }));
     let (mut session, notifications) = owner(&stored, current.clone());
     assert_eq!(
@@ -621,6 +627,7 @@ fn lost_completion_ack_exact_retry_and_restart_accept_response_only_once() {
         receipts: vec![],
         commit: Commit::LostAcknowledgement,
         events: vec![],
+        unavailable_lookups: 0,
     }));
     let (mut session, notifications) = owner(&stored, current.clone());
     assert_eq!(
@@ -629,10 +636,52 @@ fn lost_completion_ack_exact_retry_and_restart_accept_response_only_once() {
     );
     assert_eq!(session.checkpoint(), &current);
     assert!(notifications.try_recv().is_err());
-    assert!(matches!(
-        submit(&mut session, &input, operation),
-        SubmissionOutcome::Confirmed(_)
-    ));
+    stored.borrow_mut().unavailable_lookups = 2;
+    for _ in 0..2 {
+        assert_eq!(
+            submit(&mut session, &input, operation),
+            SubmissionOutcome::Refused(RepositoryError::Unavailable)
+        );
+        assert!(session.has_uncertain_operation());
+        assert_eq!(session.checkpoint(), &current);
+        assert_eq!(stored.borrow().events, ["execute", "commit"]);
+    }
+    let changed_operation = OperationId::from_bytes(&[0x99; 16]).unwrap();
+    assert_eq!(
+        submit(&mut session, &input, changed_operation),
+        SubmissionOutcome::LookupRequired
+    );
+    assert!(session.has_uncertain_operation());
+    assert_eq!(stored.borrow().events, ["execute", "commit"]);
+    struct IdleRecovery(Owner);
+    impl Reducer<GameInput> for IdleRecovery {
+        fn reduce(&mut self, _: AdmissionSequence, _: GameInput) {
+            panic!("receipt recovery must not require a player input");
+        }
+    }
+    let (sender, inbox) = df_session::inbox::bounded_inbox::<GameInput>();
+    let mut recovery = IdleRecovery(session);
+    let due = std::time::Instant::now();
+    let mut wakes = 0;
+    let drained = inbox
+        .run_with_owner_wake(
+            &mut recovery,
+            |_| Some(due),
+            |recovery| {
+                wakes += 1;
+                assert!(matches!(
+                    submit(&mut recovery.0, &input, operation),
+                    SubmissionOutcome::Confirmed(_)
+                ));
+                assert!(recovery.0.is_current());
+                assert!(!recovery.0.has_uncertain_operation());
+                sender.stop().unwrap();
+            },
+        )
+        .unwrap();
+    assert_eq!(wakes, 1);
+    assert_eq!(drained.reduced_inputs, 0);
+    let session = recovery.0;
     assert_eq!(stored.borrow().events, ["execute", "commit"]);
     assert_eq!(player_clue(session.checkpoint(), first), RESPONSE);
     assert!(player_clue(session.checkpoint(), second).is_empty());

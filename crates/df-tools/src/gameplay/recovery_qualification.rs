@@ -2,7 +2,9 @@
 //! No ordinary service route, public fault message or hosted authority is introduced.
 use super::{Service, actor, hex, journey, model, wire};
 use df_model::checkpoint::Checkpoint;
-use df_persistence::local_demo_scope::{self, LocalDemoAuthority, LocalDemoScopeIssuer};
+use df_persistence::local_demo_scope::{
+    self, LocalDemoAuthority, LocalDemoRole, LocalDemoScopeIssuer,
+};
 use df_persistence::{
     NativeCodecLimits, NativeRepositoryOptions, NativeTransactionBounds, PostgresRepository,
 };
@@ -120,54 +122,99 @@ struct RunningActor {
     thread: Option<std::thread::JoinHandle<Result<ActorExit, Error>>>,
 }
 impl RunningActor {
-    fn start(
+    async fn start(
         repository: PostgresRepository<LocalDemoAuthority>,
         issuer: LocalDemoScopeIssuer,
         checkpoint: Checkpoint,
         codec: NativeCodecLimits,
         counter: Arc<AtomicUsize>,
     ) -> Result<Self, Error> {
+        Self::start_observed(repository, issuer, checkpoint, codec, counter, None).await
+    }
+    async fn start_observed(
+        repository: PostgresRepository<LocalDemoAuthority>,
+        mut issuer: LocalDemoScopeIssuer,
+        checkpoint: Checkpoint,
+        codec: NativeCodecLimits,
+        counter: Arc<AtomicUsize>,
+        completion_observer: Option<actor::CompletionObserver>,
+    ) -> Result<Self, Error> {
         let (updates, receiver) = watch::channel(checkpoint.clone());
         let (publication, intent_notifications) = actor::Publication::new(updates.clone());
-        let owner = DurableOwner::new(
+        let owner = match DurableOwner::new(
             repository,
             actor::Engine(Some(counter)),
             publication,
             checkpoint,
             4096,
-        )
-        .map_err(repository_error)?;
+        ) {
+            Ok(owner) => owner,
+            Err(error) => {
+                issuer.close_owned().await.map_err(repository_error)?;
+                return Err(repository_error(error));
+            }
+        };
         let (sender, inbox) = bounded_inbox::<actor::Call>();
+        let actor = actor::Actor {
+            owner,
+            bootstrap_credential: [0x81; 32],
+            issuer,
+            codec,
+            fenced: false,
+            recovery_wakeup: updates,
+            intent_notifications,
+            calls_remaining: 20,
+            qualification_inputs: Some(Vec::new()),
+            qualification_joins: Some(Vec::new()),
+            completion_retry: None,
+            completion_observer,
+        };
+        let (handoff, receive) = std::sync::mpsc::sync_channel::<actor::Actor>(1);
         let thread = std::thread::Builder::new()
             .name("df-engine-recovery-owner".to_owned())
             .spawn(move || {
-                let mut actor = actor::Actor {
-                    owner,
-                    bootstrap_credential: [0x81; 32],
-                    issuer,
-                    codec,
-                    fenced: false,
-                    recovery_wakeup: updates,
-                    intent_notifications,
-                    calls_remaining: 20,
-                    qualification_inputs: Some(Vec::new()),
-                    qualification_joins: Some(Vec::new()),
-                };
+                let mut actor = receive
+                    .recv_timeout(Duration::from_secs(2))
+                    .map_err(|_| io::Error::other("qualification actor handoff deadline"))?;
                 actor.run_committed_intents();
-                let drained = inbox.run(&mut actor);
+                let drained = inbox.run_with_owner_wake(
+                    &mut actor,
+                    actor::Actor::next_completion_wake,
+                    actor::Actor::wake_completion,
+                );
                 let checkpoint = actor.owner.checkpoint().clone();
                 let mut repository = actor.owner.into_repository();
                 let first_close = repository.close();
                 if first_close.is_err() {
-                    repository.close().map_err(repository_error)?;
+                    let second_close = repository.close();
+                    actor.issuer.close().map_err(repository_error)?;
+                    second_close.map_err(repository_error)?;
                 }
                 first_close.map_err(repository_error)?;
-                drained.map_err(|_| io::Error::other("recovery actor drain failed"))?;
+                if drained.is_err() {
+                    actor.issuer.close().map_err(repository_error)?;
+                    return Err(io::Error::other("recovery actor drain failed").into());
+                }
                 Ok(ActorExit {
                     checkpoint,
                     issuer: actor.issuer,
                 })
-            })?;
+            });
+        let thread = match thread {
+            Ok(thread) => thread,
+            Err(error) => {
+                super::close_unstarted_actor(actor).await?;
+                return Err(error.into());
+            }
+        };
+        if let Err(error) = handoff.send(actor) {
+            let closed = super::close_unstarted_actor(error.0).await;
+            let joined = tokio::task::spawn_blocking(move || thread.join()).await?;
+            closed?;
+            let _outcome =
+                joined.map_err(|_| io::Error::other("qualification actor handoff join failed"))?;
+            return Err(io::Error::other("qualification actor handoff failed").into());
+        }
         let service = Service {
             actor: sender.clone(),
             updates: receiver,
@@ -333,6 +380,7 @@ struct Durable {
     operations: Vec<String>,
     facts: Vec<String>,
     intents: Vec<String>,
+    checkpoints: Vec<String>,
     envelope: Vec<u8>,
     receipt: Vec<u8>,
 }
@@ -348,6 +396,7 @@ async fn durable(client: &Client, operation: u8) -> Result<Durable, Error> {
         operations: physical_rows(client, "SELECT CASE WHEN octet_length(body)<=262144 AND sum(octet_length(body)) OVER ()<=1048576 THEN body END FROM (SELECT row_to_json(t)::text AS body,row_number() OVER (ORDER BY tenant_id,session_id,principal_id,command_namespace,recovery_epoch,operation_id) AS row_ordinal FROM df_game.operations t ORDER BY tenant_id,session_id,principal_id,command_namespace,recovery_epoch,operation_id LIMIT 257) bounded ORDER BY row_ordinal").await?,
         facts: physical_rows(client, "SELECT CASE WHEN octet_length(body)<=262144 AND sum(octet_length(body)) OVER ()<=1048576 THEN body END FROM (SELECT row_to_json(t)::text AS body,row_number() OVER (ORDER BY tenant_id,session_id,committed_epoch,committed_sequence,ordinal) AS row_ordinal FROM df_game.facts t ORDER BY tenant_id,session_id,committed_epoch,committed_sequence,ordinal LIMIT 257) bounded ORDER BY row_ordinal").await?,
         intents: physical_rows(client, "SELECT CASE WHEN octet_length(body)<=262144 AND sum(octet_length(body)) OVER ()<=1048576 THEN body END FROM (SELECT row_to_json(t)::text AS body,row_number() OVER (ORDER BY tenant_id,session_id,principal_id,command_namespace,recovery_epoch,operation_id,slot) AS row_ordinal FROM df_game.intents t ORDER BY tenant_id,session_id,principal_id,command_namespace,recovery_epoch,operation_id,slot LIMIT 257) bounded ORDER BY row_ordinal").await?,
+        checkpoints: physical_rows(client, "SELECT CASE WHEN octet_length(body)<=262144 AND sum(octet_length(body)) OVER ()<=1048576 THEN body END FROM (SELECT row_to_json(t)::text AS body,row_number() OVER (ORDER BY tenant_id,session_id,recovery_epoch,in_epoch_sequence) AS row_ordinal FROM df_game.checkpoints t ORDER BY tenant_id,session_id,recovery_epoch,in_epoch_sequence LIMIT 257) bounded ORDER BY row_ordinal").await?,
         envelope: row.try_get("envelope")?,
         receipt: row.try_get("receipt")?,
     })
@@ -428,7 +477,8 @@ async fn exercise() -> Result<(), Error> {
         initial,
         codec,
         prep_counter.clone(),
-    )?;
+    )
+    .await?;
     let preparation = async {
         let first = join(&prep.service, 0x91, &mut calls).await?;
         let second = join(&prep.service, 0x92, &mut calls).await?;
@@ -477,7 +527,8 @@ async fn exercise() -> Result<(), Error> {
         baseline.clone(),
         codec,
         counter.clone(),
-    )?;
+    )
+    .await?;
     let original = create(&baseline, 0x93);
     let flow = async {
         expect_unknown_initial_submission(
@@ -613,7 +664,8 @@ async fn exercise() -> Result<(), Error> {
             current.checkpoint.clone(),
             codec,
             Arc::new(AtomicUsize::new(0)),
-        )?;
+        )
+        .await?;
         let advance = async {
             let begin = action(
                 &current.checkpoint,
@@ -761,18 +813,38 @@ fn native_courier_committed_pending_actor_restart() {
         .enable_all()
         .build()
         .unwrap();
-    runtime.block_on(courier_pending_actor_restart()).unwrap();
+    runtime
+        .block_on(courier_pending_actor_restart(None))
+        .unwrap();
 }
 
-async fn courier_pending_actor_restart() -> Result<(), Error> {
+async fn courier_pending_actor_restart(idle_recovery: Option<bool>) -> Result<(), Error> {
     let started = Instant::now();
-    let configuration = configuration()?;
+    let configuration = if let Some(revoked) = idle_recovery {
+        required(
+            std::env::var("DF_NARRATIVE_RECOVERY_QUALIFICATION").as_deref()
+                == Ok("owned-loopback-narrative-recovery01"),
+        )?;
+        let mut config = trusted_configuration(55517, "df-narrative-recovery-inspector-01");
+        config.dbname(if revoked {
+            "df_gameplay_demo_20261005_narrative_revoked01"
+        } else {
+            "df_gameplay_demo_20261005_narrative_recovery01"
+        });
+        config
+    } else {
+        configuration()?
+    };
     let (mut inspector, inspector_connection) =
         timeout(Duration::from_secs(2), configuration.connect(NoTls)).await??;
     let inspector_driver = tokio::spawn(inspector_connection);
     let (grant_client, grant_connection) =
         timeout(Duration::from_secs(2), configuration.connect(NoTls)).await??;
-    let grant_driver = tokio::spawn(grant_connection);
+    let mut grant_driver = Some(tokio::spawn(grant_connection));
+    let grant_pid: i32 = grant_client
+        .query_one("SELECT pg_backend_pid()", &[])
+        .await?
+        .try_get(0)?;
     let codec = NativeCodecLimits {
         maximum_document_bytes: 1024 * 1024,
         maximum_allocated_bytes: 2 * 1024 * 1024,
@@ -794,7 +866,12 @@ async fn courier_pending_actor_restart() -> Result<(), Error> {
     if initialized.is_err() {
         drop(grant_client);
         drop(inspector);
-        timeout(Duration::from_secs(2), grant_driver).await???;
+        join_driver(
+            grant_driver
+                .take()
+                .ok_or_else(|| io::Error::other("grant driver missing"))?,
+        )
+        .await?;
         timeout(Duration::from_secs(2), inspector_driver).await???;
         return Err(io::Error::other("fresh registered courier database required").into());
     }
@@ -812,7 +889,8 @@ async fn courier_pending_actor_restart() -> Result<(), Error> {
         initial,
         codec,
         reductions.clone(),
-    )?;
+    )
+    .await?;
     let mut calls = Calls {
         count: 0,
         deadline: started + Duration::from_secs(45),
@@ -870,7 +948,12 @@ async fn courier_pending_actor_restart() -> Result<(), Error> {
         required(super::courier_ai::saved_response(&pending.checkpoint, principal).map_err(repository_error)?.is_none())?;
         let physical_pending = durable(&inspector, 0x96).await?;
         required(physical_pending.counts[3] == 1 && !physical_pending.intents.is_empty())?;
-        let mut restarted = RunningActor::start(repository(&configuration, &configuration, codec).await?, pending.issuer, pending.checkpoint, codec, reductions.clone())?;
+        if let Some(revoked) = idle_recovery {
+            let driver = grant_driver.take().ok_or_else(|| io::Error::other("grant driver missing"))?;
+            return courier_idle_recovery(&mut inspector, &configuration, pending, driver, grant_pid,
+                codec, reductions.clone(), principal, first, revoked, &mut calls).await;
+        }
+        let mut restarted = RunningActor::start(repository(&configuration, &configuration, codec).await?, pending.issuer, pending.checkpoint, codec, reductions.clone()).await?;
         let resumed = snapshot(&restarted.service, &mut calls).await;
         let resumed_exit = restarted.close().await?;
         let resumed = resumed?;
@@ -878,7 +961,7 @@ async fn courier_pending_actor_restart() -> Result<(), Error> {
         required(super::courier_ai::saved_response(&resumed.checkpoint, principal).map_err(repository_error)? == Some(super::courier_ai::RESPONSE))?;
         let accepted = durable(&inspector, 0x96).await?;
         required(accepted.counts[0] == physical_pending.counts[0] + 1 && accepted.intents == physical_pending.intents)?;
-        let mut again = RunningActor::start(repository(&configuration, &configuration, codec).await?, resumed_exit.issuer, resumed_exit.checkpoint, codec, reductions.clone())?;
+        let mut again = RunningActor::start(repository(&configuration, &configuration, codec).await?, resumed_exit.issuer, resumed_exit.checkpoint, codec, reductions.clone()).await?;
         let unchanged = snapshot(&again.service, &mut calls).await;
         let final_exit = again.close().await?;
         drop(final_exit.issuer);
@@ -896,10 +979,349 @@ async fn courier_pending_actor_restart() -> Result<(), Error> {
     }.await;
     let released = local_demo_scope::release_owner(&inspector, session, fence).await;
     drop(inspector);
-    timeout(Duration::from_secs(2), grant_driver).await???;
+    if let Some(driver) = grant_driver {
+        join_driver(driver).await?;
+    }
     timeout(Duration::from_secs(2), inspector_driver).await???;
     released.map_err(repository_error)?;
     result
+}
+
+#[test]
+#[ignore = "Root registered fresh narrative_recovery01 PG database and finite resource release required"]
+fn actual_pending_completion_recovers_idle_after_owned_grant_connection_failure() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime
+        .block_on(courier_pending_actor_restart(Some(false)))
+        .unwrap();
+}
+
+#[test]
+#[ignore = "Root registered fresh narrative_revoked01 PG database and finite resource release required"]
+fn actual_idle_reconnect_refuses_current_revoked_recipient_without_execution() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime
+        .block_on(courier_pending_actor_restart(Some(true)))
+        .unwrap();
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn courier_idle_recovery(
+    inspector: &mut Client,
+    configuration: &Config,
+    mut pending: ActorExit,
+    driver: JoinHandle<Result<(), tokio_postgres::Error>>,
+    grant_pid: i32,
+    codec: NativeCodecLimits,
+    reductions: Arc<AtomicUsize>,
+    recipient: df_types::MemberId,
+    credential: [u8; 32],
+    revoked: bool,
+    calls: &mut Calls,
+) -> Result<(), Error> {
+    use df_model::checkpoint::DurableStatus;
+    use df_session::submission::RepositoryError;
+    if let Err((error, driver)) = pending
+        .issuer
+        .configure_reconnect(configuration.clone(), driver)
+    {
+        pending
+            .issuer
+            .close_owned()
+            .await
+            .map_err(repository_error)?;
+        join_driver(driver).await?;
+        return Err(repository_error(error));
+    }
+    let setup = async {
+        let physical = durable(inspector, 0x96).await?;
+        let repository = repository(configuration, configuration, codec).await?;
+        Ok::<_, Error>((physical, repository))
+    }
+    .await;
+    let (physical_pending, mut native_repository) = match setup {
+        Ok(setup) => setup,
+        Err(error) => {
+            pending
+                .issuer
+                .close_owned()
+                .await
+                .map_err(repository_error)?;
+            return Err(error);
+        }
+    };
+    let transaction = {
+        let locked = async {
+        let transaction = inspector.transaction().await?;
+        transaction.batch_execute("SET LOCAL statement_timeout='2000ms'; LOCK TABLE df_local_demo.grants IN ACCESS EXCLUSIVE MODE").await?;
+        let terminated: bool = transaction.query_one("SELECT pg_terminate_backend($1::integer)", &[&grant_pid]).await?.try_get(0)?;
+        required(terminated)?;
+        Ok::<_, Error>(transaction)
+    }.await;
+        match locked {
+            Ok(transaction) => transaction,
+            Err(error) => {
+                let closed = native_repository.close_owned().await;
+                let grants = pending.issuer.close_owned().await;
+                closed.map_err(repository_error)?;
+                grants.map_err(repository_error)?;
+                return Err(error);
+            }
+        }
+    };
+    let (observe, outcomes) = std::sync::mpsc::sync_channel(8);
+    let mut running = RunningActor::start_observed(
+        native_repository,
+        pending.issuer,
+        pending.checkpoint.clone(),
+        codec,
+        reductions.clone(),
+        Some(observe),
+    )
+    .await?;
+    let before_calls = calls.count;
+    let mut observed_completion = None;
+    let flow = async {
+        let (outcomes, first) = tokio::task::spawn_blocking(move || {
+            let first = outcomes.recv_timeout(Duration::from_secs(4));
+            (outcomes, first)
+        })
+        .await?;
+        let first = first
+            .map_err(|_| io::Error::other("actual completion failure observation deadline"))?;
+        required(first == (Err(RepositoryError::Unavailable), 20))?;
+        required(
+            running.service.updates.borrow().state().intents[0].status == DurableStatus::Pending
+                && reductions.load(Ordering::SeqCst) == 6
+                && calls.count == before_calls,
+        )?;
+        if revoked {
+            transaction
+                .execute(
+                    "UPDATE df_local_demo.grants SET active=false WHERE credential=$1::bytea",
+                    &[&credential.as_slice()],
+                )
+                .await?;
+            transaction.commit().await?;
+        } else {
+            transaction.rollback().await?;
+        }
+        if revoked {
+            let (outcomes, second) = tokio::task::spawn_blocking(move || {
+                let second = outcomes.recv_timeout(Duration::from_secs(4));
+                (outcomes, second)
+            })
+            .await?;
+            required(
+                second.map_err(|_| io::Error::other("revoked completion observation deadline"))?
+                    == (Err(RepositoryError::Unauthorized), 20),
+            )?;
+            // This finite absence check is synchronized with the actual terminal refusal.
+            let additional = tokio::task::spawn_blocking(move || {
+                outcomes.recv_timeout(Duration::from_millis(600))
+            })
+            .await?;
+            required(matches!(
+                additional,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ))?;
+            required(
+                *running.service.updates.borrow() == pending.checkpoint
+                    && reductions.load(Ordering::SeqCst) == 6
+                    && calls.count == before_calls,
+            )?;
+            for member in journey::participants(&pending.checkpoint)
+                .iter()
+                .map(|entry| entry.member)
+                .chain(std::iter::once(
+                    df_types::MemberId::from_bytes(&local_demo_scope::DISPLAY)
+                        .map_err(|_| io::Error::other("display identity"))?,
+                ))
+            {
+                let role = if member.as_bytes() == &local_demo_scope::DISPLAY {
+                    LocalDemoRole::Display
+                } else {
+                    LocalDemoRole::Player
+                };
+                let view = wire::journey_view(&pending.checkpoint, role, member)
+                    .map_err(repository_error)?;
+                required(
+                    !view
+                        .encode_to_vec()
+                        .windows(super::courier_ai::RESPONSE.len())
+                        .any(|bytes| bytes == super::courier_ai::RESPONSE.as_bytes()),
+                )?;
+            }
+        } else {
+            let mut updates = running.service.updates.clone();
+            timeout(Duration::from_secs(5), async {
+                loop {
+                    if updates.borrow_and_update().state().intents[0].status
+                        == DurableStatus::Completed
+                    {
+                        break Ok::<_, Error>(());
+                    }
+                    updates
+                        .changed()
+                        .await
+                        .map_err(|_| io::Error::other("ordinary completion publication closed"))?;
+                }
+            })
+            .await??;
+            required(calls.count == before_calls && reductions.load(Ordering::SeqCst) == 7)?;
+            let completed = updates.borrow().clone();
+            observed_completion = Some(completed.clone());
+            required(
+                completed.state().facts == pending.checkpoint.state().facts
+                    && completed.state().draws == pending.checkpoint.state().draws
+                    && completed.state().resources == pending.checkpoint.state().resources
+                    && completed.state().narrative == pending.checkpoint.state().narrative
+                    && completed.state().logical_time == pending.checkpoint.state().logical_time,
+            )?;
+            required(
+                super::courier_ai::saved_response(&completed, recipient)
+                    .map_err(repository_error)?
+                    == Some(super::courier_ai::RESPONSE),
+            )?;
+            let actual = snapshot(&running.service, calls).await?;
+            required(actual.checkpoint == completed && actual.calls_remaining == 19)?;
+            for member in journey::participants(&completed)
+                .iter()
+                .map(|entry| entry.member)
+                .chain(std::iter::once(
+                    df_types::MemberId::from_bytes(&local_demo_scope::DISPLAY)
+                        .map_err(|_| io::Error::other("display identity"))?,
+                ))
+            {
+                let role = if member.as_bytes() == &local_demo_scope::DISPLAY {
+                    LocalDemoRole::Display
+                } else {
+                    LocalDemoRole::Player
+                };
+                let view =
+                    wire::journey_view(&completed, role, member).map_err(repository_error)?;
+                let private = view
+                    .encode_to_vec()
+                    .windows(super::courier_ai::RESPONSE.len())
+                    .any(|bytes| bytes == super::courier_ai::RESPONSE.as_bytes());
+                required(private == (member == recipient))?;
+            }
+        }
+        required(Instant::now() < calls.deadline)?;
+        Ok::<_, Error>(())
+    }
+    .await;
+    let mut exited = running.close().await?;
+    exited
+        .issuer
+        .close_owned()
+        .await
+        .map_err(repository_error)?;
+    flow?;
+    let after = durable(inspector, 0x96).await?;
+    required(
+        local_demo_scope::encode_owned_demo_checkpoint(&pending.checkpoint, codec)
+            .map_err(repository_error)?
+            == physical_pending.envelope,
+    )?;
+    if revoked {
+        required(after == physical_pending)?;
+    } else {
+        let completed = observed_completion
+            .ok_or_else(|| io::Error::other("idle completion was not observed"))?;
+        let intent = pending
+            .checkpoint
+            .state()
+            .intents
+            .first()
+            .ok_or_else(|| io::Error::other("pending completion intent absent"))?;
+        let completion = super::courier_ai::expected_completion(intent)
+            .map_err(|_| io::Error::other("expected completion binding invalid"))?;
+        let operation = super::courier_ai::completion_operation(intent)
+            .map_err(|_| io::Error::other("expected completion identity invalid"))?;
+        let fingerprint = super::courier_ai::completion_fingerprint(&completion)
+            .map_err(|_| io::Error::other("expected completion fingerprint invalid"))?;
+        let expected =
+            super::courier_ai::stage_completion(&pending.checkpoint, &completion, operation)
+                .map_err(|_| io::Error::other("expected completion checkpoint invalid"))?;
+        // Bind every checkpoint family, pin and basis to the ordinary idle publication,
+        // and the exact canonical encoding to the persisted complete envelope.
+        required(
+            completed == expected
+                && exited.checkpoint == completed
+                && after.envelope
+                    == local_demo_scope::encode_owned_demo_checkpoint(&completed, codec)
+                        .map_err(repository_error)?,
+        )?;
+        required(
+            after.counts[0] == physical_pending.counts[0] + 1
+                && after.counts[1] == physical_pending.counts[1]
+                && after.counts[2] == physical_pending.counts[2] + 1
+                && after.counts[3] == physical_pending.counts[3]
+                && after.facts == physical_pending.facts
+                && after.intents == physical_pending.intents
+                && after.receipt == physical_pending.receipt
+                && after.operations.len() == physical_pending.operations.len() + 1
+                && physical_pending
+                    .operations
+                    .iter()
+                    .all(|row| after.operations.contains(row))
+                && after.checkpoints.len() == physical_pending.checkpoints.len() + 1
+                && physical_pending
+                    .checkpoints
+                    .iter()
+                    .all(|row| after.checkpoints.contains(row)),
+        )?;
+        let basis = completed.basis();
+        let epoch = basis.revision.epoch().get().to_string();
+        let sequence = basis.revision.sequence().to_string();
+        let added_operation: String = inspector.query_one("SELECT CASE WHEN octet_length(row_to_json(t)::text)<=262144 THEN row_to_json(t)::text END FROM df_game.operations t WHERE tenant_id=$1::bytea AND session_id=$2::bytea AND principal_id=$3::bytea AND command_namespace=$4::bytea AND recovery_epoch=$5::text::numeric AND operation_id=$6::bytea AND fingerprint_version=1 AND canonical_fingerprint=$7::bytea AND committed_epoch=$5::text::numeric AND committed_sequence=$8::text::numeric AND receipt_version=2 AND receipt IS NOT NULL", &[&local_demo_scope::TENANT.as_slice(), &basis.session.as_bytes().as_slice(), &recipient.as_bytes().as_slice(), &b"local-courier-completion-v1".as_slice(), &epoch, &operation.as_bytes().as_slice(), &fingerprint.as_slice(), &sequence]).await?.try_get(0)?;
+        required(
+            after
+                .operations
+                .iter()
+                .filter(|row| !physical_pending.operations.contains(row))
+                .collect::<Vec<_>>()
+                == vec![&added_operation],
+        )?;
+        let added_checkpoint: String = inspector.query_one("SELECT CASE WHEN octet_length(row_to_json(t)::text)<=262144 THEN row_to_json(t)::text END FROM df_game.checkpoints t WHERE tenant_id=$1::bytea AND session_id=$2::bytea AND recovery_epoch=$3::text::numeric AND in_epoch_sequence=$4::text::numeric AND run_id=$5::bytea AND complete_envelope=$6::bytea", &[&local_demo_scope::TENANT.as_slice(), &basis.session.as_bytes().as_slice(), &epoch, &sequence, &basis.run.as_bytes().as_slice(), &after.envelope.as_slice()]).await?.try_get(0)?;
+        required(
+            after
+                .checkpoints
+                .iter()
+                .filter(|row| !physical_pending.checkpoints.contains(row))
+                .collect::<Vec<_>>()
+                == vec![&added_checkpoint],
+        )?;
+    }
+    let remaining: i64 = inspector.query_one("SELECT count(*)::bigint FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND application_name='df-narrative-recovery-inspector-01'", &[]).await?.try_get(0)?;
+    required(remaining == 0)?;
+    let report = if revoked {
+        "narrative-revoked-recovery-report-01.json"
+    } else {
+        "narrative-idle-recovery-report-01.json"
+    };
+    std::fs::write(
+        format!(
+            "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-narrative-recovery-20261005/{report}"
+        ),
+        format!(
+            "{{\"pass\":true,\"pid\":{},\"actor_calls_before_restoration\":{before_calls},\"actor_calls_after_proof\":{},\"failed_completion_call_budget\":20,\"engine_reductions\":{},\"ordinary_idle_completed_publication\":{},\"revoked_recipient_refused\":{revoked},\"actor_joined\":true,\"original_and_replacement_grant_drivers_joined\":true,\"repository_driver_joined\":true}}\n",
+            std::process::id(),
+            calls.count,
+            reductions.load(Ordering::SeqCst),
+            !revoked
+        ),
+    )?;
+    Ok(())
 }
 #[test]
 fn initial_submission_diagnostics_retain_status_without_private_payload() {
