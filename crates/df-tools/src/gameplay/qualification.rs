@@ -10,8 +10,8 @@ use std::{io, time::Duration};
 use tokio::sync::oneshot;
 use tonic::Request;
 
-const TRIGGER: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-rest-20261005/engine-qualification-start-01";
-const REPORT: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-rest-20261005/engine-authority-acceptance-report-01.json";
+const TRIGGER: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-courier-ai-20261005/engine-qualification-start-01";
+const REPORT: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-courier-ai-20261005/engine-authority-acceptance-report-01.json";
 #[track_caller]
 fn required(condition: bool) -> Result<(), io::Error> {
     if condition {
@@ -111,6 +111,30 @@ async fn verify_retained_narrative(
     required(persisted.as_deref() == Some(envelope.as_slice()))?;
 
     let state = checkpoint.state();
+    let mut courier_jobs = state
+        .intents
+        .iter()
+        .filter(|intent| intent.kind == df_model::checkpoint::EffectKind::RunAi);
+    let courier = courier_jobs
+        .next()
+        .ok_or_else(|| io::Error::other("committed courier effect absent"))?;
+    required(courier_jobs.next().is_none())?;
+    required(courier.status == df_model::checkpoint::DurableStatus::Completed)?;
+    let recipient = super::courier_ai::recipient(checkpoint, courier)
+        .map_err(|_| io::Error::other("courier source binding refused"))?;
+    required(
+        super::courier_ai::saved_response(checkpoint, recipient)
+            .map_err(|_| io::Error::other("saved courier response refused"))?
+            == Some(super::courier_ai::RESPONSE),
+    )?;
+    required(
+        state
+            .decisions
+            .iter()
+            .filter(|decision| decision.source_policy.as_str() == super::courier_ai::POLICY)
+            .count()
+            == 1,
+    )?;
     let packet = model::content("sealed-packet-delivery-thread")
         .map_err(|_| io::Error::other("packet source unavailable"))?;
     let threat = model::content("dockside-threat-thread")
@@ -396,7 +420,7 @@ pub(super) async fn run(
             std::fs::write(
                 REPORT,
                 format!(
-                    "{{\"pass\":{passed},\"actor_calls_limit\":14,\"proof_flags_require_overall_pass\":true,\"failure_stage\":\"{failure_stage}\",\"failure_diagnostic\":{diagnostic_json},\"transport\":\"generated protobuf Service consumer; browser transport assessed separately\",\"retention_qualification\":\"last; expired row remains retained\",\"persisted_checkpoint_byte_equality\":{passed},\"narrative_source_policy_retained\":{passed},\"packet_branch_unresolved\":{passed},\"threat_closure_matches_accepted_knockout\":{passed},\"private_courier_audience_preserved\":{passed},\"restart_rehydration_verified\":false}}\n"
+                    "{{\"pass\":{passed},\"actor_calls_limit\":14,\"proof_flags_require_overall_pass\":true,\"failure_stage\":\"{failure_stage}\",\"failure_diagnostic\":{diagnostic_json},\"transport\":\"generated protobuf Service consumer; browser transport assessed separately\",\"retention_qualification\":\"last; expired row remains retained\",\"persisted_checkpoint_byte_equality\":{passed},\"narrative_source_policy_retained\":{passed},\"packet_branch_unresolved\":{passed},\"threat_closure_matches_accepted_knockout\":{passed},\"private_courier_audience_preserved\":{passed},\"courier_effect_durable\":{passed},\"courier_native_completion_committed\":{passed},\"courier_private_saved_response\":{passed},\"restart_rehydration_verified\":false}}\n"
                 ),
             )?;
             if let Some((stage, _)) = failure {

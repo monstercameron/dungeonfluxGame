@@ -1,0 +1,669 @@
+use super::*;
+use crate::gameplay::{actor, wire};
+use df_ai::admission::RecordInputError;
+use df_observe::OperationContext;
+use df_persistence::local_demo_scope::{LocalDemoRole, PLAYER};
+use df_session::inbox::{ActorInput, AdmissionSequence, Reducer};
+use df_session::submission::*;
+use std::{cell::RefCell, rc::Rc};
+
+fn command(
+    current: &Checkpoint,
+    member: MemberId,
+    operation: u8,
+    entry: &str,
+    choices: Vec<(RevisionLabel, RevisionLabel)>,
+) -> GameInput {
+    GameInput::Game(CommandInput {
+        basis: current.basis(),
+        operation: OperationId::from_bytes(&[operation; 16]).unwrap(),
+        member,
+        observed_revision: current.basis().revision,
+        command: GameCommand::ProposeAction {
+            actor: if member.as_bytes() == &PLAYER {
+                journey::room_entity().unwrap()
+            } else {
+                journey::player_entity(member, current).unwrap()
+            },
+            action: model::content(entry).unwrap(),
+            targets: vec![],
+            choices,
+        },
+    })
+}
+fn build(name: &str) -> Vec<(RevisionLabel, RevisionLabel)> {
+    [
+        ("name", journey::hex(name.as_bytes())),
+        ("species", "dwarf".to_owned()),
+        ("class", "fighter-1".to_owned()),
+        ("background", "soldier".to_owned()),
+        ("array", "stalwart".to_owned()),
+        ("alignment", "lawful-good".to_owned()),
+        ("language-1", "dwarvish".to_owned()),
+        ("language-2", "elvish".to_owned()),
+        ("skill-1", "perception".to_owned()),
+        ("skill-2", "survival".to_owned()),
+        ("gaming-set", "dice".to_owned()),
+        ("equipment", "fighter-a-soldier-a".to_owned()),
+        (
+            "style-masteries",
+            "defense-greatsword-flail-javelin".to_owned(),
+        ),
+        ("allied-ties", "join-order".to_owned()),
+    ]
+    .into_iter()
+    .map(|(key, value)| (model::label(key).unwrap(), model::label(&value).unwrap()))
+    .collect()
+}
+fn before_answer() -> (Checkpoint, MemberId, MemberId) {
+    let mut current = journey::initial().unwrap();
+    let bootstrap = MemberId::from_bytes(&PLAYER).unwrap();
+    for operation in [1, 2] {
+        current = journey::stage_join(
+            &current,
+            &command(&current, bootstrap, operation, "join-room", vec![]),
+        )
+        .unwrap();
+    }
+    let members = current
+        .state()
+        .members
+        .iter()
+        .filter(|link| link.member != bootstrap)
+        .map(|link| link.member)
+        .collect::<Vec<_>>();
+    let (first, second) = (members[0], members[1]);
+    current = journey::stage(
+        &current,
+        &command(&current, first, 3, "create-character", build("Brynn")),
+    )
+    .unwrap();
+    current = journey::stage(
+        &current,
+        &command(&current, second, 4, "create-character", build("Vale")),
+    )
+    .unwrap();
+    current = journey::stage(
+        &current,
+        &command(&current, first, 5, "begin-story", vec![]),
+    )
+    .unwrap();
+    (current, first, second)
+}
+fn pending() -> (Checkpoint, MemberId, MemberId) {
+    let (current, first, second) = before_answer();
+    (
+        journey::stage(
+            &current,
+            &command(&current, first, 6, "ask-courier", vec![]),
+        )
+        .unwrap(),
+        first,
+        second,
+    )
+}
+fn intent(current: &Checkpoint) -> &DurableIntent {
+    current.state().intents.first().unwrap()
+}
+fn player_clue(current: &Checkpoint, member: MemberId) -> String {
+    let view = wire::journey_view(current, LocalDemoRole::Player, member).unwrap();
+    let Some(crate::gameplay::rpc::view_message::Audience::Player(player)) = view.audience else {
+        panic!("player view")
+    };
+    player.private_clue
+}
+
+#[test]
+fn actual_source_producer_retains_reveal_and_declares_only_one_pending_ai_effect() {
+    let (before, first, _) = before_answer();
+    let current =
+        journey::stage(&before, &command(&before, first, 6, "ask-courier", vec![])).unwrap();
+    let effect = intent(&current);
+    assert_eq!(effect.kind, EffectKind::RunAi);
+    assert_eq!(effect.status, DurableStatus::Pending);
+    assert_eq!(recipient(&current, effect), Ok(first));
+    assert_eq!(
+        df_engine::effect_emission::declare_accepted_effects(
+            &current,
+            current.basis(),
+            current.pins(),
+            effect.operation,
+            df_engine::effect_emission::EffectEmissionLimits {
+                maximum_scan_records: 512,
+                maximum_effects: 2,
+                maximum_comparisons: 8192,
+                maximum_retained_bytes: 8192
+            }
+        )
+        .unwrap(),
+        vec![effect.clone()]
+    );
+    assert!(player_clue(&current, first).is_empty());
+    assert_eq!(current.state().draws, before.state().draws);
+    assert_eq!(current.state().resources, before.state().resources);
+    assert_eq!(
+        current.state().narrative.open_threads,
+        before.state().narrative.open_threads
+    );
+}
+
+#[test]
+fn actual_prepared_record_completion_and_safe_view_preserve_sibling_state() {
+    let (current, first, second) = pending();
+    let original = current.clone();
+    let effect = intent(&current);
+    let completion = execute(&current, effect).unwrap();
+    assert_eq!(completion, expected_completion(effect).unwrap());
+    let staged =
+        stage_completion(&current, &completion, completion_operation(effect).unwrap()).unwrap();
+    assert_eq!(current, original);
+    assert_eq!(staged.state().intents[0].status, DurableStatus::Completed);
+    assert_eq!(staged.state().facts, current.state().facts);
+    assert_eq!(staged.state().draws, current.state().draws);
+    assert_eq!(staged.state().resources, current.state().resources);
+    assert_eq!(staged.state().narrative, current.state().narrative);
+    assert_eq!(staged.state().logical_time, current.state().logical_time);
+    assert_eq!(player_clue(&staged, first), RESPONSE);
+    assert!(player_clue(&staged, second).is_empty());
+    let display = wire::journey_view(
+        &staged,
+        LocalDemoRole::Display,
+        MemberId::from_bytes(&df_persistence::local_demo_scope::DISPLAY).unwrap(),
+    )
+    .unwrap();
+    let Some(crate::gameplay::rpc::view_message::Audience::Display(view)) = display.audience else {
+        panic!("display")
+    };
+    // Encoding an actual display projection must not include the private response bytes.
+    use prost::Message;
+    assert!(
+        !view
+            .encode_to_vec()
+            .windows(RESPONSE.len())
+            .any(|bytes| bytes == RESPONSE.as_bytes())
+    );
+    assert!(stage_completion(&staged, &completion, completion_operation(effect).unwrap()).is_err());
+}
+
+#[test]
+fn every_completion_binding_and_final_response_refusal_preserves_original_checkpoint() {
+    let (current, _, _) = pending();
+    let original = current.clone();
+    let effect = intent(&current);
+    let accepted = execute(&current, effect).unwrap();
+    for case in 0..9 {
+        let mut changed = accepted.clone();
+        let mut operation = completion_operation(effect).unwrap();
+        match case {
+            0 => changed.generation += 1,
+            1 => changed.job = JobId::from_bytes(&[99; 16]).unwrap(),
+            2 => changed.operation = OperationId::from_bytes(&[99; 16]).unwrap(),
+            3 => changed.basis.run = df_types::RunId::from_bytes(&[99; 16]).unwrap(),
+            4 => changed.basis.session = df_types::SessionId::from_bytes(&[99; 16]).unwrap(),
+            5 => operation = effect.operation,
+            6 => {
+                if let JobOutcome::Ai { policy, .. } = &mut changed.outcome {
+                    *policy = model::content("harbor").unwrap();
+                }
+            }
+            7 => {
+                if let JobOutcome::Ai { model, .. } = &mut changed.outcome {
+                    *model = model::label("unadmitted-model").unwrap();
+                }
+            }
+            8 => {
+                if let JobOutcome::Ai {
+                    semantic_output, ..
+                } = &mut changed.outcome
+                {
+                    *semantic_output = "The courier guarantees a successful battle.".to_owned();
+                }
+            }
+            _ => unreachable!(),
+        }
+        assert!(
+            stage_completion(&current, &changed, operation).is_err(),
+            "case {case}"
+        );
+        assert_eq!(current, original);
+    }
+}
+
+#[test]
+fn changed_source_and_unapproved_modes_never_execute_or_change_truth() {
+    let (current, _, _) = pending();
+    for case in 0..6 {
+        let mut state = current.state().clone();
+        match case {
+            0 => state.intents[0].definition = model::content("harbor").unwrap(),
+            1 => state.mode = ExecutionMode::Live,
+            2 => state.mode = ExecutionMode::Replay,
+            3 => {
+                let source = state
+                    .facts
+                    .iter_mut()
+                    .find(|fact| {
+                        fact.operation == intent(&current).operation
+                            && matches!(fact.value, FactValue::ContentEvent { .. })
+                    })
+                    .unwrap();
+                source.value = FactValue::ContentEvent {
+                    definition: model::content("escort-courier").unwrap(),
+                    subjects: vec![],
+                };
+            }
+            4 => {
+                state
+                    .decisions
+                    .iter_mut()
+                    .find(|decision| decision.operation == intent(&current).operation)
+                    .unwrap()
+                    .source_policy = model::label("unadmitted-source-policy").unwrap()
+            }
+            5 => state.intents[0].status = DurableStatus::Cancelled,
+            _ => unreachable!(),
+        }
+        let changed = model::checkpoint(current.basis(), state).unwrap();
+        let original = changed.clone();
+        assert!(execute(&changed, intent(&changed)).is_err());
+        assert_eq!(changed, original);
+    }
+}
+
+#[test]
+fn truncated_cancelled_mismatched_and_trailing_streams_publish_nothing() {
+    let (current, first, _) = pending();
+    let original = current.clone();
+    let effect = intent(&current);
+    let complete = || RecordEvent::Complete {
+        identity: RecordIdentity {
+            key: effect.job.unwrap(),
+            basis: effect.basis,
+            operation: effect.operation,
+        },
+        byte_length: RESPONSE.len() as u64,
+        sha256: Sha256::digest(RESPONSE.as_bytes()).into(),
+    };
+    let streams = [
+        vec![Ok(RecordEvent::Chunk(RESPONSE.as_bytes().to_vec()))],
+        vec![
+            Ok(RecordEvent::Chunk(RESPONSE.as_bytes()[..10].to_vec())),
+            Ok(complete()),
+        ],
+        vec![
+            Ok(RecordEvent::Chunk(RESPONSE.as_bytes().to_vec())),
+            Err(RecordInputError::Cancelled),
+        ],
+        vec![
+            Ok(RecordEvent::Chunk(RESPONSE.as_bytes().to_vec())),
+            Ok(complete()),
+            Ok(RecordEvent::Chunk(vec![])),
+        ],
+        vec![
+            Ok(RecordEvent::Chunk(vec![b'x'; RESPONSE.len()])),
+            Ok(complete()),
+        ],
+    ];
+    for events in streams {
+        assert_eq!(
+            admit_record(&current, effect, events),
+            Err(CourierError::Record)
+        );
+        assert_eq!(current, original);
+        assert_eq!(saved_response(&current, first).unwrap(), None);
+    }
+}
+
+#[test]
+fn final_candidate_capacity_failure_does_not_escape_completed_status_or_response() {
+    let (mut current, first, _) = pending();
+    // Fill only existing canonical history records. Every prior fixture snapshot
+    // passes the real constructor; the next response must cross the same bound.
+    for ordinal in 0_u64..512 {
+        let mut state = current.state().clone();
+        let mut bytes = [0x90; 16];
+        bytes[8..].copy_from_slice(&ordinal.to_be_bytes());
+        state.decisions.push(AcceptedDecision {
+            operation: OperationId::from_bytes(&bytes).unwrap(),
+            revision: current.basis().revision,
+            facts: vec![],
+            draws: vec![],
+            effects: vec![],
+            source_policy: model::label("fixture-history").unwrap(),
+            semantic_output: None,
+        });
+        match model::checkpoint(current.basis(), state) {
+            Ok(next) => current = next,
+            Err(_) => break,
+        }
+    }
+    let original = current.clone();
+    let effect = intent(&current);
+    let completion = execute(&current, effect).unwrap();
+    assert_eq!(
+        stage_completion(&current, &completion, completion_operation(effect).unwrap()),
+        Err(CourierError::Capacity)
+    );
+    assert_eq!(current, original);
+    assert_eq!(intent(&current).status, DurableStatus::Pending);
+    assert_eq!(saved_response(&current, first).unwrap(), None);
+}
+
+// The repository below is a classified in-memory commit fixture, not PostgreSQL,
+// authentication or native issuer qualification. It exercises the actual session
+// lookup/commit gates with the source producer and recording/response consumers.
+#[derive(Eq, PartialEq)]
+struct Key(OperationId, Vec<u8>);
+impl ActorInput for Key {
+    fn retained_heap_bytes(&self) -> Option<usize> {
+        Some(self.1.capacity())
+    }
+}
+struct Scope {
+    operation: OperationId,
+    input: GameInput,
+    fingerprint: Vec<u8>,
+}
+impl ActorInput for Scope {
+    fn retained_heap_bytes(&self) -> Option<usize> {
+        self.input
+            .retained_bytes()?
+            .checked_add(self.fingerprint.capacity())
+    }
+}
+impl OperationScope for Scope {
+    type UncertaintyKey = Key;
+    fn capture_uncertainty_key(&self, maximum: usize) -> Result<Key, RepositoryError> {
+        if maximum < std::mem::size_of::<Key>() + self.fingerprint.len() {
+            return Err(RepositoryError::Capacity);
+        }
+        Ok(Key(self.operation, self.fingerprint.clone()))
+    }
+    fn session(&self) -> df_types::SessionId {
+        match &self.input {
+            GameInput::Game(input) => input.basis.session,
+            GameInput::Job(input) => input.basis.session,
+            _ => unreachable!(),
+        }
+    }
+    fn operation(&self) -> OperationId {
+        self.operation
+    }
+    fn validate_input(&self, input: &GameInput) -> Result<(), RepositoryError> {
+        if input == &self.input {
+            Ok(())
+        } else {
+            Err(RepositoryError::InputBinding)
+        }
+    }
+    fn is_lookup_only(&self) -> bool {
+        false
+    }
+}
+#[derive(Clone, Copy)]
+enum Commit {
+    Confirm,
+    Refuse,
+    LostAcknowledgement,
+}
+struct Stored {
+    checkpoint: Checkpoint,
+    receipts: Vec<(OperationId, Vec<u8>, DecisionReceipt)>,
+    commit: Commit,
+    events: Vec<&'static str>,
+}
+struct Repository(Rc<RefCell<Stored>>);
+impl SessionRepository for Repository {
+    type Scope = Scope;
+    fn lookup_operation(
+        &mut self,
+        scope: &Scope,
+        _: &OperationContext,
+    ) -> Result<OperationLookup, RepositoryError> {
+        let stored = self.0.borrow();
+        Ok(
+            match stored
+                .receipts
+                .iter()
+                .find(|(operation, _, _)| *operation == scope.operation)
+            {
+                Some((_, fingerprint, receipt)) if fingerprint == &scope.fingerprint => {
+                    OperationLookup::Committed(receipt.clone())
+                }
+                Some(_) => OperationLookup::Conflict,
+                None => OperationLookup::NotRecorded,
+            },
+        )
+    }
+    fn commit_decision(
+        &mut self,
+        scope: &Scope,
+        candidate: &Checkpoint,
+        expected: Basis,
+        _: &OperationContext,
+    ) -> Result<CommitOutcome, RepositoryError> {
+        let mut stored = self.0.borrow_mut();
+        if stored.checkpoint.basis() != expected {
+            return Err(RepositoryError::RevisionConflict);
+        }
+        if matches!(stored.commit, Commit::Refuse) {
+            return Err(RepositoryError::Unavailable);
+        }
+        let receipt = DecisionReceipt::new(
+            candidate.basis(),
+            candidate
+                .state()
+                .decisions
+                .iter()
+                .find(|decision| decision.operation == scope.operation)
+                .unwrap()
+                .clone(),
+            4096,
+        )?;
+        stored.checkpoint = candidate.clone();
+        stored
+            .receipts
+            .push((scope.operation, scope.fingerprint.clone(), receipt.clone()));
+        stored.events.push("commit");
+        Ok(if matches!(stored.commit, Commit::LostAcknowledgement) {
+            CommitOutcome::Indeterminate
+        } else {
+            CommitOutcome::Confirmed(receipt)
+        })
+    }
+    fn load_current(
+        &mut self,
+        _: &Scope,
+        _: &OperationContext,
+    ) -> Result<Checkpoint, RepositoryError> {
+        Ok(self.0.borrow().checkpoint.clone())
+    }
+}
+struct Engine(Rc<RefCell<Stored>>);
+impl SessionEngine<Scope> for Engine {
+    fn decide(
+        &mut self,
+        current: &Checkpoint,
+        scope: &Scope,
+        input: &GameInput,
+    ) -> Result<Checkpoint, RepositoryError> {
+        scope.validate_input(input)?;
+        match input {
+            GameInput::Game(_) => journey::stage(current, input),
+            GameInput::Job(completion) => {
+                self.0.borrow_mut().events.push("execute");
+                let admitted = execute(current, intent(current))
+                    .map_err(|_| RepositoryError::InvalidCandidate)?;
+                if admitted != *completion {
+                    return Err(RepositoryError::InputBinding);
+                }
+                stage_completion(current, completion, scope.operation)
+                    .map_err(|_| RepositoryError::InvalidCandidate)
+            }
+            _ => Err(RepositoryError::InvalidCandidate),
+        }
+    }
+    fn validate_recovery(&mut self, current: &Checkpoint) -> Result<(), RepositoryError> {
+        current
+            .validate_resume(current.basis(), &model::pins()?)
+            .map(|_| ())
+            .map_err(|_| RepositoryError::InvalidCandidate)
+    }
+}
+struct Publication(Rc<RefCell<Stored>>, actor::Publication);
+impl PublicationOwner<Scope> for Publication {
+    fn publish_committed(&mut self, _: &Scope, current: &Checkpoint) -> Result<(), DeliveryError> {
+        self.1.publish(current);
+        Ok(())
+    }
+    fn wake_committed_intents(&mut self, _: &Scope) -> Result<(), DeliveryError> {
+        self.0.borrow_mut().events.push("wake");
+        self.1.wake()
+    }
+}
+type Owner = DurableOwner<Repository, Engine, Publication>;
+fn owner(
+    stored: &Rc<RefCell<Stored>>,
+    current: Checkpoint,
+) -> (Owner, std::sync::mpsc::Receiver<()>) {
+    let (updates, _) = tokio::sync::watch::channel(current.clone());
+    let (publication, notifications) = actor::Publication::new(updates);
+    (
+        DurableOwner::new(
+            Repository(stored.clone()),
+            Engine(stored.clone()),
+            Publication(stored.clone(), publication),
+            current,
+            4096,
+        )
+        .unwrap(),
+        notifications,
+    )
+}
+fn submit(owner: &mut Owner, input: &GameInput, operation: OperationId) -> SubmissionOutcome {
+    let fingerprint = if let GameInput::Job(completion) = input {
+        completion_fingerprint(completion).unwrap().to_vec()
+    } else {
+        operation.as_bytes().to_vec()
+    };
+    let scope = Scope {
+        operation,
+        input: input.clone(),
+        fingerprint,
+    };
+    let (item, receiver) = OwnedInput::new(
+        OperationContext {
+            trace_parent: String::new(),
+            build: "courier-connection-test".to_owned(),
+        },
+        scope,
+        input.clone(),
+    );
+    owner.reduce(AdmissionSequence(0), item);
+    receiver.try_recv().unwrap()
+}
+
+#[test]
+fn source_commit_precedes_wake_and_execution_and_refused_commit_never_wakes() {
+    let (current, first, _) = before_answer();
+    let input = command(&current, first, 6, "ask-courier", vec![]);
+    let operation = if let GameInput::Game(input) = &input {
+        input.operation
+    } else {
+        unreachable!()
+    };
+    let stored = Rc::new(RefCell::new(Stored {
+        checkpoint: current.clone(),
+        receipts: vec![],
+        commit: Commit::Refuse,
+        events: vec![],
+    }));
+    let (mut session, notifications) = owner(&stored, current.clone());
+    assert_eq!(
+        submit(&mut session, &input, operation),
+        SubmissionOutcome::Refused(RepositoryError::Unavailable)
+    );
+    assert_eq!(stored.borrow().checkpoint, current);
+    assert!(notifications.try_recv().is_err());
+    assert!(stored.borrow().events.is_empty());
+    stored.borrow_mut().commit = Commit::Confirm;
+    assert!(matches!(
+        submit(&mut session, &input, operation),
+        SubmissionOutcome::Confirmed(_)
+    ));
+    assert_eq!(stored.borrow().events, ["commit", "wake"]);
+    notifications.try_recv().unwrap();
+    let effect = intent(session.checkpoint()).clone();
+    let completion = GameInput::Job(expected_completion(&effect).unwrap());
+    assert!(matches!(
+        submit(
+            &mut session,
+            &completion,
+            completion_operation(&effect).unwrap()
+        ),
+        SubmissionOutcome::Confirmed(_)
+    ));
+    assert_eq!(
+        stored.borrow().events,
+        ["commit", "wake", "execute", "commit", "wake"]
+    );
+    assert_eq!(player_clue(session.checkpoint(), first), RESPONSE);
+}
+
+#[test]
+fn lost_completion_ack_exact_retry_and_restart_accept_response_only_once() {
+    let (current, first, second) = pending();
+    let effect = intent(&current).clone();
+    let input = GameInput::Job(expected_completion(&effect).unwrap());
+    let operation = completion_operation(&effect).unwrap();
+    let stored = Rc::new(RefCell::new(Stored {
+        checkpoint: current.clone(),
+        receipts: vec![],
+        commit: Commit::LostAcknowledgement,
+        events: vec![],
+    }));
+    let (mut session, notifications) = owner(&stored, current.clone());
+    assert_eq!(
+        submit(&mut session, &input, operation),
+        SubmissionOutcome::LookupRequired
+    );
+    assert_eq!(session.checkpoint(), &current);
+    assert!(notifications.try_recv().is_err());
+    assert!(matches!(
+        submit(&mut session, &input, operation),
+        SubmissionOutcome::Confirmed(_)
+    ));
+    assert_eq!(stored.borrow().events, ["execute", "commit"]);
+    assert_eq!(player_clue(session.checkpoint(), first), RESPONSE);
+    assert!(player_clue(session.checkpoint(), second).is_empty());
+    let saved = stored.borrow().checkpoint.clone();
+    let (mut restarted, _) = owner(&stored, saved.clone());
+    assert!(matches!(
+        submit(&mut restarted, &input, operation),
+        SubmissionOutcome::Confirmed(_)
+    ));
+    assert_eq!(stored.borrow().events, ["execute", "commit"]);
+    assert_eq!(restarted.checkpoint(), &saved);
+    assert_eq!(
+        saved
+            .state()
+            .decisions
+            .iter()
+            .filter(|decision| decision.source_policy.as_str() == POLICY)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn capacity_one_wake_coalesces_and_disconnected_executor_is_explicit() {
+    let (current, _, _) = pending();
+    let (updates, _) = tokio::sync::watch::channel(current);
+    let (mut publication, notifications) = actor::Publication::new(updates);
+    assert_eq!(publication.wake(), Ok(()));
+    assert_eq!(publication.wake(), Ok(()));
+    notifications.try_recv().unwrap();
+    assert!(notifications.try_recv().is_err());
+    drop(notifications);
+    assert_eq!(publication.wake(), Err(DeliveryError::Unavailable));
+}

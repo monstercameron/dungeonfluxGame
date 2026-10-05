@@ -53,6 +53,11 @@ pub(super) fn contents() -> Result<Vec<ContentReference>, RepositoryError> {
     .into_iter()
     .map(content)
     .chain(super::journey::CONTENT_ENTRIES.iter().copied().map(content))
+    .chain(
+        [super::courier_ai::DEFINITION, super::courier_ai::POLICY]
+            .into_iter()
+            .map(content),
+    )
     .collect()
 }
 pub(super) fn source_manifest() -> Vec<u8> {
@@ -82,9 +87,15 @@ pub(super) fn pins() -> Result<CheckpointPins, RepositoryError> {
         },
         content: ContentPins {
             content: label("harbor-investigation-demo-4-threads-1-rest-1")?,
-            content_digest: ContentDigest(Sha256::digest(CONTENT).into()),
+            content_digest: ContentDigest(
+                Sha256::digest([CONTENT, include_bytes!("courier_ai.rs").as_slice()].concat())
+                    .into(),
+            ),
             package: label("harbor-investigation-demo-4-threads-1-rest-1")?,
-            package_digest: ContentDigest(Sha256::digest(CONTENT).into()),
+            package_digest: ContentDigest(
+                Sha256::digest([CONTENT, include_bytes!("courier_ai.rs").as_slice()].concat())
+                    .into(),
+            ),
         },
         build: BuildIdentity::new(
             Some(crate::BUILD_ID),
@@ -523,6 +534,10 @@ impl SessionEngine<NativeScope<LocalDemoAuthority>> for HarborEngine {
     ) -> Result<Checkpoint, RepositoryError> {
         use df_session::submission::OperationScope;
         scope.validate_input(input)?;
+        if let GameInput::Job(completion) = input {
+            return super::courier_ai::stage_completion(current, completion, scope.operation())
+                .map_err(invalid);
+        }
         if let GameInput::Game(command) = input
             && let GameCommand::ProposeAction { action, .. } = &command.command
         {

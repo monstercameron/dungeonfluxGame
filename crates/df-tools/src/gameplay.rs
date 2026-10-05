@@ -1,6 +1,8 @@
 //! A finite, explicitly local gameplay slice. Authentication is preconfigured development
 //! membership, not production bootstrap. The action and its outcome use generated RPC.
 mod actor;
+mod courier_ai;
+mod courier_process_qualification;
 mod journey;
 mod model;
 mod qualification;
@@ -324,6 +326,10 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         std::path::Path::new(&asset_root).join("../concept-art/vell-avatar.webp"),
         1024 * 1024,
     )?;
+    let courier_phase = courier_process_qualification::phase();
+    let courier_budget = courier_phase
+        .map(courier_process_qualification::call_budget)
+        .transpose()?;
     let restart_phase = restart_qualification::phase();
     let restart_budget = restart_phase
         .map(restart_qualification::call_budget)
@@ -430,6 +436,20 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         join_grant_driver(grant_driver).await?;
         released.map_err(|_| io::Error::other("rest wrong-phase exact-fence release failed"))?;
         return Err(io::Error::other("rest phase admission kind refused").into());
+    }
+    if let Some(phase) = courier_phase
+        && admitted.restored != (phase != courier_process_qualification::Phase::A)
+    {
+        let released = df_persistence::local_demo_scope::release_owner(
+            &grant_client,
+            admitted.checkpoint.basis().session,
+            fence,
+        )
+        .await;
+        drop(grant_client);
+        join_grant_driver(grant_driver).await?;
+        released.map_err(|_| io::Error::other("courier wrong-phase exact-fence release failed"))?;
+        return Err(io::Error::other("courier phase admission kind refused").into());
     }
     let initial = admitted.checkpoint;
     let player_credential = admitted.player_credential;
@@ -543,10 +563,12 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     .map_err(|_| io::Error::other("local issuer construction refused"))?;
 
     let (updates, receiver) = watch::channel(initial.clone());
+    let (publication, intent_notifications) = actor::Publication::new(updates.clone());
+    let courier_reductions = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let owner = DurableOwner::new(
         repository,
-        actor::Engine(None),
-        actor::Publication(updates.clone()),
+        actor::Engine(courier_phase.map(|_| courier_reductions.clone())),
+        publication,
         initial,
         4096,
     )
@@ -559,8 +581,13 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         codec,
         fenced: false,
         recovery_wakeup: updates,
-        calls_remaining: restart_budget.or(rest_budget).unwrap_or(128),
-        qualification_joins: if rest_phase.is_some()
+        intent_notifications,
+        calls_remaining: courier_budget
+            .or(restart_budget)
+            .or(rest_budget)
+            .unwrap_or(128),
+        qualification_joins: if courier_phase.is_some()
+            || rest_phase.is_some()
             || restart_phase.is_some()
             || std::env::args().nth(4).as_deref() == Some("--qualification")
         {
@@ -568,7 +595,8 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             None
         },
-        qualification_inputs: if rest_phase.is_some()
+        qualification_inputs: if courier_phase.is_some()
+            || rest_phase.is_some()
             || restart_phase.is_some()
             || std::env::args().nth(4).as_deref() == Some("--qualification")
         {
@@ -578,13 +606,33 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         },
     };
     let (startup_send, startup_receive) = std::sync::mpsc::sync_channel::<actor::Actor>(1);
+    let courier_database = database.clone();
+    let courier_runtime = runtime.clone();
+    let courier_thread_reductions = courier_reductions.clone();
     let thread_setup = std::thread::Builder::new()
         .name("df-real-gameplay-owner".to_owned())
         .spawn(move || {
             let mut actor = startup_receive
                 .recv_timeout(Duration::from_secs(2))
                 .map_err(|_| io::Error::other("actor startup handoff deadline"))?;
+            actor.run_committed_intents();
             let drained = inbox.run(&mut actor);
+            let courier_committed = if drained.is_ok() {
+                courier_phase
+                    .map(|phase| {
+                        courier_process_qualification::after_drained(
+                            phase,
+                            &mut actor,
+                            &courier_database,
+                            &courier_runtime,
+                            courier_thread_reductions.as_ref(),
+                        )
+                    })
+                    .transpose()
+                    .map(|_| ())
+            } else {
+                Err(io::Error::other("courier requires drained inbox"))
+            };
             let released = if drained.is_ok() {
                 actor.issuer.release_owner()
             } else {
@@ -594,7 +642,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
             let mut repository = actor.owner.into_repository();
             let closed = repository.close();
             drop(actor.issuer);
-            Ok::<_, io::Error>((drained, released, closed, remaining))
+            Ok::<_, io::Error>((drained, released, closed, remaining, courier_committed))
         });
     let thread = match thread_setup {
         Ok(thread) => thread,
@@ -668,6 +716,16 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route("/assets/concept-art/vell-avatar.webp", get(portrait))
         .with_state(state);
+    let courier = courier_phase.map(|phase| {
+        tokio::spawn(courier_process_qualification::run(
+            service.clone(),
+            display_credential,
+            codec,
+            database.clone(),
+            phase,
+            courier_reductions.clone(),
+        ))
+    });
     let restart = restart_phase.map(|phase| {
         tokio::spawn(restart_qualification::run(
             service.clone(),
@@ -717,6 +775,23 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Ok(())
     };
+    let courier_outcome = if let Some(mut task) = courier {
+        match tokio::time::timeout(Duration::from_secs(47), &mut task).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(io::Error::other("courier process consumer panicked")),
+            Err(_) => {
+                task.abort();
+                let joined = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
+                Err(io::Error::other(if joined.is_ok() {
+                    "courier consumer deadline; aborted task joined"
+                } else {
+                    "courier consumer deadline; join pending"
+                }))
+            }
+        }
+    } else {
+        Ok(())
+    };
     let restart_outcome = if let Some(mut task) = restart {
         match tokio::time::timeout(Duration::from_secs(47), &mut task).await {
             Ok(Ok(result)) => result,
@@ -756,14 +831,17 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     sender
         .stop()
         .map_err(|_| io::Error::other("gameplay inbox stop failed"))?;
-    let (drained, released, closed, remaining) = tokio::task::spawn_blocking(move || thread.join())
-        .await?
-        .map_err(|_| io::Error::other("gameplay actor join failed"))??;
+    let (drained, released, closed, remaining, courier_committed) =
+        tokio::task::spawn_blocking(move || thread.join())
+            .await?
+            .map_err(|_| io::Error::other("gameplay actor join failed"))??;
     let grant_closed = join_grant_driver(grant_driver).await;
     drained.map_err(|_| io::Error::other("gameplay actor drain failed"))?;
     released.map_err(|_| io::Error::other("gameplay exact-fence release failed"))?;
     closed.map_err(|_| io::Error::other("gameplay repository close failed"))?;
     grant_closed?;
+    courier_committed?;
+    courier_outcome?;
     qualification_outcome?;
     restart_outcome?;
     rest_outcome?;
@@ -772,6 +850,13 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     }
     if let Some(phase) = rest_phase {
         rest_qualification::closed(phase, remaining)?;
+    }
+    if let Some(phase) = courier_phase {
+        courier_process_qualification::closed(
+            phase,
+            remaining,
+            courier_reductions.load(std::sync::atomic::Ordering::SeqCst),
+        )?;
     }
     outcome
 }

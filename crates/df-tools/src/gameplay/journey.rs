@@ -1826,7 +1826,7 @@ fn stage_using(
     } else {
         action.entry.as_str()
     };
-    finish(
+    let candidate = finish(
         current,
         basis,
         state,
@@ -1842,7 +1842,12 @@ fn stage_using(
                 AudienceScope::Shared
             },
         },
-    )
+    )?;
+    if private {
+        super::courier_ai::append_request(candidate, command.operation)
+    } else {
+        Ok(candidate)
+    }
 }
 fn phase_from_state(state: &GameState) -> Result<rpc::JourneyPhase, RepositoryError> {
     match state

@@ -9,9 +9,11 @@ use std::time::Duration;
 use df_auth::membership::{
     MembershipAuthority, MembershipRecord, MembershipRequest, authorize_membership,
 };
-use df_model::checkpoint::{Checkpoint, CheckpointPins, ExecutionMode, GameInput};
+use df_model::checkpoint::{
+    Checkpoint, CheckpointPins, DurableStatus, EffectKind, ExecutionMode, GameInput, JobCompletion,
+};
 use df_session::submission::RepositoryError;
-use df_types::SessionId;
+use df_types::{MemberId, OperationId, RecoveryEpoch, SessionId};
 use tokio::runtime::Handle;
 use tokio_postgres::Client;
 
@@ -97,6 +99,16 @@ pub struct LocalDemoScopeIssuer {
     authority: LocalDemoAuthority,
     session: SessionId,
     fence: [u8; 16],
+}
+struct LocalInputBinding {
+    principal: [u8; 16],
+    operation: OperationId,
+    epoch: RecoveryEpoch,
+    namespace: Vec<u8>,
+    proof_binding: [u8; 32],
+    fingerprint: [u8; 32],
+    input: GameInput,
+    pins: CheckpointPins,
 }
 impl LocalDemoScopeIssuer {
     /// Call only after the serialization inbox has stopped admission and drained.
@@ -336,6 +348,113 @@ impl LocalDemoScopeIssuer {
         {
             return Err(RepositoryError::InputBinding);
         }
+        let namespace = if principal == PLAYER {
+            match &command.command {
+                df_model::checkpoint::GameCommand::ProposeAction { action, .. }
+                    if action.entry.as_str() == "join-room" =>
+                {
+                    b"local-room-join-v1".to_vec()
+                }
+                _ => return Err(RepositoryError::Unauthorized),
+            }
+        } else {
+            b"local-room-journey-v1".to_vec()
+        };
+        let binding = LocalInputBinding {
+            principal,
+            operation: command.operation,
+            epoch: command.basis.revision.epoch(),
+            namespace,
+            proof_binding,
+            fingerprint,
+            input,
+            pins,
+        };
+        self.issue_bound(credential, binding)
+    }
+
+    /// Native-only completion admission. The executor supplies no client credential or role.
+    /// A matching durable effect and current recipient grant are required independently;
+    /// the engine still checks the source, recording and generation against current state.
+    pub fn issue_completion(
+        &mut self,
+        current: &Checkpoint,
+        completion: JobCompletion,
+        member: MemberId,
+        operation: OperationId,
+        proof: ([u8; 32], [u8; 32]),
+    ) -> Result<NativeScope<LocalDemoAuthority>, RepositoryError> {
+        if current.state().mode != ExecutionMode::PreparedOnly
+            || current.basis().session != self.session
+            || completion.basis.session != self.session
+            || completion.basis.run != current.basis().run
+            || completion.basis.revision.epoch() != current.basis().revision.epoch()
+            || operation == completion.operation
+            || proof.0 == [0; 32]
+            || member.as_bytes() == &PLAYER
+            || member.as_bytes() == &DISPLAY
+        {
+            return Err(RepositoryError::InputBinding);
+        }
+        let intent = current
+            .state()
+            .intents
+            .iter()
+            .find(|intent| {
+                intent.kind == EffectKind::RunAi
+                    && intent.status == DurableStatus::Pending
+                    && intent.job == Some(completion.job)
+                    && intent.basis == completion.basis
+                    && intent.operation == completion.operation
+                    && intent.generation == completion.generation
+            })
+            .ok_or(RepositoryError::InputBinding)?;
+        let principal = *member.as_bytes();
+        // Read a server-owned active grant and original durable declaration. Neither an
+        // inbox item nor a caller-provided checkpoint can fabricate this causal association.
+        let credential: [u8; 32] = self.authority.runtime.block_on(async {
+            let row = tokio::time::timeout(Duration::from_secs(2), self.authority.client.query_opt(
+                "SELECT g.credential FROM df_local_demo.grants AS g JOIN df_game.intents AS i ON i.tenant_id=g.tenant_id AND i.session_id=g.session_id AND i.principal_id=g.principal_id WHERE g.tenant_id=$1::bytea AND g.session_id=$2::bytea AND g.principal_id=$3::bytea AND g.campaign_id=$4::bytea AND g.effective_role=$5::bytea AND g.active AND g.expires_at>clock_timestamp() AND i.effect_id=$6::bytea AND i.job_id=$7::bytea AND i.operation_id=$8::bytea AND i.run_id=$9::bytea AND i.process_generation=$10::text::numeric AND i.execution_mode=2 AND i.intent_kind=1 AND i.recovery_epoch=$11::text::numeric AND i.committed_epoch=$11::text::numeric AND i.committed_sequence=$12::text::numeric",
+                &[&TENANT.as_slice(), &self.session.as_bytes().as_slice(), &principal.as_slice(), &CAMPAIGN.as_slice(), &b"player".as_slice(), &intent.id.as_bytes().as_slice(), &completion.job.as_bytes().as_slice(), &completion.operation.as_bytes().as_slice(), &completion.basis.run.as_bytes().as_slice(), &completion.generation.to_string(), &completion.basis.revision.epoch().get().to_string(), &completion.basis.revision.sequence().to_string()]
+            )).await.map_err(|_| RepositoryError::Unavailable)?.map_err(|_| RepositoryError::Unavailable)?.ok_or(RepositoryError::Unauthorized)?;
+            row.try_get::<_,Vec<u8>>("credential").map_err(|_| RepositoryError::Unauthorized)?.try_into().map_err(|_| RepositoryError::Unauthorized)
+        })?;
+        self.issue_bound(
+            &credential,
+            LocalInputBinding {
+                principal,
+                operation,
+                epoch: completion.basis.revision.epoch(),
+                namespace: b"local-courier-completion-v1".to_vec(),
+                proof_binding: proof.0,
+                fingerprint: proof.1,
+                input: GameInput::Job(completion),
+                pins: current.pins().clone(),
+            },
+        )
+    }
+
+    fn issue_bound(
+        &mut self,
+        credential: &[u8; 32],
+        binding: LocalInputBinding,
+    ) -> Result<NativeScope<LocalDemoAuthority>, RepositoryError> {
+        let LocalInputBinding {
+            principal,
+            operation,
+            epoch,
+            namespace,
+            proof_binding,
+            fingerprint,
+            input,
+            pins,
+        } = binding;
+        if self.authenticate(credential)? != LocalDemoRole::Player
+            || self.principal(credential)? != principal
+            || input.retained_bytes().is_none_or(|bytes| bytes > 8192)
+        {
+            return Err(RepositoryError::InputBinding);
+        }
         let role = LocalDemoRole::Player.bytes();
         let now = self.authority.runtime.block_on(async {
             tokio::time::timeout(
@@ -363,21 +482,7 @@ impl LocalDemoScopeIssuer {
         )
         .map_err(|_| RepositoryError::Unauthorized)?;
         let revision = capability.revision().clone();
-        let operation = command.operation;
-        let epoch = command.basis.revision.epoch();
         let epoch_text = epoch.get().to_string();
-        let namespace = if principal == PLAYER {
-            match &command.command {
-                df_model::checkpoint::GameCommand::ProposeAction { action, .. }
-                    if action.entry.as_str() == "join-room" =>
-                {
-                    b"local-room-join-v1".to_vec()
-                }
-                _ => return Err(RepositoryError::Unauthorized),
-            }
-        } else {
-            b"local-room-journey-v1".to_vec()
-        };
         self.authority.runtime.block_on(async {
             tokio::time::timeout(Duration::from_secs(2), self.authority.client.execute(
                 "INSERT INTO df_local_demo.scope_proofs (binding, credential, tenant_id, principal_id, campaign_id, effective_role, access_revision, session_id, operation_id, command_namespace, recovery_epoch, fingerprint_version, canonical_fingerprint, owner_fence, execution_mode, lookup_only) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1,$12,$13,2,false)",

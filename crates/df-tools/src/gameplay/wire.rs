@@ -324,11 +324,9 @@ pub(super) fn journey_view(
                 },
             });
         }
-        if state.facts.iter().any(|fact| matches!(&fact.value,
-            df_model::checkpoint::FactValue::ContentEvent {definition,..} if definition.entry.as_str()=="private-courier-note")
-            && matches!(&fact.audience,df_model::checkpoint::AudienceScope::Members(members) if members.contains(&principal))) {
-            private_clue="The courier quietly tells you: the sealed packet is addressed to Vell at the Harbor Inn. Keep its destination between you.".to_owned();
-        }
+        private_clue = super::courier_ai::saved_response(current, principal)?
+            .unwrap_or_default()
+            .to_owned();
     }
     let mut combat = None;
     if let Some(encounter) = state.encounters.first() {

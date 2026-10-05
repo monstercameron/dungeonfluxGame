@@ -10,6 +10,7 @@ use df_protocol::common as rpc;
 use df_session::inbox::{InboxHandle, bounded_inbox};
 use df_session::submission::DurableOwner;
 use prost::Message;
+use sha2::{Digest, Sha256};
 use std::{
     io,
     sync::{
@@ -27,6 +28,7 @@ use tokio_postgres::{Client, Config, NoTls};
 use tonic::Request;
 
 const REPORT: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-recovery-20261005/engine-recovery-qualification-report-04.json";
+const COURIER_REPORT: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-courier-ai-20261005/courier-pending-restart-report-01.json";
 type Error = Box<dyn std::error::Error + Send + Sync>;
 #[track_caller]
 fn required(value: bool) -> Result<(), Error> {
@@ -126,10 +128,11 @@ impl RunningActor {
         counter: Arc<AtomicUsize>,
     ) -> Result<Self, Error> {
         let (updates, receiver) = watch::channel(checkpoint.clone());
+        let (publication, intent_notifications) = actor::Publication::new(updates.clone());
         let owner = DurableOwner::new(
             repository,
             actor::Engine(Some(counter)),
-            actor::Publication(updates.clone()),
+            publication,
             checkpoint,
             4096,
         )
@@ -145,10 +148,12 @@ impl RunningActor {
                     codec,
                     fenced: false,
                     recovery_wakeup: updates,
+                    intent_notifications,
                     calls_remaining: 20,
                     qualification_inputs: Some(Vec::new()),
                     qualification_joins: Some(Vec::new()),
                 };
+                actor.run_committed_intents();
                 let drained = inbox.run(&mut actor);
                 let checkpoint = actor.owner.checkpoint().clone();
                 let mut repository = actor.owner.into_repository();
@@ -744,6 +749,157 @@ fn expect_unknown_initial_submission(
             .into())
         }
     }
+}
+
+/// Operator-only connecting proof using the existing registered recovery database.
+/// Run separately on its fresh database; this does not reset or create a database.
+#[test]
+#[ignore = "requires ROOT registered fresh loopback recovery database and original resource guard"]
+fn native_courier_committed_pending_actor_restart() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(courier_pending_actor_restart()).unwrap();
+}
+
+async fn courier_pending_actor_restart() -> Result<(), Error> {
+    let started = Instant::now();
+    let configuration = configuration()?;
+    let (mut inspector, inspector_connection) =
+        timeout(Duration::from_secs(2), configuration.connect(NoTls)).await??;
+    let inspector_driver = tokio::spawn(inspector_connection);
+    let (grant_client, grant_connection) =
+        timeout(Duration::from_secs(2), configuration.connect(NoTls)).await??;
+    let grant_driver = tokio::spawn(grant_connection);
+    let codec = NativeCodecLimits {
+        maximum_document_bytes: 1024 * 1024,
+        maximum_allocated_bytes: 2 * 1024 * 1024,
+        maximum_collection_items: 1024,
+        maximum_text_bytes: 4096,
+    };
+    let initial = journey::initial().map_err(repository_error)?;
+    let session = initial.basis().session;
+    let fence = [0x83; 16];
+    let initialized = local_demo_scope::initialize(
+        &mut inspector,
+        &initial,
+        fence,
+        [0x81; 32],
+        [0x82; 32],
+        codec,
+    )
+    .await;
+    if initialized.is_err() {
+        drop(grant_client);
+        drop(inspector);
+        timeout(Duration::from_secs(2), grant_driver).await???;
+        timeout(Duration::from_secs(2), inspector_driver).await???;
+        return Err(io::Error::other("fresh registered courier database required").into());
+    }
+    let issuer = LocalDemoScopeIssuer::new(
+        tokio::runtime::Handle::current(),
+        grant_client,
+        initial.basis().session,
+        fence,
+    )
+    .map_err(repository_error)?;
+    let reductions = Arc::new(AtomicUsize::new(0));
+    let mut actor = RunningActor::start(
+        repository(&configuration, &configuration, codec).await?,
+        issuer,
+        initial,
+        codec,
+        reductions.clone(),
+    )?;
+    let mut calls = Calls {
+        count: 0,
+        deadline: started + Duration::from_secs(45),
+    };
+    let preparation = async {
+        let first = join(&actor.service, 0x91, &mut calls).await?;
+        let second = join(&actor.service, 0x92, &mut calls).await?;
+        let current = actor.service.updates.borrow().clone();
+        committed(submit(&actor.service, &create(&current, 0x93), first, &mut calls).await?)?;
+        let current = actor.service.updates.borrow().clone();
+        committed(submit(&actor.service, &create(&current, 0x94), second, &mut calls).await?)?;
+        let current = actor.service.updates.borrow().clone();
+        committed(
+            submit(
+                &actor.service,
+                &action(&current, 0x95, rpc::GameplayActionKind::BeginStory),
+                first,
+                &mut calls,
+            )
+            .await?,
+        )?;
+        Ok::<_, Error>(first)
+    }
+    .await;
+    let prepared = actor.close().await?;
+    let result = async {
+    if let Ok(first) = preparation {
+        let body = action(&prepared.checkpoint, 0x96, rpc::GameplayActionKind::AskCourier);
+        let principal = journey::participants(&prepared.checkpoint).first().ok_or_else(|| io::Error::other("courier recipient absent"))?.member;
+        let input = wire::journey_input(&body, principal, &prepared.checkpoint)?;
+        let native_repository = repository(&configuration, &configuration, codec).await?;
+        let count = reductions.clone();
+        let commit_thread = std::thread::Builder::new().name("df-courier-source-commit-owner".to_owned()).spawn(move || {
+            use df_session::inbox::{AdmissionSequence, Reducer};
+            use df_session::submission::{OwnedInput, SubmissionOutcome};
+            let mut issuer = prepared.issuer;
+            let scope = issuer.issue(&first, model::random().map_err(repository_error)?, Sha256::digest(body.encode_to_vec()).into(), input.clone(), model::pins().map_err(repository_error)?).map_err(repository_error)?;
+            let (updates, _) = watch::channel(prepared.checkpoint.clone());
+            let (publication, notifications) = actor::Publication::new(updates);
+            let mut owner = DurableOwner::new(native_repository, actor::Engine(Some(count)), publication, prepared.checkpoint, 4096).map_err(repository_error)?;
+            let (item, receipt) = OwnedInput::new(df_observe::OperationContext { trace_parent: String::new(), build: crate::BUILD_ID.to_owned() }, scope, input);
+            owner.reduce(AdmissionSequence(0), item);
+            let confirmed = matches!(receipt.try_recv(), Ok(SubmissionOutcome::Confirmed(_)));
+            let woken = notifications.try_recv().is_ok();
+            let checkpoint = owner.checkpoint().clone();
+            let mut repository = owner.into_repository();
+            repository.close().map_err(repository_error)?;
+            required(confirmed && woken)?;
+            Ok::<_, Error>(ActorExit { checkpoint, issuer })
+        })?;
+        let pending = tokio::task::spawn_blocking(move || commit_thread.join()).await?.map_err(|_| io::Error::other("courier source commit owner panicked"))??;
+        required(reductions.load(Ordering::SeqCst) == 6)?;
+        let effect = pending.checkpoint.state().intents.first().ok_or_else(|| io::Error::other("durable courier effect absent"))?;
+        required(effect.status == df_model::checkpoint::DurableStatus::Pending)?;
+        required(super::courier_ai::saved_response(&pending.checkpoint, principal).map_err(repository_error)?.is_none())?;
+        let physical_pending = durable(&inspector, 0x96).await?;
+        required(physical_pending.counts[3] == 1 && !physical_pending.intents.is_empty())?;
+        let mut restarted = RunningActor::start(repository(&configuration, &configuration, codec).await?, pending.issuer, pending.checkpoint, codec, reductions.clone())?;
+        let resumed = snapshot(&restarted.service, &mut calls).await;
+        let resumed_exit = restarted.close().await?;
+        let resumed = resumed?;
+        required(reductions.load(Ordering::SeqCst) == 7)?;
+        required(super::courier_ai::saved_response(&resumed.checkpoint, principal).map_err(repository_error)? == Some(super::courier_ai::RESPONSE))?;
+        let accepted = durable(&inspector, 0x96).await?;
+        required(accepted.counts[0] == physical_pending.counts[0] + 1 && accepted.intents == physical_pending.intents)?;
+        let mut again = RunningActor::start(repository(&configuration, &configuration, codec).await?, resumed_exit.issuer, resumed_exit.checkpoint, codec, reductions.clone())?;
+        let unchanged = snapshot(&again.service, &mut calls).await;
+        let final_exit = again.close().await?;
+        drop(final_exit.issuer);
+        let unchanged = unchanged?;
+        required(unchanged.checkpoint == resumed.checkpoint && reductions.load(Ordering::SeqCst) == 7)?;
+        required(durable(&inspector, 0x96).await? == accepted)?;
+        required(Instant::now() < calls.deadline)?;
+        std::fs::write(COURIER_REPORT, format!("{{\"pass\":true,\"actor_calls\":{},\"actor_calls_limit\":20,\"engine_reductions\":7,\"source_commit_then_real_wake\":true,\"pending_durable_intent_on_actor_restart\":true,\"native_startup_completed_once\":true,\"second_actor_restart_unchanged\":true,\"immutable_declaration_unchanged\":true,\"process_restart_verified\":false}}\n", calls.count))?;
+        Ok(())
+    } else {
+        let issuer = prepared.issuer;
+        drop(issuer);
+        Err(io::Error::other("courier source preparation refused").into())
+    }
+    }.await;
+    let released = local_demo_scope::release_owner(&inspector, session, fence).await;
+    drop(inspector);
+    timeout(Duration::from_secs(2), grant_driver).await???;
+    timeout(Duration::from_secs(2), inspector_driver).await???;
+    released.map_err(repository_error)?;
+    result
 }
 #[test]
 fn initial_submission_diagnostics_retain_status_without_private_payload() {

@@ -511,6 +511,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "bytes",
+ "df-ai",
  "df-api",
  "df-auth",
  "df-content",

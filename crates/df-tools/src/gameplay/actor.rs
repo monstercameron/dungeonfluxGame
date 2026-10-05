@@ -133,21 +133,39 @@ impl ActorInput for Call {
     }
 }
 
-pub(super) struct Publication(pub watch::Sender<Checkpoint>);
+pub(super) struct Publication {
+    updates: watch::Sender<Checkpoint>,
+    intents: std::sync::mpsc::SyncSender<()>,
+}
+impl Publication {
+    pub(super) fn new(updates: watch::Sender<Checkpoint>) -> (Self, std::sync::mpsc::Receiver<()>) {
+        let (intents, receiver) = std::sync::mpsc::sync_channel(1);
+        (Self { updates, intents }, receiver)
+    }
+    pub(super) fn publish(&mut self, checkpoint: &Checkpoint) {
+        self.updates.send_replace(checkpoint.clone());
+    }
+    pub(super) fn wake(&mut self) -> Result<(), DeliveryError> {
+        match self.intents.try_send(()) {
+            Ok(()) | Err(std::sync::mpsc::TrySendError::Full(())) => Ok(()),
+            Err(std::sync::mpsc::TrySendError::Disconnected(())) => Err(DeliveryError::Unavailable),
+        }
+    }
+}
 impl PublicationOwner<NativeScope<LocalDemoAuthority>> for Publication {
     fn publish_committed(
         &mut self,
         _: &NativeScope<LocalDemoAuthority>,
         checkpoint: &Checkpoint,
     ) -> Result<(), DeliveryError> {
-        self.0.send_replace(checkpoint.clone());
+        self.publish(checkpoint);
         Ok(())
     }
     fn wake_committed_intents(
         &mut self,
         _: &NativeScope<LocalDemoAuthority>,
     ) -> Result<(), DeliveryError> {
-        Ok(())
+        self.wake()
     }
 }
 pub(super) struct Engine(pub Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>);
@@ -158,6 +176,23 @@ impl df_session::submission::SessionEngine<NativeScope<LocalDemoAuthority>> for 
         scope: &NativeScope<LocalDemoAuthority>,
         input: &GameInput,
     ) -> Result<Checkpoint, RepositoryError> {
+        if let GameInput::Job(completion) = input {
+            df_session::submission::OperationScope::validate_input(scope, input)?;
+            // This native executor runs only after DurableOwner's receipt lookup.
+            // Its finite prepared recording is owned by the actor, with no task,
+            // provider, clock, or dependence on the originating RPC receiver.
+            let intent = current
+                .state()
+                .intents
+                .iter()
+                .find(|intent| intent.job == Some(completion.job))
+                .ok_or(RepositoryError::InvalidCandidate)?;
+            let admitted = super::courier_ai::execute(current, intent)
+                .map_err(|_| RepositoryError::InvalidCandidate)?;
+            if &admitted != completion {
+                return Err(RepositoryError::InputBinding);
+            }
+        }
         if let Some(counter) = &self.0 {
             counter
                 .fetch_update(
@@ -189,6 +224,7 @@ pub(super) struct Actor {
     pub codec: NativeCodecLimits,
     pub fenced: bool,
     pub recovery_wakeup: watch::Sender<Checkpoint>,
+    pub intent_notifications: std::sync::mpsc::Receiver<()>,
     pub calls_remaining: u16,
     pub qualification_inputs: Option<Vec<QualificationInput>>,
     pub qualification_joins: Option<Vec<QualificationJoin>>,
@@ -202,6 +238,110 @@ pub(super) fn unavailable(error: RepositoryError) -> tonic::Status {
     }
 }
 impl Actor {
+    /// Called on startup and at input boundaries by this same serialization owner.
+    /// Notification loss cannot erase the backlog: work comes from a validated
+    /// durable reload, while terminal state comes from the committed checkpoint.
+    pub(super) fn run_committed_intents(&mut self) {
+        let context = OperationContext {
+            trace_parent: String::new(),
+            build: crate::BUILD_ID.to_owned(),
+        };
+        let mut span = df_observe::begin(&context, "gameplay.courier_intents");
+        let result = self.complete_courier(&context);
+        span.finish_unmeasured(match result {
+            Ok(()) => "durable_work_checked",
+            Err(RepositoryError::Unauthorized) => "recipient_access_unavailable",
+            Err(RepositoryError::InvalidCandidate | RepositoryError::InputBinding) => {
+                "recording_or_source_refused"
+            }
+            Err(_) => "durable_completion_pending",
+        });
+    }
+
+    fn complete_courier(&mut self, context: &OperationContext) -> Result<(), RepositoryError> {
+        match self.intent_notifications.try_recv() {
+            Ok(()) | Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                return Err(RepositoryError::Unavailable);
+            }
+        }
+        let Some(intent) = self
+            .owner
+            .checkpoint()
+            .state()
+            .intents
+            .iter()
+            .find(|intent| {
+                intent.kind == df_model::checkpoint::EffectKind::RunAi
+                    && intent.status == df_model::checkpoint::DurableStatus::Pending
+            })
+            .cloned()
+        else {
+            return Ok(());
+        };
+        let member = super::courier_ai::recipient(self.owner.checkpoint(), &intent)
+            .map_err(|_| RepositoryError::InvalidCandidate)?;
+        let completion = super::courier_ai::expected_completion(&intent)
+            .map_err(|_| RepositoryError::InvalidCandidate)?;
+        let operation = super::courier_ai::completion_operation(&intent)
+            .map_err(|_| RepositoryError::InvalidCandidate)?;
+        let fingerprint = super::courier_ai::completion_fingerprint(&completion)
+            .map_err(|_| RepositoryError::InvalidCandidate)?;
+        let scope = self.issuer.issue_completion(
+            self.owner.checkpoint(),
+            completion.clone(),
+            member,
+            operation,
+            (model::random()?, fingerprint),
+        )?;
+        let input = GameInput::Job(completion);
+        if self.owner.has_uncertain_operation() {
+            if !self.owner.matches_uncertain_retry(&scope, &input)? {
+                return Err(RepositoryError::UnresolvedCommit);
+            }
+        } else {
+            self.owner.reload_current(&scope, context)?;
+            if !self
+                .owner
+                .checkpoint()
+                .state()
+                .intents
+                .iter()
+                .any(|record| {
+                    record.id == intent.id
+                        && record.status == df_model::checkpoint::DurableStatus::Pending
+                })
+            {
+                return Ok(());
+            }
+        }
+        let (item, receipt) = OwnedInput::new(
+            OperationContext {
+                trace_parent: context.trace_parent.clone(),
+                build: context.build.clone(),
+            },
+            scope,
+            input,
+        );
+        self.owner.reduce(AdmissionSequence(0), item);
+        let outcome = receipt
+            .try_recv()
+            .map_err(|_| RepositoryError::Unavailable)?;
+        if !self.owner.is_current() {
+            self.fence();
+        }
+        match outcome {
+            SubmissionOutcome::Confirmed(_) if self.owner.is_current() => {
+                self.fenced = false;
+                Ok(())
+            }
+            SubmissionOutcome::Refused(error) => Err(error),
+            SubmissionOutcome::Confirmed(_)
+            | SubmissionOutcome::LookupRequired
+            | SubmissionOutcome::ExpiredOrIndeterminate => Err(RepositoryError::UnresolvedCommit),
+            SubmissionOutcome::OperationConflict => Err(RepositoryError::InputBinding),
+        }
+    }
     pub(super) fn fence(&mut self) {
         self.fenced = true;
         self.recovery_wakeup
@@ -479,6 +619,7 @@ impl Actor {
 }
 impl Reducer<Call> for Actor {
     fn reduce(&mut self, _: AdmissionSequence, call: Call) {
+        self.run_committed_intents();
         if self.calls_remaining == 0 {
             match call {
                 Call::QualificationInputs { reply } => {
@@ -546,6 +687,7 @@ impl Reducer<Call> for Actor {
         } else {
             "caller_gone_outcome_retained"
         });
+        self.run_committed_intents();
     }
 }
 

@@ -1,0 +1,414 @@
+//! The one authored, prepared-only courier recording. No general AI or provider fallback.
+use df_ai::admission::{
+    CompleteRecord, RecordEvent, RecordIdentity, RecordLimits, RecordingPublisher,
+    admit_complete_record,
+};
+use df_ai::lookup::{PreparedRead, ReadResult, lookup_prepared};
+use df_model::checkpoint::*;
+use df_session::submission::RepositoryError;
+use df_types::{MemberId, OperationId, RevisionLabel};
+use sha2::{Digest, Sha256};
+
+use super::{journey, model};
+
+pub(super) const DEFINITION: &str = "courier-private-answer-prepared-1";
+pub(super) const POLICY: &str = "courier-private-answer-policy-1";
+pub(super) const MODEL: &str = "authored-courier-recording-1";
+pub(super) const RESPONSE: &str = "The courier quietly tells you: the sealed packet is addressed to Vell at the Harbor Inn. Keep its destination between you.";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum CourierError {
+    Unavailable,
+    Source,
+    Stale,
+    Record,
+    Capacity,
+}
+
+fn id(domain: &[u8], basis: Basis, operation: OperationId) -> [u8; 16] {
+    let mut hash = Sha256::new();
+    hash.update(domain);
+    hash.update(basis.session.as_bytes());
+    hash.update(basis.run.as_bytes());
+    hash.update(basis.revision.epoch().get().to_be_bytes());
+    hash.update(basis.revision.sequence().to_be_bytes());
+    hash.update(operation.as_bytes());
+    let digest = hash.finalize();
+    let mut bytes = [0; 16];
+    bytes.copy_from_slice(&digest[..16]);
+    bytes
+}
+
+pub(super) fn completion_operation(intent: &DurableIntent) -> Result<OperationId, CourierError> {
+    OperationId::from_bytes(&id(b"courier-completion-1", intent.basis, intent.operation))
+        .map_err(|_| CourierError::Source)
+}
+
+/// Exact expected native input for receipt lookup. Constructing it does not execute
+/// the recording; the native engine executes only after the session's lookup gate.
+pub(super) fn expected_completion(intent: &DurableIntent) -> Result<JobCompletion, CourierError> {
+    Ok(JobCompletion {
+        basis: intent.basis,
+        operation: intent.operation,
+        job: intent.job.ok_or(CourierError::Source)?,
+        generation: intent.generation,
+        outcome: JobOutcome::Ai {
+            semantic_output: RESPONSE.to_owned(),
+            policy: model::content(POLICY).map_err(|_| CourierError::Source)?,
+            model: model::label(MODEL).map_err(|_| CourierError::Source)?,
+        },
+    })
+}
+
+pub(super) fn completion_fingerprint(completion: &JobCompletion) -> Result<[u8; 32], CourierError> {
+    let JobOutcome::Ai {
+        semantic_output,
+        policy,
+        model,
+    } = &completion.outcome
+    else {
+        return Err(CourierError::Unavailable);
+    };
+    if semantic_output.len() > 512 {
+        return Err(CourierError::Capacity);
+    }
+    let mut hash = Sha256::new();
+    hash.update(b"local-courier-completion-v1");
+    hash.update(completion.basis.session.as_bytes());
+    hash.update(completion.basis.run.as_bytes());
+    hash.update(completion.basis.revision.epoch().get().to_be_bytes());
+    hash.update(completion.basis.revision.sequence().to_be_bytes());
+    hash.update(completion.operation.as_bytes());
+    hash.update(completion.job.as_bytes());
+    hash.update(completion.generation.to_be_bytes());
+    for value in [
+        semantic_output.as_str(),
+        policy.package.as_str(),
+        policy.entry.as_str(),
+        model.as_str(),
+    ] {
+        hash.update((value.len() as u64).to_be_bytes());
+        hash.update(value.as_bytes());
+    }
+    Ok(hash.finalize().into())
+}
+
+/// Called inside the existing source transition, before its candidate is committed.
+pub(super) fn append_request(
+    candidate: Checkpoint,
+    operation: OperationId,
+) -> Result<Checkpoint, RepositoryError> {
+    let mut state = candidate.state().clone();
+    let intent = DurableIntent {
+        id: EffectId::from_bytes(&id(b"courier-effect-1", candidate.basis(), operation))
+            .map_err(|_| RepositoryError::InvalidCandidate)?,
+        basis: candidate.basis(),
+        operation,
+        slot: 0,
+        kind: EffectKind::RunAi,
+        job: Some(
+            JobId::from_bytes(&id(b"courier-job-1", candidate.basis(), operation))
+                .map_err(|_| RepositoryError::InvalidCandidate)?,
+        ),
+        timer: None,
+        generation: 1,
+        status: DurableStatus::Pending,
+        definition: model::content(DEFINITION)?,
+    };
+    let decision = state
+        .decisions
+        .iter_mut()
+        .find(|decision| {
+            decision.operation == operation && decision.revision == candidate.basis().revision
+        })
+        .ok_or(RepositoryError::InvalidCandidate)?;
+    if !decision.effects.is_empty() {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    decision.effects.push(intent.id);
+    state.intents.push(intent);
+    model::checkpoint(candidate.basis(), state)
+}
+
+/// Source and audience come from the committed reveal, never from recording text.
+pub(super) fn recipient(
+    current: &Checkpoint,
+    intent: &DurableIntent,
+) -> Result<MemberId, CourierError> {
+    current
+        .validate_resume(
+            current.basis(),
+            &model::pins().map_err(|_| CourierError::Source)?,
+        )
+        .map_err(|_| CourierError::Stale)?;
+    if current.state().mode != ExecutionMode::PreparedOnly
+        || intent.kind != EffectKind::RunAi
+        || intent.definition != model::content(DEFINITION).map_err(|_| CourierError::Source)?
+    {
+        return Err(CourierError::Unavailable);
+    }
+    if intent.basis.session != current.basis().session
+        || intent.basis.run != current.basis().run
+        || intent.basis.revision.epoch() != current.basis().revision.epoch()
+        || intent.basis.revision > current.basis().revision
+        || intent.generation != 1
+        || intent.slot != 0
+        || intent.job.is_none()
+        || intent.timer.is_some()
+        || !current.state().intents.contains(intent)
+    {
+        return Err(CourierError::Stale);
+    }
+    let decision = current
+        .state()
+        .decisions
+        .iter()
+        .find(|decision| {
+            decision.operation == intent.operation
+                && decision.revision == intent.basis.revision
+                && decision.source_policy.as_str() == journey::THREAD_POLICY
+                && decision.effects == [intent.id]
+        })
+        .ok_or(CourierError::Source)?;
+    let definition = model::content("private-courier-note").map_err(|_| CourierError::Source)?;
+    let mut sources = current.state().facts.iter().filter(|fact| fact.operation == intent.operation && fact.revision == intent.basis.revision && decision.facts.contains(&fact.id) && matches!(&fact.value, FactValue::ContentEvent { definition: source, subjects } if *source == definition && subjects.is_empty()));
+    let source = sources.next().ok_or(CourierError::Source)?;
+    if sources.next().is_some() {
+        return Err(CourierError::Source);
+    }
+    let AudienceScope::Members(members) = &source.audience else {
+        return Err(CourierError::Source);
+    };
+    let [member] = members.as_slice() else {
+        return Err(CourierError::Source);
+    };
+    if !current
+        .state()
+        .members
+        .iter()
+        .any(|link| link.member == *member && link.character.is_some())
+    {
+        return Err(CourierError::Source);
+    }
+    Ok(*member)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RecordingBasis {
+    pins: CheckpointPins,
+    policy: ContentReference,
+    model: RevisionLabel,
+}
+struct AuthoredRecording {
+    key: ContentReference,
+    basis: RecordingBasis,
+}
+impl PreparedRead for AuthoredRecording {
+    type Key = ContentReference;
+    type Basis = RecordingBasis;
+    type Artifact = &'static str;
+    type Failure = CourierError;
+    fn read_prepared(
+        &self,
+        _: &Self::Key,
+    ) -> ReadResult<'_, Self::Key, Self::Basis, Self::Artifact, Self::Failure> {
+        Ok(Some((&self.key, &self.basis, &RESPONSE)))
+    }
+    fn read_replay(
+        &self,
+        _: &Self::Key,
+    ) -> ReadResult<'_, Self::Key, Self::Basis, Self::Artifact, Self::Failure> {
+        Ok(None)
+    }
+}
+
+struct ResponseAdmission<'a> {
+    current: &'a Checkpoint,
+    intent: &'a DurableIntent,
+}
+impl RecordingPublisher for ResponseAdmission<'_> {
+    type Key = JobId;
+    type Basis = Basis;
+    type Artifact = JobCompletion;
+    type Error = CourierError;
+    fn publish_complete(
+        &mut self,
+        record: CompleteRecord<JobId, Basis>,
+    ) -> Result<JobCompletion, CourierError> {
+        recipient(self.current, self.intent)?;
+        if self.intent.status != DurableStatus::Pending || record.bytes() != RESPONSE.as_bytes() {
+            return Err(CourierError::Record);
+        }
+        // Transfer a complete candidate to the session owner; this is not reusable storage
+        // or publication. The owner revalidates and commits before any view reads it.
+        Ok(JobCompletion {
+            basis: record.identity().basis,
+            operation: record.identity().operation,
+            job: record.identity().key,
+            generation: self.intent.generation,
+            outcome: JobOutcome::Ai {
+                semantic_output: RESPONSE.to_owned(),
+                policy: model::content(POLICY).map_err(|_| CourierError::Source)?,
+                model: model::label(MODEL).map_err(|_| CourierError::Source)?,
+            },
+        })
+    }
+}
+
+pub(super) fn execute(
+    current: &Checkpoint,
+    intent: &DurableIntent,
+) -> Result<JobCompletion, CourierError> {
+    recipient(current, intent)?;
+    if intent.status != DurableStatus::Pending {
+        return Err(CourierError::Stale);
+    }
+    let basis = RecordingBasis {
+        pins: current.pins().clone(),
+        policy: model::content(POLICY).map_err(|_| CourierError::Source)?,
+        model: model::label(MODEL).map_err(|_| CourierError::Source)?,
+    };
+    let recording = AuthoredRecording {
+        key: model::content(DEFINITION).map_err(|_| CourierError::Source)?,
+        basis: basis.clone(),
+    };
+    let text = lookup_prepared(&recording, &intent.definition, &basis)
+        .map_err(|_| CourierError::Unavailable)?;
+    let job = intent.job.ok_or(CourierError::Source)?;
+    admit_record(
+        current,
+        intent,
+        [
+            Ok(RecordEvent::Chunk(text.as_bytes().to_vec())),
+            Ok(RecordEvent::Complete {
+                identity: RecordIdentity {
+                    key: job,
+                    basis: intent.basis,
+                    operation: intent.operation,
+                },
+                byte_length: text.len() as u64,
+                sha256: Sha256::digest(text.as_bytes()).into(),
+            }),
+        ],
+    )
+}
+
+pub(super) fn admit_record(
+    current: &Checkpoint,
+    intent: &DurableIntent,
+    events: impl IntoIterator<
+        Item = Result<RecordEvent<JobId, Basis>, df_ai::admission::RecordInputError>,
+    >,
+) -> Result<JobCompletion, CourierError> {
+    let expected = RecordIdentity {
+        key: intent.job.ok_or(CourierError::Source)?,
+        basis: intent.basis,
+        operation: intent.operation,
+    };
+    admit_complete_record(
+        &mut ResponseAdmission { current, intent },
+        expected,
+        RecordLimits::new(512, 512, 2).map_err(|_| CourierError::Capacity)?,
+        events,
+    )
+    .map_err(|_| CourierError::Record)
+}
+
+/// A detached next-revision candidate. Nothing is applied when any final check fails.
+pub(super) fn stage_completion(
+    current: &Checkpoint,
+    completion: &JobCompletion,
+    operation: OperationId,
+) -> Result<Checkpoint, CourierError> {
+    let intent = current
+        .state()
+        .intents
+        .iter()
+        .find(|intent| intent.job == Some(completion.job))
+        .ok_or(CourierError::Source)?;
+    recipient(current, intent)?;
+    if intent.status != DurableStatus::Pending
+        || completion.basis != intent.basis
+        || completion.operation != intent.operation
+        || completion.generation != intent.generation
+        || operation != completion_operation(intent)?
+        || operation == intent.operation
+    {
+        return Err(CourierError::Stale);
+    }
+    let JobOutcome::Ai {
+        semantic_output,
+        policy,
+        model: recording_model,
+    } = &completion.outcome
+    else {
+        return Err(CourierError::Unavailable);
+    };
+    if semantic_output != RESPONSE
+        || *policy != model::content(POLICY).map_err(|_| CourierError::Source)?
+        || *recording_model != model::label(MODEL).map_err(|_| CourierError::Source)?
+    {
+        return Err(CourierError::Source);
+    }
+    let mut basis = current.basis();
+    basis.revision = basis
+        .revision
+        .next_sequence()
+        .map_err(|_| CourierError::Capacity)?;
+    let mut state = current.state().clone();
+    let staged_intent = state
+        .intents
+        .iter_mut()
+        .find(|record| record.id == intent.id)
+        .ok_or(CourierError::Source)?;
+    staged_intent.status = DurableStatus::Completed;
+    state.decisions.push(AcceptedDecision {
+        operation,
+        revision: basis.revision,
+        facts: vec![],
+        draws: vec![],
+        effects: vec![],
+        source_policy: model::label(POLICY).map_err(|_| CourierError::Source)?,
+        semantic_output: Some(semantic_output.clone()),
+    });
+    model::checkpoint(basis, state).map_err(|_| CourierError::Capacity)
+}
+
+pub(super) fn saved_response(
+    current: &Checkpoint,
+    member: MemberId,
+) -> Result<Option<&str>, RepositoryError> {
+    for intent in &current.state().intents {
+        if intent.definition.entry.as_str() != DEFINITION
+            || intent.status != DurableStatus::Completed
+        {
+            continue;
+        }
+        if recipient(current, intent).map_err(|_| RepositoryError::InvalidCandidate)? != member {
+            continue;
+        }
+        let operation =
+            completion_operation(intent).map_err(|_| RepositoryError::InvalidCandidate)?;
+        let decision = current
+            .state()
+            .decisions
+            .iter()
+            .find(|decision| {
+                decision.operation == operation && decision.source_policy.as_str() == POLICY
+            })
+            .ok_or(RepositoryError::InvalidCandidate)?;
+        let text = decision
+            .semantic_output
+            .as_deref()
+            .ok_or(RepositoryError::InvalidCandidate)?;
+        if text != RESPONSE {
+            return Err(RepositoryError::InvalidCandidate);
+        }
+        return Ok(Some(text));
+    }
+    Ok(None)
+}
+
+#[cfg(test)]
+#[path = "courier_ai_tests.rs"]
+mod tests;
