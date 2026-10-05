@@ -315,6 +315,7 @@ dependencies = [
 name = "df-encounter"
 version = "0.1.0"
 dependencies = [
+ "df-model",
  "df-types",
 ]
 
@@ -322,9 +323,10 @@ dependencies = [
 name = "df-engine"
 version = "0.1.0"
 dependencies = [
+ "df-combat",
  "df-content",
- "df-interaction",
  "df-intent",
+ "df-interaction",
  "df-model",
  "df-narrative",
  "df-observe",
@@ -355,6 +357,7 @@ dependencies = [
 name = "df-interaction"
 version = "0.1.0"
 dependencies = [
+ "df-model",
  "df-types",
 ]
 
@@ -377,6 +380,7 @@ dependencies = [
 name = "df-media"
 version = "0.1.0"
 dependencies = [
+ "df-model",
  "df-types",
 ]
 
@@ -391,6 +395,7 @@ dependencies = [
 name = "df-narrative"
 version = "0.1.0"
 dependencies = [
+ "df-knowledge",
  "df-model",
  "df-types",
 ]

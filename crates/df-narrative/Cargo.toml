@@ -9,3 +9,4 @@ publish = false
 [dependencies]
 df-model = { path = "../df-model" }
 df-types = { path = "../df-types" }
+df-knowledge = { path = "../df-knowledge" }

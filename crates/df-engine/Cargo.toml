@@ -15,6 +15,7 @@ df-world = { path = "../df-world" }
 df-narrative = { path = "../df-narrative" }
 df-interaction = { path = "../df-interaction" }
 df-intent = { path = "../df-intent" }
+df-combat = { path = "../df-combat" }
 
 [dev-dependencies]
 df-content = { path = "../df-content" }
@@ -38,6 +39,15 @@ path = "tests/obligation_fulfillment.rs"
 [[test]]
 name = "semantic_candidate"
 path = "tests/semantic_candidate.rs"
+
+
+[[test]]
+name = "combat_staging"
+path = "tests/combat_staging.rs"
+
+[[test]]
+name = "world_staging"
+path = "tests/world_staging.rs"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 df-session = { path = "../df-session" }
