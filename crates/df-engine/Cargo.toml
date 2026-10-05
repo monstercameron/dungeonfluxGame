@@ -13,6 +13,7 @@ df-types = { path = "../df-types" }
 df-rules = { path = "../df-rules" }
 df-world = { path = "../df-world" }
 df-narrative = { path = "../df-narrative" }
+df-interaction = { path = "../df-interaction" }
 
 [dev-dependencies]
 df-content = { path = "../df-content" }
@@ -28,3 +29,11 @@ path = "tests/director_staging.rs"
 [[test]]
 name = "pending_resumption"
 path = "tests/pending_resumption.rs"
+
+[[test]]
+name = "obligation_fulfillment"
+path = "tests/obligation_fulfillment.rs"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+df-session = { path = "../df-session" }
+df-observe = { path = "../df-observe" }

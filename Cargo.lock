@@ -323,9 +323,12 @@ name = "df-engine"
 version = "0.1.0"
 dependencies = [
  "df-content",
+ "df-interaction",
  "df-model",
  "df-narrative",
+ "df-observe",
  "df-rules",
+ "df-session",
  "df-types",
  "df-world",
 ]
