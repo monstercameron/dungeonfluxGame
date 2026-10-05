@@ -113,6 +113,9 @@ impl WebSocketIo {
                 metrics: message_metrics.clone(),
                 bytes: size,
             };
+            if size == 0 {
+                return;
+            }
             if size > MESSAGE_BYTES
                 || state.bytes.saturating_add(size) > RECEIVE_BYTES
                 || state.messages.len() >= 256

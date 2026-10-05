@@ -34,6 +34,7 @@ df-combat = { path = "../df-combat" }
 df-content = { path = "../df-content" }
 df-encounter = { path = "../df-encounter" }
 df-engine = { path = "../df-engine" }
+df-interaction = { path = "../df-interaction" }
 df-model = { path = "../df-model" }
 df-knowledge = { path = "../df-knowledge" }
 df-narrative = { path = "../df-narrative" }

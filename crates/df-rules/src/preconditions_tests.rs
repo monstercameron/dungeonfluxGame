@@ -801,11 +801,15 @@ struct FixtureHandler<'a> {
     pins: &'a CheckpointPins,
     calls: &'a Cell<usize>,
     decline: bool,
+    bound_source: Option<&'a RuleReference>,
 }
 impl RulesCommandHandler for FixtureHandler<'_> {
     type Rejection = FixtureFailure;
     fn pins(&self) -> &CheckpointPins {
         self.pins
+    }
+    fn bound_source(&self) -> Option<&RuleReference> {
+        self.bound_source
     }
     fn stage(
         &self,
@@ -864,6 +868,7 @@ fn with_registered<R>(
         pins: current.pins(),
         calls: &calls,
         decline,
+        bound_source: None,
     };
     let context = || CurrentRuleContext {
         checkpoint: current,
@@ -936,6 +941,199 @@ fn registered_stage(
         },
     )
 }
+
+#[test]
+fn registered_stage_refuses_a_handler_bound_to_a_different_source() {
+    let current = checkpoint(state()).unwrap();
+    let before = current.clone();
+    let registered_source = rule();
+    let mut handler_source = registered_source.clone();
+    handler_source.clause = label("other-clause");
+    let sources = [registered_source.clone(), handler_source.clone()];
+    let entries = [
+        CatalogEntry::new(&registered_source, b"registered-source"),
+        CatalogEntry::new(&handler_source, b"handler-source"),
+    ];
+    let content_entries = [content()];
+    let constraints = resource_constraints();
+    let selector = label("fixture-selector");
+    let calls = Cell::new(0);
+    let handler = FixtureHandler {
+        pins: current.pins(),
+        calls: &calls,
+        decline: false,
+        bound_source: None,
+    };
+    let guarded = PreconditionedCommandHandler::new(
+        &handler,
+        &handler_source,
+        CurrentRuleContext {
+            checkpoint: &current,
+            basis: current.basis(),
+            pins: current.pins(),
+            inventory: ReferenceInventory {
+                rules: &sources,
+                content: &content_entries,
+                resources: &constraints,
+                assets: &[],
+            },
+            command_limits: command_limits(),
+        },
+        RulePreconditions {
+            prepared: &current,
+            sources: &sources,
+            dependencies: &[],
+        },
+        bounds(),
+    );
+    let registrations = [HandlerRegistration::new(
+        &selector,
+        &registered_source,
+        &guarded,
+    )];
+    let catalog = CatalogSnapshot::from_published(
+        &current.pins().rules.catalog,
+        current.pins(),
+        b"synthetic-publication",
+        &entries,
+        CatalogLimits {
+            max_complete_bytes: 128,
+            max_entries: 2,
+            max_item_bytes: 64,
+            max_total_item_bytes: 128,
+        },
+    )
+    .unwrap();
+    let registry = DispatchRegistry::from_catalog(catalog, &registrations, 2).unwrap();
+    let command = input();
+
+    assert_eq!(
+        registry.stage(
+            current.pins(),
+            &selector,
+            &registered_source,
+            RulesCommandInput {
+                command: &command,
+                supplied_draws: &[],
+            },
+            &current,
+            1024 * 1024,
+        ),
+        Err(InvocationError::HandlerSourceMismatch)
+    );
+    assert_eq!(calls.get(), 0);
+    assert_eq!(current, before);
+}
+
+#[test]
+fn registered_wrapper_checks_inner_source_before_dependencies_and_invocation() {
+    let current = checkpoint(state()).unwrap();
+    let before = current.clone();
+    let source = rule();
+    let mut other_source = source.clone();
+    other_source.clause = label("other-clause");
+    let sources = [source.clone(), other_source.clone()];
+    let entries = [
+        CatalogEntry::new(&source, b"registered-source"),
+        CatalogEntry::new(&other_source, b"other-source"),
+    ];
+    let contents = [content()];
+    let resources = resource_constraints();
+    let selector = label("fixture-selector");
+    let command = input();
+
+    for (inner_source, mismatched, invalid_dependency) in [
+        (Some(&other_source), true, false),
+        (Some(&other_source), true, true),
+        (Some(&source), false, false),
+        (None, false, false),
+    ] {
+        let calls = Cell::new(0);
+        let handler = FixtureHandler {
+            pins: current.pins(),
+            calls: &calls,
+            decline: false,
+            bound_source: inner_source,
+        };
+        let absent_resource = [RuleDependency::Resource {
+            owner: entity(4),
+            resource: label("missing-resource"),
+        }];
+        let dependencies = if invalid_dependency {
+            &absent_resource[..]
+        } else {
+            &[][..]
+        };
+        let guarded = PreconditionedCommandHandler::new(
+            &handler,
+            &source,
+            CurrentRuleContext {
+                checkpoint: &current,
+                basis: current.basis(),
+                pins: current.pins(),
+                inventory: ReferenceInventory {
+                    rules: &sources,
+                    content: &contents,
+                    resources: &resources,
+                    assets: &[],
+                },
+                command_limits: command_limits(),
+            },
+            RulePreconditions {
+                prepared: &current,
+                sources: &sources,
+                dependencies,
+            },
+            bounds(),
+        );
+        let registrations = [HandlerRegistration::new(&selector, &source, &guarded)];
+        let catalog = CatalogSnapshot::from_published(
+            &current.pins().rules.catalog,
+            current.pins(),
+            b"synthetic-publication",
+            &entries,
+            CatalogLimits {
+                max_complete_bytes: 128,
+                max_entries: 2,
+                max_item_bytes: 64,
+                max_total_item_bytes: 128,
+            },
+        )
+        .unwrap();
+        let registry = DispatchRegistry::from_catalog(catalog, &registrations, 2).unwrap();
+        let result = registry.stage(
+            current.pins(),
+            &selector,
+            &source,
+            RulesCommandInput {
+                command: &command,
+                supplied_draws: &[],
+            },
+            &current,
+            1024 * 1024,
+        );
+
+        if mismatched {
+            assert_eq!(
+                result,
+                Err(InvocationError::Handler(
+                    PreconditionedRejection::HandlerSourceMismatch
+                ))
+            );
+            assert_eq!(calls.get(), 0);
+        } else {
+            let candidate = result.expect("matching or unbound handler stages");
+            assert_eq!(
+                candidate.state().decisions.len(),
+                current.state().decisions.len() + 1
+            );
+            assert_eq!(calls.get(), 1);
+        }
+        assert_eq!(current, before);
+        assert!(current.state().draws.is_empty());
+    }
+}
+
 #[test]
 fn registry_selected_handler_retains_dependency_list_and_skips_handler_on_selected_change() {
     let prepared = checkpoint(with_second_resource()).unwrap();

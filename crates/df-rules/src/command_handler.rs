@@ -25,6 +25,11 @@ pub trait RulesCommandHandler {
     type Rejection;
 
     fn pins(&self) -> &CheckpointPins;
+    /// A clause fixed by the compiled wrapper, when the handler has one. The registry refuses
+    /// staging if its registration names a different clause.
+    fn bound_source(&self) -> Option<&RuleReference> {
+        None
+    }
     fn stage(
         &self,
         input: RulesCommandInput<'_>,
@@ -41,6 +46,7 @@ pub enum InvocationError<Rejection> {
     AlreadyAccepted,
     CurrentPinsMismatch,
     CurrentCheckpoint(CheckpointError),
+    HandlerSourceMismatch,
     HandlerRulesMismatch,
     HandlerContentMismatch,
     HandlerBuildMismatch,
@@ -355,6 +361,9 @@ impl<Handler: RulesCommandHandler> DispatchRegistry<'_, Handler> {
         let handler = self
             .select(expected_pins, selector, source)
             .map_err(InvocationError::Dispatch)?;
+        if handler.bound_source().is_some_and(|bound| bound != source) {
+            return Err(InvocationError::HandlerSourceMismatch);
+        }
         stage_handler(
             handler,
             expected_pins,

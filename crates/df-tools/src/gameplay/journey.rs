@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use super::{model, wire};
 
+pub(super) mod courier_reaction;
 mod encounter_admission;
 mod enemy_tactics;
 mod narrative_phase;
@@ -20,7 +21,7 @@ const MEMBERS: [[u8; 16]; 2] = [[0x61; 16], [0x62; 16]];
 const ENTITIES: [[u8; 16]; 2] = [[0x63; 16], [0x64; 16]];
 const BANDIT: [u8; 16] = [0x65; 16];
 const ENCOUNTER: [u8; 16] = [0x66; 16];
-pub(super) const THREAD_POLICY: &str = "local-journey-rpc-3-threads-1-rest-1-inn-1";
+pub(super) const THREAD_POLICY: &str = "local-journey-rpc-3-threads-1-rest-1-inn-1-npc-1";
 const PACKET_THREAD: &str = "sealed-packet-delivery-thread";
 const THREAT_THREAD: &str = "dockside-threat-thread";
 // This fixed authored slice admits one causal event to one thread. Packet delivery is outside
@@ -888,6 +889,8 @@ pub(super) fn stage_join(
             semantic: Some(format!("join:{}:{}", hex(&member_id), hex(&entity_id))),
             policy: "local-room-join-1",
             audience: AudienceScope::Shared,
+            reaction: None,
+            escort_target: None,
         },
     )
 }
@@ -896,6 +899,8 @@ struct DecisionContent<'a> {
     semantic: Option<String>,
     policy: &'a str,
     audience: AudienceScope,
+    reaction: Option<Box<df_interaction::reactions::ReactionProposal>>,
+    escort_target: Option<EntityId>,
 }
 fn finish(
     current: &Checkpoint,
@@ -910,7 +915,14 @@ fn finish(
         semantic,
         policy,
         audience,
+        reaction,
+        escort_target,
     } = content;
+    if (entry == "escort-courier") != escort_target.is_some()
+        || (reaction.is_some() && entry != "defend-courier")
+    {
+        return Err(RepositoryError::InvalidCandidate);
+    }
     let mut facts = Vec::new();
     let make_id = |ordinal: u32| {
         use sha2::{Digest, Sha256};
@@ -1103,6 +1115,43 @@ fn finish(
         });
         facts.push(id);
     }
+    if let Some(proposal) = reaction.as_deref() {
+        let ordinal = facts.len() as u32;
+        let id = make_id(ordinal)?;
+        courier_reaction::stage_proposal(
+            current,
+            &mut state,
+            proposal,
+            operation,
+            basis.revision,
+            ordinal,
+            id,
+        )?;
+        facts.push(id);
+    }
+    let escort_contact = if let Some(target) = escort_target {
+        let ordinal = facts.len() as u32;
+        let id = make_id(ordinal)?;
+        state.facts.push(GameFact {
+            id,
+            revision: basis.revision,
+            operation,
+            ordinal,
+            cause: facts
+                .last()
+                .copied()
+                .or_else(|| current.state().facts.last().map(|fact| fact.id)),
+            audience: AudienceScope::Shared,
+            value: FactValue::ContentEvent {
+                definition: model::content("courier-escort-contact")?,
+                subjects: vec![target],
+            },
+        });
+        facts.push(id);
+        Some((id, target))
+    } else {
+        None
+    };
     let fact_id = make_id(facts.len() as u32)?;
     state.facts.push(GameFact {
         id: fact_id,
@@ -1131,6 +1180,15 @@ fn finish(
         },
     });
     facts.push(fact_id);
+    if let Some((contact_id, target)) = escort_contact {
+        courier_reaction::perceive_escort(
+            &mut state,
+            contact_id,
+            operation,
+            basis.revision,
+            target,
+        )?;
+    }
     state.decisions.push(AcceptedDecision {
         operation,
         revision: basis.revision,
@@ -2058,6 +2116,7 @@ fn stage_using(
                 .narrative
                 .open_threads
                 .push(model::content(PACKET_THREAD)?);
+            courier_reaction::enter_opening(&mut state)?;
         }
         rpc::GameplayActionKind::AskCourier | rpc::GameplayActionKind::EscortCourier => {
             if !choices.is_empty() {
@@ -2199,6 +2258,11 @@ fn stage_using(
     } else {
         action.entry.as_str()
     };
+    let reaction = if kind == rpc::GameplayActionKind::DefendCourier {
+        courier_reaction::propose_on_defend(current, *who)?
+    } else {
+        None
+    };
     let candidate = finish(
         current,
         basis,
@@ -2214,6 +2278,8 @@ fn stage_using(
             } else {
                 AudienceScope::Shared
             },
+            reaction,
+            escort_target: (kind == rpc::GameplayActionKind::EscortCourier).then_some(*who),
         },
     )?;
     if private {

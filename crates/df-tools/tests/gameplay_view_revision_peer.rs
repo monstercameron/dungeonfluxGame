@@ -305,7 +305,15 @@ async fn socket(
         .max_write_buffer_size(MESSAGE_BYTES)
         .max_message_size(MESSAGE_BYTES)
         .max_frame_size(MESSAGE_BYTES)
-        .on_upgrade(move |socket| async move {
+        .on_upgrade(move |mut socket| async move {
+            if socket
+                .send(axum::extract::ws::Message::Binary(Vec::new().into()))
+                .await
+                .is_err()
+            {
+                drop(permit);
+                return;
+            }
             let _result = admission
                 .accept_websocket_measured(
                     socket,

@@ -528,6 +528,7 @@ dependencies = [
  "df-content",
  "df-encounter",
  "df-engine",
+ "df-interaction",
  "df-knowledge",
  "df-model",
  "df-narrative",

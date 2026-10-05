@@ -467,6 +467,7 @@ fn validate_bounds(
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PreconditionedRejection<R> {
     Precondition(PreconditionError),
+    HandlerSourceMismatch,
     HandlerPinsMismatch,
     Handler(R),
 }
@@ -515,11 +516,22 @@ impl<H: RulesCommandHandler> RulesCommandHandler for PreconditionedCommandHandle
         self.handler.pins()
     }
 
+    fn bound_source(&self) -> Option<&RuleReference> {
+        Some(self.source)
+    }
+
     fn stage(
         &self,
         input: RulesCommandInput<'_>,
         checkpoint: &Checkpoint,
     ) -> Result<Checkpoint, Self::Rejection> {
+        if self
+            .handler
+            .bound_source()
+            .is_some_and(|source| source != self.source)
+        {
+            return Err(PreconditionedRejection::HandlerSourceMismatch);
+        }
         if self.handler.pins() != self.context.pins {
             return Err(PreconditionedRejection::HandlerPinsMismatch);
         }
