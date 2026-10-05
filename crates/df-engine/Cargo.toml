@@ -14,6 +14,7 @@ df-rules = { path = "../df-rules" }
 df-world = { path = "../df-world" }
 df-narrative = { path = "../df-narrative" }
 df-interaction = { path = "../df-interaction" }
+df-intent = { path = "../df-intent" }
 
 [dev-dependencies]
 df-content = { path = "../df-content" }
@@ -33,6 +34,10 @@ path = "tests/pending_resumption.rs"
 [[test]]
 name = "obligation_fulfillment"
 path = "tests/obligation_fulfillment.rs"
+
+[[test]]
+name = "semantic_candidate"
+path = "tests/semantic_candidate.rs"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 df-session = { path = "../df-session" }

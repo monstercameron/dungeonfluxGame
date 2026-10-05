@@ -324,6 +324,7 @@ version = "0.1.0"
 dependencies = [
  "df-content",
  "df-interaction",
+ "df-intent",
  "df-model",
  "df-narrative",
  "df-observe",
