@@ -3,6 +3,11 @@ use df_model::checkpoint::{
     Basis, Checkpoint, CheckpointError, CheckpointLimits, CheckpointPins, GameState,
     PendingResolution, ReferenceInventory,
 };
+use df_narrative::{
+    CheckpointProgressError, ProgressLimits, ThreadCheckpointRequest, ThreadConsequenceSelection,
+    ThreadProgressEvidence, stage_checkpoint_thread_progress,
+};
+use df_types::RevisionLabel;
 use df_world::{
     AdmittedEnvironmentalChange, AdmittedScheduleDestination, DueSelection, DueSelectionError,
     DueSelectionLimits, DueSelectionRequest, EnvironmentalDeltaError, EnvironmentalDeltaLimits,
@@ -51,6 +56,7 @@ pub enum DirectorError {
     World(DueSelectionError),
     Schedule(ScheduleAdvancementError),
     Environment(EnvironmentalDeltaError),
+    Narrative(CheckpointProgressError),
     InvalidCandidate(CheckpointError),
     WorldStateConflict,
 }
@@ -66,6 +72,8 @@ pub enum DirectorError {
 pub struct StagedDirectors<'a> {
     world: DueSelection<'a>,
     candidate: Checkpoint,
+    narrative_policy: Option<RevisionLabel>,
+    narrative_evidence: Vec<ThreadProgressEvidence>,
 }
 
 impl StagedDirectors<'_> {
@@ -84,6 +92,22 @@ impl StagedDirectors<'_> {
     /// Private server-side policy data, never an audience projection or provider prompt.
     pub fn candidate(&self) -> &Checkpoint {
         &self.candidate
+    }
+
+    /// Transfers the detached candidate to its owning transition producer.
+    /// Policy/evidence must be qualified in that producer's durable decision contract.
+    pub fn into_candidate(self) -> Checkpoint {
+        self.candidate
+    }
+
+    /// Retained admitted narrative policy for owner revalidation and replay qualification.
+    pub fn narrative_policy(&self) -> Option<&RevisionLabel> {
+        self.narrative_policy.as_ref()
+    }
+
+    /// Private causal records; the audience owner must authorize before projection.
+    pub fn narrative_evidence(&self) -> &[ThreadProgressEvidence] {
+        &self.narrative_evidence
     }
 }
 
@@ -165,6 +189,8 @@ pub fn compose_director_candidates<'a>(
     Ok(DirectorStaging::Staged(Box::new(StagedDirectors {
         world,
         candidate: selected,
+        narrative_policy: None,
+        narrative_evidence: vec![],
     })))
 }
 
@@ -228,6 +254,138 @@ pub struct ScheduleDirectorLimits {
     pub directors: DirectorLimits,
     pub schedule: ScheduleAdvancementLimits,
     pub checkpoint: CheckpointLimits,
+}
+
+/// Allocation bounds for schedule composition and the real narrative reducer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ScheduleThreadProgressLimits {
+    pub directors: ScheduleDirectorLimits,
+    pub narrative: ProgressLimits,
+}
+
+/// Stages World/environment and interaction before evaluating admitted thread consequences.
+///
+/// All stages use the canonical Model checkpoint. Narrative consumes the selected sibling state
+/// without changing facts, knowledge, draws, decisions, effects, rules outcomes or open alternatives
+/// beyond explicitly admitted Resolve selections. Pending prerequisites preserve their typed
+/// outcome. A narrative refusal discards the whole detached candidate, including tentative World
+/// work. Retained evidence/policy remain private server data, requiring owner revalidation and an
+/// atomic session commit before publication; this operation cannot commit or dispatch anything.
+pub fn compose_schedule_thread_progress<'a>(
+    current: &'a Checkpoint,
+    admitted_pins: &CheckpointPins,
+    schedule: ScheduleDirectorRequest<'_>,
+    interaction: Option<Checkpoint>,
+    narrative: ThreadCheckpointRequest<'_>,
+    limits: ScheduleThreadProgressLimits,
+) -> Result<DirectorStaging<'a>, DirectorError> {
+    let composition_limits = ScheduleDirectorLimits {
+        directors: thread_composition_limits(
+            &narrative,
+            limits.directors.directors,
+            limits.narrative,
+        )?,
+        ..limits.directors
+    };
+    let inventory = ReferenceInventory {
+        rules: narrative.inventory.rules,
+        content: narrative.inventory.content,
+        resources: narrative.inventory.resources,
+        assets: narrative.inventory.assets,
+    };
+    let composed = compose_schedule_candidates(
+        current,
+        admitted_pins,
+        schedule,
+        DirectorCandidates {
+            interaction,
+            narrative: None,
+        },
+        inventory,
+        composition_limits,
+    )?;
+    finish_thread_progress(composed, narrative, limits.narrative)
+}
+
+/// Bounds for the policy-only World/interaction and canonical narrative composition.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ThreadDirectorLimits {
+    pub directors: DirectorLimits,
+    pub narrative: ProgressLimits,
+}
+
+/// Evaluates real admitted thread consequences after policy-only sibling selection.
+/// Pending rules/World work stops Narrative. Unlike schedule composition, this entrypoint does
+/// not stage time, movement or a catch-up cursor. It retains private policy/evidence and publishes
+/// nothing; the same immutable-basis, source, bounded-work and atomic-refusal contract applies.
+pub fn compose_director_thread_progress<'a>(
+    current: &'a Checkpoint,
+    admitted_pins: &CheckpointPins,
+    world: DueSelectionRequest<'_>,
+    interaction: Option<Checkpoint>,
+    narrative: ThreadCheckpointRequest<'_>,
+    limits: ThreadDirectorLimits,
+) -> Result<DirectorStaging<'a>, DirectorError> {
+    let bounds = thread_composition_limits(&narrative, limits.directors, limits.narrative)?;
+    let composed = compose_director_candidates(
+        current,
+        admitted_pins,
+        world,
+        DirectorCandidates {
+            interaction,
+            narrative: None,
+        },
+        bounds,
+    )?;
+    finish_thread_progress(composed, narrative, limits.narrative)
+}
+
+fn thread_composition_limits(
+    narrative: &ThreadCheckpointRequest<'_>,
+    mut bounds: DirectorLimits,
+    limits: ProgressLimits,
+) -> Result<DirectorLimits, DirectorError> {
+    if narrative.checkpoint_limits.maximum_retained_bytes > bounds.maximum_checkpoint_bytes {
+        return Err(DirectorError::InvalidLimits);
+    }
+    if narrative.selections.len() > limits.consequences {
+        return Err(DirectorError::Capacity);
+    }
+    // Reserve causal output and borrowed consequence scratch before cloning sibling state.
+    // Composition already reserves three checkpoint-sized working copies for reducer staging.
+    let mut narrative_bytes =
+        std::mem::size_of::<RevisionLabel>() + narrative.policy.retained_heap_bytes();
+    for selection in narrative.selections {
+        narrative_bytes = narrative_bytes
+            .checked_add(std::mem::size_of::<ThreadProgressEvidence>())
+            .and_then(|bytes| {
+                bytes.checked_add(std::mem::size_of::<ThreadConsequenceSelection<'_>>())
+            })
+            .and_then(|bytes| bytes.checked_add(selection.thread.package.retained_heap_bytes()))
+            .and_then(|bytes| bytes.checked_add(selection.thread.entry.retained_heap_bytes()))
+            .ok_or(DirectorError::Capacity)?;
+    }
+    bounds.maximum_pass_bytes = bounds
+        .maximum_pass_bytes
+        .checked_sub(narrative_bytes)
+        .ok_or(DirectorError::Capacity)?;
+    Ok(bounds)
+}
+
+fn finish_thread_progress<'a>(
+    composed: DirectorStaging<'a>,
+    narrative: ThreadCheckpointRequest<'_>,
+    limits: ProgressLimits,
+) -> Result<DirectorStaging<'a>, DirectorError> {
+    let DirectorStaging::Staged(mut staged) = composed else {
+        return Ok(composed);
+    };
+    let proposed = stage_checkpoint_thread_progress(&staged.candidate, narrative, limits)
+        .map_err(DirectorError::Narrative)?;
+    staged.candidate = proposed.checkpoint;
+    staged.narrative_policy = Some(proposed.policy);
+    staged.narrative_evidence = proposed.evidence;
+    Ok(DirectorStaging::Staged(staged))
 }
 
 /// Explicit applicable world work supplied by the engine's source-qualified caller.
@@ -500,5 +658,7 @@ fn compose_world_candidates<'a>(
     Ok(DirectorStaging::Staged(Box::new(StagedDirectors {
         world: advanced.due,
         candidate: selected,
+        narrative_policy: None,
+        narrative_evidence: vec![],
     })))
 }

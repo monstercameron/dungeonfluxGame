@@ -32,6 +32,8 @@ df-auth = { path = "../df-auth" }
 df-content = { path = "../df-content" }
 df-engine = { path = "../df-engine" }
 df-model = { path = "../df-model" }
+df-narrative = { path = "../df-narrative" }
+df-world = { path = "../df-world" }
 df-persistence = { path = "../df-persistence" }
 df-rules = { path = "../df-rules" }
 df-session = { path = "../df-session" }

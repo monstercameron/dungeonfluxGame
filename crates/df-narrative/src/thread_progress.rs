@@ -22,7 +22,7 @@ pub(crate) struct ThreadProgressBasis<'a> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ThreadDisposition {
+pub enum ThreadDisposition {
     Continue,
     Resolve,
 }
@@ -36,15 +36,16 @@ pub(crate) struct AcceptedThreadConsequence<'a> {
     pub disposition: ThreadDisposition,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct ProgressLimits {
+/// Explicit record, consequence and comparison budgets; no calibrated defaults.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProgressLimits {
     pub records: usize,
     pub consequences: usize,
     pub work: usize,
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) enum ProgressError {
+pub enum ProgressError {
     WrongSession,
     WrongRun,
     StaleBasis,
@@ -65,7 +66,7 @@ pub(crate) enum ProgressError {
 
 /// Internal causal evidence; projection requires current audience authorization.
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) struct ThreadProgressEvidence {
+pub struct ThreadProgressEvidence {
     pub thread: ContentReference,
     pub source: FactId,
     pub revision: SessionRevision,
@@ -86,14 +87,15 @@ pub(crate) struct ThreadProgressProposal {
 
 /// An already admitted consuming-owner selection, not an authored closure rule.
 /// Source selection requires this exact committed event definition and fact ID.
-pub(crate) struct ThreadConsequenceSelection<'a> {
+pub struct ThreadConsequenceSelection<'a> {
     pub thread: &'a ContentReference,
     pub event_definition: &'a ContentReference,
     pub source: FactId,
     pub disposition: ThreadDisposition,
 }
 
-pub(crate) struct ThreadCheckpointRequest<'a> {
+/// Immutable source/policy admission for one bounded checkpoint proposal.
+pub struct ThreadCheckpointRequest<'a> {
     pub expected_basis: Basis,
     pub admitted_pins: &'a CheckpointPins,
     pub policy: &'a RevisionLabel,
@@ -104,7 +106,7 @@ pub(crate) struct ThreadCheckpointRequest<'a> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) enum CheckpointProgressError {
+pub enum CheckpointProgressError {
     Binding(CheckpointError),
     Progress(ProgressError),
     SourceDefinition,
@@ -112,8 +114,10 @@ pub(crate) enum CheckpointProgressError {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) struct CheckpointThreadProgressProposal {
+/// Detached server-side candidate and causal metadata; never an audience projection.
+pub struct CheckpointThreadProgressProposal {
     pub checkpoint: Checkpoint,
+    pub policy: RevisionLabel,
     pub evidence: Vec<ThreadProgressEvidence>,
 }
 
@@ -121,7 +125,7 @@ pub(crate) struct CheckpointThreadProgressProposal {
 /// admitted dispositions through the canonical thread reducer. The detached
 /// checkpoint preserves the exact basis/pins and every sibling state field.
 /// This is a concrete engine-consumable proposal, never a durable apply operation.
-pub(crate) fn stage_checkpoint_thread_progress(
+pub fn stage_checkpoint_thread_progress(
     current: &Checkpoint,
     request: ThreadCheckpointRequest<'_>,
     limits: ProgressLimits,
@@ -189,10 +193,12 @@ pub(crate) fn stage_checkpoint_thread_progress(
     .map_err(CheckpointProgressError::Progress)?;
     let mut state = current.state().clone();
     state.narrative = proposed.narrative;
+    let mut pins = current.pins().clone();
+    pins.content = proposed.content;
     let checkpoint = Checkpoint::new(
         current.schema(),
-        current.basis(),
-        current.pins().clone(),
+        proposed.basis,
+        pins,
         state,
         request.inventory,
         request.checkpoint_limits,
@@ -200,6 +206,7 @@ pub(crate) fn stage_checkpoint_thread_progress(
     .map_err(CheckpointProgressError::InvalidCandidate)?;
     Ok(CheckpointThreadProgressProposal {
         checkpoint,
+        policy: proposed.policy,
         evidence: proposed.evidence,
     })
 }

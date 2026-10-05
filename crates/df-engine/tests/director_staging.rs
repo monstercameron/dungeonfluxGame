@@ -1,11 +1,5 @@
-// Root installs these exact owner sources before compiling this cross-consumer fixture.
-// The narrative include is test-only: its private proposal API is not a public crate contract.
-#[path = "../src/effect_emission.rs"]
-mod effect_emission;
-#[path = "../../df-narrative/src/thread_progress.rs"]
-mod narrative_thread_progress;
-
 use df_engine::director_staging::*;
+use df_engine::effect_emission;
 use df_model::checkpoint::*;
 use df_types::{
     BuildIdentity, MemberId, RecoveryEpoch, RevisionLabel, RunId, SessionId, SessionRevision,
@@ -1070,9 +1064,8 @@ fn source_backed_schedule_state() -> GameState {
 
 #[test]
 fn actual_world_and_narrative_producers_compose_without_changing_declared_effects_or_facts() {
-    use narrative_thread_progress::{
+    use df_narrative::{
         ProgressLimits, ThreadCheckpointRequest, ThreadConsequenceSelection, ThreadDisposition,
-        stage_checkpoint_thread_progress,
     };
     let current = checkpoint(source_backed_schedule_state());
     let unchanged = current.clone();
@@ -1093,32 +1086,40 @@ fn actual_world_and_narrative_producers_compose_without_changing_declared_effect
             destination: entity(6),
         },
     ];
-    let world = schedule_compose(
-        &current,
-        &destinations,
-        DirectorCandidates {
-            interaction: None,
-            narrative: None,
-        },
-        schedule_limits(),
-    )
-    .unwrap();
-    let DirectorStaging::Staged(world) = world else {
-        panic!("mapped world producer failed")
-    };
     let policy = label("fixture-admitted-thread-policy");
     let selections = [ThreadConsequenceSelection {
         thread: &definition,
         event_definition: &definition,
         source: FactId::from_bytes(&[7; 16]).unwrap(),
-        // The source-qualified caller supplies Resolve; neither engine nor narrative infers it.
+        // Source admission supplies Resolve; the reducer never infers it from a fact.
         disposition: ThreadDisposition::Resolve,
     }];
-    let narrative = stage_checkpoint_thread_progress(
-        world.candidate(),
+    let mut interaction_state = current.state().clone();
+    interaction_state.relationships.push(Relationship {
+        subject: entity(4),
+        object: entity(5),
+        policy: content(),
+        state: label("fixture-authored-reaction"),
+    });
+    let interaction = checkpoint(interaction_state);
+    let composed = compose_schedule_thread_progress(
+        &current,
+        current.pins(),
+        ScheduleDirectorRequest {
+            accepted_time: Some(DueSelectionRequest {
+                expected_basis: current.basis(),
+                target_time: time(12),
+                paused: false,
+                deadline_remaining: Duration::from_secs(1),
+                policy: &definition,
+            }),
+            destinations: &destinations,
+            environmental: EnvironmentalRequest::NotApplicable,
+        },
+        Some(interaction.clone()),
         ThreadCheckpointRequest {
-            expected_basis: world.basis(),
-            admitted_pins: world.pins(),
+            expected_basis: current.basis(),
+            admitted_pins: current.pins(),
             policy: &policy,
             expected_policy: &policy,
             inventory: ReferenceInventory {
@@ -1130,34 +1131,28 @@ fn actual_world_and_narrative_producers_compose_without_changing_declared_effect
             checkpoint_limits: checkpoint_limits(),
             selections: &selections,
         },
-        ProgressLimits {
-            records: 32,
-            consequences: 4,
-            work: 1024,
+        ScheduleThreadProgressLimits {
+            directors: schedule_limits(),
+            narrative: ProgressLimits {
+                records: 32,
+                consequences: 4,
+                work: 1024,
+            },
         },
-    )
-    .unwrap();
-    assert_eq!(
-        narrative.evidence.first().unwrap().source,
-        selections.first().unwrap().source
-    );
-    assert_eq!(
-        narrative.checkpoint.state().narrative.open_threads,
-        vec![alternative_thread()]
-    );
-    let composed = schedule_compose(
-        &current,
-        &destinations,
-        DirectorCandidates {
-            interaction: None,
-            narrative: Some(narrative.checkpoint),
-        },
-        schedule_limits(),
     )
     .unwrap();
     let DirectorStaging::Staged(staged) = composed else {
-        panic!("actual producer snapshot refused")
+        panic!("actual producer refused")
     };
+    assert_eq!(staged.narrative_policy(), Some(&policy));
+    assert_eq!(
+        staged.narrative_evidence().first().unwrap().source,
+        selections[0].source
+    );
+    assert_eq!(
+        staged.candidate().state().relationships,
+        interaction.state().relationships
+    );
     let effects = effect_emission::declare_accepted_effects(
         staged.candidate(),
         staged.basis(),
@@ -1201,7 +1196,7 @@ fn actual_world_and_narrative_producers_compose_without_changing_declared_effect
 
 #[test]
 fn actual_narrative_producer_refuses_absent_source_before_engine_selection() {
-    use narrative_thread_progress::{
+    use df_narrative::{
         CheckpointProgressError, ProgressError, ProgressLimits, ThreadCheckpointRequest,
         ThreadConsequenceSelection, ThreadDisposition, stage_checkpoint_thread_progress,
     };
@@ -1323,7 +1318,7 @@ fn actual_effect_inspection_keeps_staged_schedule_pending_when_registration_is_m
 
 #[test]
 fn actual_narrative_continue_preserves_alternatives_and_consumed_source_is_not_reapplied() {
-    use narrative_thread_progress::{
+    use df_narrative::{
         CheckpointProgressError, ProgressError, ProgressLimits, ThreadCheckpointRequest,
         ThreadConsequenceSelection, ThreadDisposition, stage_checkpoint_thread_progress,
     };
@@ -1973,5 +1968,342 @@ fn environmental_entry_keeps_unmapped_due_work_pending_before_any_environmental_
         panic!("unmapped due work was skipped")
     };
     assert_eq!(due.events.len(), 2);
+    assert_eq!(current, unchanged);
+}
+
+struct NarrativeAdmission {
+    policy: RevisionLabel,
+    rules: Vec<RuleReference>,
+    content: Vec<ContentReference>,
+    resources: Vec<ResourceConstraint>,
+}
+
+impl NarrativeAdmission {
+    fn new() -> Self {
+        Self {
+            policy: label("fixture-admitted-thread-policy"),
+            rules: vec![rule()],
+            content: admitted_content(),
+            resources: resource_constraints(),
+        }
+    }
+
+    fn request<'a>(
+        &'a self,
+        current: &'a Checkpoint,
+        selections: &'a [df_narrative::ThreadConsequenceSelection<'a>],
+    ) -> df_narrative::ThreadCheckpointRequest<'a> {
+        df_narrative::ThreadCheckpointRequest {
+            expected_basis: current.basis(),
+            admitted_pins: current.pins(),
+            policy: &self.policy,
+            expected_policy: &self.policy,
+            inventory: ReferenceInventory {
+                rules: &self.rules,
+                content: &self.content,
+                resources: &self.resources,
+                assets: &[],
+            },
+            checkpoint_limits: checkpoint_limits(),
+            selections,
+        }
+    }
+}
+
+fn thread_limits() -> ScheduleThreadProgressLimits {
+    ScheduleThreadProgressLimits {
+        directors: schedule_limits(),
+        narrative: df_narrative::ProgressLimits {
+            records: 32,
+            consequences: 4,
+            work: 1024,
+        },
+    }
+}
+
+fn compose_threads<'a>(
+    current: &'a Checkpoint,
+    narrative: df_narrative::ThreadCheckpointRequest<'_>,
+    limits: ScheduleThreadProgressLimits,
+) -> Result<DirectorStaging<'a>, DirectorError> {
+    compose_schedule_thread_progress(
+        current,
+        current.pins(),
+        ScheduleDirectorRequest {
+            accepted_time: Some(DueSelectionRequest {
+                expected_basis: current.basis(),
+                target_time: time(12),
+                paused: false,
+                deadline_remaining: Duration::from_secs(1),
+                policy: &current.state().narrative.definition,
+            }),
+            destinations: &[],
+            environmental: EnvironmentalRequest::NotApplicable,
+        },
+        None,
+        narrative,
+        limits,
+    )
+}
+
+#[test]
+fn engine_narrative_continue_is_deterministic_and_preserves_private_facts_without_grants() {
+    use df_narrative::{ThreadConsequenceSelection, ThreadDisposition};
+    let mut state = source_backed_schedule_state();
+    state.schedules.clear();
+    state.facts[0].audience = AudienceScope::Members(vec![member(3)]);
+    let current = checkpoint(state);
+    let unchanged = current.clone();
+    let admission = NarrativeAdmission::new();
+    let definition = content();
+    let selections = [ThreadConsequenceSelection {
+        thread: &definition,
+        event_definition: &definition,
+        source: FactId::from_bytes(&[7; 16]).unwrap(),
+        disposition: ThreadDisposition::Continue,
+    }];
+    let first = compose_threads(
+        &current,
+        admission.request(&current, &selections),
+        thread_limits(),
+    )
+    .unwrap();
+    let second = compose_threads(
+        &current,
+        admission.request(&current, &selections),
+        thread_limits(),
+    )
+    .unwrap();
+    assert_eq!(first, second);
+    let DirectorStaging::Staged(staged) = first else {
+        panic!("Continue refused")
+    };
+    assert_eq!(
+        staged.candidate().state().narrative.open_threads,
+        current.state().narrative.open_threads
+    );
+    assert_eq!(
+        staged.candidate().state().narrative.accepted_facts,
+        vec![selections[0].source]
+    );
+    assert_eq!(staged.narrative_policy(), Some(&admission.policy));
+    assert_eq!(
+        staged.narrative_evidence()[0].disposition,
+        ThreadDisposition::Continue
+    );
+    let mut protected = staged.candidate().state().clone();
+    protected.narrative = current.state().narrative.clone();
+    protected.logical_time = current.state().logical_time;
+    protected.continuity.catch_up = current.state().continuity.catch_up.clone();
+    assert_eq!(protected, *current.state());
+    assert_eq!(staged.candidate().basis(), current.basis());
+    assert_eq!(staged.candidate().pins(), current.pins());
+    assert_eq!(current, unchanged);
+
+    let retry = compose_threads(
+        staged.candidate(),
+        admission.request(staged.candidate(), &selections),
+        thread_limits(),
+    );
+    assert_eq!(
+        retry,
+        Err(DirectorError::Narrative(
+            df_narrative::CheckpointProgressError::Progress(
+                df_narrative::ProgressError::RepeatedConsequence,
+            )
+        ))
+    );
+    assert_eq!(current, unchanged);
+}
+
+#[test]
+fn engine_narrative_refuses_stale_versions_and_discards_all_staged_world_changes() {
+    use df_narrative::{CheckpointProgressError, ProgressError};
+    let mut state = source_backed_schedule_state();
+    state.schedules.clear();
+    let current = checkpoint(state);
+    let unchanged = current.clone();
+    let admission = NarrativeAdmission::new();
+
+    for expected_basis in [
+        Basis {
+            revision: revision(2, 7),
+            ..current.basis()
+        },
+        Basis {
+            revision: revision(3, 8),
+            ..current.basis()
+        },
+        Basis {
+            run: RunId::from_bytes(&[99; 16]).unwrap(),
+            ..current.basis()
+        },
+        Basis {
+            session: SessionId::from_bytes(&[99; 16]).unwrap(),
+            ..current.basis()
+        },
+    ] {
+        let mut request = admission.request(&current, &[]);
+        request.expected_basis = expected_basis;
+        let expected = current
+            .validate_resume(expected_basis, current.pins())
+            .unwrap_err();
+        assert_eq!(
+            compose_threads(&current, request, thread_limits()),
+            Err(DirectorError::Narrative(CheckpointProgressError::Binding(
+                expected
+            )))
+        );
+    }
+    for component in 0..3 {
+        let mut stale = current.pins().clone();
+        let expected = match component {
+            0 => {
+                stale.content.package_digest = ContentDigest([99; 32]);
+                CheckpointError::ContentMismatch
+            }
+            1 => {
+                stale.rules.source_manifest_digest = ContentDigest([99; 32]);
+                CheckpointError::RulesMismatch
+            }
+            _ => {
+                stale.build = BuildIdentity::new(
+                    Some("different-source"),
+                    Some("fixture-native-1"),
+                    Some("fixture-wasm-1"),
+                    Some("fixture-config-1"),
+                    Some("fixture-content-1"),
+                )
+                .unwrap();
+                CheckpointError::BuildMismatch
+            }
+        };
+        let mut request = admission.request(&current, &[]);
+        request.admitted_pins = &stale;
+        assert_eq!(
+            compose_threads(&current, request, thread_limits()),
+            Err(DirectorError::Narrative(CheckpointProgressError::Binding(
+                expected
+            )))
+        );
+    }
+    let stale_policy = label("stale-thread-policy");
+    let mut request = admission.request(&current, &[]);
+    request.expected_policy = &stale_policy;
+    assert_eq!(
+        compose_threads(&current, request, thread_limits()),
+        Err(DirectorError::Narrative(CheckpointProgressError::Progress(
+            ProgressError::StalePolicy
+        )))
+    );
+    assert_eq!(current, unchanged);
+}
+
+#[test]
+fn engine_narrative_missing_source_and_exhausted_work_expose_no_candidate() {
+    use df_narrative::{
+        CheckpointProgressError, ProgressError, ThreadConsequenceSelection, ThreadDisposition,
+    };
+    let mut state = source_backed_schedule_state();
+    state.schedules.clear();
+    let current = checkpoint(state);
+    let unchanged = current.clone();
+    let admission = NarrativeAdmission::new();
+    let definition = content();
+    let selections = [ThreadConsequenceSelection {
+        thread: &definition,
+        event_definition: &definition,
+        source: FactId::from_bytes(&[99; 16]).unwrap(),
+        disposition: ThreadDisposition::Resolve,
+    }];
+    assert_eq!(
+        compose_threads(
+            &current,
+            admission.request(&current, &selections),
+            thread_limits()
+        ),
+        Err(DirectorError::Narrative(CheckpointProgressError::Progress(
+            ProgressError::MissingFact
+        )))
+    );
+    let mut bounds = thread_limits();
+    bounds.narrative.work = 0;
+    assert_eq!(
+        compose_threads(&current, admission.request(&current, &[]), bounds),
+        Err(DirectorError::Narrative(CheckpointProgressError::Progress(
+            ProgressError::Capacity
+        )))
+    );
+    let mut request = admission.request(&current, &[]);
+    request.checkpoint_limits.maximum_retained_bytes *= 2;
+    assert_eq!(
+        compose_threads(&current, request, thread_limits()),
+        Err(DirectorError::InvalidLimits)
+    );
+    assert_eq!(current, unchanged);
+}
+
+#[test]
+fn engine_narrative_reserves_evidence_within_the_total_composition_byte_budget() {
+    use df_narrative::{ThreadConsequenceSelection, ThreadDisposition};
+    let mut state = source_backed_schedule_state();
+    state.schedules.clear();
+    let current = checkpoint(state);
+    let unchanged = current.clone();
+    let admission = NarrativeAdmission::new();
+    let definition = content();
+    let selections = [ThreadConsequenceSelection {
+        thread: &definition,
+        event_definition: &definition,
+        source: FactId::from_bytes(&[7; 16]).unwrap(),
+        disposition: ThreadDisposition::Continue,
+    }];
+    let mut bounds = thread_limits();
+    bounds.directors.directors.maximum_pass_bytes = current.retained_bytes().unwrap()
+        + 3 * bounds.directors.directors.maximum_checkpoint_bytes
+        + bounds.directors.schedule.output_bytes;
+    assert!(matches!(
+        schedule_compose(
+            &current,
+            &[],
+            DirectorCandidates {
+                interaction: None,
+                narrative: None
+            },
+            bounds.directors
+        )
+        .unwrap(),
+        DirectorStaging::Staged(_)
+    ));
+    assert_eq!(
+        compose_threads(&current, admission.request(&current, &selections), bounds),
+        Err(DirectorError::Capacity)
+    );
+    assert_eq!(current, unchanged);
+}
+
+#[test]
+fn engine_narrative_waits_for_unresolved_world_work_before_examining_consequences() {
+    use df_narrative::{ThreadConsequenceSelection, ThreadDisposition};
+    let current = checkpoint(source_backed_schedule_state());
+    let unchanged = current.clone();
+    let admission = NarrativeAdmission::new();
+    let definition = content();
+    let missing_source = [ThreadConsequenceSelection {
+        thread: &definition,
+        event_definition: &definition,
+        source: FactId::from_bytes(&[99; 16]).unwrap(),
+        disposition: ThreadDisposition::Resolve,
+    }];
+    let output = compose_threads(
+        &current,
+        admission.request(&current, &missing_source),
+        thread_limits(),
+    )
+    .unwrap();
+    let DirectorStaging::WorldPending(world) = output else {
+        panic!("unresolved World work skipped")
+    };
+    assert_eq!(world.events.len(), 2);
     assert_eq!(current, unchanged);
 }

@@ -324,6 +324,7 @@ version = "0.1.0"
 dependencies = [
  "df-content",
  "df-model",
+ "df-narrative",
  "df-rules",
  "df-types",
  "df-world",
@@ -378,6 +379,14 @@ dependencies = [
 name = "df-model"
 version = "0.1.0"
 dependencies = [
+ "df-types",
+]
+
+[[package]]
+name = "df-narrative"
+version = "0.1.0"
+dependencies = [
+ "df-model",
  "df-types",
 ]
 
@@ -507,6 +516,7 @@ dependencies = [
  "df-content",
  "df-engine",
  "df-model",
+ "df-narrative",
  "df-observe",
  "df-persistence",
  "df-protocol",
@@ -515,6 +525,7 @@ dependencies = [
  "df-session",
  "df-types",
  "df-ui",
+ "df-world",
  "futures",
  "gloo-timers",
  "js-sys",

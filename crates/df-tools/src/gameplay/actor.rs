@@ -19,9 +19,33 @@ use super::{model, wire};
 pub(super) struct QualificationSnapshot {
     pub actions: Vec<QualificationInput>,
     pub joins: Vec<QualificationJoin>,
+    pub checkpoint: Checkpoint,
+    pub codec: NativeCodecLimits,
 }
 pub(super) type QualificationJoin = (rpc::JoinRoomRequest, [u8; 32], [u8; 16]);
 pub(super) type QualificationInput = ([u8; 32], rpc::SubmitActionRequest);
+fn retain_qualification_input(
+    inputs: &mut Vec<QualificationInput>,
+    credential: [u8; 32],
+    request: &rpc::SubmitActionRequest,
+) {
+    if inputs.len() < 7
+        && matches!(
+            rpc::GameplayActionKind::try_from(request.action_kind),
+            Ok(rpc::GameplayActionKind::CreateCharacter
+                | rpc::GameplayActionKind::BeginStory
+                | rpc::GameplayActionKind::AskCourier
+                | rpc::GameplayActionKind::DefendCourier
+                | rpc::GameplayActionKind::GreatswordAttack)
+        )
+        && !inputs.iter().any(|(saved_credential, saved)| {
+            *saved_credential == credential && saved.action_kind == request.action_kind
+        })
+    {
+        inputs.push((credential, request.clone()));
+    }
+}
+
 pub(super) enum Call {
     QualificationInputs {
         reply: oneshot::Sender<Result<QualificationSnapshot, tonic::Status>>,
@@ -304,18 +328,8 @@ impl Actor {
             SubmissionOutcome::Confirmed(committed) => {
                 let accepted =
                     super::journey::accepted(committed.decision()).map_err(unavailable)?;
-                if let Some(inputs) = self.qualification_inputs.as_mut()
-                    && inputs.len() < 4
-                    && matches!(
-                        rpc::GameplayActionKind::try_from(request.action_kind),
-                        Ok(rpc::GameplayActionKind::CreateCharacter
-                            | rpc::GameplayActionKind::GreatswordAttack)
-                    )
-                    && !inputs.iter().any(|(saved_credential, saved)| {
-                        *saved_credential == credential && saved.action_kind == request.action_kind
-                    })
-                {
-                    inputs.push((credential, request.clone()));
+                if let Some(inputs) = self.qualification_inputs.as_mut() {
+                    retain_qualification_input(inputs, credential, &request);
                 }
                 Ok(wire::committed(wire::receipt(
                     committed.basis(),
@@ -437,6 +451,8 @@ impl Reducer<Call> for Actor {
                         .map(|actions| QualificationSnapshot {
                             actions,
                             joins: self.qualification_joins.clone().unwrap_or_default(),
+                            checkpoint: self.owner.checkpoint().clone(),
+                            codec: self.codec,
                         })
                         .ok_or_else(|| tonic::Status::permission_denied("qualification disabled")),
                 )
@@ -458,5 +474,86 @@ impl Reducer<Call> for Actor {
         } else {
             "caller_gone_outcome_retained"
         });
+    }
+}
+
+#[cfg(test)]
+mod qualification_tests {
+    use super::*;
+
+    #[test]
+    fn retained_inputs_cover_authored_verifier_and_replay_with_a_fixed_bound() {
+        let mut inputs = Vec::new();
+        let action = |kind| rpc::SubmitActionRequest {
+            action_kind: kind as i32,
+            ..Default::default()
+        };
+        for kind in [
+            rpc::GameplayActionKind::CreateCharacter,
+            rpc::GameplayActionKind::BeginStory,
+            rpc::GameplayActionKind::AskCourier,
+            rpc::GameplayActionKind::DefendCourier,
+            rpc::GameplayActionKind::GreatswordAttack,
+        ] {
+            retain_qualification_input(&mut inputs, [1; 32], &action(kind));
+            retain_qualification_input(&mut inputs, [1; 32], &action(kind));
+        }
+        retain_qualification_input(
+            &mut inputs,
+            [2; 32],
+            &action(rpc::GameplayActionKind::CreateCharacter),
+        );
+        retain_qualification_input(
+            &mut inputs,
+            [2; 32],
+            &action(rpc::GameplayActionKind::GreatswordAttack),
+        );
+        assert_eq!(inputs.len(), 7);
+        for kind in [
+            rpc::GameplayActionKind::BeginStory,
+            rpc::GameplayActionKind::AskCourier,
+            rpc::GameplayActionKind::DefendCourier,
+            rpc::GameplayActionKind::GreatswordAttack,
+        ] {
+            assert!(
+                inputs
+                    .iter()
+                    .any(|(_, request)| request.action_kind == kind as i32)
+            );
+        }
+        for kind in [
+            rpc::GameplayActionKind::CreateCharacter,
+            rpc::GameplayActionKind::GreatswordAttack,
+        ] {
+            assert_eq!(
+                inputs
+                    .iter()
+                    .filter(|(_, request)| request.action_kind == kind as i32)
+                    .count(),
+                2
+            );
+        }
+        let retained = inputs.clone();
+        retain_qualification_input(
+            &mut inputs,
+            [3; 32],
+            &action(rpc::GameplayActionKind::BeginStory),
+        );
+        assert_eq!(inputs, retained);
+        let mut empty = Vec::new();
+        retain_qualification_input(
+            &mut empty,
+            [1; 32],
+            &action(rpc::GameplayActionKind::EndTurn),
+        );
+        retain_qualification_input(
+            &mut empty,
+            [1; 32],
+            &rpc::SubmitActionRequest {
+                action_kind: i32::MAX,
+                ..Default::default()
+            },
+        );
+        assert!(empty.is_empty());
     }
 }

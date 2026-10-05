@@ -1,6 +1,7 @@
 //! Finite private consumer of generated requests against the actual local actor and PG.
 //! Enabled only by the explicit qualification flag; no HTTP route or gameplay UI control.
-use super::{Service, actor, hex};
+use super::{Service, actor, hex, journey, model};
+use df_model::checkpoint::{AudienceScope, FactValue};
 use df_persistence::local_demo_scope::TENANT;
 use df_protocol::common as rpc;
 use prost::Message;
@@ -9,13 +10,19 @@ use std::{io, time::Duration};
 use tokio::sync::oneshot;
 use tonic::Request;
 
-const TRIGGER: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/real-next-scene-20261004/qualification-start-01";
-const REPORT: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/real-next-scene-20261004/authority-acceptance-report-01.json";
+const TRIGGER: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-runtime-20261004/engine-qualification-start-02";
+const REPORT: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-runtime-20261004/engine-authority-acceptance-report-02.json";
+#[track_caller]
 fn required(condition: bool) -> Result<(), io::Error> {
     if condition {
         Ok(())
     } else {
-        Err(io::Error::other("finite authority assertion failed"))
+        let location = std::panic::Location::caller();
+        Err(io::Error::other(format!(
+            "finite authority assertion failed at {}:{}",
+            location.file(),
+            location.line()
+        )))
     }
 }
 fn request<T>(value: T, credential: [u8; 32]) -> Result<Request<T>, io::Error> {
@@ -86,6 +93,108 @@ async fn durable(
             .map_err(|_| io::Error::other("qualified fingerprint malformed"))?,
     })
 }
+
+async fn verify_retained_narrative(
+    client: &tokio_postgres::Client,
+    snapshot: &actor::QualificationSnapshot,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let checkpoint = &snapshot.checkpoint;
+    let envelope =
+        df_persistence::local_demo_scope::encode_owned_demo_checkpoint(checkpoint, snapshot.codec)
+            .map_err(|_| io::Error::other("owned checkpoint encoding failed"))?;
+    required(!envelope.is_empty() && envelope.len() <= 1024 * 1024)?;
+    let row = client.query_one(
+        "SELECT CASE WHEN octet_length(c.complete_envelope) <= 1048576 THEN c.complete_envelope END AS envelope FROM df_game.sessions s JOIN df_game.checkpoints c ON (c.tenant_id,c.session_id,c.recovery_epoch,c.in_epoch_sequence)=(s.tenant_id,s.session_id,s.recovery_epoch,s.in_epoch_sequence) WHERE s.tenant_id=$1 AND s.session_id=$2",
+        &[&TENANT.as_slice(), &checkpoint.basis().session.as_bytes().as_slice()],
+    ).await?;
+    let persisted: Option<Vec<u8>> = row.try_get("envelope")?;
+    required(persisted.as_deref() == Some(envelope.as_slice()))?;
+
+    let state = checkpoint.state();
+    let packet = model::content("sealed-packet-delivery-thread")
+        .map_err(|_| io::Error::other("packet source unavailable"))?;
+    let threat = model::content("dockside-threat-thread")
+        .map_err(|_| io::Error::other("threat source unavailable"))?;
+    let bandit =
+        journey::entity([0x65; 16]).map_err(|_| io::Error::other("bandit source unavailable"))?;
+    let unconscious = journey::value(state, bandit, "unconscious")
+        .map_err(|_| io::Error::other("bandit outcome unavailable"))?;
+    required(state.narrative.open_threads.contains(&packet))?;
+    required(state.narrative.open_threads.contains(&threat) == (unconscious == 0))?;
+    let source_rule = journey::rule().map_err(|_| io::Error::other("rules source unavailable"))?;
+    let mut admitted_knockout = false;
+    for id in &state.narrative.accepted_facts {
+        let fact = state
+            .facts
+            .iter()
+            .find(|fact| fact.id == *id)
+            .ok_or_else(|| io::Error::other("narrative source fact absent"))?;
+        let FactValue::ContentEvent { definition, .. } = &fact.value else {
+            return Err(io::Error::other("narrative source is not an authored event").into());
+        };
+        required(definition.package == checkpoint.pins().content.package)?;
+        required(
+            [
+                "begin-story",
+                "private-courier-note",
+                "escort-courier",
+                "defend-courier",
+                "greatsword-attack",
+                "second-wind",
+                "end-turn",
+            ]
+            .contains(&definition.entry.as_str()),
+        )?;
+        required(state.decisions.iter().any(|decision| {
+            decision.operation == fact.operation
+                && decision.revision == fact.revision
+                && decision.source_policy.as_str() == journey::THREAD_POLICY
+                && decision.facts.contains(id)
+        }))?;
+        admitted_knockout |= ["defend-courier", "greatsword-attack", "second-wind", "end-turn"]
+            .contains(&definition.entry.as_str()) && state.facts.iter().any(|cause| {
+                cause.operation == fact.operation && cause.revision == fact.revision && cause.ordinal < fact.ordinal
+                    && matches!(&cause.value, FactValue::ResourceChanged { entity, resource, before: 0, after: 1, source }
+                        if *entity == bandit && resource.as_str() == "unconscious" && *source == source_rule)
+            });
+    }
+    required(admitted_knockout == (unconscious != 0))?;
+    for (kind, event) in [
+        (rpc::GameplayActionKind::BeginStory, "begin-story"),
+        (rpc::GameplayActionKind::AskCourier, "private-courier-note"),
+        (rpc::GameplayActionKind::DefendCourier, "defend-courier"),
+        (
+            rpc::GameplayActionKind::GreatswordAttack,
+            "greatsword-attack",
+        ),
+    ] {
+        let (credential, request) = snapshot
+            .actions
+            .iter()
+            .find(|(_, request)| request.action_kind == kind as i32)
+            .ok_or_else(|| io::Error::other("required authored input absent"))?;
+        let operation = request
+            .operation_id
+            .as_ref()
+            .and_then(|id| id.value.as_ref())
+            .ok_or_else(|| io::Error::other("required authored operation absent"))?;
+        let fact = state.facts.iter().find(|fact| fact.operation.as_bytes().as_slice() == operation
+            && matches!(&fact.value, FactValue::ContentEvent { definition, .. } if definition.entry.as_str() == event))
+            .ok_or_else(|| io::Error::other("required authored source fact absent"))?;
+        required(state.narrative.accepted_facts.contains(&fact.id))?;
+        if kind == rpc::GameplayActionKind::AskCourier {
+            let (_, _, discoverer) = snapshot
+                .joins
+                .iter()
+                .find(|(_, grant, _)| grant == credential)
+                .ok_or_else(|| io::Error::other("private discoverer absent"))?;
+            required(matches!(&fact.audience, AudienceScope::Members(members)
+                if members.len() == 1 && members[0].as_bytes() == discoverer
+                    && members[0].as_bytes() != &df_persistence::local_demo_scope::DISPLAY))?;
+        }
+    }
+    Ok(())
+}
 async fn exercise(
     service: &Service,
     client: &tokio_postgres::Client,
@@ -98,6 +207,7 @@ async fn exercise(
         .map_err(|_| io::Error::other("qualification inputs admission failed"))?;
     let snapshot = tokio::time::timeout(Duration::from_secs(5), wait).await???;
     required(snapshot.joins.len() == 2)?;
+    verify_retained_narrative(client, &snapshot).await?;
     let (proof, grant, member) = &snapshot.joins[0];
     let counts=client.query_one("SELECT (SELECT count(*) FROM df_local_demo.room_grants) AS joins,(SELECT count(*) FROM df_local_demo.grants) AS grants,(SELECT count(*) FROM df_game.operations) AS operations",&[]).await?;
     let before_counts = (
@@ -267,14 +377,33 @@ pub(super) async fn run(
                 .await
                 .map_err(io::Error::other)?
                 .map_err(io::Error::other);
-            let passed = matches!(result, Ok(Ok(()))) && joined.is_ok();
+            let failure = match result {
+                Ok(Ok(())) => joined
+                    .err()
+                    .map(|error| ("connection_driver", error.to_string())),
+                Ok(Err(error)) => Some(("exercise", error.to_string())),
+                Err(_) => Some((
+                    "exercise_timeout",
+                    "qualification exercise timeout".to_owned(),
+                )),
+            };
+            let passed = failure.is_none();
+            let failure_stage = failure.as_ref().map_or("none", |(stage, _)| *stage);
+            let failure_diagnostic = failure.as_ref().map_or_else(String::new, |(_, error)| {
+                error.chars().take(256).collect::<String>()
+            });
+            let diagnostic_json = bounded_json_string(&failure_diagnostic);
             std::fs::write(
                 REPORT,
                 format!(
-                    "{{\"pass\":{passed},\"actor_calls_limit\":14,\"transport\":\"generated protobuf Service consumer; browser transport assessed separately\",\"retention_qualification\":\"last; expired row remains retained\"}}\n"
+                    "{{\"pass\":{passed},\"actor_calls_limit\":14,\"proof_flags_require_overall_pass\":true,\"failure_stage\":\"{failure_stage}\",\"failure_diagnostic\":{diagnostic_json},\"transport\":\"generated protobuf Service consumer; browser transport assessed separately\",\"retention_qualification\":\"last; expired row remains retained\",\"persisted_checkpoint_byte_equality\":{passed},\"narrative_source_policy_retained\":{passed},\"packet_branch_unresolved\":{passed},\"threat_closure_matches_accepted_knockout\":{passed},\"private_courier_audience_preserved\":{passed},\"restart_rehydration_verified\":false}}\n"
                 ),
             )?;
-            required(passed)?;
+            if let Some((stage, _)) = failure {
+                return Err(io::Error::other(format!(
+                    "qualification {stage}: {failure_diagnostic}"
+                )));
+            }
             return Ok(());
         }
         tokio::select! {
@@ -287,4 +416,39 @@ pub(super) async fn run(
         }
     }
     Err(io::Error::other("qualification trigger deadline"))
+}
+
+fn bounded_json_string(value: &str) -> String {
+    let mut result = String::from("\"");
+    for ch in value.chars().take(256) {
+        match ch {
+            '"' => result.push_str("\\\""),
+            '\\' => result.push_str("\\\\"),
+            ch if ch.is_control() => result.push_str(&format!("\\u{:04x}", ch as u32)),
+            ch => result.push(ch),
+        }
+    }
+    result.push('"');
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn assertion_diagnostics_keep_location_and_bounded_json_context() {
+        let line = line!() + 1;
+        let error = required(false).expect_err("false assertion must fail");
+        assert!(
+            error
+                .to_string()
+                .ends_with(&format!("qualification.rs:{line}"))
+        );
+        assert_eq!(
+            bounded_json_string("stage\n\"\\"),
+            "\"stage\\u000a\\\"\\\\\""
+        );
+        assert_eq!(bounded_json_string(&"x".repeat(300)).len(), 258);
+    }
 }

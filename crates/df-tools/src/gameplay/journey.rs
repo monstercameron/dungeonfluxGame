@@ -6,6 +6,7 @@ use df_rules::local_journey as rules;
 use df_session::submission::RepositoryError;
 use df_types::{MemberId, OperationId};
 use prost::Message;
+use std::time::Duration;
 
 use super::{model, wire};
 
@@ -15,6 +16,20 @@ const MEMBERS: [[u8; 16]; 2] = [[0x61; 16], [0x62; 16]];
 const ENTITIES: [[u8; 16]; 2] = [[0x63; 16], [0x64; 16]];
 const BANDIT: [u8; 16] = [0x65; 16];
 const ENCOUNTER: [u8; 16] = [0x66; 16];
+pub(super) const THREAD_POLICY: &str = "local-journey-rpc-2-threads-1";
+const PACKET_THREAD: &str = "sealed-packet-delivery-thread";
+const THREAT_THREAD: &str = "dockside-threat-thread";
+// This fixed authored slice admits one causal event to one thread. Packet delivery is outside
+// this journey; combat victory resolves only the dockside threat and never delivers the packet.
+const THREAD_EVENTS: &[(&str, &str)] = &[
+    ("begin-story", PACKET_THREAD),
+    ("private-courier-note", PACKET_THREAD),
+    ("escort-courier", PACKET_THREAD),
+    ("defend-courier", THREAT_THREAD),
+    ("greatsword-attack", THREAT_THREAD),
+    ("second-wind", THREAT_THREAD),
+    ("end-turn", THREAT_THREAD),
+];
 pub(super) const CONTENT_ENTRIES: &[&str] = &[
     "room",
     "join-room",
@@ -51,6 +66,8 @@ pub(super) const CONTENT_ENTRIES: &[&str] = &[
     "quiver",
     "travelers-clothes",
     "gold-piece",
+    PACKET_THREAD,
+    THREAT_THREAD,
 ];
 fn bad<T>(_: T) -> RepositoryError {
     RepositoryError::InvalidCandidate
@@ -389,7 +406,7 @@ pub(super) fn offered(
 pub(super) fn accepted(
     decision: &AcceptedDecision,
 ) -> Result<rpc::AcceptedAction, RepositoryError> {
-    if decision.source_policy.as_str() != "local-journey-rpc-1" {
+    if decision.source_policy.as_str() != THREAD_POLICY {
         return Err(RepositoryError::InvalidReceipt);
     }
     let text = decision
@@ -548,7 +565,7 @@ fn finish(
             revision: basis.revision,
             operation,
             ordinal: draw.ordinal,
-            cause: current.state().narrative.accepted_facts.last().copied(),
+            cause: current.state().facts.last().map(|fact| fact.id),
             audience: AudienceScope::Shared,
             value: FactValue::DrawAccepted {
                 operation,
@@ -611,7 +628,7 @@ fn finish(
         cause: facts
             .last()
             .copied()
-            .or_else(|| current.state().narrative.accepted_facts.last().copied()),
+            .or_else(|| current.state().facts.last().map(|fact| fact.id)),
         audience,
         value: FactValue::ContentEvent {
             definition: model::content(entry)?,
@@ -619,7 +636,6 @@ fn finish(
         },
     });
     facts.push(fact_id);
-    state.narrative.accepted_facts.push(fact_id);
     state.decisions.push(AcceptedDecision {
         operation,
         revision: basis.revision,
@@ -630,7 +646,119 @@ fn finish(
         semantic_output: semantic,
     });
     state.draws.extend(draws);
-    model::checkpoint(basis, state)
+    let candidate = model::checkpoint(basis, state)?;
+    stage_authored_threads(candidate, fact_id)
+}
+
+fn stage_authored_threads(
+    candidate: Checkpoint,
+    source_id: FactId,
+) -> Result<Checkpoint, RepositoryError> {
+    use df_engine::director_staging::{
+        DirectorLimits, DirectorStaging, ThreadDirectorLimits, compose_director_thread_progress,
+    };
+    use df_narrative::{
+        ProgressLimits, ThreadCheckpointRequest, ThreadConsequenceSelection, ThreadDisposition,
+    };
+    let source = candidate
+        .state()
+        .facts
+        .iter()
+        .find(|fact| fact.id == source_id)
+        .ok_or(RepositoryError::InvalidCandidate)?;
+    let FactValue::ContentEvent { definition, .. } = &source.value else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
+    let mut admitted_thread = None;
+    for &(event, thread) in THREAD_EVENTS {
+        if *definition == model::content(event)? {
+            admitted_thread = Some(model::content(thread)?);
+            break;
+        }
+    }
+    let Some(thread) = admitted_thread else {
+        return Ok(candidate);
+    };
+    if !candidate.state().decisions.iter().any(|decision| {
+        decision.operation == source.operation
+            && decision.revision == source.revision
+            && decision.source_policy.as_str() == THREAD_POLICY
+            && decision.facts.contains(&source_id)
+    }) {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    let bandit = entity(BANDIT)?;
+    let unconscious = model::label("unconscious")?;
+    let source_rule = rule()?;
+    let defeated = thread == model::content(THREAT_THREAD)? && candidate.state().facts.iter().any(|fact| {
+        fact.operation == source.operation && fact.revision == source.revision && fact.ordinal < source.ordinal
+            && matches!(&fact.value, FactValue::ResourceChanged { entity, resource, before: 0, after: 1, source }
+                if *entity == bandit && *resource == unconscious && *source == source_rule)
+    });
+    let selections = [ThreadConsequenceSelection {
+        thread: &thread,
+        event_definition: definition,
+        source: source_id,
+        disposition: if defeated {
+            ThreadDisposition::Resolve
+        } else {
+            ThreadDisposition::Continue
+        },
+    }];
+    let policy = model::label(THREAD_POLICY)?;
+    let pins = model::pins()?;
+    let staged = compose_director_thread_progress(
+        &candidate,
+        &pins,
+        df_world::DueSelectionRequest {
+            expected_basis: candidate.basis(),
+            target_time: candidate.state().logical_time,
+            paused: false,
+            deadline_remaining: Duration::from_secs(1),
+            policy: &candidate.state().narrative.definition,
+        },
+        None,
+        ThreadCheckpointRequest {
+            expected_basis: candidate.basis(),
+            admitted_pins: &pins,
+            policy: &policy,
+            expected_policy: &policy,
+            inventory: ReferenceInventory {
+                rules: &[model::rule()?, source_rule],
+                content: &model::contents()?,
+                resources: &resources()?,
+                assets: &[],
+            },
+            checkpoint_limits: model::limits(),
+            selections: &selections,
+        },
+        ThreadDirectorLimits {
+            directors: DirectorLimits {
+                maximum_checkpoint_bytes: model::limits().maximum_retained_bytes,
+                maximum_pass_bytes: 8 * 1024 * 1024,
+                maximum_relationships: 512,
+                world: df_world::DueSelectionLimits {
+                    queue_events: 512,
+                    selected_events: 8,
+                    output_bytes: 128 * 1024,
+                },
+            },
+            narrative: ProgressLimits {
+                records: 512,
+                consequences: 1,
+                work: 1024 * 1024,
+            },
+        },
+    )
+    .map_err(bad)?;
+    match staged {
+        DirectorStaging::Staged(staged) => Ok((*staged).into_candidate()),
+        // The local slice has no scheduled/pending continuation producer. Refusal leaves the
+        // current checkpoint and pending prerequisites untouched; nothing reaches session commit.
+        DirectorStaging::RulesPending(_)
+        | DirectorStaging::WorldPending(_)
+        | DirectorStaging::MissingEnvironmentalProducer => Err(RepositoryError::InvalidCandidate),
+    }
 }
 
 fn command(input: &GameInput) -> Result<&CommandInput, RepositoryError> {
@@ -1045,6 +1173,9 @@ fn stage_using(
     input: &GameInput,
     supplier: DiceSource<'_>,
 ) -> Result<Checkpoint, RepositoryError> {
+    current
+        .validate_resume(current.basis(), &model::pins()?)
+        .map_err(bad)?;
     df_model::commands::validate_client_command(
         input,
         current,
@@ -1096,6 +1227,10 @@ fn stage_using(
                 return Err(RepositoryError::InvalidCandidate);
             }
             beat(&mut state, "opening")?;
+            state
+                .narrative
+                .open_threads
+                .push(model::content(PACKET_THREAD)?);
         }
         rpc::GameplayActionKind::AskCourier | rpc::GameplayActionKind::EscortCourier => {
             if !choices.is_empty() {
@@ -1113,6 +1248,10 @@ fn stage_using(
             if !choices.is_empty() {
                 return Err(RepositoryError::InvalidCandidate);
             }
+            state
+                .narrative
+                .open_threads
+                .push(model::content(THREAT_THREAD)?);
             start_combat(
                 &mut state,
                 command.operation,
@@ -1215,7 +1354,7 @@ fn stage_using(
         DecisionContent {
             entry,
             semantic,
-            policy: "local-journey-rpc-1",
+            policy: THREAD_POLICY,
             audience: if private {
                 AudienceScope::Members(vec![command.member])
             } else {
@@ -1282,7 +1421,15 @@ pub(super) fn stage(
     current: &Checkpoint,
     input: &GameInput,
 ) -> Result<Checkpoint, RepositoryError> {
-    let prepared = stage_using(current, input, &mut sample_face)?;
+    stage_with_supplier(current, input, &mut sample_face)
+}
+
+fn stage_with_supplier(
+    current: &Checkpoint,
+    input: &GameInput,
+    supplier: DiceSource<'_>,
+) -> Result<Checkpoint, RepositoryError> {
+    let prepared = stage_using(current, input, supplier)?;
     let operation = command(input)?.operation;
     let draws = prepared
         .state()
@@ -1558,5 +1705,282 @@ mod tests {
         let mut forbid = |_: u32| panic!("wrong turn must never draw");
         assert!(stage_using(&current, &wrong, &mut forbid).is_err());
         assert_eq!(current.state().draws.len(), 3);
+    }
+
+    fn prepared_story() -> Checkpoint {
+        let mut current = initial().expect("initial room");
+        for op in [1, 2] {
+            current = stage_join(
+                &current,
+                &input(
+                    &current,
+                    bootstrap_member().unwrap(),
+                    op,
+                    "join-room",
+                    vec![],
+                ),
+            )
+            .expect("joined member");
+        }
+        for (op, bytes, name) in [(3, MEMBERS[0], "Brynn"), (4, MEMBERS[1], "Vale")] {
+            current = stage_with_supplier(
+                &current,
+                &input(
+                    &current,
+                    MemberId::from_bytes(&bytes).unwrap(),
+                    op,
+                    "create-character",
+                    build(name),
+                ),
+                &mut |_| panic!("creation cannot draw"),
+            )
+            .expect("registered character outcome");
+        }
+        current
+    }
+
+    fn opening_story() -> Checkpoint {
+        let current = prepared_story();
+        stage_with_supplier(
+            &current,
+            &input(
+                &current,
+                MemberId::from_bytes(&MEMBERS[0]).unwrap(),
+                5,
+                "begin-story",
+                vec![],
+            ),
+            &mut |_| panic!("opening cannot draw"),
+        )
+        .expect("registered opening")
+    }
+
+    #[test]
+    fn registered_narrative_tracks_private_packet_and_ignores_unmapped_events() {
+        let ready = prepared_story();
+        assert!(ready.state().narrative.accepted_facts.is_empty());
+        assert!(ready.state().narrative.open_threads.is_empty());
+        let current = opening_story();
+        assert_eq!(
+            current.state().narrative.open_threads,
+            vec![model::content(PACKET_THREAD).unwrap()]
+        );
+        assert_eq!(current.state().narrative.accepted_facts.len(), 1);
+        let member = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let command = input(&current, member, 6, "ask-courier", vec![]);
+        let private =
+            stage_with_supplier(&current, &command, &mut |_| panic!("dialogue cannot draw"))
+                .expect("private accepted source");
+        let replay = stage_with_supplier(&current, &command, &mut |_| panic!("replay cannot draw"))
+            .expect("same immutable source");
+        assert_eq!(private, replay);
+        assert_eq!(
+            private.state().narrative.open_threads,
+            current.state().narrative.open_threads
+        );
+        assert_eq!(private.state().narrative.accepted_facts.len(), 2);
+        let source = private.state().facts.last().unwrap();
+        assert_eq!(source.audience, AudienceScope::Members(vec![member]));
+        assert!(private.state().knowledge.is_empty());
+        assert!(private.state().draws.is_empty());
+        assert_eq!(
+            private
+                .state()
+                .decisions
+                .last()
+                .unwrap()
+                .source_policy
+                .as_str(),
+            THREAD_POLICY
+        );
+        assert_eq!(
+            accepted(private.state().decisions.last().unwrap())
+                .unwrap()
+                .phase,
+            rpc::JourneyPhase::Dialogue as i32
+        );
+        assert_eq!(
+            stage_authored_threads(private.clone(), source.id),
+            Err(RepositoryError::InvalidCandidate)
+        );
+        assert!(
+            stage_with_supplier(&private, &command, &mut |_| panic!(
+                "stale command cannot draw"
+            ))
+            .is_err()
+        );
+        let untouched = private.clone();
+        let mut old_pins = private.pins().clone();
+        old_pins.content.package_digest = ContentDigest([99; 32]);
+        let stale = Checkpoint::new(
+            private.schema(),
+            private.basis(),
+            old_pins,
+            private.state().clone(),
+            ReferenceInventory {
+                rules: &[model::rule().unwrap(), rule().unwrap()],
+                content: &model::contents().unwrap(),
+                resources: &resources().unwrap(),
+                assets: &[],
+            },
+            model::limits(),
+        )
+        .unwrap();
+        assert!(
+            stage_with_supplier(
+                &stale,
+                &input(&stale, member, 7, "defend-courier", vec![]),
+                &mut |_| Ok(10)
+            )
+            .is_err()
+        );
+        assert_eq!(private, untouched);
+    }
+
+    #[test]
+    fn registered_hit_preserves_threat_until_actual_knockout_then_retains_packet_branch() {
+        let member = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let mut current = opening_story();
+        current = stage_with_supplier(
+            &current,
+            &input(&current, member, 6, "escort-courier", vec![]),
+            &mut |_| panic!("escort cannot draw"),
+        )
+        .unwrap();
+        current = stage_with_supplier(
+            &current,
+            &input(&current, member, 7, "defend-courier", vec![]),
+            &mut |_| Ok(10),
+        )
+        .unwrap();
+        let threads = vec![
+            model::content(PACKET_THREAD).unwrap(),
+            model::content(THREAT_THREAD).unwrap(),
+        ];
+        assert_eq!(current.state().narrative.open_threads, threads);
+        assert_eq!(current.state().draws.len(), 3);
+        let attack_choices = || {
+            vec![
+                (
+                    model::label("savage-attacker").unwrap(),
+                    model::label("no").unwrap(),
+                ),
+                (model::label("graze").unwrap(), model::label("no").unwrap()),
+            ]
+        };
+        let command = input(&current, member, 8, "greatsword-attack", attack_choices());
+        current = stage_with_supplier(&current, &command, &mut |sides| {
+            Ok(if sides == 20 { 10 } else { 1 })
+        })
+        .unwrap();
+        assert_eq!(
+            value(current.state(), entity(BANDIT).unwrap(), "unconscious").unwrap(),
+            0
+        );
+        assert_eq!(current.state().narrative.open_threads, threads);
+        assert_eq!(current.state().draws.len(), 6);
+        current = stage_with_supplier(
+            &current,
+            &input(&current, member, 9, "end-turn", vec![]),
+            &mut |_| panic!("next player needs no enemy draw"),
+        )
+        .unwrap();
+        let second = MemberId::from_bytes(&MEMBERS[1]).unwrap();
+        let before = current.clone();
+        let command = input(&current, second, 10, "greatsword-attack", attack_choices());
+        let defeated = stage_with_supplier(&current, &command, &mut |sides| {
+            Ok(if sides == 20 { 10 } else { 6 })
+        })
+        .unwrap();
+        assert_eq!(
+            value(defeated.state(), entity(BANDIT).unwrap(), "unconscious").unwrap(),
+            1
+        );
+        assert_eq!(
+            value(defeated.state(), entity(BANDIT).unwrap(), "hit-points").unwrap(),
+            1
+        );
+        assert_eq!(
+            defeated.state().narrative.open_threads,
+            vec![model::content(PACKET_THREAD).unwrap()]
+        );
+        assert_eq!(phase(&defeated).unwrap(), rpc::JourneyPhase::Complete);
+        assert_eq!(defeated.state().draws.len(), before.state().draws.len() + 3);
+        assert_eq!(current, before);
+        let repeated = stage_with_supplier(&current, &command, &mut |sides| {
+            Ok(if sides == 20 { 10 } else { 6 })
+        })
+        .unwrap();
+        assert_eq!(defeated, repeated);
+        let decision = defeated.state().decisions.last().unwrap();
+        let receipt = accepted(decision).unwrap();
+        assert!(receipt.combat[0].knocked_out);
+        assert_eq!(decision.source_policy.as_str(), THREAD_POLICY);
+        assert!(defeated.state().facts.iter().any(|fact| decision.facts.contains(&fact.id)
+            && matches!(&fact.value, FactValue::ResourceChanged { entity: who, resource, before: 0, after: 1, .. }
+                if *who == entity(BANDIT).unwrap() && resource.as_str() == "unconscious")));
+        assert!(defeated.state().continuity.catch_up.is_none());
+    }
+
+    #[test]
+    fn registered_party_defeat_keeps_both_threads_unresolved() {
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let second = MemberId::from_bytes(&MEMBERS[1]).unwrap();
+        let opening = opening_story();
+        let dialogue = stage_with_supplier(
+            &opening,
+            &input(&opening, first, 6, "escort-courier", vec![]),
+            &mut |_| panic!("escort cannot draw"),
+        )
+        .unwrap();
+        let mut initiative_count = 0;
+        let combat = stage_with_supplier(
+            &dialogue,
+            &input(&dialogue, first, 7, "defend-courier", vec![]),
+            &mut |sides| {
+                if sides == 20 {
+                    initiative_count += 1;
+                    Ok(if initiative_count <= 2 { 1 } else { 20 })
+                } else {
+                    Ok(6)
+                }
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            value(combat.state(), entity(ENTITIES[0]).unwrap(), "unconscious").unwrap(),
+            1
+        );
+        assert_eq!(
+            value(combat.state(), entity(BANDIT).unwrap(), "unconscious").unwrap(),
+            0
+        );
+        let defeated = stage_with_supplier(
+            &combat,
+            &input(&combat, second, 8, "end-turn", vec![]),
+            &mut |sides| Ok(if sides == 20 { 20 } else { 6 }),
+        )
+        .unwrap();
+        assert_eq!(phase(&defeated).unwrap(), rpc::JourneyPhase::Complete);
+        assert_eq!(
+            value(
+                defeated.state(),
+                entity(ENTITIES[1]).unwrap(),
+                "unconscious"
+            )
+            .unwrap(),
+            1
+        );
+        assert_eq!(
+            value(defeated.state(), entity(BANDIT).unwrap(), "unconscious").unwrap(),
+            0
+        );
+        assert_eq!(
+            defeated.state().narrative.open_threads,
+            vec![
+                model::content(PACKET_THREAD).unwrap(),
+                model::content(THREAT_THREAD).unwrap()
+            ]
+        );
     }
 }

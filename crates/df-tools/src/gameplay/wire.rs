@@ -335,7 +335,7 @@ pub(super) fn journey_view(
         let outcomes = state
             .decisions
             .iter()
-            .filter(|decision| decision.source_policy.as_str() == "local-journey-rpc-1")
+            .filter(|decision| decision.source_policy.as_str() == journey::THREAD_POLICY)
             .map(journey::accepted)
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()

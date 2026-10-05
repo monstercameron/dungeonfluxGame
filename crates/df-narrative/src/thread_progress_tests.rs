@@ -752,6 +752,7 @@ fn checkpoint_producer_consumer_selects_current_consequences_and_applies_once() 
     assert_eq!(current, before);
     assert_eq!(proposal.checkpoint.basis(), current.basis());
     assert_eq!(proposal.checkpoint.pins(), current.pins());
+    assert_eq!(proposal.policy, fixture.policy);
     let mut protected = proposal.checkpoint.state().clone();
     protected.narrative = current.state().narrative.clone();
     assert_eq!(protected, *current.state());

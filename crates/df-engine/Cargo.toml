@@ -12,6 +12,7 @@ df-model = { path = "../df-model" }
 df-types = { path = "../df-types" }
 df-rules = { path = "../df-rules" }
 df-world = { path = "../df-world" }
+df-narrative = { path = "../df-narrative" }
 
 [dev-dependencies]
 df-content = { path = "../df-content" }
