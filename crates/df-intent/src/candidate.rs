@@ -80,6 +80,8 @@ pub fn prepare_semantic_candidate<H: RulesCommandHandler>(
 /// complete pins must match the current snapshot. An older same-epoch client observation remains
 /// valid when its exact current offer survives; it never substitutes for the native current basis.
 /// Existing operation receipt lookup remains a session responsibility before this admission.
+/// Overlapping current option identities must agree on their exact source; otherwise the
+/// suggestion is refused as a duplicate selection rather than selecting provenance by order.
 ///
 /// The borrowed result preserves the supplied command without producing state, costs, dice or
 /// facts. It does not grant actor control or confirm an ambiguous utterance. Session/engine owners
@@ -169,14 +171,17 @@ pub fn validate_semantic_candidate<'a>(
             {
                 return Err(CandidateError::Command(CommandError::Capacity));
             }
-            let response = remaining
-                .iter()
-                .find(|response| {
-                    response.participant == owner.member
-                        && response.offer == *offer
-                        && response.options.contains(option)
-                })
+            let mut matches = remaining.iter().filter(|response| {
+                response.participant == owner.member
+                    && response.offer == *offer
+                    && response.options.contains(option)
+            });
+            let response = matches
+                .next()
                 .ok_or(CandidateError::Command(CommandError::UnofferedResponse))?;
+            if matches.any(|other| other.source != response.source) {
+                return Err(CandidateError::Command(CommandError::DuplicateSelection));
+            }
             &response.source
         }
         (GameCommand::SubmitRoll { .. }, PendingInput::Roll { source, .. }) => source,

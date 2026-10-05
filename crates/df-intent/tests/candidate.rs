@@ -430,6 +430,61 @@ fn duplicate_offer_labels_select_the_exact_option_source_without_first_match_bia
 }
 
 #[test]
+fn overlapping_current_option_sources_refuse_independently_of_response_order() {
+    for kind in 0..2 {
+        for reverse in [false, true] {
+            let mut supplied = waiting(kind).state().clone();
+            let (PendingInput::Choice { remaining } | PendingInput::Reaction { remaining }) =
+                &mut supplied.pending.first_mut().unwrap().next
+            else {
+                unreachable!()
+            };
+            let mut conflicting = remaining.first().unwrap().clone();
+            conflicting.source.clause = label("fixture-conflicting-clause");
+            let sources = [rule(), conflicting.source.clone()];
+            remaining.push(conflicting);
+            if reverse {
+                remaining.reverse();
+            }
+            let current = checkpoint_with_rules(supplied, &sources).unwrap();
+            let before = current.clone();
+            let candidate = response(kind);
+            assert_eq!(
+                validate_semantic_candidate(
+                    &candidate,
+                    &current,
+                    owner(&current, member(3)),
+                    ReferenceInventory {
+                        rules: &sources,
+                        content: &[],
+                        resources: &[],
+                        assets: &[],
+                    },
+                    bounds(),
+                ),
+                Err(CandidateError::Command(CommandError::DuplicateSelection))
+            );
+            assert_eq!(current, before);
+        }
+    }
+}
+
+#[test]
+fn repeated_current_option_with_the_same_source_remains_unambiguous() {
+    for kind in 0..2 {
+        let mut supplied = waiting(kind).state().clone();
+        let (PendingInput::Choice { remaining } | PendingInput::Reaction { remaining }) =
+            &mut supplied.pending.first_mut().unwrap().next
+        else {
+            unreachable!()
+        };
+        remaining.push(remaining.first().unwrap().clone());
+        let current = checkpoint(supplied).unwrap();
+        assert!(validate(&response(kind), &current).is_ok());
+    }
+}
+
+#[test]
 fn capacity_includes_every_pending_option_before_any_option_search() {
     let mut supplied = waiting(1).state().clone();
     let PendingInput::Reaction { remaining } = &mut supplied.pending.first_mut().unwrap().next
@@ -902,6 +957,44 @@ fn unoffered_and_unknown_handler_suggestions_never_invoke_mechanics() {
             CandidateError::Command(CommandError::UnofferedResponse,)
         ))
     );
+}
+
+#[test]
+fn conflicting_current_option_sources_never_invoke_registered_mechanics() {
+    for kind in 0..2 {
+        let mut supplied = waiting(kind).state().clone();
+        let (PendingInput::Choice { remaining } | PendingInput::Reaction { remaining }) =
+            &mut supplied.pending.first_mut().unwrap().next
+        else {
+            unreachable!()
+        };
+        let mut conflicting = remaining.first().unwrap().clone();
+        conflicting.source.clause = label("fixture-conflicting-clause");
+        let sources = [rule(), conflicting.source.clone()];
+        remaining.push(conflicting);
+        let current = checkpoint_with_rules(supplied, &sources).unwrap();
+        let before = current.clone();
+        let candidate = response(kind);
+        let (staged, calls) = prepare_fixture(
+            RulesCommandInput {
+                command: &candidate,
+                supplied_draws: &[],
+            },
+            &current,
+            &current,
+            &[],
+            &label("fixture-compiled-handler"),
+            1_000_000,
+        );
+        assert_eq!(calls, 0);
+        assert_eq!(
+            staged,
+            Err(CandidatePreparationError::Candidate(
+                CandidateError::Command(CommandError::DuplicateSelection)
+            ))
+        );
+        assert_eq!(current, before);
+    }
 }
 
 #[test]

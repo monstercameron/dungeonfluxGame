@@ -43,6 +43,7 @@ pub enum WindowError {
     WrongSession,
     WrongRun,
     WrongEpoch,
+    StaleBasis,
     FutureRevision,
     EventIdConflict,
     Capacity,
@@ -65,12 +66,17 @@ pub enum Observation {
 /// remains immutable under its caller owner; dedupe memory covers retained events,
 /// not a lifetime operation ledger. Counts describe the last successful supplied
 /// clock, including after an admission refusal.
+///
+/// The first successful observation fixes the recovery epoch. Later observations
+/// require a nonregressing owner basis, even after all retained activity expires.
+/// The caller creates a new window for a different recovery epoch.
 #[derive(Debug)]
 pub struct ActivityWindow<ParticipantId, EventId> {
     session: SessionId,
     run: RunId,
     limits: ActivityWindowLimits,
     now: Duration,
+    basis: Option<SessionRevision>,
     events: Vec<AcceptedActivity<ParticipantId, EventId>>,
 }
 
@@ -98,6 +104,7 @@ impl<ParticipantId: Copy + Eq, EventId: Copy + Eq> ActivityWindow<ParticipantId,
             run,
             limits,
             now: Duration::ZERO,
+            basis: None,
             events,
         })
     }
@@ -122,6 +129,14 @@ impl<ParticipantId: Copy + Eq, EventId: Copy + Eq> ActivityWindow<ParticipantId,
         }
         if event.revision.epoch() != basis.epoch() {
             return Err(WindowError::WrongEpoch);
+        }
+        if let Some(previous_basis) = self.basis {
+            if previous_basis.epoch() != basis.epoch() {
+                return Err(WindowError::WrongEpoch);
+            }
+            if basis.sequence() < previous_basis.sequence() {
+                return Err(WindowError::StaleBasis);
+            }
         }
         if event.revision.sequence() > basis.sequence() {
             return Err(WindowError::FutureRevision);
@@ -153,6 +168,7 @@ impl<ParticipantId: Copy + Eq, EventId: Copy + Eq> ActivityWindow<ParticipantId,
         let removed_expired = self.events.len() - retained;
         self.events.retain(|stored| !expired(stored.at, cutoff));
         self.now = now;
+        self.basis = Some(basis);
         if duplicate {
             Ok(Observation::Duplicate { removed_expired })
         } else {

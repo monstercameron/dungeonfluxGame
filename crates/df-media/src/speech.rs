@@ -231,9 +231,15 @@ impl SpeechScheduler {
         Ok(receipt)
     }
 
-    /// Begins the actual media dispatch. A receipt for obsolete queued work can only be stopped.
+    /// Begins current queued work in admission order without dispatching obsolete commands.
+    /// Obsolete commands retain their queue budget until explicit receipt-fenced cancellation.
     pub fn begin(&mut self) -> Result<Option<SpeechReceipt>, SpeechBeginRefusal> {
-        let dispatch = match self.scheduler.begin() {
+        let jobs = &self.jobs;
+        let current = self.current;
+        let dispatch = match self.scheduler.begin_eligible(|request| {
+            jobs.get(request.id())
+                .is_some_and(|job| job.identity.basis == current)
+        }) {
             Ok(Some(dispatch)) => dispatch,
             Ok(None) => return Ok(None),
             Err(reason) => return Err(SpeechBeginRefusal::Schedule(reason)),

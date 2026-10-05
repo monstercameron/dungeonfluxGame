@@ -526,6 +526,27 @@ impl ConnectionMetrics {
     pub(crate) fn observe(&self, incoming: bool, bytes: &[u8]) -> io::Result<()> {
         self.observe_at(incoming, bytes, Instant::now())
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn receive_eof(&self) -> io::Result<()> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| io::Error::other("resource observation lock poisoned"))?;
+        let receive = &state.incoming;
+        // An idle socket may close before starting HTTP/2. Once bytes arrive,
+        // clean transport completion requires a complete preface/frame boundary.
+        if (receive.preface_remaining != 0 && receive.preface_remaining != 24)
+            || receive.header_used != 0
+            || receive.remaining != 0
+        {
+            state.snapshot.rejected = true;
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "WebSocket closed during HTTP2 preface or frame",
+            ));
+        }
+        Ok(())
+    }
     fn observe_at(&self, incoming: bool, bytes: &[u8], now: Instant) -> io::Result<()> {
         let mut state = self
             .state

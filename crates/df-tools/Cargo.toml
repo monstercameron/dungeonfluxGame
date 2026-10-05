@@ -30,6 +30,7 @@ tower-http = { version = "0.6", features = ["fs"] }
 df-api = { path = "../df-api" }
 df-ai = { path = "../df-ai" }
 df-auth = { path = "../df-auth" }
+df-combat = { path = "../df-combat" }
 df-content = { path = "../df-content" }
 df-encounter = { path = "../df-encounter" }
 df-engine = { path = "../df-engine" }

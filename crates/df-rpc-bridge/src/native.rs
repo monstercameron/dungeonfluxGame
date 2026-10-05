@@ -309,7 +309,7 @@ async fn pump_websocket(
                         tokio::task::yield_now().await;
                     }
                 }
-                Message::Close(_) => return Ok(()),
+                Message::Close(_) => return metrics.receive_eof(),
                 Message::Ping(_) | Message::Pong(_) => {}
                 _ => {
                     return Err(io::Error::new(
@@ -321,7 +321,7 @@ async fn pump_websocket(
             metrics.yield_decode()?;
             tokio::task::yield_now().await;
         }
-        Ok(())
+        metrics.receive_eof()
     };
     let send = async {
         let mut buffer = vec![0; FRAME_BYTES];
@@ -542,6 +542,60 @@ mod tests {
             drop(connection);
             assert_released(&metrics);
             owner.stop().await;
+        })
+        .await
+        .unwrap();
+    }
+    #[tokio::test]
+    async fn native_idle_websocket_close_is_clean_and_releases_owners() {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let (incoming, mut receiver) = mpsc::channel(1);
+            let (mut socket, finished, metrics, mut owner) = native_boundary(incoming).await;
+            let mut connection = receiver.recv().await.unwrap().unwrap();
+            socket.close(None).await.unwrap();
+            finished.await.unwrap().unwrap();
+            let mut bytes = Vec::new();
+            connection.read_to_end(&mut bytes).await.unwrap();
+            assert!(bytes.is_empty());
+            assert!(!metrics.snapshot().unwrap().rejected);
+            drop(connection);
+            drop(socket);
+            assert_released(&metrics);
+            owner.stop().await;
+        })
+        .await
+        .unwrap();
+    }
+    #[tokio::test]
+    async fn native_websocket_close_rejects_truncated_http2_bytes_and_releases_owners() {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let wire = ordered_wire(true);
+            // Partial preface, frame header, and DATA payload, including a header
+            // received in separate WebSocket messages from its truncated payload.
+            for length in [1, 23, 28, 24 + 9 + 9 + 7] {
+                let (incoming, mut receiver) = mpsc::channel(1);
+                let (mut socket, finished, metrics, mut owner) = native_boundary(incoming).await;
+                let mut connection = receiver.recv().await.unwrap().unwrap();
+                for chunk in wire[..length].chunks(7) {
+                    socket
+                        .send(tokio_tungstenite::tungstenite::Message::Binary(
+                            chunk.to_vec().into(),
+                        ))
+                        .await
+                        .unwrap();
+                }
+                socket.close(None).await.unwrap();
+                let mut actual = Vec::new();
+                connection.read_to_end(&mut actual).await.unwrap();
+                assert_eq!(actual, wire[..length]);
+                let error = finished.await.unwrap().unwrap_err();
+                assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+                assert!(metrics.snapshot().unwrap().rejected);
+                drop(connection);
+                drop(socket);
+                assert_released(&metrics);
+                owner.stop().await;
+            }
         })
         .await
         .unwrap();

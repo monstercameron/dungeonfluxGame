@@ -1,4 +1,6 @@
 //! Thin server-projected room, creation, dialogue and combat clients.
+mod revisions;
+
 use df_protocol::common as rpc;
 use df_rpc_bridge::{BrowserChannel, BrowserConnection};
 use df_ui::{
@@ -737,7 +739,9 @@ fn render(client: &Rc<RefCell<Client>>, view: rpc::ViewMessage) -> Result<(), Js
     let next = view
         .revision
         .ok_or_else(|| JsValue::from_str("server revision missing"))?;
-    if previous.is_some_and(|old| old.epoch == next.epoch && old.sequence > next.sequence) {
+    if !revisions::accept_revision(previous, next)
+        .map_err(|_| JsValue::from_str("server revision incomplete"))?
+    {
         return Ok(());
     }
     let (document, root, role) = {

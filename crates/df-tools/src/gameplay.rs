@@ -6,6 +6,7 @@ mod courier_process_qualification;
 mod inn_qualification;
 mod journey;
 mod model;
+mod public_assets;
 mod qualification;
 #[cfg(test)]
 mod recovery_qualification;
@@ -180,13 +181,9 @@ impl rpc::session_service_server::SessionService for Service {
 struct PageState {
     incoming: NativeAdmission,
     connections: Arc<Semaphore>,
-    campfire: bytes::Bytes,
-    inn: Option<bytes::Bytes>,
-    portrait: bytes::Bytes,
     display: [u8; 32],
     glue: bytes::Bytes,
     wasm: bytes::Bytes,
-    art: bytes::Bytes,
 }
 async fn socket(
     State(state): State<PageState>,
@@ -239,9 +236,6 @@ async fn wasm(State(state): State<PageState>) -> impl IntoResponse {
         state.wasm,
     )
 }
-async fn art(State(state): State<PageState>) -> impl IntoResponse {
-    ([(axum::http::header::CONTENT_TYPE, "image/png")], state.art)
-}
 fn bounded_asset(path: std::path::PathBuf, maximum: u64) -> Result<bytes::Bytes, io::Error> {
     let metadata = std::fs::symlink_metadata(&path)?;
     if !metadata.is_file() || metadata.len() > maximum {
@@ -263,25 +257,6 @@ async fn player() -> Html<String> {
 }
 async fn display(State(state): State<PageState>) -> Html<String> {
     page(false, Some(state.display))
-}
-async fn campfire(State(state): State<PageState>) -> impl IntoResponse {
-    (
-        [(axum::http::header::CONTENT_TYPE, "image/webp")],
-        state.campfire,
-    )
-}
-async fn inn(State(state): State<PageState>) -> axum::response::Response {
-    match state.inn {
-        Some(bytes) => ([(axum::http::header::CONTENT_TYPE, "image/webp")], bytes).into_response(),
-        None => axum::response::Redirect::temporary("/assets/ui/scenes/mara-harbor-v4.png")
-            .into_response(),
-    }
-}
-async fn portrait(State(state): State<PageState>) -> impl IntoResponse {
-    (
-        [(axum::http::header::CONTENT_TYPE, "image/webp")],
-        state.portrait,
-    )
 }
 fn page(player: bool, display: Option<[u8; 32]>) -> Html<String> {
     let roots = if player {
@@ -775,13 +750,9 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let state = PageState {
         incoming: incoming_sender,
         connections: Arc::new(Semaphore::new(4)),
-        campfire: campfire_bytes,
-        inn: inn_bytes,
-        portrait: portrait_bytes,
         display: display_credential,
         glue: glue_bytes,
         wasm: wasm_bytes,
-        art: art_bytes,
     };
     let router = Router::new()
         .route("/gameplay", get(both))
@@ -790,17 +761,13 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .route("/gameplay/tunnel", get(socket))
         .route("/pkg/df_tools.js", get(glue))
         .route("/pkg/df_tools_bg.wasm", get(wasm))
-        .route("/assets/ui/scenes/mara-harbor-v4.png", get(art))
-        .route(
-            "/assets/concept-art/scene-campfire-under-stars.webp",
-            get(campfire),
-        )
-        .route("/assets/concept-art/vell-avatar.webp", get(portrait))
-        .route(
-            "/assets/concept-art/scene-tavern-barkeep-talk-rain.webp",
-            get(inn),
-        )
-        .with_state(state);
+        .with_state(state)
+        .merge(public_assets::router(public_assets::PublicAssets {
+            art: art_bytes,
+            campfire: campfire_bytes,
+            portrait: portrait_bytes,
+            inn: inn_bytes,
+        }));
     let inn = inn_phase.map(|phase| {
         tokio::spawn(inn_qualification::run(
             service.clone(),

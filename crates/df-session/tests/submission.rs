@@ -1,7 +1,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use df_observe::OperationContext;
-use df_session::inbox::{ActorInput, AdmissionSequence, Reducer, bounded_inbox};
+use df_session::inbox::{ActorInput, AdmissionRefusal, AdmissionSequence, Reducer, bounded_inbox};
 use df_session::submission::*;
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
@@ -1057,6 +1057,41 @@ fn dropped_receipt_waiter_does_not_cancel_owned_committed_work() {
     assert_eq!(db.receipts.len(), 1);
     assert_eq!(db.checkpoint.state().intents.len(), 1);
     assert!(db.events.contains(&"wake"));
+}
+
+#[test]
+fn aborted_inbox_disconnects_admitted_receipts_without_running_durable_work() {
+    let db = database();
+    let owner = owner(&db);
+    let (handle, actor) = bounded_inbox();
+    let producer = handle.clone();
+    let mut waiters = Vec::new();
+    for value in [6, 7] {
+        let (item, waiter) = owned(scope(value));
+        assert!(handle.try_submit(item).is_ok());
+        assert_eq!(waiter.try_recv(), Err(TryRecvError::Empty));
+        waiters.push(waiter);
+    }
+    drop(actor);
+    for waiter in waiters {
+        assert_eq!(waiter.try_recv(), Err(TryRecvError::Disconnected));
+    }
+    let (late, late_waiter) = owned(scope(8));
+    let refused = producer.try_submit(late).err().unwrap();
+    assert_eq!(refused.reason, AdmissionRefusal::Closed);
+    assert_eq!(late_waiter.try_recv(), Err(TryRecvError::Empty));
+    drop(refused.input);
+    assert_eq!(late_waiter.try_recv(), Err(TryRecvError::Disconnected));
+    assert_eq!(handle.usage().unwrap().retained_items, 0);
+    assert_eq!(handle.usage().unwrap().retained_bytes, 0);
+    assert!(owner.is_current());
+    assert_eq!(owner.checkpoint(), &initial());
+    let db = db.lock().unwrap();
+    assert_eq!(db.engine_calls, 0);
+    assert_eq!(db.commit_calls, 0);
+    assert!(db.receipts.is_empty());
+    assert!(db.events.is_empty());
+    assert_eq!(db.checkpoint, initial());
 }
 
 #[test]

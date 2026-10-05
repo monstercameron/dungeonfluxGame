@@ -261,6 +261,14 @@ impl<JobId: Copy + Eq> MediaScheduler<JobId> {
     /// None means no eligible request or no execution slot. Provider admission,
     /// deadlines, scene fences and paid execution remain caller boundaries.
     pub fn begin(&mut self) -> Result<Option<MediaDispatch<JobId>>, ScheduleError> {
+        self.begin_eligible(|_| true)
+    }
+
+    /// Leaves ineligible queued work owned and counted until explicit cancellation.
+    pub(crate) fn begin_eligible(
+        &mut self,
+        eligible: impl Fn(&MediaRequest<JobId>) -> bool,
+    ) -> Result<Option<MediaDispatch<JobId>>, ScheduleError> {
         if self.active.len() >= self.limits.execution_slots {
             return Ok(None);
         }
@@ -278,11 +286,14 @@ impl<JobId: Copy + Eq> MediaScheduler<JobId> {
             {
                 continue;
             }
+            let Some(position) = self.queues[index].iter().position(&eligible) else {
+                continue;
+            };
             let generation = self
                 .generation
                 .checked_add(1)
                 .ok_or(ScheduleError::IdentityExhausted)?;
-            if let Some(request) = self.queues[index].pop_front() {
+            if let Some(request) = self.queues[index].remove(position) {
                 self.remove_queued_bytes(&request);
                 self.active.push(Active {
                     id: request.id,

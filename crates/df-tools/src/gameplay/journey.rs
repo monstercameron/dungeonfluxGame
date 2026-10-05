@@ -11,6 +11,8 @@ use std::time::Duration;
 use super::{model, wire};
 
 mod encounter_admission;
+mod enemy_tactics;
+mod narrative_phase;
 
 pub(super) const ROOM_CODE: &str = "LANTERN";
 pub(super) const ROOM_ENTITY: [u8; 16] = [0x45; 16];
@@ -143,19 +145,7 @@ pub(super) fn initial() -> Result<Checkpoint, RepositoryError> {
     model::checkpoint(model::basis()?, state)
 }
 pub(super) fn phase(current: &Checkpoint) -> Result<rpc::JourneyPhase, RepositoryError> {
-    match current.state().narrative.active_beats.as_slice() {
-        [beat] => match beat.entry.as_str() {
-            "room" => Ok(rpc::JourneyPhase::Room),
-            "opening" => Ok(rpc::JourneyPhase::Opening),
-            "dialogue" | "courier-answer-seal" | "courier-answer-escort" => {
-                Ok(rpc::JourneyPhase::Dialogue)
-            }
-            "combat" => Ok(rpc::JourneyPhase::Combat),
-            "complete" | "harbor-inn" => Ok(rpc::JourneyPhase::Complete),
-            _ => Err(RepositoryError::InvalidCandidate),
-        },
-        _ => Err(RepositoryError::InvalidCandidate),
-    }
+    narrative_phase::validate(current)
 }
 pub(super) fn resources() -> Result<Vec<ResourceConstraint>, RepositoryError> {
     let mut result = Vec::new();
@@ -388,6 +378,7 @@ pub(super) fn offered(
     current: &Checkpoint,
     member: MemberId,
 ) -> Result<Vec<(rpc::GameplayActionKind, &'static str)>, RepositoryError> {
+    let phase = phase(current)?;
     let who = player_entity(member, current)?;
     let ready = current
         .state()
@@ -400,7 +391,7 @@ pub(super) fn offered(
             "Bring your hero to life",
         )]);
     }
-    let result = match phase(current)? {
+    let result = match phase {
         rpc::JourneyPhase::Room if current.state().characters.len() == 2 => vec![(
             rpc::GameplayActionKind::BeginStory,
             "Enter the Lantern Wharf",
@@ -827,6 +818,25 @@ pub(super) fn stage_join(
     current: &Checkpoint,
     input: &GameInput,
 ) -> Result<Checkpoint, RepositoryError> {
+    current
+        .validate_resume(current.basis(), &model::pins()?)
+        .map_err(bad)?;
+    df_model::commands::validate_client_command(
+        input,
+        current,
+        ReferenceInventory {
+            rules: &[model::rule()?, rule()?],
+            content: &model::contents()?,
+            resources: &resources()?,
+            assets: &[],
+        },
+        df_model::commands::CommandLimits {
+            maximum_records: 32,
+            maximum_text_bytes: 128,
+            maximum_retained_bytes: 8192,
+        },
+    )
+    .map_err(bad)?;
     let GameInput::Game(command) = input else {
         return Err(RepositoryError::InvalidCandidate);
     };
@@ -1132,7 +1142,9 @@ fn finish(
     });
     state.draws.extend(draws);
     let candidate = model::checkpoint(basis, state)?;
-    stage_authored_threads(candidate, fact_id)
+    let candidate = stage_authored_threads(candidate, fact_id)?;
+    phase(&candidate)?;
+    Ok(candidate)
 }
 
 fn stage_authored_threads(
@@ -1732,6 +1744,7 @@ fn advance(state: &mut GameState) -> Result<(), RepositoryError> {
     Err(RepositoryError::InvalidCandidate)
 }
 fn enemy_turn(
+    current: &Checkpoint,
     state: &mut GameState,
     operation: OperationId,
     draws: &mut Vec<ActualDraw>,
@@ -1751,25 +1764,32 @@ fn enemy_turn(
     {
         return Ok(());
     }
-    let target = state
-        .characters
-        .iter()
-        .find(|character| value(state, character.entity, "unconscious") == Ok(0))
-        .map(|character| character.entity)
-        .ok_or(RepositoryError::InvalidCandidate)?;
-    outcomes.push(attack(
-        state,
-        operation,
-        monster,
-        target,
-        AttackOptions {
-            savage: false,
-            graze: false,
-        },
-        draws,
-        supplier,
-    )?);
-    set(state, monster, "action-used", 1)?;
+    if let Some(target) = enemy_tactics::select(current, state, operation)? {
+        let economy = rules::ActionEconomy {
+            action_used: value(state, monster, "action-used")? != 0,
+            bonus_action_used: value(state, monster, "bonus-used")? != 0,
+        }
+        .attack()
+        .map_err(bad)?;
+        outcomes.push(attack(
+            state,
+            operation,
+            monster,
+            target,
+            AttackOptions {
+                savage: false,
+                graze: false,
+            },
+            draws,
+            supplier,
+        )?);
+        set(
+            state,
+            monster,
+            "action-used",
+            u32::from(economy.action_used),
+        )?;
+    }
     if !finish_combat(state)? {
         advance(state)?;
     }
@@ -1859,7 +1879,7 @@ fn start_combat(
         combat_policy: model::content("normal-nonlethal-melee")?,
     });
     beat(state, "combat")?;
-    enemy_turn(state, operation, draws, outcomes, supplier)
+    enemy_turn(current, state, operation, draws, outcomes, supplier)
 }
 fn accept_character(
     state: &mut GameState,
@@ -2146,6 +2166,7 @@ fn stage_using(
             }
             advance(&mut state)?;
             enemy_turn(
+                current,
                 &mut state,
                 command.operation,
                 &mut draws,
@@ -2202,19 +2223,9 @@ fn stage_using(
     }
 }
 fn phase_from_state(state: &GameState) -> Result<rpc::JourneyPhase, RepositoryError> {
-    match state
-        .narrative
-        .active_beats
-        .first()
-        .map(|beat| beat.entry.as_str())
-    {
-        Some("room") => Ok(rpc::JourneyPhase::Room),
-        Some("opening") => Ok(rpc::JourneyPhase::Opening),
-        Some("courier-answer-seal" | "courier-answer-escort") => Ok(rpc::JourneyPhase::Dialogue),
-        Some("combat") => Ok(rpc::JourneyPhase::Combat),
-        Some("complete" | "harbor-inn") => Ok(rpc::JourneyPhase::Complete),
-        _ => Err(RepositoryError::InvalidCandidate),
-    }
+    // The receipt is encoded before its causal fact exists. Admission follows finish(),
+    // after the accepted decision and authored thread consequences have been staged.
+    narrative_phase::classify(state)
 }
 
 struct JourneyHandler {
@@ -2358,7 +2369,7 @@ mod tests {
             },
         })
     }
-    fn build(name: &str) -> Vec<(df_types::RevisionLabel, df_types::RevisionLabel)> {
+    pub(super) fn build(name: &str) -> Vec<(df_types::RevisionLabel, df_types::RevisionLabel)> {
         [
             ("name", hex(name.as_bytes())),
             ("species", "dwarf".to_owned()),
@@ -2545,7 +2556,7 @@ mod tests {
         assert_eq!(current.state().draws.len(), 3);
     }
 
-    fn prepared_story() -> Checkpoint {
+    pub(super) fn prepared_story() -> Checkpoint {
         let mut current = initial().expect("initial room");
         for op in [1, 2] {
             current = stage_join(
@@ -3030,7 +3041,7 @@ mod tests {
         assert_rest_preserves_battle(&rest, &second);
     }
 
-    fn inn_victory() -> Checkpoint {
+    pub(super) fn inn_victory() -> Checkpoint {
         let member = MemberId::from_bytes(&MEMBERS[0]).unwrap();
         let opening = opening_story();
         let private = stage_with_supplier(
@@ -3513,7 +3524,7 @@ mod tests {
         );
     }
 
-    fn inn_command(current: &Checkpoint, member: MemberId, operation: u8) -> GameInput {
+    pub(super) fn inn_command(current: &Checkpoint, member: MemberId, operation: u8) -> GameInput {
         input(
             current,
             member,

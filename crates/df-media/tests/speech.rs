@@ -352,6 +352,141 @@ fn new_revision_or_recovery_epoch_keeps_old_buffers_owned_but_disables_delivery(
 }
 
 #[test]
+fn obsolete_queued_speech_keeps_its_budget_without_starting_or_blocking_current_dispatch() {
+    for new_basis in [basis(1, 8), basis(2, 0)] {
+        let mut owner = owner();
+        let old = owner.admit(identity(3), Box::from([7; 6])).unwrap();
+        owner.replace_basis(new_basis).unwrap();
+        let retained = owner.snapshot();
+        assert_eq!(retained.schedule.queued_items, 1);
+        assert_eq!(retained.schedule.queued_bytes, 6);
+        assert!(owner.begin().unwrap().is_none());
+        assert_eq!(owner.snapshot(), retained);
+
+        let mut fresh = identity(4);
+        fresh.basis = new_basis;
+        let current = owner.admit(fresh, Box::from([1; 2])).unwrap();
+        let begun = owner.begin().unwrap().unwrap();
+        assert_eq!(begun.identity(), fresh);
+        let snapshot = owner.snapshot();
+        assert_eq!(snapshot.schedule.queued_items, 1);
+        assert_eq!(snapshot.schedule.queued_bytes, 6);
+        assert_eq!(snapshot.schedule.active_dispatches, 1);
+        assert_eq!(snapshot.schedule.active_bytes, 2);
+        match owner.admit(
+            SpeechIdentity {
+                job: identity(5).job,
+                ..fresh
+            },
+            Box::from([9]),
+        ) {
+            Err(SpeechAdmissionRefusal::Schedule(refusal)) => {
+                assert_eq!(refusal.reason, ScheduleError::ByteCapacity);
+                assert_eq!(refusal.request.payload(), &[9]);
+            }
+            other => panic!("unexpected admission: {other:?}"),
+        }
+        close(&mut owner, &current, 0);
+        assert_eq!(owner.finish(&begun).unwrap().payload(), &[1; 2]);
+        assert!(owner.begin().unwrap().is_none());
+        assert_eq!(
+            owner.cancel_queued(&old).unwrap().unwrap().payload(),
+            &[7; 6]
+        );
+        let snapshot = owner.snapshot();
+        assert_eq!(snapshot.schedule.queued_items, 0);
+        assert_eq!(snapshot.schedule.queued_bytes, 0);
+        assert_eq!(snapshot.schedule.active_dispatches, 0);
+        assert_eq!(snapshot.schedule.completed_dispatches, 1);
+        assert_eq!(snapshot.schedule.cancelled_dispatches, 0);
+
+        let reused = owner
+            .admit(
+                SpeechIdentity {
+                    basis: new_basis,
+                    ..identity(3)
+                },
+                Box::from([2]),
+            )
+            .unwrap();
+        assert!(matches!(owner.cancel_queued(&old), Err(SpeechError::Stale)));
+        assert_eq!(
+            owner.begin().unwrap().unwrap().identity(),
+            reused.identity()
+        );
+        owner.stop(&reused, SpeechStopReason::Cancelled).unwrap();
+    }
+}
+
+#[test]
+fn basis_change_keeps_started_work_owned_and_fifo_among_eligible_queued_speech() {
+    let mut owner = owner();
+    let active_old = start(&mut owner, identity(3));
+    queue(&mut owner, &active_old, 0, &[7; 3]);
+    let queued_old = owner.admit(identity(4), Box::from([8; 3])).unwrap();
+    let new_basis = basis(2, 0);
+    owner.replace_basis(new_basis).unwrap();
+    let fresh = SpeechIdentity {
+        basis: new_basis,
+        ..identity(5)
+    };
+    let first = owner.admit(fresh, Box::from([1; 3])).unwrap();
+    let second = owner
+        .admit(
+            SpeechIdentity {
+                job: identity(6).job,
+                ..fresh
+            },
+            Box::from([2]),
+        )
+        .unwrap();
+    assert_eq!(owner.begin().unwrap().unwrap().identity(), first.identity());
+    assert!(owner.begin().unwrap().is_none());
+    let snapshot = owner.snapshot();
+    assert_eq!(snapshot.schedule.active_dispatches, 2);
+    assert_eq!(snapshot.schedule.active_bytes, 4);
+    assert_eq!(snapshot.schedule.queued_items, 2);
+    assert_eq!(snapshot.schedule.queued_bytes, 4);
+    assert_eq!(snapshot.buffered_bytes, 3);
+    assert_eq!(
+        owner
+            .queue_chunk(&active_old, active_old.identity(), 1, Box::from([9]))
+            .unwrap_err()
+            .reason,
+        SpeechError::Stale
+    );
+    let stopped = owner
+        .stop(&active_old, SpeechStopReason::Cancelled)
+        .unwrap();
+    assert_eq!((stopped.discarded_chunks, stopped.discarded_bytes), (1, 3));
+    assert_eq!(
+        owner.begin().unwrap().unwrap().identity(),
+        second.identity()
+    );
+    assert_eq!(owner.snapshot().buffered_bytes, 0);
+    assert_eq!(
+        owner.cancel_queued(&queued_old).unwrap().unwrap().payload(),
+        &[8; 3]
+    );
+    queue(&mut owner, &second, 0, &[2]);
+    close(&mut owner, &second, 1);
+    assert_eq!(owner.next(&second).unwrap().unwrap().bytes, &[2]);
+    owner.acknowledge(&second, 0).unwrap();
+    owner.finish(&second).unwrap();
+    close(&mut owner, &first, 0);
+    owner.finish(&first).unwrap();
+    let snapshot = owner.snapshot();
+    assert_eq!(snapshot.schedule.active_dispatches, 0);
+    assert_eq!(snapshot.schedule.queued_items, 0);
+    assert_eq!(snapshot.schedule.active_bytes, 0);
+    assert_eq!(snapshot.schedule.queued_bytes, 0);
+    assert_eq!(snapshot.schedule.cancelled_dispatches, 1);
+    assert_eq!(snapshot.schedule.completed_dispatches, 2);
+    assert_eq!(snapshot.buffered_bytes, 0);
+    assert_eq!(snapshot.buffered_chunks, 0);
+}
+
+#[test]
 fn scheduler_admission_cancellation_and_occupied_slots_preserve_original_command_bytes() {
     let mut owner = owner();
     let queued = owner.admit(identity(3), Box::from([7; 8])).unwrap();

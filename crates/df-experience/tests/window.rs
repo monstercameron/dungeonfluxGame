@@ -232,6 +232,104 @@ fn a_duplicate_can_expire_other_records_and_reports_the_removed_count() {
 }
 
 #[test]
+fn a_window_cannot_mix_successful_observation_epochs_even_after_expiry() {
+    let mut window = window(2);
+    let first = activity(1, 1, 1);
+    window.observe(first, revision(1, 9), time(5)).unwrap();
+    let mut next_epoch = activity(2, 2, 4);
+    next_epoch.revision = revision(2, 1);
+
+    assert_eq!(
+        window.observe(next_epoch, revision(2, 1), time(6)),
+        Err(WindowError::WrongEpoch)
+    );
+    assert_eq!(window.activity_count(&Participant(1)), 1);
+    assert_eq!(window.activity_count(&Participant(2)), 0);
+    assert_eq!(
+        window.observe(first, revision(1, 9), time(5)),
+        Ok(Observation::Duplicate { removed_expired: 0 })
+    );
+
+    assert_eq!(window.advance(time(11)), Ok(1));
+    next_epoch.at = time(11);
+    assert_eq!(
+        window.observe(next_epoch, revision(2, 1), time(11)),
+        Err(WindowError::WrongEpoch)
+    );
+    assert!(window.is_empty());
+}
+
+#[test]
+fn accepted_owner_basis_cannot_regress_but_historical_activity_is_valid() {
+    let mut window = window(4);
+    let first = activity(1, 1, 1);
+    window.observe(first, revision(1, 9), time(5)).unwrap();
+    let mut historical = activity(2, 2, 4);
+    historical.revision = revision(1, 3);
+    assert_eq!(
+        window.observe(historical, revision(1, 6), time(6)),
+        Err(WindowError::StaleBasis)
+    );
+    assert_eq!(window.len(), 1);
+    assert_eq!(window.activity_count(&Participant(2)), 0);
+    assert_eq!(
+        window.observe(historical, revision(1, 10), time(5)),
+        Ok(Observation::Inserted { removed_expired: 0 })
+    );
+    assert_eq!(
+        window.observe(historical, revision(1, 11), time(6)),
+        Ok(Observation::Duplicate { removed_expired: 0 })
+    );
+    assert_eq!(window.activity_count(&Participant(1)), 1);
+    assert_eq!(window.activity_count(&Participant(2)), 1);
+    assert_eq!(
+        window.observe(historical, revision(1, 10), time(6)),
+        Err(WindowError::StaleBasis)
+    );
+
+    assert_eq!(window.advance(time(20)), Ok(2));
+    historical.at = time(20);
+    assert_eq!(
+        window.observe(historical, revision(1, 10), time(20)),
+        Err(WindowError::StaleBasis)
+    );
+    assert!(window.is_empty());
+}
+
+#[test]
+fn first_refused_observation_does_not_bind_recovery_epoch_or_clock() {
+    let mut window = window(1);
+    let mut future = activity(1, 1, 7);
+    future.revision = revision(2, 1);
+    assert_eq!(
+        window.observe(future, revision(2, 1), time(6)),
+        Err(WindowError::FutureActivity)
+    );
+    assert!(window.is_empty());
+    assert_eq!(
+        window.observe(activity(1, 1, 4), revision(1, 9), time(5)),
+        Ok(Observation::Inserted { removed_expired: 0 })
+    );
+}
+
+#[test]
+fn refused_capacity_does_not_advance_the_accepted_owner_basis() {
+    let mut window = window(1);
+    let first = activity(1, 1, 1);
+    window.observe(first, revision(1, 9), time(5)).unwrap();
+    assert_eq!(
+        window.observe(activity(2, 2, 4), revision(1, 10), time(6)),
+        Err(WindowError::Capacity)
+    );
+    assert_eq!(window.len(), 1);
+    assert_eq!(window.activity_count(&Participant(2)), 0);
+    assert_eq!(
+        window.observe(first, revision(1, 9), time(5)),
+        Ok(Observation::Duplicate { removed_expired: 0 })
+    );
+}
+
+#[test]
 fn an_expired_refusal_does_not_silently_prune_unrelated_records() {
     let mut window = window(2);
     let old = activity(1, 1, 0);
