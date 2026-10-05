@@ -361,6 +361,7 @@ dependencies = [
 name = "df-knowledge"
 version = "0.1.0"
 dependencies = [
+ "df-model",
  "df-types",
 ]
 
@@ -520,6 +521,7 @@ dependencies = [
  "df-content",
  "df-encounter",
  "df-engine",
+ "df-knowledge",
  "df-model",
  "df-narrative",
  "df-observe",

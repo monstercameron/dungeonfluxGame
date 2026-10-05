@@ -34,6 +34,7 @@ df-content = { path = "../df-content" }
 df-encounter = { path = "../df-encounter" }
 df-engine = { path = "../df-engine" }
 df-model = { path = "../df-model" }
+df-knowledge = { path = "../df-knowledge" }
 df-narrative = { path = "../df-narrative" }
 df-world = { path = "../df-world" }
 df-persistence = { path = "../df-persistence" }

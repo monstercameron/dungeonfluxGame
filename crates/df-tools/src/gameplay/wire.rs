@@ -288,6 +288,35 @@ pub(super) fn journey_view(
 ) -> Result<rpc::ViewMessage, RepositoryError> {
     use super::journey;
     use df_persistence::local_demo_scope::LocalDemoRole;
+    let observer = match role {
+        LocalDemoRole::Display => df_knowledge::perception::ObserverScope::Shared,
+        LocalDemoRole::Player => df_knowledge::perception::ObserverScope::Member(principal),
+    };
+    let perceived = df_knowledge::perception::perceive(
+        current,
+        current.basis(),
+        &model::pins()?,
+        observer,
+        // The admitted local checkpoint caps aggregate records, including
+        // membership and nested audience entries, at 512.
+        df_knowledge::perception::PerceptionLimits {
+            maximum_scan_records: 512,
+            maximum_member_comparisons: 512,
+            maximum_selected_facts: 512,
+        },
+    )
+    .map_err(|error| match error {
+        df_knowledge::perception::PerceptionError::ObserverUnavailable => {
+            RepositoryError::Unauthorized
+        }
+        df_knowledge::perception::PerceptionError::ScanCapacity
+        | df_knowledge::perception::PerceptionError::ComparisonCapacity
+        | df_knowledge::perception::PerceptionError::ResultCapacity
+        | df_knowledge::perception::PerceptionError::AllocationCapacity => {
+            RepositoryError::Capacity
+        }
+        _ => RepositoryError::InvalidCandidate,
+    })?;
     let state = current.state();
     let phase = journey::phase(current)?;
     let mut party = Vec::new();
@@ -348,9 +377,21 @@ pub(super) fn journey_view(
                 },
             });
         }
-        private_clue = super::courier_ai::saved_response(current, principal)?
-            .unwrap_or_default()
-            .to_owned();
+        let source = model::content("private-courier-note")?;
+        if perceived.facts().iter().any(|fact| {
+            matches!(
+                &fact.value,
+                df_model::checkpoint::FactValue::ContentEvent { definition, subjects }
+                if *definition == source && subjects.is_empty()
+            )
+        }) {
+            // Canonical audience selection only gates eligibility. The existing
+            // courier owner still checks the exact authored reveal, recipient,
+            // committed recording and saved response before rendering its text.
+            private_clue = super::courier_ai::saved_response(current, principal)?
+                .unwrap_or_default()
+                .to_owned();
+        }
     }
     let mut combat = None;
     if let Some(encounter) = state.encounters.first() {
@@ -516,3 +557,7 @@ pub(super) fn journey_view(
         audience: Some(audience),
     })
 }
+
+#[cfg(test)]
+#[path = "perception_tests.rs"]
+mod perception_tests;
