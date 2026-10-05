@@ -16,7 +16,7 @@ const MEMBERS: [[u8; 16]; 2] = [[0x61; 16], [0x62; 16]];
 const ENTITIES: [[u8; 16]; 2] = [[0x63; 16], [0x64; 16]];
 const BANDIT: [u8; 16] = [0x65; 16];
 const ENCOUNTER: [u8; 16] = [0x66; 16];
-pub(super) const THREAD_POLICY: &str = "local-journey-rpc-2-threads-1";
+pub(super) const THREAD_POLICY: &str = "local-journey-rpc-3-threads-1-rest-1";
 const PACKET_THREAD: &str = "sealed-packet-delivery-thread";
 const THREAT_THREAD: &str = "dockside-threat-thread";
 // This fixed authored slice admits one causal event to one thread. Packet delivery is outside
@@ -51,6 +51,15 @@ pub(super) const CONTENT_ENTRIES: &[&str] = &[
     "greatsword-attack",
     "second-wind",
     "end-turn",
+    "short-rest",
+    "short-rest-start",
+    "knockout-short-rest-start",
+    "knockout-short-rest-due",
+    "short-rest-complete",
+    "short-rest-interrupted",
+    "combat-victory",
+    "combat-defeat",
+    "scimitar",
     "normal-nonlethal-melee",
     "fighter-a-soldier-a",
     "chain-mail",
@@ -74,10 +83,10 @@ fn bad<T>(_: T) -> RepositoryError {
 }
 pub(super) fn rule() -> Result<RuleReference, RepositoryError> {
     Ok(RuleReference {
-        catalog: model::label("srd521-journey-subset-1")?,
-        source: model::label("srd521-creation-combat-selected")?,
+        catalog: model::label("srd521-journey-subset-2")?,
+        source: model::label("srd521-creation-combat-rest-selected")?,
         entry: model::label("dwarf-fighter-soldier-bandit")?,
-        clause: model::label("normal-adjacent-nonlethal")?,
+        clause: model::label("normal-adjacent-nonlethal-and-no-hit-dice-rest")?,
     })
 }
 pub(super) fn entity(bytes: [u8; 16]) -> Result<EntityId, RepositoryError> {
@@ -161,6 +170,8 @@ pub(super) fn resources() -> Result<Vec<ResourceConstraint>, RepositoryError> {
             ("charisma", 1, 20),
             ("second-wind", 0, 2),
             ("unconscious", 0, 1),
+            ("prone", 0, 1),
+            ("held-weapon", 0, 1),
             ("action-used", 0, 1),
             ("bonus-used", 0, 1),
         ] {
@@ -297,6 +308,26 @@ pub(super) fn character_sheet(
             value: value(state, who, key)?.to_string(),
         });
     }
+    facts.push(rpc::SheetFact {
+        label: "Condition".to_owned(),
+        value: if value(state, who, "unconscious")? != 0 {
+            "Unconscious and Prone"
+        } else if value(state, who, "prone")? != 0 {
+            "Prone"
+        } else {
+            "None"
+        }
+        .to_owned(),
+    });
+    facts.push(rpc::SheetFact {
+        label: "Greatsword".to_owned(),
+        value: if value(state, who, "held-weapon")? != 0 {
+            "Held"
+        } else {
+            "Dropped; ownership retained"
+        }
+        .to_owned(),
+    });
     Ok(rpc::CharacterSheet {
         name: name(state, who)?,
         facts,
@@ -315,6 +346,14 @@ fn beat(state: &mut GameState, next: &str) -> Result<(), RepositoryError> {
     Ok(())
 }
 pub(super) fn offer_id(current: &Checkpoint, kind: rpc::GameplayActionKind) -> String {
+    if kind == rpc::GameplayActionKind::ShortRest {
+        return format!(
+            "journey-rest-{}-{}-{}",
+            current.basis().revision.epoch().get(),
+            current.basis().revision.sequence(),
+            current.state().logical_time.ticks
+        );
+    }
     if matches!(
         kind,
         rpc::GameplayActionKind::GreatswordAttack
@@ -398,7 +437,13 @@ pub(super) fn offered(
                 offered
             }
         }
-        rpc::JourneyPhase::Complete => vec![],
+        rpc::JourneyPhase::Complete => {
+            prepare_short_rest(current)?;
+            vec![(
+                rpc::GameplayActionKind::ShortRest,
+                "Short Rest · 1 hour, no Hit Point Dice",
+            )]
+        }
         _ => return Err(RepositoryError::InvalidCandidate),
     };
     Ok(result)
@@ -574,6 +619,40 @@ fn finish(
         });
         facts.push(fact_id);
     }
+    if entry == "short-rest" {
+        let id = make_id(facts.len() as u32)?;
+        state.facts.push(GameFact {
+            id,
+            revision: basis.revision,
+            operation,
+            ordinal: facts.len() as u32,
+            cause: current.state().facts.last().map(|fact| fact.id),
+            audience: AudienceScope::Shared,
+            value: FactValue::ContentEvent {
+                definition: model::content("short-rest-start")?,
+                subjects: state
+                    .characters
+                    .iter()
+                    .map(|character| character.entity)
+                    .collect(),
+            },
+        });
+        facts.push(id);
+        let id = make_id(facts.len() as u32)?;
+        state.facts.push(GameFact {
+            id,
+            revision: basis.revision,
+            operation,
+            ordinal: facts.len() as u32,
+            cause: facts.last().copied(),
+            audience: AudienceScope::Shared,
+            value: FactValue::TimeAdvanced {
+                before: current.state().logical_time,
+                after: state.logical_time,
+            },
+        });
+        facts.push(id);
+    }
     for resource in &state.resources {
         if let Some(before) = current
             .state()
@@ -602,18 +681,103 @@ fn finish(
             facts.push(id);
         }
     }
-    if state.logical_time != current.state().logical_time {
-        let ordinal = facts.len() as u32;
-        let id = make_id(ordinal)?;
+    for moved in &state.entities {
+        if let Some(before) = current
+            .state()
+            .entities
+            .iter()
+            .find(|before| before.id == moved.id)
+            && before.location != moved.location
+        {
+            let destination = moved.location.ok_or(RepositoryError::InvalidCandidate)?;
+            let position = moved.position.ok_or(RepositoryError::InvalidCandidate)?;
+            let id = make_id(facts.len() as u32)?;
+            state.facts.push(GameFact {
+                id,
+                revision: basis.revision,
+                operation,
+                ordinal: facts.len() as u32,
+                cause: facts.last().copied(),
+                audience: AudienceScope::Shared,
+                value: FactValue::EntityMoved {
+                    entity: moved.id,
+                    destination,
+                    position,
+                },
+            });
+            facts.push(id);
+        }
+    }
+    let mut evidenced_time = current.state().logical_time;
+    for scheduled in &state.schedules {
+        if !current
+            .state()
+            .schedules
+            .iter()
+            .any(|before| before.id == scheduled.id)
+        {
+            if scheduled.definition != model::content("knockout-short-rest-due")? {
+                return Err(RepositoryError::InvalidCandidate);
+            }
+            let cause=state.facts.iter().find(|fact|fact.operation==operation && matches!(&fact.value,FactValue::ResourceChanged {entity,resource,before:0,after:1,..} if *entity==scheduled.entity && resource.as_str()=="unconscious")).map(|fact|fact.id).ok_or(RepositoryError::InvalidCandidate)?;
+            let started = LogicalTime {
+                ticks: scheduled
+                    .due
+                    .ticks
+                    .checked_sub(u64::from(scheduled.due.ticks_per_second) * 3600)
+                    .ok_or(RepositoryError::InvalidCandidate)?,
+                ticks_per_second: scheduled.due.ticks_per_second,
+            };
+            if started.ticks_per_second != evidenced_time.ticks_per_second
+                || started.ticks < evidenced_time.ticks
+                || started.ticks > state.logical_time.ticks
+            {
+                return Err(RepositoryError::InvalidCandidate);
+            }
+            if started != evidenced_time {
+                let id = make_id(facts.len() as u32)?;
+                state.facts.push(GameFact {
+                    id,
+                    revision: basis.revision,
+                    operation,
+                    ordinal: facts.len() as u32,
+                    cause: Some(cause),
+                    audience: AudienceScope::Shared,
+                    value: FactValue::TimeAdvanced {
+                        before: evidenced_time,
+                        after: started,
+                    },
+                });
+                facts.push(id);
+                evidenced_time = started;
+            }
+            let id = make_id(facts.len() as u32)?;
+            state.facts.push(GameFact {
+                id,
+                revision: basis.revision,
+                operation,
+                ordinal: facts.len() as u32,
+                cause: Some(cause),
+                audience: AudienceScope::Shared,
+                value: FactValue::ContentEvent {
+                    definition: model::content("knockout-short-rest-start")?,
+                    subjects: vec![scheduled.entity],
+                },
+            });
+            facts.push(id);
+        }
+    }
+    if entry != "short-rest" && state.logical_time != evidenced_time {
+        let id = make_id(facts.len() as u32)?;
         state.facts.push(GameFact {
             id,
             revision: basis.revision,
             operation,
-            ordinal,
+            ordinal: facts.len() as u32,
             cause: facts.last().copied(),
             audience: AudienceScope::Shared,
             value: FactValue::TimeAdvanced {
-                before: current.state().logical_time,
+                before: evidenced_time,
                 after: state.logical_time,
             },
         });
@@ -825,6 +989,289 @@ struct AttackOptions {
     savage: bool,
     graze: bool,
 }
+fn held_weapon_id(who: EntityId) -> Result<EntityId, RepositoryError> {
+    let mut id = *who.as_bytes();
+    id[0] ^= 0x80;
+    id[15] ^= if who == entity(BANDIT)? { 1 } else { 2 };
+    entity(id)
+}
+fn knockout_rest_id(
+    operation: OperationId,
+    who: EntityId,
+    started: u64,
+) -> Result<RecordId, RepositoryError> {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(
+        [
+            b"source-knockout-rest-1".as_slice(),
+            operation.as_bytes(),
+            who.as_bytes(),
+            &started.to_be_bytes(),
+        ]
+        .concat(),
+    );
+    RecordId::from_bytes(&digest[..16]).map_err(bad)
+}
+fn start_knockout_rest(
+    state: &mut GameState,
+    operation: OperationId,
+    who: EntityId,
+) -> Result<(), RepositoryError> {
+    if value(state, who, "hit-points")? != 1 || value(state, who, "held-weapon")? != 1 {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    set(state, who, "unconscious", 1)?;
+    set(state, who, "prone", 1)?;
+    set(state, who, "held-weapon", 0)?;
+    let position = state
+        .entities
+        .iter()
+        .find(|entity| entity.id == who)
+        .and_then(|entity| entity.position)
+        .ok_or(RepositoryError::InvalidCandidate)?;
+    let weapon = held_weapon_id(who)?;
+    let item = state
+        .entities
+        .iter_mut()
+        .find(|entity| entity.id == weapon && entity.location == Some(who))
+        .ok_or(RepositoryError::InvalidCandidate)?;
+    item.location = Some(room_entity()?);
+    item.position = Some(position);
+    let due = LogicalTime {
+        ticks: rules::short_rest_due(
+            state.logical_time.ticks,
+            state.logical_time.ticks_per_second,
+        )
+        .map_err(bad)?,
+        ticks_per_second: state.logical_time.ticks_per_second,
+    };
+    state.schedules.push(ScheduledEvent {
+        id: knockout_rest_id(operation, who, state.logical_time.ticks)?,
+        entity: who,
+        due,
+        definition: model::content("knockout-short-rest-due")?,
+    });
+    Ok(())
+}
+
+pub(super) fn combat_victory(state: &GameState) -> Result<bool, RepositoryError> {
+    let encounter = state
+        .encounters
+        .first()
+        .ok_or(RepositoryError::InvalidCandidate)?;
+    let victory = encounter
+        .objectives
+        .contains(&model::content("combat-victory")?);
+    let defeat = encounter
+        .objectives
+        .contains(&model::content("combat-defeat")?);
+    if encounter.active_turn.is_some() || victory == defeat {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    Ok(victory)
+}
+fn knockout_rest_started(
+    current: &Checkpoint,
+    event: &ScheduledEvent,
+) -> Result<u64, RepositoryError> {
+    if event.definition != model::content("knockout-short-rest-due")?
+        || event.due.ticks_per_second != current.state().logical_time.ticks_per_second
+    {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    let duration = u64::from(event.due.ticks_per_second)
+        .checked_mul(3600)
+        .ok_or(RepositoryError::Capacity)?;
+    let started = event
+        .due
+        .ticks
+        .checked_sub(duration)
+        .ok_or(RepositoryError::InvalidCandidate)?;
+    if started > current.state().logical_time.ticks
+        || value(current.state(), event.entity, "unconscious")? != 1
+        || value(current.state(), event.entity, "prone")? != 1
+        || value(current.state(), event.entity, "held-weapon")? != 0
+        || value(current.state(), event.entity, "hit-points")? != 1
+    {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    let start_definition = model::content("knockout-short-rest-start")?;
+    let start=current.state().facts.iter().find(|fact| matches!(&fact.value,FactValue::ContentEvent { definition,subjects } if definition==&start_definition && subjects.as_slice()==[event.entity]) && knockout_rest_id(fact.operation,event.entity,started)==Ok(event.id)).ok_or(RepositoryError::InvalidCandidate)?;
+    let historical_time = current
+        .state()
+        .facts
+        .iter()
+        .filter(|fact| (fact.revision, fact.ordinal) < (start.revision, start.ordinal))
+        .filter_map(|fact| match fact.value {
+            FactValue::TimeAdvanced { after, .. } => Some(((fact.revision, fact.ordinal), after)),
+            _ => None,
+        })
+        .max_by_key(|(order, _)| *order)
+        .map(|(_, time)| time)
+        .unwrap_or(LogicalTime {
+            ticks: 0,
+            ticks_per_second: current.state().logical_time.ticks_per_second,
+        });
+    if historical_time.ticks != started
+        || historical_time.ticks_per_second != event.due.ticks_per_second
+    {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    let cause = current
+        .state()
+        .facts
+        .iter()
+        .find(|fact| Some(fact.id) == start.cause && fact.operation == start.operation)
+        .ok_or(RepositoryError::InvalidCandidate)?;
+    if !matches!(&cause.value,FactValue::ResourceChanged { entity,resource,before:0,after:1,source } if *entity==event.entity && resource.as_str()=="unconscious" && *source==rule()?)
+        || !current.state().decisions.iter().any(|decision| {
+            decision.operation == start.operation
+                && decision.source_policy.as_str() == THREAD_POLICY
+                && decision.facts.contains(&start.id)
+                && decision.facts.contains(&cause.id)
+        })
+    {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    for fact in current
+        .state()
+        .facts
+        .iter()
+        .filter(|fact| (fact.revision, fact.ordinal) > (start.revision, start.ordinal))
+    {
+        let interrupted = match &fact.value {
+            FactValue::ResourceChanged {
+                entity,
+                resource,
+                before,
+                after,
+                ..
+            } => *entity == event.entity && resource.as_str() == "hit-points" && after < before,
+            FactValue::ContentEvent {
+                definition,
+                subjects,
+            } => {
+                (definition.entry.as_str() == "defend-courier" && fact.operation != start.operation)
+                    || (definition.entry.as_str() == "short-rest-interrupted"
+                        && subjects.contains(&event.entity))
+            }
+            _ => false,
+        };
+        if interrupted {
+            return Err(RepositoryError::InvalidCandidate);
+        }
+    }
+    Ok(started)
+}
+fn prepare_short_rest(current: &Checkpoint) -> Result<df_world::DueSelection<'_>, RepositoryError> {
+    if phase(current)? != rpc::JourneyPhase::Complete
+        || !current.state().threats.is_empty()
+        || !current.state().pending.is_empty()
+        || !current.state().timers.is_empty()
+        || !current.state().active_effects.is_empty()
+    {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    combat_victory(current.state())?;
+    let target = LogicalTime {
+        ticks: rules::short_rest_due(
+            current.state().logical_time.ticks,
+            current.state().logical_time.ticks_per_second,
+        )
+        .map_err(bad)?,
+        ticks_per_second: current.state().logical_time.ticks_per_second,
+    };
+    let policy = model::content("short-rest")?;
+    let selection = df_world::select_due_events(
+        current,
+        current.pins(),
+        df_world::DueSelectionRequest {
+            expected_basis: current.basis(),
+            target_time: target,
+            paused: false,
+            deadline_remaining: Duration::from_secs(1),
+            policy: &policy,
+        },
+        df_world::DueSelectionLimits {
+            queue_events: 8,
+            selected_events: 8,
+            output_bytes: 65536,
+        },
+    )
+    .map_err(bad)?;
+    if selection.remaining_due() != 0 {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    for (index, event) in selection.events.iter().enumerate() {
+        knockout_rest_started(current, event)?;
+        if selection.events[..index]
+            .iter()
+            .any(|previous| previous.entity == event.entity)
+        {
+            return Err(RepositoryError::InvalidCandidate);
+        }
+    }
+    for who in current
+        .state()
+        .characters
+        .iter()
+        .map(|character| character.entity)
+        .chain([entity(BANDIT)?])
+    {
+        if value(current.state(), who, "unconscious")? != 0
+            && !selection.events.iter().any(|event| event.entity == who)
+        {
+            return Err(RepositoryError::InvalidCandidate);
+        }
+    }
+    Ok(selection)
+}
+fn complete_short_rest(current: &Checkpoint, state: &mut GameState) -> Result<(), RepositoryError> {
+    let selection = prepare_short_rest(current)?;
+    let fighters = state
+        .characters
+        .iter()
+        .map(|character| character.entity)
+        .collect::<Vec<_>>();
+    for who in fighters.iter().copied().chain([entity(BANDIT)?]) {
+        let start = selection
+            .events
+            .iter()
+            .find(|event| event.entity == who)
+            .map(|event| knockout_rest_started(current, event))
+            .transpose()?
+            .unwrap_or(current.state().logical_time.ticks);
+        let fighter = fighters.contains(&who);
+        let benefits = rules::complete_no_hit_dice_short_rest(rules::NoHitDiceShortRest {
+            started: start,
+            finished: selection.proposed_time.ticks,
+            ticks_per_second: selection.proposed_time.ticks_per_second,
+            interrupted: false,
+            hit_points: value(state, who, "hit-points")?,
+            fighter_second_wind_uses: if fighter {
+                Some(value(state, who, "second-wind")?)
+            } else {
+                None
+            },
+            knockout_unconscious: value(state, who, "unconscious")? != 0,
+        })
+        .map_err(bad)?;
+        if let Some(uses) = benefits.fighter_second_wind_uses {
+            set(state, who, "second-wind", uses)?;
+        }
+        if benefits.ends_knockout_unconscious {
+            set(state, who, "unconscious", 0)?;
+        }
+    }
+    state.logical_time = selection.proposed_time;
+    state.continuity.catch_up = Some(selection.cursor);
+    let completed = model::content("short-rest-complete")?;
+    if !state.narrative.completed_beats.contains(&completed) {
+        state.narrative.completed_beats.push(completed);
+    }
+    Ok(())
+}
+
 fn attack(
     state: &mut GameState,
     operation: OperationId,
@@ -871,7 +1318,7 @@ fn attack(
     .map_err(bad)?;
     set(state, target, "hit-points", outcome.target_hit_points)?;
     if outcome.knocked_out {
-        set(state, target, "unconscious", 1)?;
+        start_knockout_rest(state, operation, target)?;
     }
     Ok(rpc::CombatOutcome {
         actor_name: name(state, who)?,
@@ -902,11 +1349,19 @@ fn finish_combat(state: &mut GameState) -> Result<bool, RepositoryError> {
         .iter()
         .all(|value| *value != 0);
     if value(state, enemy, "unconscious")? != 0 || all_players_down {
-        state
+        let outcome = model::content(if value(state, enemy, "unconscious")? != 0 {
+            "combat-victory"
+        } else {
+            "combat-defeat"
+        })?;
+        let encounter = state
             .encounters
             .first_mut()
-            .ok_or(RepositoryError::InvalidCandidate)?
-            .active_turn = None;
+            .ok_or(RepositoryError::InvalidCandidate)?;
+        encounter.active_turn = None;
+        if !encounter.objectives.contains(&outcome) {
+            encounter.objectives.push(outcome);
+        }
         beat(state, "complete")?;
         return Ok(true);
     }
@@ -1017,11 +1472,29 @@ fn start_combat(
         ("charisma", 10),
         ("second-wind", 0),
         ("unconscious", 0),
+        ("prone", 0),
+        ("held-weapon", 1),
         ("action-used", 0),
         ("bonus-used", 0),
     ] {
         add_resource(state, monster, key, value)?;
     }
+    let weapon = held_weapon_id(monster)?;
+    state.entities.push(WorldEntity {
+        id: weapon,
+        definition: model::content("scimitar")?,
+        location: Some(monster),
+        position: None,
+        identity_revision: model::label("source-held-scimitar-1")?,
+    });
+    state.inventory.push(InventoryItem {
+        item: weapon,
+        owner: monster,
+        quantity: 1,
+        source: rule()?,
+        origin: model::content("scimitar")?,
+        attunement_owner: None,
+    });
     let participants = state
         .members
         .iter()
@@ -1123,6 +1596,8 @@ fn accept_character(
         ("charisma", u32::from(build.abilities[5])),
         ("second-wind", build.second_wind_uses),
         ("unconscious", 0),
+        ("prone", 0),
+        ("held-weapon", 1),
         ("action-used", 0),
         ("bonus-used", 0),
     ] {
@@ -1312,6 +1787,12 @@ fn stage_using(
                 "bonus-used",
                 u32::from(economy.bonus_action_used),
             )?;
+        }
+        rpc::GameplayActionKind::ShortRest => {
+            if !choices.is_empty() {
+                return Err(RepositoryError::InvalidCandidate);
+            }
+            complete_short_rest(current, &mut state)?;
         }
         rpc::GameplayActionKind::EndTurn => {
             if !choices.is_empty() {
@@ -1982,5 +2463,213 @@ mod tests {
                 model::content(THREAT_THREAD).unwrap()
             ]
         );
+
+        assert!(!combat_victory(defeated.state()).unwrap());
+        let original = defeated.clone();
+        let command = input(&defeated, first, 9, "short-rest", vec![]);
+        let rested =
+            stage_with_supplier(&defeated, &command, &mut |_| panic!("rest cannot draw")).unwrap();
+        assert_rest_preserves_battle(&defeated, &rested);
+        for bytes in ENTITIES {
+            let who = entity(bytes).unwrap();
+            assert_eq!(value(rested.state(), who, "hit-points"), Ok(1));
+            assert_eq!(value(rested.state(), who, "unconscious"), Ok(0));
+            assert_eq!(value(rested.state(), who, "prone"), Ok(1));
+            assert_eq!(value(rested.state(), who, "held-weapon"), Ok(0));
+            assert_eq!(
+                rested
+                    .state()
+                    .entities
+                    .iter()
+                    .find(|item| item.id == held_weapon_id(who).unwrap())
+                    .unwrap()
+                    .location,
+                Some(room_entity().unwrap())
+            );
+        }
+        assert_eq!(defeated, original);
+        assert_eq!(
+            stage_with_supplier(&defeated, &command, &mut |_| panic!("deterministic rest")),
+            Ok(rested.clone())
+        );
+        assert!(stage_with_supplier(&rested, &command, &mut |_| panic!("stale rest")).is_err());
+        let next = stage_with_supplier(
+            &rested,
+            &input(&rested, first, 10, "short-rest", vec![]),
+            &mut |_| panic!("fresh rest cannot draw"),
+        )
+        .unwrap();
+        assert_rest_preserves_battle(&rested, &next);
+        for bytes in ENTITIES {
+            assert_eq!(
+                value(next.state(), entity(bytes).unwrap(), "second-wind"),
+                Ok(2)
+            );
+        }
+        let mut shifted = defeated.state().clone();
+        let event = shifted
+            .schedules
+            .iter_mut()
+            .find(|event| event.due.ticks > 3600)
+            .unwrap();
+        let original_start = event.due.ticks - 3600;
+        let operation=defeated.state().facts.iter().find(|fact|matches!(&fact.value,FactValue::ContentEvent {definition,subjects} if definition.entry.as_str()=="knockout-short-rest-start" && subjects.contains(&event.entity))).unwrap().operation;
+        event.due.ticks -= 1;
+        event.id = knockout_rest_id(operation, event.entity, original_start - 1).unwrap();
+        let shifted = model::checkpoint(defeated.basis(), shifted).unwrap();
+        assert!(
+            prepare_short_rest(&shifted).is_err(),
+            "coordinated due/id rewrite must not alter accepted source time"
+        );
+        let mut unsupported = defeated.state().clone();
+        unsupported.schedules[0].definition = model::content("short-rest-interrupted").unwrap();
+        let unsupported = model::checkpoint(defeated.basis(), unsupported).unwrap();
+        assert!(prepare_short_rest(&unsupported).is_err());
+        let mut interrupted = defeated.state().clone();
+        let last = interrupted.facts.last().unwrap().clone();
+        let interruption_id = FactId::from_bytes(&[0xee; 16]).unwrap();
+        interrupted.facts.push(GameFact {
+            id: interruption_id,
+            ordinal: last.ordinal + 1,
+            value: FactValue::ContentEvent {
+                definition: model::content("short-rest-interrupted").unwrap(),
+                subjects: vec![entity(ENTITIES[0]).unwrap()],
+            },
+            cause: Some(last.id),
+            ..last
+        });
+        interrupted
+            .decisions
+            .last_mut()
+            .unwrap()
+            .facts
+            .push(interruption_id);
+        let interrupted = model::checkpoint(defeated.basis(), interrupted).unwrap();
+        assert!(
+            prepare_short_rest(&interrupted).is_err(),
+            "saved interruption source evidence must refuse without benefits"
+        );
+        assert!(
+            stage_with_supplier(
+                &interrupted,
+                &input(&interrupted, first, 11, "short-rest", vec![]),
+                &mut |_| panic!("interrupted rest cannot draw")
+            )
+            .is_err()
+        );
+    }
+    fn assert_rest_preserves_battle(before: &Checkpoint, after: &Checkpoint) {
+        assert_eq!(
+            after.state().logical_time.ticks,
+            before.state().logical_time.ticks + 3600
+        );
+        assert_eq!(after.state().draws, before.state().draws);
+        assert_eq!(after.state().inventory, before.state().inventory);
+        assert_eq!(after.state().entities, before.state().entities);
+        assert_eq!(after.state().knowledge, before.state().knowledge);
+        assert_eq!(
+            after.state().narrative.open_threads,
+            before.state().narrative.open_threads
+        );
+        assert_eq!(
+            combat_victory(after.state()),
+            combat_victory(before.state())
+        );
+        for resource in &before.state().resources {
+            if resource.resource.as_str() == "hit-points" {
+                assert_eq!(
+                    value(after.state(), resource.owner, "hit-points"),
+                    Ok(u32::try_from(resource.value).unwrap())
+                );
+            }
+        }
+        assert_eq!(after.state().schedules, before.state().schedules);
+        assert!(after.state().continuity.catch_up.is_some());
+    }
+    #[test]
+    fn victorious_rest_recharges_one_use_without_healing_or_rewriting_threat_closure() {
+        let member = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let opening = opening_story();
+        assert!(
+            stage_with_supplier(
+                &opening,
+                &input(&opening, member, 6, "short-rest", vec![]),
+                &mut |_| panic!("premature rest")
+            )
+            .is_err()
+        );
+        let private = stage_with_supplier(
+            &opening,
+            &input(&opening, member, 6, "ask-courier", vec![]),
+            &mut |_| panic!("dialogue"),
+        )
+        .unwrap();
+        let mut draw_index = 0;
+        let combat = stage_with_supplier(
+            &private,
+            &input(&private, member, 7, "defend-courier", vec![]),
+            &mut |_| {
+                draw_index += 1;
+                Ok(if draw_index == 1 { 20 } else { 1 })
+            },
+        )
+        .unwrap();
+        let wind = stage_with_supplier(
+            &combat,
+            &input(&combat, member, 8, "second-wind", vec![]),
+            &mut |_| Ok(1),
+        )
+        .unwrap();
+        let victory = stage_with_supplier(
+            &wind,
+            &input(
+                &wind,
+                member,
+                9,
+                "greatsword-attack",
+                vec![
+                    (
+                        model::label("savage-attacker").unwrap(),
+                        model::label("no").unwrap(),
+                    ),
+                    (model::label("graze").unwrap(), model::label("no").unwrap()),
+                ],
+            ),
+            &mut |sides| Ok(if sides == 20 { 20 } else { 6 }),
+        )
+        .unwrap();
+        assert!(combat_victory(victory.state()).unwrap());
+        assert_eq!(
+            value(victory.state(), entity(ENTITIES[0]).unwrap(), "second-wind"),
+            Ok(1)
+        );
+        let command = input(&victory, member, 10, "short-rest", vec![]);
+        let rest =
+            stage_with_supplier(&victory, &command, &mut |_| panic!("rest cannot draw")).unwrap();
+        assert_rest_preserves_battle(&victory, &rest);
+        assert_eq!(
+            value(rest.state(), entity(ENTITIES[0]).unwrap(), "second-wind"),
+            Ok(2)
+        );
+        assert_eq!(
+            value(rest.state(), entity(BANDIT).unwrap(), "unconscious"),
+            Ok(0)
+        );
+        assert_eq!(value(rest.state(), entity(BANDIT).unwrap(), "prone"), Ok(1));
+        assert_eq!(
+            rest.state().narrative.open_threads,
+            vec![model::content(PACKET_THREAD).unwrap()]
+        );
+        let mut invalid = input(
+            &victory,
+            member,
+            11,
+            "short-rest",
+            vec![(model::label("elapsed").unwrap(), model::label("1").unwrap())],
+        );
+        assert!(stage_with_supplier(&victory, &invalid, &mut |_| panic!("invalid rest")).is_err());
+        invalid = input(&rest, member, 11, "short-rest", vec![]);
+        let second = stage_with_supplier(&rest, &invalid, &mut |_| panic!("fresh rest")).unwrap();
+        assert_rest_preserves_battle(&rest, &second);
     }
 }

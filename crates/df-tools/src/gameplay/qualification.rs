@@ -10,8 +10,8 @@ use std::{io, time::Duration};
 use tokio::sync::oneshot;
 use tonic::Request;
 
-const TRIGGER: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-recovery-20261005/engine-qualification-start-01";
-const REPORT: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-recovery-20261005/engine-authority-acceptance-report-01.json";
+const TRIGGER: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-rest-20261005/engine-qualification-start-01";
+const REPORT: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-rest-20261005/engine-authority-acceptance-report-01.json";
 #[track_caller]
 fn required(condition: bool) -> Result<(), io::Error> {
     if condition {
@@ -117,10 +117,10 @@ async fn verify_retained_narrative(
         .map_err(|_| io::Error::other("threat source unavailable"))?;
     let bandit =
         journey::entity([0x65; 16]).map_err(|_| io::Error::other("bandit source unavailable"))?;
-    let unconscious = journey::value(state, bandit, "unconscious")
-        .map_err(|_| io::Error::other("bandit outcome unavailable"))?;
+    let victory = journey::combat_victory(state)
+        .map_err(|_| io::Error::other("retained battle outcome unavailable"))?;
     required(state.narrative.open_threads.contains(&packet))?;
-    required(state.narrative.open_threads.contains(&threat) == (unconscious == 0))?;
+    required(state.narrative.open_threads.contains(&threat) == !victory)?;
     let source_rule = journey::rule().map_err(|_| io::Error::other("rules source unavailable"))?;
     let mut admitted_knockout = false;
     for id in &state.narrative.accepted_facts {
@@ -158,7 +158,7 @@ async fn verify_retained_narrative(
                         if *entity == bandit && resource.as_str() == "unconscious" && *source == source_rule)
             });
     }
-    required(admitted_knockout == (unconscious != 0))?;
+    required(admitted_knockout == victory)?;
     for (kind, event) in [
         (rpc::GameplayActionKind::BeginStory, "begin-story"),
         (rpc::GameplayActionKind::AskCourier, "private-courier-note"),

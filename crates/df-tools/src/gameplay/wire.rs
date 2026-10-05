@@ -70,6 +70,7 @@ pub(super) fn action_kind(entry: &str) -> Option<rpc::GameplayActionKind> {
         "greatsword-attack" => rpc::GameplayActionKind::GreatswordAttack,
         "second-wind" => rpc::GameplayActionKind::SecondWind,
         "end-turn" => rpc::GameplayActionKind::EndTurn,
+        "short-rest" => rpc::GameplayActionKind::ShortRest,
         _ => return None,
     })
 }
@@ -83,6 +84,7 @@ pub(super) fn action_entry(kind: rpc::GameplayActionKind) -> Option<&'static str
         rpc::GameplayActionKind::GreatswordAttack => "greatsword-attack",
         rpc::GameplayActionKind::SecondWind => "second-wind",
         rpc::GameplayActionKind::EndTurn => "end-turn",
+        rpc::GameplayActionKind::ShortRest => "short-rest",
         _ => return None,
     })
 }
@@ -402,17 +404,29 @@ pub(super) fn journey_view(
             "Hand over the packet. Last warning.",
         ),
         rpc::JourneyPhase::Complete => {
-            if journey::value(state, journey::entity([0x65; 16])?, "unconscious")? != 0 {
+            let rested = state
+                .narrative
+                .completed_beats
+                .contains(&model::content("short-rest-complete")?);
+            if journey::combat_victory(state)? {
                 (
                     "The Courier's Road",
-                    "The Bandit falls unconscious with 1 HP. The courier lowers his shaking hands. The packet—and its secret—remain with your party.",
+                    if rested {
+                        "The Bandit was defeated. An uninterrupted hour has passed without Hit Point Dice or healing. Knocked-out creatures are awake with 1 HP, still Prone; their held weapons remain dropped. The original victory and the courier's unresolved journey remain."
+                    } else {
+                        "The Bandit falls unconscious with 1 HP. The courier lowers his shaking hands. The packet—and its secret—remain with your party. His Short Rest has begun; campaign time has not completed it."
+                    },
                     "Courier",
                     "You stood your ground. Come on. There's a light waiting for us at the inn.",
                 )
             } else {
                 (
                     "A Costly Encounter",
-                    "Both heroes are unconscious with 1 HP after nonlethal attacks. Their Short Rests have begun; the campaign clock has not advanced that rest. The Bandit takes the packet and leaves.",
+                    if rested {
+                        "Both heroes were defeated by nonlethal attacks. An uninterrupted hour has passed without Hit Point Dice or healing. They awaken with 1 HP, still Prone, and their held weapons remain dropped. That rest does not change the original defeat: the Bandit took the packet and left."
+                    } else {
+                        "Both heroes are unconscious with 1 HP after nonlethal attacks. Their Short Rests have begun; campaign time has not completed them. The Bandit takes the packet and leaves."
+                    },
                     "",
                     "",
                 )

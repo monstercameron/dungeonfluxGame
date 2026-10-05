@@ -6,6 +6,7 @@ mod model;
 mod qualification;
 #[cfg(test)]
 mod recovery_qualification;
+mod rest_qualification;
 mod restart_qualification;
 mod room;
 mod wire;
@@ -327,6 +328,10 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let restart_budget = restart_phase
         .map(restart_qualification::call_budget)
         .transpose()?;
+    let rest_phase = rest_qualification::phase();
+    let rest_budget = rest_phase
+        .map(rest_qualification::call_budget)
+        .transpose()?;
     let cold =
         journey::initial().map_err(|_| io::Error::other("gameplay baseline validation failed"))?;
     let codec = NativeCodecLimits {
@@ -377,6 +382,10 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
                 && let Ok(Err(error)) = &failure
             {
                 restart_qualification::refusal(error)
+            } else if rest_phase == Some(rest_qualification::Phase::Contender)
+                && let Ok(Err(error)) = &failure
+            {
+                rest_qualification::refusal(error)
             } else {
                 Ok(())
             };
@@ -407,6 +416,20 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
             released.map_err(|_| io::Error::other("wrong-phase exact-fence release failed"))?;
             return Err(io::Error::other("restart phase admission kind refused").into());
         }
+    }
+    if let Some(phase) = rest_phase
+        && admitted.restored != (phase == rest_qualification::Phase::B)
+    {
+        let released = df_persistence::local_demo_scope::release_owner(
+            &grant_client,
+            admitted.checkpoint.basis().session,
+            fence,
+        )
+        .await;
+        drop(grant_client);
+        join_grant_driver(grant_driver).await?;
+        released.map_err(|_| io::Error::other("rest wrong-phase exact-fence release failed"))?;
+        return Err(io::Error::other("rest phase admission kind refused").into());
     }
     let initial = admitted.checkpoint;
     let player_credential = admitted.player_credential;
@@ -536,15 +559,17 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         codec,
         fenced: false,
         recovery_wakeup: updates,
-        calls_remaining: restart_budget.unwrap_or(128),
-        qualification_joins: if restart_phase.is_some()
+        calls_remaining: restart_budget.or(rest_budget).unwrap_or(128),
+        qualification_joins: if rest_phase.is_some()
+            || restart_phase.is_some()
             || std::env::args().nth(4).as_deref() == Some("--qualification")
         {
             Some(Vec::new())
         } else {
             None
         },
-        qualification_inputs: if restart_phase.is_some()
+        qualification_inputs: if rest_phase.is_some()
+            || restart_phase.is_some()
             || std::env::args().nth(4).as_deref() == Some("--qualification")
         {
             Some(Vec::new())
@@ -653,6 +678,16 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
             fence,
         ))
     });
+    let rest = rest_phase.map(|phase| {
+        tokio::spawn(rest_qualification::run(
+            service.clone(),
+            display_credential,
+            codec,
+            database.clone(),
+            phase,
+            fence,
+        ))
+    });
     let qualification = if std::env::args().nth(4).as_deref() == Some("--qualification") {
         let (cancel, cancelled) = oneshot::channel();
         Some((
@@ -701,6 +736,23 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Ok(())
     };
+    let rest_outcome = if let Some(mut task) = rest {
+        match tokio::time::timeout(Duration::from_secs(47), &mut task).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(io::Error::other("rest consumer panicked; cleanup required")),
+            Err(_) => {
+                task.abort();
+                let joined = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
+                Err(io::Error::other(if joined.is_ok() {
+                    "rest consumer deadline; aborted task joined"
+                } else {
+                    "rest consumer deadline; join pending"
+                }))
+            }
+        }
+    } else {
+        Ok(())
+    };
     sender
         .stop()
         .map_err(|_| io::Error::other("gameplay inbox stop failed"))?;
@@ -714,8 +766,12 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     grant_closed?;
     qualification_outcome?;
     restart_outcome?;
+    rest_outcome?;
     if let Some(phase) = restart_phase {
         restart_qualification::closed(phase, remaining)?;
+    }
+    if let Some(phase) = rest_phase {
+        rest_qualification::closed(phase, remaining)?;
     }
     outcome
 }

@@ -14,6 +14,7 @@ enum-value dungeonflux.experimental.transport.v1.Sample.Behavior 3 WAIT
 enum-value dungeonflux.public.v1.GameplayActionKind 0 GAMEPLAY_ACTION_KIND_UNSPECIFIED
 enum-value dungeonflux.public.v1.GameplayActionKind 1 EXAMINE_HARBOR_SEAL
 enum-value dungeonflux.public.v1.GameplayActionKind 10 END_TURN
+enum-value dungeonflux.public.v1.GameplayActionKind 11 SHORT_REST
 enum-value dungeonflux.public.v1.GameplayActionKind 2 CHOOSE_HARBOR_SCENE
 enum-value dungeonflux.public.v1.GameplayActionKind 3 CREATE_CHARACTER
 enum-value dungeonflux.public.v1.GameplayActionKind 4 BEGIN_STORY

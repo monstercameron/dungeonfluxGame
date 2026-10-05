@@ -1,7 +1,7 @@
 //! Selected SRD 5.2.1 creation and normal adjacent melee mechanics.
 //! This is an explicitly bounded playable subset, not full 2024 rules coverage.
-pub const SOURCE_REVISION: &str = "SRD5.2.1-2024-local-journey-1";
-pub const SOURCE: &str = "Wizards of the Coast LLC SRD 5.2.1 English; https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf; CC BY4.0; PDF SHA256 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87; creation pages19-22; Fighter47-48; Soldier83; Dwarf84; SavageAttacker87; Defense88; Graze90; weapons91; armor92; initiative13; attack7,14; damage16; knockout17; Bandit261. Selected level1 Dwarf Fighter/Soldier, Defense, Greatsword/Flail/Javelin masteries, two standard arrays, normal adjacent attack, SecondWind, nonlethal melee encounter only.";
+pub const SOURCE_REVISION: &str = "SRD5.2.1-2024-local-journey-2";
+pub const SOURCE: &str = "Wizards of the Coast LLC SRD 5.2.1 English; https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf; CC BY4.0; PDF SHA256 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87; creation pages19-22; Fighter47-48; Soldier83; Dwarf84; SavageAttacker87; Defense88; Graze90; weapons91; armor92; initiative13; attack7,14; damage16; knockout17; ShortRest187; Unconscious191; Bandit261. Selected level1 Dwarf Fighter/Soldier, Defense, Greatsword/Flail/Javelin masteries, two standard arrays, normal adjacent attack, SecondWind, nonlethal melee encounter and uninterrupted after-combat ShortRest without HitPointDice; no full-rest or general rest catalog.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum JourneyRuleError {
@@ -15,6 +15,9 @@ pub enum JourneyRuleError {
     ActionSpent,
     BonusActionSpent,
     ResourceMissing,
+    InvalidRest,
+    RestIncomplete,
+    RestInterrupted,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LegalCharacter {
@@ -303,6 +306,53 @@ pub fn heal_second_wind(
     Ok((maximum.min(current + die + 1), uses - 1))
 }
 
+/// Source p187 fixed one-hour duration, expressed in admitted campaign ticks.
+/// This does not advance time or supply healing/dice.
+pub fn short_rest_due(started: u64, ticks_per_second: u32) -> Result<u64, JourneyRuleError> {
+    if ticks_per_second == 0 {
+        return Err(JourneyRuleError::InvalidRest);
+    }
+    started
+        .checked_add(u64::from(ticks_per_second) * 3600)
+        .ok_or(JourneyRuleError::InvalidRest)
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NoHitDiceShortRest {
+    pub started: u64,
+    pub finished: u64,
+    pub ticks_per_second: u32,
+    pub interrupted: bool,
+    pub hit_points: u32,
+    pub fighter_second_wind_uses: Option<u32>,
+    pub knockout_unconscious: bool,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ShortRestBenefits {
+    pub hit_points: u32,
+    pub fighter_second_wind_uses: Option<u32>,
+    pub ends_knockout_unconscious: bool,
+}
+/// Selected no-Hit-Dice rest: unchanged HP, Fighter p48 +one use capped2,
+/// and source p17 knockout unconsciousness ends. Prone/equipment stay with the caller.
+pub fn complete_no_hit_dice_short_rest(
+    input: NoHitDiceShortRest,
+) -> Result<ShortRestBenefits, JourneyRuleError> {
+    if input.interrupted {
+        return Err(JourneyRuleError::RestInterrupted);
+    }
+    if input.hit_points == 0 || input.fighter_second_wind_uses.is_some_and(|uses| uses > 2) {
+        return Err(JourneyRuleError::InvalidRest);
+    }
+    if input.finished < short_rest_due(input.started, input.ticks_per_second)? {
+        return Err(JourneyRuleError::RestIncomplete);
+    }
+    Ok(ShortRestBenefits {
+        hit_points: input.hit_points,
+        fighter_second_wind_uses: input.fighter_second_wind_uses.map(|uses| 2.min(uses + 1)),
+        ends_knockout_unconscious: input.knockout_unconscious,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -404,5 +454,64 @@ mod tests {
             heal_second_wind(1, 13, 13, 0),
             Err(JourneyRuleError::ResourceMissing)
         );
+    }
+    #[test]
+    fn no_hit_dice_rest_requires_uninterrupted_hour_and_caps_one_recovered_use() {
+        let rest = NoHitDiceShortRest {
+            started: 6,
+            finished: 3606,
+            ticks_per_second: 1,
+            interrupted: false,
+            hit_points: 1,
+            fighter_second_wind_uses: Some(0),
+            knockout_unconscious: true,
+        };
+        assert_eq!(
+            complete_no_hit_dice_short_rest(NoHitDiceShortRest {
+                finished: 3605,
+                ..rest
+            }),
+            Err(JourneyRuleError::RestIncomplete)
+        );
+        assert_eq!(
+            complete_no_hit_dice_short_rest(NoHitDiceShortRest {
+                interrupted: true,
+                ..rest
+            }),
+            Err(JourneyRuleError::RestInterrupted)
+        );
+        assert_eq!(
+            complete_no_hit_dice_short_rest(NoHitDiceShortRest {
+                hit_points: 0,
+                ..rest
+            }),
+            Err(JourneyRuleError::InvalidRest)
+        );
+        let result = complete_no_hit_dice_short_rest(rest).unwrap();
+        assert_eq!(
+            result,
+            ShortRestBenefits {
+                hit_points: 1,
+                fighter_second_wind_uses: Some(1),
+                ends_knockout_unconscious: true
+            }
+        );
+        for uses in [1, 2] {
+            assert_eq!(
+                complete_no_hit_dice_short_rest(NoHitDiceShortRest {
+                    fighter_second_wind_uses: Some(uses),
+                    ..rest
+                })
+                .unwrap()
+                .fighter_second_wind_uses,
+                Some(2)
+            );
+        }
+        assert_eq!(short_rest_due(6, 2), Ok(7206));
+        assert_eq!(
+            short_rest_due(u64::MAX, 1),
+            Err(JourneyRuleError::InvalidRest)
+        );
+        assert_eq!(short_rest_due(0, 0), Err(JourneyRuleError::InvalidRest));
     }
 }
