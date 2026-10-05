@@ -372,8 +372,10 @@ pub(super) fn journey_view(
                 .map(|who| journey::name(state, who))
                 .transpose()?
                 .unwrap_or_default(),
-            round: u32::try_from(state.logical_time.ticks / 6 + 1)
-                .map_err(|_| RepositoryError::Capacity)?,
+            round: journey::combat_round(current).map_err(|error| match error {
+                journey::CombatRoundError::Capacity => RepositoryError::Capacity,
+                _ => RepositoryError::InvalidCandidate,
+            })?,
             outcomes: outcomes
                 .into_iter()
                 .rev()

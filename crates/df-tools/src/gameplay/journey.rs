@@ -552,6 +552,223 @@ pub(super) fn accepted(
     let bytes = unhex(text)?;
     rpc::AcceptedAction::decode(bytes.as_slice()).map_err(bad)
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum CombatRoundError {
+    Binding,
+    Encounter,
+    Start,
+    Source,
+    Units,
+    Duration,
+    Chronology,
+    Capacity,
+}
+
+/// Count only the current authored encounter's accepted initiative wraps.
+pub(super) fn combat_round(current: &Checkpoint) -> Result<u32, CombatRoundError> {
+    use CombatRoundError as Error;
+    let pins = model::pins().map_err(|_| Error::Binding)?;
+    current
+        .validate_resume(current.basis(), &pins)
+        .map_err(|_| Error::Binding)?;
+    let state = current.state();
+    if state.facts.len() > 512 || state.decisions.len() > 512 {
+        return Err(Error::Capacity);
+    }
+    let content = |entry| model::content(entry).map_err(|_| Error::Source);
+    let monster = entity(BANDIT).map_err(|_| Error::Encounter)?;
+    let party = participants(current)
+        .into_iter()
+        .map(|link| link.character.ok_or(Error::Encounter))
+        .collect::<Result<Vec<_>, _>>()?;
+    let expected = party.iter().copied().chain([monster]).collect::<Vec<_>>();
+    let [encounter] = state.encounters.as_slice() else {
+        return Err(Error::Encounter);
+    };
+    if party.len() != 2
+        || encounter.id != RecordId::from_bytes(&ENCOUNTER).map_err(|_| Error::Encounter)?
+        || encounter.definition != content("combat")?
+        || encounter.combat_policy != content("normal-nonlethal-melee")?
+        || encounter.participants != expected
+        || !encounter.objectives.contains(&content("defend-courier")?)
+    {
+        return Err(Error::Encounter);
+    }
+    let starts = state
+        .facts
+        .iter()
+        .filter(|fact| {
+            matches!(&fact.value, FactValue::ContentEvent { definition, .. }
+            if definition.entry.as_str() == "defend-courier")
+        })
+        .collect::<Vec<_>>();
+    let [start] = starts.as_slice() else {
+        return Err(Error::Start);
+    };
+    let owner = |fact: &GameFact| {
+        state
+            .decisions
+            .iter()
+            .find(|decision| {
+                decision.operation == fact.operation
+                    && decision.revision == fact.revision
+                    && decision.facts.contains(&fact.id)
+            })
+            .ok_or(Error::Source)
+    };
+    let start_decision = owner(start).map_err(|_| Error::Start)?;
+    if start_decision.facts.last() != Some(&start.id)
+        || start.audience != AudienceScope::Shared
+        || !matches!(&start.value, FactValue::ContentEvent { definition, .. }
+            if *definition == content("defend-courier")?)
+        || accepted(start_decision).map_err(|_| Error::Start)?.phase
+            != rpc::JourneyPhase::Combat as i32
+    {
+        return Err(Error::Start);
+    }
+    let source = rule().map_err(|_| Error::Start)?;
+    for ordinal in 0..3 {
+        if !start_decision.draws.contains(&ordinal)
+            || !state.draws.iter().any(|draw| {
+                draw.operation == start.operation
+                    && draw.ordinal == ordinal
+                    && draw.sides == 20
+                    && draw.source == source
+            })
+        {
+            return Err(Error::Start);
+        }
+    }
+    let mut initiative = Vec::new();
+    for (priority, who) in expected.iter().enumerate() {
+        let draw = state
+            .draws
+            .iter()
+            .find(|draw| draw.operation == start.operation && draw.ordinal == priority as u32)
+            .ok_or(Error::Start)?;
+        let dexterity =
+            u8::try_from(value(state, *who, "dexterity").map_err(|_| Error::Encounter)?)
+                .map_err(|_| Error::Encounter)?;
+        initiative.push((
+            *who,
+            draw.value as i32 + rules::ability_modifier(dexterity),
+            priority,
+        ));
+    }
+    initiative.sort_by_key(|(_, score, priority)| (std::cmp::Reverse(*score), *priority));
+    if encounter.turn_order
+        != initiative
+            .into_iter()
+            .map(|(who, _, _)| who)
+            .collect::<Vec<_>>()
+    {
+        return Err(Error::Encounter);
+    }
+    let mut time = LogicalTime {
+        ticks: 0,
+        ticks_per_second: 1,
+    };
+    let mut round = 1u32;
+    let mut advances: Vec<(OperationId, u64, bool)> = Vec::new();
+    for fact in &state.facts {
+        let FactValue::TimeAdvanced { before, after } = fact.value else {
+            continue;
+        };
+        if before.ticks_per_second != 1
+            || after.ticks_per_second != 1
+            || state.logical_time.ticks_per_second != 1
+        {
+            return Err(Error::Units);
+        }
+        if before != time || fact.revision <= start.revision {
+            return Err(Error::Chronology);
+        }
+        let decision = owner(fact)?;
+        let terminal = state
+            .facts
+            .iter()
+            .find(|event| Some(&event.id) == decision.facts.last())
+            .ok_or(Error::Source)?;
+        if fact.audience != AudienceScope::Shared
+            || terminal.operation != fact.operation
+            || terminal.revision != fact.revision
+            || terminal.ordinal <= fact.ordinal
+            || decision.facts.get(fact.ordinal as usize) != Some(&fact.id)
+        {
+            return Err(Error::Source);
+        }
+        match fact.cause {
+            Some(id) => {
+                let cause = state
+                    .facts
+                    .iter()
+                    .find(|event| event.id == id)
+                    .ok_or(Error::Source)?;
+                if cause.operation != fact.operation
+                    || cause.revision != fact.revision
+                    || cause.ordinal >= fact.ordinal
+                    || !decision.facts.contains(&cause.id)
+                {
+                    return Err(Error::Source);
+                }
+            }
+            None if fact.ordinal == 0 && decision.facts.first() == Some(&fact.id) => {}
+            None => return Err(Error::Source),
+        }
+        let accepted = accepted(decision).map_err(|_| Error::Source)?;
+        let FactValue::ContentEvent { definition, .. } = &terminal.value else {
+            return Err(Error::Source);
+        };
+        let duration = after
+            .ticks
+            .checked_sub(before.ticks)
+            .ok_or(Error::Duration)?;
+        let combat = if *definition == content("end-turn")?
+            && [
+                rpc::JourneyPhase::Combat as i32,
+                rpc::JourneyPhase::Complete as i32,
+            ]
+            .contains(&accepted.phase)
+        {
+            true
+        } else if *definition == content("short-rest")?
+            && accepted.phase == rpc::JourneyPhase::Complete as i32
+        {
+            false
+        } else {
+            return Err(Error::Source);
+        };
+        if duration == 0 {
+            return Err(Error::Duration);
+        }
+        if let Some((_, total, existing_combat)) = advances
+            .iter_mut()
+            .find(|(operation, _, _)| *operation == fact.operation)
+        {
+            if *existing_combat != combat {
+                return Err(Error::Source);
+            }
+            *total = total.checked_add(duration).ok_or(Error::Capacity)?;
+        } else {
+            advances.push((fact.operation, duration, combat));
+        }
+        time = after;
+    }
+    for (_, duration, combat) in advances {
+        if duration != if combat { 6 } else { 3600 } {
+            return Err(Error::Duration);
+        }
+        if combat {
+            round = round.checked_add(1).ok_or(Error::Capacity)?;
+        }
+    }
+    if time != state.logical_time {
+        return Err(Error::Chronology);
+    }
+    Ok(round)
+}
+
 pub(super) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
@@ -2845,6 +3062,451 @@ mod tests {
         )
         .unwrap()
     }
+
+    fn round_combat() -> Checkpoint {
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let opening = opening_story();
+        let dialogue = stage_with_supplier(
+            &opening,
+            &input(&opening, first, 6, "ask-courier", vec![]),
+            &mut |_| panic!("dialogue cannot draw"),
+        )
+        .unwrap();
+        stage_with_supplier(
+            &dialogue,
+            &input(&dialogue, first, 7, "defend-courier", vec![]),
+            &mut |_| Ok(10),
+        )
+        .unwrap()
+    }
+    fn wrapped_combat() -> Checkpoint {
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let second = MemberId::from_bytes(&MEMBERS[1]).unwrap();
+        let combat = round_combat();
+        assert_eq!(combat_round(&combat), Ok(1));
+        let partial = stage_with_supplier(
+            &combat,
+            &input(&combat, first, 8, "end-turn", vec![]),
+            &mut |_| panic!("first turn has no enemy roll"),
+        )
+        .unwrap();
+        assert_eq!(combat_round(&partial), Ok(1));
+        assert_eq!(partial.state().logical_time, combat.state().logical_time);
+        let wrapped = stage_with_supplier(
+            &partial,
+            &input(&partial, second, 9, "end-turn", vec![]),
+            &mut |_| Ok(1),
+        )
+        .unwrap();
+        assert_eq!(wrapped.state().logical_time.ticks, 6);
+        assert_eq!(combat_round(&wrapped), Ok(2));
+        wrapped
+    }
+    fn round_view(current: &Checkpoint, member: MemberId, display: bool) -> rpc::ViewMessage {
+        use df_persistence::local_demo_scope::LocalDemoRole;
+        wire::journey_view(
+            current,
+            if display {
+                LocalDemoRole::Display
+            } else {
+                LocalDemoRole::Player
+            },
+            member,
+        )
+        .unwrap()
+    }
+    fn assert_round_views(current: &Checkpoint, expected: u32) {
+        let original = current.clone();
+        for (member, display) in [
+            (MemberId::from_bytes(&MEMBERS[0]).unwrap(), false),
+            (MemberId::from_bytes(&MEMBERS[1]).unwrap(), false),
+            (bootstrap_member().unwrap(), true),
+        ] {
+            let view = round_view(current, member, display);
+            let decoded = rpc::ViewMessage::decode(view.encode_to_vec().as_slice()).unwrap();
+            assert_eq!(decoded, view);
+            let journey = match decoded.audience.unwrap() {
+                rpc::view_message::Audience::Player(view) => view.journey.unwrap(),
+                rpc::view_message::Audience::Display(view) => view.journey.unwrap(),
+            };
+            assert_eq!(journey.combat.unwrap().round, expected);
+        }
+        assert_eq!(
+            current, &original,
+            "projection cannot mutate any canonical record"
+        );
+    }
+    #[test]
+    fn encounter_round_one_survives_real_rest_inn_and_restored_checkpoint() {
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let victory = inn_victory();
+        assert_round_views(&victory, 1);
+        let command = input(&victory, first, 9, "short-rest", vec![]);
+        let rest = stage_with_supplier(&victory, &command, &mut |_| panic!("rest dice")).unwrap();
+        let retry = stage_with_supplier(&victory, &command, &mut |_| panic!("retry dice")).unwrap();
+        assert_eq!(rest, retry);
+        assert_rest_preserves_battle(&victory, &rest);
+        assert_eq!(rest.state().logical_time.ticks, 3600);
+        assert_round_views(&rest, 1);
+        let arrived = stage_with_supplier(&rest, &inn_command(&rest, first, 10), &mut |_| {
+            panic!("Inn dice")
+        })
+        .unwrap();
+        inn_preserves(&rest, &arrived);
+        assert_round_views(&arrived, 1);
+        let restored = model::checkpoint(arrived.basis(), arrived.state().clone()).unwrap();
+        assert_eq!(restored, arrived);
+        assert_round_views(&restored, 1);
+    }
+    #[test]
+    fn encounter_round_two_counts_only_real_wrap_and_survives_rest_inn_retry() {
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let wrapped = wrapped_combat();
+        assert_round_views(&wrapped, 2);
+        let command = input(
+            &wrapped,
+            first,
+            10,
+            "greatsword-attack",
+            vec![
+                (
+                    model::label("savage-attacker").unwrap(),
+                    model::label("no").unwrap(),
+                ),
+                (model::label("graze").unwrap(), model::label("no").unwrap()),
+            ],
+        );
+        let victory = stage_with_supplier(&wrapped, &command, &mut |sides| {
+            Ok(if sides == 20 { 20 } else { 6 })
+        })
+        .unwrap();
+        let retry = stage_with_supplier(&wrapped, &command, &mut |sides| {
+            Ok(if sides == 20 { 20 } else { 6 })
+        })
+        .unwrap();
+        assert_eq!(victory, retry);
+        assert!(combat_victory(victory.state()).unwrap());
+        let rest = stage_with_supplier(
+            &victory,
+            &input(&victory, first, 11, "short-rest", vec![]),
+            &mut |_| panic!("rest dice"),
+        )
+        .unwrap();
+        assert_rest_preserves_battle(&victory, &rest);
+        assert_eq!(rest.state().logical_time.ticks, 3606);
+        let arrived = stage_with_supplier(&rest, &inn_command(&rest, first, 12), &mut |_| {
+            panic!("Inn dice")
+        })
+        .unwrap();
+        inn_preserves(&rest, &arrived);
+        for current in [&victory, &rest, &arrived] {
+            assert_round_views(current, 2);
+        }
+        let restored = model::checkpoint(arrived.basis(), arrived.state().clone()).unwrap();
+        assert_round_views(&restored, 2);
+        assert_eq!(restored, arrived);
+    }
+
+    #[test]
+    fn encounter_round_wrap_with_monster_between_heroes_needs_no_attack_or_cause_fact() {
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let second = MemberId::from_bytes(&MEMBERS[1]).unwrap();
+        let opening = opening_story();
+        let dialogue = stage_with_supplier(
+            &opening,
+            &input(&opening, first, 6, "escort-courier", vec![]),
+            &mut |_| panic!("dialogue"),
+        )
+        .unwrap();
+        let mut dice = [20, 1, 10].into_iter();
+        let combat = stage_with_supplier(
+            &dialogue,
+            &input(&dialogue, first, 7, "defend-courier", vec![]),
+            &mut |_| Ok(dice.next().expect("exact initiative draws")),
+        )
+        .unwrap();
+        assert_eq!(
+            combat.state().encounters[0].turn_order,
+            vec![
+                entity(ENTITIES[0]).unwrap(),
+                entity(BANDIT).unwrap(),
+                entity(ENTITIES[1]).unwrap()
+            ]
+        );
+        let partial = stage_with_supplier(
+            &combat,
+            &input(&combat, first, 8, "end-turn", vec![]),
+            &mut |_| Ok(1),
+        )
+        .unwrap();
+        assert_eq!(partial.state().logical_time.ticks, 0);
+        assert_round_views(&partial, 1);
+        let command = input(&partial, second, 9, "end-turn", vec![]);
+        let wrapped =
+            stage_with_supplier(&partial, &command, &mut |_| panic!("no monster turn here"))
+                .unwrap();
+        let retry =
+            stage_with_supplier(&partial, &command, &mut |_| panic!("no retry draw")).unwrap();
+        assert_eq!(wrapped, retry);
+        assert_eq!(wrapped.state().logical_time.ticks, 6);
+        let decision = wrapped.state().decisions.last().unwrap();
+        assert!(decision.draws.is_empty());
+        assert!(accepted(decision).unwrap().combat.is_empty());
+        let time = wrapped
+            .state()
+            .facts
+            .iter()
+            .find(|fact| {
+                fact.operation == decision.operation
+                    && matches!(fact.value, FactValue::TimeAdvanced { .. })
+            })
+            .unwrap();
+        assert_eq!(time.ordinal, 0);
+        assert_eq!(time.cause, None);
+        assert_round_views(&wrapped, 2);
+        let restored = model::checkpoint(wrapped.basis(), wrapped.state().clone()).unwrap();
+        assert_eq!(restored, wrapped);
+        assert_round_views(&restored, 2);
+    }
+
+    #[test]
+    fn encounter_round_counts_wrap_before_same_operation_knockout_start_once() {
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let second = MemberId::from_bytes(&MEMBERS[1]).unwrap();
+        let opening = opening_story();
+        let dialogue = stage_with_supplier(
+            &opening,
+            &input(&opening, first, 6, "escort-courier", vec![]),
+            &mut |_| panic!("dialogue"),
+        )
+        .unwrap();
+        let mut dice = [1, 1, 20, 1].into_iter();
+        let combat = stage_with_supplier(
+            &dialogue,
+            &input(&dialogue, first, 7, "defend-courier", vec![]),
+            &mut |_| Ok(dice.next().expect("initiative and initial monster miss")),
+        )
+        .unwrap();
+        assert_eq!(
+            combat.state().encounters[0].turn_order,
+            vec![
+                entity(BANDIT).unwrap(),
+                entity(ENTITIES[0]).unwrap(),
+                entity(ENTITIES[1]).unwrap()
+            ]
+        );
+        assert_eq!(
+            combat.state().encounters[0].active_turn,
+            Some(entity(ENTITIES[0]).unwrap())
+        );
+        let partial = stage_with_supplier(
+            &combat,
+            &input(&combat, first, 8, "end-turn", vec![]),
+            &mut |_| panic!("next player, no monster roll"),
+        )
+        .unwrap();
+        let wrapped = stage_with_supplier(
+            &partial,
+            &input(&partial, second, 9, "end-turn", vec![]),
+            &mut |sides| Ok(if sides == 20 { 20 } else { 6 }),
+        )
+        .unwrap();
+        assert_eq!(
+            value(wrapped.state(), entity(ENTITIES[0]).unwrap(), "unconscious"),
+            Ok(1)
+        );
+        assert_eq!(wrapped.state().logical_time.ticks, 6);
+        let operation = wrapped.state().decisions.last().unwrap().operation;
+        let facts = wrapped
+            .state()
+            .facts
+            .iter()
+            .filter(|fact| fact.operation == operation)
+            .collect::<Vec<_>>();
+        let times = facts
+            .iter()
+            .filter(|fact| matches!(fact.value, FactValue::TimeAdvanced { .. }))
+            .collect::<Vec<_>>();
+        assert_eq!(times.len(), 1);
+        assert!(
+            matches!(times[0].value, FactValue::TimeAdvanced { before, after }
+            if before.ticks == 0 && after.ticks == 6)
+        );
+        let knockout = facts.iter().find(|fact| matches!(&fact.value,
+            FactValue::ContentEvent { definition, .. } if definition.entry.as_str() == "knockout-short-rest-start")).unwrap();
+        assert!(times[0].ordinal < knockout.ordinal);
+        assert!(knockout.ordinal < facts.last().unwrap().ordinal);
+        assert_round_views(&wrapped, 2);
+        assert_eq!(
+            wrapped.state().encounters[0].active_turn,
+            Some(entity(ENTITIES[1]).unwrap())
+        );
+    }
+
+    #[test]
+    fn encounter_round_skips_down_actor_without_inventing_a_wrap() {
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let second = MemberId::from_bytes(&MEMBERS[1]).unwrap();
+        let opening = opening_story();
+        let dialogue = stage_with_supplier(
+            &opening,
+            &input(&opening, first, 6, "escort-courier", vec![]),
+            &mut |_| panic!("dialogue"),
+        )
+        .unwrap();
+        let mut ordinal = 0;
+        let combat = stage_with_supplier(
+            &dialogue,
+            &input(&dialogue, first, 7, "defend-courier", vec![]),
+            &mut |sides| {
+                ordinal += 1;
+                Ok(if ordinal <= 2 {
+                    1
+                } else if sides == 20 {
+                    20
+                } else {
+                    6
+                })
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            value(combat.state(), entity(ENTITIES[0]).unwrap(), "unconscious"),
+            Ok(1)
+        );
+        assert_eq!(
+            combat.state().encounters[0].active_turn,
+            Some(entity(ENTITIES[1]).unwrap())
+        );
+        assert_eq!(combat.state().logical_time.ticks, 0);
+        assert_round_views(&combat, 1);
+        let wrapped = stage_with_supplier(
+            &combat,
+            &input(&combat, second, 8, "end-turn", vec![]),
+            &mut |_| Ok(1),
+        )
+        .unwrap();
+        assert_eq!(wrapped.state().logical_time.ticks, 6);
+        assert_eq!(
+            wrapped.state().encounters[0].active_turn,
+            Some(entity(ENTITIES[1]).unwrap())
+        );
+        assert_round_views(&wrapped, 2);
+    }
+    #[test]
+    fn encounter_round_refuses_forged_time_source_units_duration_and_start_without_partial_state() {
+        use CombatRoundError as Error;
+        let current = wrapped_combat();
+        let untouched = current.clone();
+        for (case, expected) in [
+            (0, Error::Source),
+            (1, Error::Source),
+            (2, Error::Units),
+            (3, Error::Duration),
+            (4, Error::Source),
+            (5, Error::Start),
+            (6, Error::Encounter),
+            (7, Error::Chronology),
+        ] {
+            let mut state = current.state().clone();
+            let time_index = state
+                .facts
+                .iter()
+                .position(|fact| matches!(fact.value, FactValue::TimeAdvanced { .. }))
+                .unwrap();
+            let operation = state.facts[time_index].operation;
+            match case {
+                0 => {
+                    state
+                        .decisions
+                        .iter_mut()
+                        .find(|decision| decision.operation == operation)
+                        .unwrap()
+                        .source_policy = model::label("foreign-policy").unwrap()
+                }
+                1 => {
+                    let terminal = state
+                        .decisions
+                        .iter()
+                        .find(|decision| decision.operation == operation)
+                        .unwrap()
+                        .facts
+                        .last()
+                        .copied()
+                        .unwrap();
+                    let FactValue::ContentEvent { definition, .. } = &mut state
+                        .facts
+                        .iter_mut()
+                        .find(|fact| fact.id == terminal)
+                        .unwrap()
+                        .value
+                    else {
+                        panic!("event")
+                    };
+                    *definition = model::content("escort-courier").unwrap();
+                }
+                2 | 3 => {
+                    let FactValue::TimeAdvanced { before, after } =
+                        &mut state.facts[time_index].value
+                    else {
+                        panic!("time")
+                    };
+                    if case == 2 {
+                        before.ticks_per_second = 2;
+                        after.ticks_per_second = 2;
+                    } else {
+                        after.ticks = 5;
+                    }
+                }
+                4 => state.facts[time_index].cause = None,
+                5 => {
+                    let fact = state.facts.iter_mut().find(|fact| matches!(&fact.value,
+                        FactValue::ContentEvent { definition, .. } if definition.entry.as_str() == "defend-courier")).unwrap();
+                    let FactValue::ContentEvent { definition, .. } = &mut fact.value else {
+                        panic!("start")
+                    };
+                    *definition = model::content("escort-courier").unwrap();
+                }
+                6 => state.encounters[0].turn_order.swap(0, 1),
+                7 => state.logical_time.ticks = 600,
+                _ => unreachable!(),
+            }
+            let candidate = model::checkpoint(current.basis(), state).unwrap();
+            let before = candidate.clone();
+            assert_eq!(combat_round(&candidate), Err(expected), "case {case}");
+            assert_eq!(candidate, before);
+        }
+        assert_eq!(current, untouched);
+        let mut stale_pins = current.pins().clone();
+        stale_pins.content.package_digest = ContentDigest([99; 32]);
+        let stale = Checkpoint::new(
+            current.schema(),
+            current.basis(),
+            stale_pins,
+            current.state().clone(),
+            ReferenceInventory {
+                rules: &[model::rule().unwrap(), rule().unwrap()],
+                content: &model::contents().unwrap(),
+                resources: &resources().unwrap(),
+                assets: &[],
+            },
+            model::limits(),
+        )
+        .unwrap();
+        assert_eq!(combat_round(&stale), Err(Error::Binding));
+        let mut unowned = current.state().clone();
+        let time = unowned
+            .facts
+            .iter_mut()
+            .find(|fact| matches!(fact.value, FactValue::TimeAdvanced { .. }))
+            .unwrap();
+        time.operation = OperationId::from_bytes(&[99; 16]).unwrap();
+        assert!(
+            model::checkpoint(current.basis(), unowned).is_err(),
+            "canonical ownership rejects unowned time before projection"
+        );
+    }
+
     fn inn_command(current: &Checkpoint, member: MemberId, operation: u8) -> GameInput {
         input(
             current,
