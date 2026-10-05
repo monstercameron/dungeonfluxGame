@@ -10,6 +10,8 @@ use std::time::Duration;
 
 use super::{model, wire};
 
+mod encounter_admission;
+
 pub(super) const ROOM_CODE: &str = "LANTERN";
 pub(super) const ROOM_ENTITY: [u8; 16] = [0x45; 16];
 const MEMBERS: [[u8; 16]; 2] = [[0x61; 16], [0x62; 16]];
@@ -1774,12 +1776,14 @@ fn enemy_turn(
     Ok(())
 }
 fn start_combat(
+    current: &Checkpoint,
+    command: &CommandInput,
     state: &mut GameState,
-    operation: OperationId,
     draws: &mut Vec<ActualDraw>,
     outcomes: &mut Vec<rpc::CombatOutcome>,
     supplier: DiceSource<'_>,
 ) -> Result<(), RepositoryError> {
+    let operation = command.operation;
     let monster = entity(BANDIT)?;
     state.entities.push(WorldEntity {
         id: monster,
@@ -1826,9 +1830,10 @@ fn start_combat(
         .members
         .iter()
         .filter(|link| link.member.as_bytes() != &PLAYER)
-        .filter_map(|link| link.character)
-        .chain([monster])
-        .collect::<Vec<_>>();
+        .map(|link| link.character.ok_or(RepositoryError::InvalidCandidate))
+        .chain([Ok(monster)])
+        .collect::<Result<Vec<_>, _>>()?;
+    encounter_admission::validate(current, command, state, &participants).map_err(bad)?;
     let mut initiative = Vec::new();
     for (priority, who) in participants.iter().enumerate() {
         let die = draw(operation, 20, draws, supplier)?;
@@ -2055,8 +2060,9 @@ fn stage_using(
                 .open_threads
                 .push(model::content(THREAT_THREAD)?);
             start_combat(
+                current,
+                command,
                 &mut state,
-                command.operation,
                 &mut draws,
                 &mut outcomes,
                 supplier,
@@ -2328,7 +2334,7 @@ fn stage_with_supplier(
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn input(
+    pub(super) fn input(
         current: &Checkpoint,
         member: MemberId,
         operation: u8,
@@ -2571,7 +2577,7 @@ mod tests {
         current
     }
 
-    fn opening_story() -> Checkpoint {
+    pub(super) fn opening_story() -> Checkpoint {
         let current = prepared_story();
         stage_with_supplier(
             &current,

@@ -515,6 +515,7 @@ dependencies = [
  "df-api",
  "df-auth",
  "df-content",
+ "df-encounter",
  "df-engine",
  "df-model",
  "df-narrative",

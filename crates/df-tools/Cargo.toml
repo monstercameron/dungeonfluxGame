@@ -31,6 +31,7 @@ df-api = { path = "../df-api" }
 df-ai = { path = "../df-ai" }
 df-auth = { path = "../df-auth" }
 df-content = { path = "../df-content" }
+df-encounter = { path = "../df-encounter" }
 df-engine = { path = "../df-engine" }
 df-model = { path = "../df-model" }
 df-narrative = { path = "../df-narrative" }
