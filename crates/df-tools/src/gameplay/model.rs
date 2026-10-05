@@ -380,6 +380,18 @@ impl RulesCommandHandler for HarborHandler {
 
 pub(super) struct HarborEngine;
 
+pub(super) fn stage_registered_journey(
+    current: &Checkpoint,
+    input: &GameInput,
+) -> Result<Checkpoint, RepositoryError> {
+    let GameInput::Game(command) = input else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
+    let staged = super::journey::stage(current, input)?;
+    super::courier_ai::inspect_candidate(current, &staged, command).map_err(invalid)?;
+    Ok(staged)
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum HarborScene {
     Harbor,
@@ -543,7 +555,7 @@ impl SessionEngine<NativeScope<LocalDemoAuthority>> for HarborEngine {
                 return super::journey::stage_join(current, input);
             }
             if super::journey::CONTENT_ENTRIES.contains(&action.entry.as_str()) {
-                return super::journey::stage(current, input);
+                return stage_registered_journey(current, input);
             }
         }
 

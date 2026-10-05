@@ -4,6 +4,10 @@ use df_ai::admission::{
     admit_complete_record,
 };
 use df_ai::lookup::{PreparedRead, ReadResult, lookup_prepared};
+use df_engine::effect_emission::{
+    EffectEmissionLimits, EffectInspectionError, EffectRegistrationInspector,
+    inspect_staged_effects,
+};
 use df_model::checkpoint::*;
 use df_session::submission::RepositoryError;
 use df_types::{MemberId, OperationId, RevisionLabel};
@@ -23,6 +27,52 @@ pub(super) enum CourierError {
     Stale,
     Record,
     Capacity,
+}
+
+struct CourierRegistration<'a> {
+    current: &'a Checkpoint,
+    staged: &'a Checkpoint,
+    source: &'a CommandInput,
+}
+
+impl EffectRegistrationInspector for CourierRegistration<'_> {
+    type Refusal = CourierError;
+
+    fn inspect(&self, intent: &DurableIntent) -> Result<(), Self::Refusal> {
+        // The compiled execute/stage_completion pair shares this closed source binding.
+        // Inspection neither reads the recording nor obtains a completion grant.
+        let member = recipient(self.staged, intent)?;
+        if member != self.source.member || journey::player_entity(member, self.current).is_err() {
+            return Err(CourierError::Source);
+        }
+        Ok(())
+    }
+}
+
+pub(super) fn inspect_candidate(
+    current: &Checkpoint,
+    staged: &Checkpoint,
+    source: &CommandInput,
+) -> Result<(), EffectInspectionError<CourierError>> {
+    inspect_staged_effects(
+        staged,
+        current.basis(),
+        current.pins(),
+        source.operation,
+        EffectEmissionLimits {
+            maximum_scan_records: model::limits().maximum_records,
+            maximum_effects: 1,
+            // One effect costs at most four comparisons per canonical record.
+            maximum_comparisons: 2048,
+            maximum_retained_bytes: 8192,
+        },
+        &CourierRegistration {
+            current,
+            staged,
+            source,
+        },
+    )?;
+    Ok(())
 }
 
 fn id(domain: &[u8], basis: Basis, operation: OperationId) -> [u8; 16] {
@@ -412,3 +462,7 @@ pub(super) fn saved_response(
 #[cfg(test)]
 #[path = "courier_ai_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "courier_registration_tests.rs"]
+mod registration_tests;
