@@ -192,7 +192,7 @@ impl OwnedConnection {
     }
 
     pub(crate) fn take_client(&mut self) -> Result<Client, RepositoryError> {
-        if !self.usable || self.driver.as_ref().is_none_or(JoinHandle::is_finished) {
+        if !self.usable || !self.driver_live() {
             return Err(RepositoryError::Unavailable);
         }
         self.client.take().ok_or(RepositoryError::Unavailable)
@@ -204,6 +204,16 @@ impl OwnedConnection {
         }
         self.client = Some(client);
         Ok(())
+    }
+
+    pub(crate) fn ready_for_lookup(&self) -> bool {
+        self.usable && self.client.is_some() && self.driver_live()
+    }
+
+    fn driver_live(&self) -> bool {
+        self.driver
+            .as_ref()
+            .is_some_and(|driver| !driver.is_finished())
     }
 
     pub(crate) fn usable(&self) -> bool {
@@ -385,5 +395,52 @@ mod tests {
             };
             assert!(matches!(bounds.validate(), Err(RepositoryError::Capacity)));
         }
+    }
+}
+
+#[cfg(test)]
+mod readiness_tests {
+    use super::*;
+
+    #[test]
+    fn finished_driver_is_not_ready_and_remains_owned_until_joined_close() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let (release, wait) = tokio::sync::oneshot::channel();
+            let driver = tokio::spawn(async {
+                wait.await.unwrap();
+                Ok(())
+            });
+            let mut connection = OwnedConnection {
+                client: None,
+                driver: Some(driver),
+                bounds: TransactionBounds {
+                    transaction: Duration::from_secs(1),
+                    rollback: Duration::from_secs(1),
+                    driver_join: Duration::from_secs(1),
+                },
+                usable: true,
+                discard_state: DiscardState::NotStarted,
+            };
+            // Exercise driver liveness independently of the absent SQL client.
+            assert!(connection.driver_live());
+            release.send(()).unwrap();
+            tokio::task::yield_now().await;
+            assert!(!connection.driver_live());
+            assert!(!connection.ready_for_lookup());
+            assert!(connection.usable());
+            assert!(
+                connection
+                    .driver
+                    .as_ref()
+                    .is_some_and(JoinHandle::is_finished)
+            );
+            connection.close().await.unwrap();
+            assert!(connection.driver.is_none());
+            assert!(matches!(connection.discard_state(), DiscardState::Joined));
+        });
     }
 }

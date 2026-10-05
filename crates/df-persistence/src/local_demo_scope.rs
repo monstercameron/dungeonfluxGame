@@ -519,3 +519,9 @@ pub fn encode_owned_demo_checkpoint(
 ) -> Result<Vec<u8>, RepositoryError> {
     encode_checkpoint(checkpoint, limits).map_err(|_| RepositoryError::InvalidCandidate)
 }
+
+/// Operator-only loopback qualification on already owned sockets. No bind/connect,
+/// scope authority, transaction replay, or normal gameplay fault control is supplied.
+pub use crate::owned_pg_commit_proxy_fixture::{
+    CommitAckObservation, ProxyBounds, ProxyError, drop_commit_acknowledgement,
+};

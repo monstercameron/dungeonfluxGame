@@ -5,7 +5,7 @@ use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 
 use df_model::checkpoint::{AcceptedDecision, Basis, Checkpoint, GameInput};
 use df_observe::OperationContext;
-use df_types::{OperationId, SessionId, SessionRevision};
+use df_types::{OperationId, SessionId};
 
 use crate::inbox::{ActorInput, AdmissionSequence, Reducer};
 
@@ -160,6 +160,13 @@ pub enum OperationLookup {
 /// Confirmed/PreviouslyCommitted mean actual durable acknowledgement, never queue admission.
 pub trait SessionRepository {
     type Scope: OperationScope;
+    /// Restore a usable owned connection before an EXACT retained uncertain retry.
+    /// The session still owns its original checkpoint/key. Native implementations
+    /// close/join the displaced driver before replacement and never replay a write.
+    /// In-memory/already usable ports need no connection replacement.
+    fn recover_connection(&mut self, _context: &OperationContext) -> Result<(), RepositoryError> {
+        Ok(())
+    }
     fn lookup_operation(
         &mut self,
         operation: &Self::Scope,
@@ -306,6 +313,31 @@ where
         &self.checkpoint
     }
 
+    /// Whether the cached checkpoint may admit a new decision. A committed receipt
+    /// alone does not establish this: uncertain recovery also requires validated reload.
+    pub fn is_current(&self) -> bool {
+        matches!(self.cache, CacheState::Current)
+    }
+
+    /// Distinguishes ambiguous admission from a known stale cache requiring reload.
+    /// Only the former restricts recovery to the first exact retained key.
+    pub fn has_uncertain_operation(&self) -> bool {
+        matches!(self.cache, CacheState::Uncertain(_))
+    }
+
+    /// Native ingress can route a fenced retry only when its full retained identity
+    /// and bound input match. This check confers no permission: the repository must
+    /// independently authenticate the refreshed scope before lookup/reload.
+    pub fn matches_uncertain_retry(
+        &self,
+        operation: &R::Scope,
+        input: &GameInput,
+    ) -> Result<bool, RepositoryError> {
+        operation.validate_input(input)?;
+        let key = self.capture_uncertainty_key(operation)?;
+        Ok(matches!(&self.cache, CacheState::Uncertain(unresolved) if unresolved == &key))
+    }
+
     /// Consumes this reducer and returns its original owned repository for explicit
     /// native shutdown. The runtime must first drain the inbox, then close/join this
     /// repository on the dedicated actor thread before joining that thread, keeping
@@ -327,6 +359,7 @@ where
         if matches!(&self.cache, CacheState::Uncertain(_)) {
             return Err(RepositoryError::UnresolvedCommit);
         }
+        self.repository.recover_connection(context)?;
         self.reload(operation, context, None)
     }
 
@@ -334,10 +367,10 @@ where
         &mut self,
         operation: &R::Scope,
         context: &OperationContext,
-        minimum_revision: Option<SessionRevision>,
+        receipt: Option<&DecisionReceipt>,
     ) -> Result<(), RepositoryError> {
         let mut span = df_observe::begin(context, "session.reload");
-        let result = self.reload_scoped(operation, context, minimum_revision);
+        let result = self.reload_scoped(operation, context, receipt);
         span.finish_unmeasured(if result.is_ok() {
             "reloaded"
         } else {
@@ -350,13 +383,16 @@ where
         &mut self,
         operation: &R::Scope,
         context: &OperationContext,
-        minimum_revision: Option<SessionRevision>,
+        receipt: Option<&DecisionReceipt>,
     ) -> Result<(), RepositoryError> {
         let checkpoint = self.repository.load_current(operation, context)?;
         if checkpoint.basis().session != operation.session()
             || checkpoint.basis().session != self.checkpoint.basis().session
             || checkpoint.basis().revision < self.checkpoint.basis().revision
-            || minimum_revision.is_some_and(|minimum| checkpoint.basis().revision < minimum)
+            || receipt.is_some_and(|receipt| {
+                checkpoint.basis().revision < receipt.basis().revision
+                    || !checkpoint.state().decisions.contains(receipt.decision())
+            })
         {
             return Err(RepositoryError::InvalidCandidate);
         }
@@ -434,6 +470,14 @@ where
             Ok(key) => key,
             Err(error) => return SubmissionOutcome::Refused(error),
         };
+        if let CacheState::Uncertain(unresolved) = &self.cache {
+            if unresolved != &key {
+                return SubmissionOutcome::LookupRequired;
+            }
+            if let Err(error) = self.repository.recover_connection(context) {
+                return SubmissionOutcome::Refused(error);
+            }
+        }
         match self.repository.lookup_operation(operation, context) {
             Ok(OperationLookup::Committed(receipt)) => {
                 if let Err(error) = self.check_receipt(&receipt, operation) {
@@ -448,8 +492,7 @@ where
                 if can_reload {
                     // Preserve uncertainty if the bounded reload fails; the durable
                     // receipt is still truthful and no staged effects are dispatched.
-                    let _reload_outcome =
-                        self.reload(operation, context, Some(receipt.basis().revision));
+                    let _reload_outcome = self.reload(operation, context, Some(&receipt));
                 }
                 return SubmissionOutcome::Confirmed(receipt);
             }
@@ -550,8 +593,7 @@ where
                     return SubmissionOutcome::Refused(error);
                 }
                 self.cache = CacheState::ReloadRequired;
-                let _reload_outcome =
-                    self.reload(operation, context, Some(receipt.basis().revision));
+                let _reload_outcome = self.reload(operation, context, Some(&receipt));
                 SubmissionOutcome::Confirmed(receipt)
             }
             Ok(CommitOutcome::Indeterminate) => {

@@ -4,6 +4,8 @@ mod actor;
 mod journey;
 mod model;
 mod qualification;
+#[cfg(test)]
+mod recovery_qualification;
 mod room;
 mod wire;
 
@@ -370,32 +372,35 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         trace_parent: String::new(),
         build: crate::BUILD_ID.to_owned(),
     };
-    let repository = PostgresRepository::<LocalDemoAuthority>::from_connected_no_tls(
+    let repository_options = NativeRepositoryOptions {
+        transaction_bounds: NativeTransactionBounds {
+            transaction: Duration::from_secs(2),
+            rollback: Duration::from_millis(250),
+            driver_join: Duration::from_secs(2),
+        },
+        codec_limits: codec,
+        maximum_receipt_bytes: 4096,
+        verifier: Some(df_persistence::local_demo_scope::verifier()),
+        recovery: Some(
+            model::recovery().map_err(|_| io::Error::other("source recovery inventory invalid"))?,
+        ),
+    };
+    let mut repository = PostgresRepository::<LocalDemoAuthority>::from_connected_no_tls(
         runtime.clone(),
         client,
         connection,
-        NativeRepositoryOptions {
-            transaction_bounds: NativeTransactionBounds {
-                transaction: Duration::from_secs(2),
-                rollback: Duration::from_millis(250),
-                driver_join: Duration::from_secs(2),
-            },
-            codec_limits: codec,
-            maximum_receipt_bytes: 4096,
-            verifier: Some(df_persistence::local_demo_scope::verifier()),
-            recovery: Some(
-                model::recovery()
-                    .map_err(|_| io::Error::other("source recovery inventory invalid"))?,
-            ),
-        },
+        repository_options.clone(),
         &context,
     )
     .await
     .map_err(|_| io::Error::other("native repository setup failed"))?;
+    repository
+        .configure_reconnect(database.clone(), repository_options)
+        .map_err(|_| io::Error::other("native repository recovery setup failed"))?;
     let (updates, receiver) = watch::channel(initial.clone());
     let owner = DurableOwner::new(
         repository,
-        model::HarborEngine,
+        actor::Engine(None),
         actor::Publication(updates.clone()),
         initial,
         4096,

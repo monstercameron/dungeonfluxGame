@@ -5896,16 +5896,25 @@ fn observe_registered_actor_lost_commit_ack(
                 if second.0 != 2 || third.0 != 3 {
                     return Err(RepositoryError::InvalidReceipt);
                 }
-                for receipt in [same_receipt, different_receipt] {
+                for (receipt, expected) in [
+                    (
+                        same_receipt,
+                        df_session::submission::SubmissionOutcome::Refused(
+                            RepositoryError::Unavailable,
+                        ),
+                    ),
+                    (
+                        different_receipt,
+                        df_session::submission::SubmissionOutcome::LookupRequired,
+                    ),
+                ] {
                     let wait = deadline
                         .checked_duration_since(Instant::now())
                         .ok_or(RepositoryError::Unavailable)?;
                     if receipt
                         .recv_timeout(wait)
                         .map_err(|_| RepositoryError::InvalidReceipt)?
-                        != df_session::submission::SubmissionOutcome::Refused(
-                            RepositoryError::Unavailable,
-                        )
+                        != expected
                         || *observed.lock().map_err(|_| RepositoryError::Unavailable)? != [1, 0, 0]
                         || retained_fixture_all_family_bytes(
                             handle,
@@ -6025,7 +6034,7 @@ fn observe_registered_actor_lost_commit_ack(
             return Err(RepositoryError::Unavailable);
         }
         println!(
-            "registered physical actual actor lost COMMIT acknowledgement: session59; one engine decision; LookupRequired then same/different Refused(Unavailable); no publication/wake; four-family counts2/1/1/1 and complete codec2/schema1 appearance equal; inbox stop/drain -> same actor native joined close -> parent join; backend_pid={backend_pid} backend_start={backend_start} OSidentity={}; exact actor recovery remains unqualified",
+            "registered physical actual actor lost COMMIT acknowledgement: session59; one engine decision; LookupRequired then same Refused(Unavailable)/different LookupRequired (prelookup exact-key gate); no publication/wake; four-family counts2/1/1/1 and complete codec2/schema1 appearance equal; inbox stop/drain -> same actor native joined close -> parent join; backend_pid={backend_pid} backend_start={backend_start} OSidentity={}; exact actor recovery remains unqualified",
             os_identity.trim()
         );
         Ok(())

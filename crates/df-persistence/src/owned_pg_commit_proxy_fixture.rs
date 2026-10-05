@@ -9,7 +9,7 @@ use tokio::net::TcpStream;
 use tokio::time::{Instant, timeout_at};
 
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) enum ProxyError {
+pub enum ProxyError {
     Capacity,
     Protocol,
     Io,
@@ -17,17 +17,17 @@ pub(crate) enum ProxyError {
     ClosedBeforeCommit,
 }
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) struct CommitAckObservation {
-    pub(crate) frontend_commit_forwarded: bool,
-    pub(crate) postgres_commit_complete_observed: bool,
-    pub(crate) postgres_ready_idle_observed: bool,
-    pub(crate) suppressed_response_bytes: usize,
+pub struct CommitAckObservation {
+    pub frontend_commit_forwarded: bool,
+    pub postgres_commit_complete_observed: bool,
+    pub postgres_ready_idle_observed: bool,
+    pub suppressed_response_bytes: usize,
 }
 #[derive(Clone, Copy)]
-pub(crate) struct ProxyBounds {
-    pub(crate) maximum_frame_bytes: usize,
-    pub(crate) maximum_suppressed_response_bytes: usize,
-    pub(crate) deadline: Instant,
+pub struct ProxyBounds {
+    pub maximum_frame_bytes: usize,
+    pub maximum_suppressed_response_bytes: usize,
+    pub deadline: Instant,
 }
 struct Frames {
     buffer: Vec<u8>,
@@ -142,7 +142,7 @@ async fn forward(stream: &TcpStream, mut bytes: &[u8]) -> Result<(), ProxyError>
 /// Completion means COMMIT CommandComplete AND idle ReadyForQuery were read from real
 /// PostgreSQL, yet their bytes never reached the adapter. Both owned sockets then drop.
 /// An error/EOF/deadline never claims that the underlying decision committed.
-pub(crate) async fn drop_commit_acknowledgement(
+pub async fn drop_commit_acknowledgement(
     frontend: TcpStream,
     postgres: TcpStream,
     bounds: ProxyBounds,

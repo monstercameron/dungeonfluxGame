@@ -23,6 +23,8 @@ pub struct PostgresRepository<A: MembershipAuthority> {
     runtime: Handle,
     adapter: DecisionAdapter,
     authority: PhantomData<fn() -> A>,
+    reconnect: Option<(tokio_postgres::Config, NativeRepositoryOptions)>,
+    pending_setup: Option<NativeSetupFailure>,
 }
 impl<A: MembershipAuthority> PostgresRepository<A> {
     /// Native construction from the exact real connected pair and the existing owner runtime.
@@ -132,6 +134,57 @@ impl<A: MembershipAuthority> PostgresRepository<A> {
             runtime,
             adapter,
             authority: PhantomData,
+            reconnect: None,
+            pending_setup: None,
+        }
+    }
+
+    /// Trusted native composition enables finite reconnect to the same admitted
+    /// database/inventory. This configuration is never accepted from an RPC payload.
+    /// Refusal retains this repository and its original connection owner.
+    pub fn configure_reconnect(
+        &mut self,
+        configuration: tokio_postgres::Config,
+        options: NativeRepositoryOptions,
+    ) -> Result<(), RepositoryError> {
+        options.validate()?;
+        self.reconnect = Some((configuration, options));
+        Ok(())
+    }
+
+    async fn reconnect_owned(&mut self) -> Result<(), RepositoryError> {
+        if self.adapter.connection_usable() {
+            return Ok(());
+        }
+        // A join timeout preserves ownership of the original poisoned adapter.
+        self.adapter.close().await?;
+        if let Some(failure) = self.pending_setup.as_mut() {
+            failure.close().await?;
+        }
+        self.pending_setup.take();
+        let (configuration, options) = self
+            .reconnect
+            .as_ref()
+            .ok_or(RepositoryError::Unavailable)?;
+        let (client, connection) = tokio::time::timeout(
+            options.transaction_bounds.transaction,
+            configuration.connect(tokio_postgres::NoTls),
+        )
+        .await
+        .map_err(|_| RepositoryError::Unavailable)?
+        .map_err(|_| RepositoryError::Unavailable)?;
+        match Self::initialize_owned(self.runtime.clone(), client, connection, options.clone())
+            .await
+        {
+            Ok(replacement) => {
+                self.adapter = replacement.adapter;
+                Ok(())
+            }
+            Err(failure) => {
+                let error = failure.error();
+                self.pending_setup = Some(failure);
+                Err(error)
+            }
         }
     }
 
@@ -144,7 +197,14 @@ impl<A: MembershipAuthority> PostgresRepository<A> {
     /// Runtime-worker invocation refuses without issuing database work.
     pub fn close(&mut self) -> Result<(), RepositoryError> {
         let runtime = self.runtime.clone();
-        actor_block_on(&runtime, self.adapter.close())?
+        actor_block_on(&runtime, async {
+            self.adapter.close().await?;
+            if let Some(failure) = self.pending_setup.as_mut() {
+                failure.close().await?;
+            }
+            self.pending_setup.take();
+            Ok(())
+        })?
     }
 }
 impl<A: MembershipAuthority> SessionRepository for PostgresRepository<A>
@@ -156,6 +216,18 @@ where
     A::Revision: Send,
 {
     type Scope = NativeScope<A>;
+
+    fn recover_connection(&mut self, context: &OperationContext) -> Result<(), RepositoryError> {
+        let mut span = df_observe::begin(context, "persistence.native_connection_recovery");
+        let runtime = self.runtime.clone();
+        let result = actor_block_on(&runtime, self.reconnect_owned()).and_then(|result| result);
+        span.finish_unmeasured(if result.is_ok() {
+            "connection_ready"
+        } else {
+            "recovery_pending"
+        });
+        result
+    }
 
     fn lookup_operation(
         &mut self,
@@ -193,6 +265,7 @@ where
 
 /// Finite native configuration; these budgets and inventories confer no caller authority.
 /// `recovery` must come from the root's admitted sources, never from checkpoint payload bytes.
+#[derive(Clone)]
 pub struct NativeRepositoryOptions {
     pub transaction_bounds: TransactionBounds,
     pub codec_limits: CodecLimits,
@@ -202,6 +275,7 @@ pub struct NativeRepositoryOptions {
 }
 /// Root-reviewed static SQL implementing the exact current-authority verifier ABI.
 /// Statement text alone proves no permission: qualification includes its actual issuer and RLS.
+#[derive(Clone)]
 pub struct NativeVerifierSource {
     pub query: &'static str,
     pub maximum_binding_bytes: usize,

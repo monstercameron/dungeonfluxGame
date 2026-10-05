@@ -10,8 +10,8 @@ use std::{io, time::Duration};
 use tokio::sync::oneshot;
 use tonic::Request;
 
-const TRIGGER: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-runtime-20261004/engine-qualification-start-02";
-const REPORT: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-runtime-20261004/engine-authority-acceptance-report-02.json";
+const TRIGGER: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-recovery-20261005/engine-qualification-start-01";
+const REPORT: &str = "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/engine-recovery-20261005/engine-authority-acceptance-report-01.json";
 #[track_caller]
 fn required(condition: bool) -> Result<(), io::Error> {
     if condition {

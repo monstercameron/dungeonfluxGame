@@ -52,7 +52,7 @@ mod owned_pg_fault_fixture;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod owned_pg_observations_fixture;
 
-#[cfg(all(test, not(target_arch = "wasm32")))]
+#[cfg(not(target_arch = "wasm32"))]
 mod owned_pg_commit_proxy_fixture;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

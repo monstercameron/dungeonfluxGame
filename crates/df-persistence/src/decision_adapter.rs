@@ -58,6 +58,10 @@ impl DecisionAdapter {
         self.connection.discard_state()
     }
 
+    pub(crate) fn connection_usable(&self) -> bool {
+        self.connection.ready_for_lookup()
+    }
+
     pub(crate) async fn close(&mut self) -> Result<(), RepositoryError> {
         self.connection.close().await
     }
@@ -485,6 +489,7 @@ impl DecisionAdapter {
 }
 
 /// The native root supplies its admitted canonical inventories; stored bytes cannot admit them.
+#[derive(Clone)]
 pub struct RecoverySource {
     pub rules: Vec<df_model::checkpoint::RuleReference>,
     pub content: Vec<df_model::checkpoint::ContentReference>,

@@ -499,6 +499,8 @@ struct Database {
     engine_failure: bool,
     lookup: HashMap<OperationId, LookupBehavior>,
     reload_failure: bool,
+    reconnect_failure: bool,
+    reconnect_calls: usize,
     reload_override: Option<Checkpoint>,
 }
 fn database() -> Arc<Mutex<Database>> {
@@ -516,6 +518,8 @@ fn database() -> Arc<Mutex<Database>> {
         engine_failure: false,
         lookup: HashMap::new(),
         reload_failure: false,
+        reconnect_failure: false,
+        reconnect_calls: 0,
         reload_override: None,
     }))
 }
@@ -526,6 +530,15 @@ struct Repository {
 }
 impl SessionRepository for Repository {
     type Scope = Scope;
+    fn recover_connection(&mut self, _: &OperationContext) -> Result<(), RepositoryError> {
+        let mut db = self.database.lock().unwrap();
+        db.reconnect_calls += 1;
+        if db.reconnect_failure {
+            Err(RepositoryError::Unavailable)
+        } else {
+            Ok(())
+        }
+    }
     fn lookup_operation(
         &mut self,
         scope: &Scope,
@@ -1251,7 +1264,7 @@ fn assert_lookup_fences_new_key(behavior: LookupBehavior) {
     let db = db.lock().unwrap();
     assert_eq!(db.engine_calls, 0);
     assert_eq!(db.commit_calls, 0);
-    assert_eq!(db.events, ["lookup", "lookup"]);
+    assert_eq!(db.events, ["lookup"]);
     assert_eq!(owner.checkpoint(), &initial());
     assert!(db.receipts.is_empty());
 }
@@ -1310,8 +1323,12 @@ fn inspecting_b_unknown_and_then_b_committed_cannot_erase_unresolved_a() {
         );
         let second_outcome = submit(&mut owner, scope(7));
         assert!(!matches!(second_outcome, SubmissionOutcome::Confirmed(_)));
-        let receipt = seed_committed(&db, &scope(7));
-        assert_eq!(assert_confirmed(submit(&mut owner, scope(7))), receipt);
+        let _receipt = seed_committed(&db, &scope(7));
+        assert_eq!(
+            submit(&mut owner, scope(7)),
+            SubmissionOutcome::LookupRequired
+        );
+        assert_eq!(db.lock().unwrap().events, ["lookup"]);
         assert_eq!(
             submit(&mut owner, scope(8)),
             SubmissionOutcome::LookupRequired
@@ -1489,9 +1506,10 @@ fn assert_full_scope_collision_stays_fenced(dimension: &str) {
         SubmissionOutcome::LookupRequired
     );
     assert_eq!(
-        assert_confirmed(submit(&mut owner, historical)),
-        historical_receipt
+        submit(&mut owner, historical),
+        SubmissionOutcome::LookupRequired
     );
+    assert_eq!(db.lock().unwrap().events, ["lookup"]);
     assert!(matches!(
         db.lock().unwrap().lookup.get(&unresolved.operation),
         Some(LookupBehavior::InProgress)
@@ -1503,7 +1521,7 @@ fn assert_full_scope_collision_stays_fenced(dimension: &str) {
         "another {dimension} sharing OperationId must not resolve the first full key"
     );
     let db = db.lock().unwrap();
-    assert_eq!(db.events, ["lookup"]);
+    assert!(db.events.is_empty());
     assert_eq!(db.engine_calls, 0);
     assert_eq!(db.commit_calls, 0);
     assert_eq!(owner.checkpoint(), &initial());
@@ -1911,4 +1929,70 @@ fn unknown_drain_and_failed_close_keep_receipts_unknown_and_owned_driver_retryab
         .unwrap();
     let actor_closed = db.events.iter().position(|e| *e == "actor_closed").unwrap();
     assert!(pending < joined && joined < actor_closed);
+}
+
+#[test]
+fn exact_recovery_connection_failure_keeps_original_key_and_blocks_other_lookup() {
+    let db = database();
+    db.lock().unwrap().failure = Failure::LostCommittedAck;
+    let mut owner = owner(&db);
+    assert_eq!(
+        submit(&mut owner, scope(6)),
+        SubmissionOutcome::LookupRequired
+    );
+    assert!(!owner.is_current());
+    assert!(
+        owner
+            .matches_uncertain_retry(&scope(6), &input(&scope(6)))
+            .unwrap()
+    );
+    db.lock().unwrap().events.clear();
+    db.lock().unwrap().reconnect_failure = true;
+    assert_eq!(
+        submit(&mut owner, scope(6)),
+        SubmissionOutcome::Refused(RepositoryError::Unavailable)
+    );
+    assert_eq!(
+        submit(&mut owner, scope(7)),
+        SubmissionOutcome::LookupRequired
+    );
+    assert_eq!(owner.checkpoint(), &initial());
+    assert!(db.lock().unwrap().events.is_empty());
+    assert_eq!(db.lock().unwrap().reconnect_calls, 1);
+    db.lock().unwrap().reconnect_failure = false;
+    db.lock().unwrap().failure = Failure::None;
+    let recovered = assert_confirmed(submit(&mut owner, scope(6)));
+    assert!(owner.is_current());
+    assert_eq!(recovered, db.lock().unwrap().receipts[&operation(6)].1);
+    let mut later = scope(7);
+    later.basis = owner.checkpoint().basis();
+    assert_confirmed(submit(&mut owner, later));
+    assert_eq!(db.lock().unwrap().engine_calls, 2);
+    assert_eq!(db.lock().unwrap().commit_calls, 2);
+}
+
+#[test]
+fn valid_new_snapshot_omitting_the_exact_stored_decision_cannot_release_uncertainty() {
+    let db = database();
+    db.lock().unwrap().failure = Failure::LostCommittedAck;
+    let mut owner = owner(&db);
+    assert_eq!(
+        submit(&mut owner, scope(6)),
+        SubmissionOutcome::LookupRequired
+    );
+    let stored = db.lock().unwrap().receipts[&operation(6)].1.clone();
+    db.lock().unwrap().reload_override = Some(proposed(&initial(), &scope(7)));
+    assert_eq!(assert_confirmed(submit(&mut owner, scope(6))), stored);
+    assert!(!owner.is_current());
+    assert_eq!(owner.checkpoint(), &initial());
+    db.lock().unwrap().events.clear();
+    assert_eq!(
+        submit(&mut owner, scope(7)),
+        SubmissionOutcome::LookupRequired
+    );
+    assert!(db.lock().unwrap().events.is_empty());
+    db.lock().unwrap().reload_override = None;
+    assert_eq!(assert_confirmed(submit(&mut owner, scope(6))), stored);
+    assert!(owner.is_current());
+    assert_eq!(db.lock().unwrap().engine_calls, 1);
 }

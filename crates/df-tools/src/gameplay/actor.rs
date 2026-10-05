@@ -21,6 +21,10 @@ pub(super) struct QualificationSnapshot {
     pub joins: Vec<QualificationJoin>,
     pub checkpoint: Checkpoint,
     pub codec: NativeCodecLimits,
+    #[cfg(test)]
+    pub fenced: bool,
+    #[cfg(test)]
+    pub uncertain: bool,
 }
 pub(super) type QualificationJoin = (rpc::JoinRoomRequest, [u8; 32], [u8; 16]);
 pub(super) type QualificationInput = ([u8; 32], rpc::SubmitActionRequest);
@@ -145,8 +149,38 @@ impl PublicationOwner<NativeScope<LocalDemoAuthority>> for Publication {
         Ok(())
     }
 }
-pub(super) type Owner =
-    DurableOwner<PostgresRepository<LocalDemoAuthority>, model::HarborEngine, Publication>;
+pub(super) struct Engine(pub Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>);
+impl df_session::submission::SessionEngine<NativeScope<LocalDemoAuthority>> for Engine {
+    fn decide(
+        &mut self,
+        current: &Checkpoint,
+        scope: &NativeScope<LocalDemoAuthority>,
+        input: &GameInput,
+    ) -> Result<Checkpoint, RepositoryError> {
+        if let Some(counter) = &self.0 {
+            counter
+                .fetch_update(
+                    std::sync::atomic::Ordering::SeqCst,
+                    std::sync::atomic::Ordering::SeqCst,
+                    |value| value.checked_add(1),
+                )
+                .map_err(|_| RepositoryError::Capacity)?;
+        }
+        df_session::submission::SessionEngine::decide(
+            &mut model::HarborEngine,
+            current,
+            scope,
+            input,
+        )
+    }
+    fn validate_recovery(&mut self, checkpoint: &Checkpoint) -> Result<(), RepositoryError> {
+        df_session::submission::SessionEngine::<NativeScope<LocalDemoAuthority>>::validate_recovery(
+            &mut model::HarborEngine,
+            checkpoint,
+        )
+    }
+}
+pub(super) type Owner = DurableOwner<PostgresRepository<LocalDemoAuthority>, Engine, Publication>;
 pub(super) struct Actor {
     pub owner: Owner,
     pub bootstrap_credential: [u8; 32],
@@ -177,11 +211,6 @@ impl Actor {
         credential: [u8; 32],
         request: rpc::SubmitActionRequest,
     ) -> Result<rpc::SubmitActionResponse, tonic::Status> {
-        if self.fenced {
-            return Err(tonic::Status::unavailable(
-                "gameplay owner requires recovery",
-            ));
-        }
         if self.issuer.authenticate(&credential).map_err(unavailable)? != LocalDemoRole::Player {
             return Err(tonic::Status::permission_denied(
                 "display bindings cannot submit player actions",
@@ -218,114 +247,151 @@ impl Actor {
                 model::pins().map_err(unavailable)?,
             )
             .map_err(unavailable)?;
-        let retained = self
-            .issuer
-            .rejected_operation(&scope, current, None, self.codec)
-            .map_err(|error| {
-                if error == RepositoryError::UnresolvedCommit {
-                    self.fence();
-                }
-                unavailable(error)
-            })?;
-        match retained {
-            LocalRejectedLookup::Committed(bytes) => {
-                let mut receipt = rpc::DecisionReceipt::decode(bytes.as_slice())
-                    .map_err(|_| tonic::Status::internal("retained receipt invalid"))?;
-                receipt.replayed = true;
-                return Ok(wire::committed(receipt));
-            }
-            LocalRejectedLookup::Conflict => {
-                return Ok(wire::observation(rpc::RejectionCode::OperationConflict));
-            }
-            LocalRejectedLookup::Expired => {
-                return Ok(wire::observation(rpc::RejectionCode::OperationExpired));
-            }
-            LocalRejectedLookup::NotRecorded => {
-                let checkpoint = self.owner.checkpoint();
-                let kind = rpc::GameplayActionKind::try_from(request.action_kind)
-                    .map_err(|_| tonic::Status::invalid_argument("unknown action"))?;
-                let rejection = if command.basis.run != current.run
-                    || command.basis.revision.epoch() != current.revision.epoch()
-                    || command.observed_revision > current.revision
-                {
-                    Some(rpc::RejectionCode::StaleOffer)
-                } else if wire::unrelated_payload(&request, kind)
-                    || (kind == rpc::GameplayActionKind::CreateCharacter
-                        && request.character.as_ref().is_none_or(|character| {
-                            let selections = character
-                                .choices
-                                .iter()
-                                .map(|choice| (choice.group_id.as_str(), choice.option_id.as_str()))
-                                .collect::<Vec<_>>();
-                            df_rules::local_journey::validate_character(
-                                &character.name,
-                                &selections,
-                            )
-                            .is_err()
-                        }))
-                {
-                    Some(rpc::RejectionCode::InvalidSelection)
-                } else if super::journey::phase(checkpoint).map_err(unavailable)?
-                    == rpc::JourneyPhase::Combat
-                    && checkpoint
-                        .state()
-                        .encounters
-                        .first()
-                        .and_then(|encounter| encounter.active_turn)
-                        != Some(
-                            super::journey::player_entity(member, checkpoint)
-                                .map_err(unavailable)?,
-                        )
-                {
-                    Some(rpc::RejectionCode::WrongTurn)
-                } else if request.offer_id != super::journey::offer_id(checkpoint, kind)
-                    || !super::journey::offered(checkpoint, member)
-                        .map_err(unavailable)?
-                        .iter()
-                        .any(|(offered, _)| *offered == kind)
-                {
-                    Some(rpc::RejectionCode::StaleOffer)
-                } else {
-                    None
-                };
-                if let Some(code) = rejection {
-                    let receipt = wire::rejected(current, operation, code);
-                    let bytes = receipt.encode_to_vec();
-                    let recorded = self
-                        .issuer
-                        .rejected_operation(&scope, current, Some(&bytes), self.codec)
-                        .map_err(|error| {
-                            if error == RepositoryError::UnresolvedCommit {
-                                self.fence();
-                            }
-                            unavailable(error)
-                        })?;
-                    return match recorded {
-                        LocalRejectedLookup::Committed(bytes) => {
-                            rpc::DecisionReceipt::decode(bytes.as_slice())
-                                .map(wire::committed)
-                                .map_err(|_| tonic::Status::internal("committed rejection invalid"))
-                        }
-                        _ => Err(tonic::Status::unavailable(
-                            "rejection commit requires recovery",
-                        )),
-                    };
-                }
-            }
-            LocalRejectedLookup::Accepted => {}
-        }
-        let prior_revision = self.owner.checkpoint().basis().revision;
         let context = OperationContext {
             trace_parent: String::new(),
             build: crate::BUILD_ID.to_owned(),
         };
+        let recovering = self.fenced;
+        let replaying_uncertain = recovering && self.owner.has_uncertain_operation();
+        if recovering {
+            if self.owner.has_uncertain_operation() {
+                if !self
+                    .owner
+                    .matches_uncertain_retry(&scope, &input)
+                    .map_err(unavailable)?
+                {
+                    return Err(tonic::Status::unavailable(
+                        "exact retained operation required for recovery",
+                    ));
+                }
+            } else {
+                // Known CAS/acknowledged duplicate failures have no unknown write:
+                // current database authorization plus validated reload may resume.
+                self.owner
+                    .reload_current(&scope, &context)
+                    .map_err(unavailable)?;
+                self.fenced = false;
+                self.recovery_wakeup
+                    .send_replace(self.owner.checkpoint().clone());
+            }
+        } else {
+            let retained = self
+                .issuer
+                .rejected_operation(&scope, current, None, self.codec)
+                .map_err(|error| {
+                    if error == RepositoryError::UnresolvedCommit {
+                        self.fence();
+                    }
+                    unavailable(error)
+                })?;
+            match retained {
+                LocalRejectedLookup::Committed(bytes) => {
+                    let mut receipt = rpc::DecisionReceipt::decode(bytes.as_slice())
+                        .map_err(|_| tonic::Status::internal("retained receipt invalid"))?;
+                    receipt.replayed = true;
+                    return Ok(wire::committed(receipt));
+                }
+                LocalRejectedLookup::Conflict => {
+                    return Ok(wire::observation(rpc::RejectionCode::OperationConflict));
+                }
+                LocalRejectedLookup::Expired => {
+                    return Ok(wire::observation(rpc::RejectionCode::OperationExpired));
+                }
+                LocalRejectedLookup::NotRecorded => {
+                    let checkpoint = self.owner.checkpoint();
+                    let kind = rpc::GameplayActionKind::try_from(request.action_kind)
+                        .map_err(|_| tonic::Status::invalid_argument("unknown action"))?;
+                    let rejection = if command.basis.run != current.run
+                        || command.basis.revision.epoch() != current.revision.epoch()
+                        || command.observed_revision > current.revision
+                    {
+                        Some(rpc::RejectionCode::StaleOffer)
+                    } else if wire::unrelated_payload(&request, kind)
+                        || (kind == rpc::GameplayActionKind::CreateCharacter
+                            && request.character.as_ref().is_none_or(|character| {
+                                let selections = character
+                                    .choices
+                                    .iter()
+                                    .map(|choice| {
+                                        (choice.group_id.as_str(), choice.option_id.as_str())
+                                    })
+                                    .collect::<Vec<_>>();
+                                df_rules::local_journey::validate_character(
+                                    &character.name,
+                                    &selections,
+                                )
+                                .is_err()
+                            }))
+                    {
+                        Some(rpc::RejectionCode::InvalidSelection)
+                    } else if super::journey::phase(checkpoint).map_err(unavailable)?
+                        == rpc::JourneyPhase::Combat
+                        && checkpoint
+                            .state()
+                            .encounters
+                            .first()
+                            .and_then(|encounter| encounter.active_turn)
+                            != Some(
+                                super::journey::player_entity(member, checkpoint)
+                                    .map_err(unavailable)?,
+                            )
+                    {
+                        Some(rpc::RejectionCode::WrongTurn)
+                    } else if request.offer_id != super::journey::offer_id(checkpoint, kind)
+                        || !super::journey::offered(checkpoint, member)
+                            .map_err(unavailable)?
+                            .iter()
+                            .any(|(offered, _)| *offered == kind)
+                    {
+                        Some(rpc::RejectionCode::StaleOffer)
+                    } else {
+                        None
+                    };
+                    if let Some(code) = rejection {
+                        let receipt = wire::rejected(current, operation, code);
+                        let bytes = receipt.encode_to_vec();
+                        let recorded = self
+                            .issuer
+                            .rejected_operation(&scope, current, Some(&bytes), self.codec)
+                            .map_err(|error| {
+                                if error == RepositoryError::UnresolvedCommit {
+                                    self.fence();
+                                }
+                                unavailable(error)
+                            })?;
+                        return match recorded {
+                            LocalRejectedLookup::Committed(bytes) => {
+                                rpc::DecisionReceipt::decode(bytes.as_slice())
+                                    .map(wire::committed)
+                                    .map_err(|_| {
+                                        tonic::Status::internal("committed rejection invalid")
+                                    })
+                            }
+                            _ => Err(tonic::Status::unavailable(
+                                "rejection commit requires recovery",
+                            )),
+                        };
+                    }
+                }
+                LocalRejectedLookup::Accepted => {}
+            }
+        }
+        let prior_revision = self.owner.checkpoint().basis().revision;
         let (item, receipt) = OwnedInput::new(context, scope, input);
         self.owner.reduce(AdmissionSequence(0), item);
         let outcome = receipt
             .try_recv()
             .map_err(|_| tonic::Status::internal("actor did not produce its outcome"))?;
+        if !self.owner.is_current() {
+            self.fence();
+        }
         match outcome {
             SubmissionOutcome::Confirmed(committed) => {
+                if recovering && self.owner.is_current() {
+                    self.fenced = false;
+                    self.recovery_wakeup
+                        .send_replace(self.owner.checkpoint().clone());
+                }
                 let accepted =
                     super::journey::accepted(committed.decision()).map_err(unavailable)?;
                 if let Some(inputs) = self.qualification_inputs.as_mut() {
@@ -335,7 +401,7 @@ impl Actor {
                     committed.basis(),
                     operation,
                     rpc::decision_receipt::Outcome::Accepted(Box::new(accepted)),
-                    committed.basis().revision <= prior_revision,
+                    replaying_uncertain || committed.basis().revision <= prior_revision,
                 )))
             }
             SubmissionOutcome::OperationConflict => {
@@ -453,6 +519,10 @@ impl Reducer<Call> for Actor {
                             joins: self.qualification_joins.clone().unwrap_or_default(),
                             checkpoint: self.owner.checkpoint().clone(),
                             codec: self.codec,
+                            #[cfg(test)]
+                            fenced: self.fenced,
+                            #[cfg(test)]
+                            uncertain: self.owner.has_uncertain_operation(),
                         })
                         .ok_or_else(|| tonic::Status::permission_denied("qualification disabled")),
                 )
