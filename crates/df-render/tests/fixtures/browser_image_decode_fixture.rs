@@ -11,7 +11,8 @@ mod browser {
     use df_client::cache::{AssetCache, CacheError, CacheKey, CacheLimits};
     use df_render::{
         BrowserDecodeStatus, BrowserImageDecode, BrowserResourceScene, ImageDecodeError,
-        ImageSurfaceError, ResourceError, ResourceLimits, inspect_png,
+        ImageSurfaceError, ResourceError, ResourceLifecycle, ResourceLimits, inspect_png,
+        inspect_prepared_image,
     };
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -583,6 +584,474 @@ mod browser {
                 require(
                     fixture.cache.borrow().lease_count() == 0,
                     "observed dispose leaked lease",
+                )?;
+            }
+            *slot = None;
+            Ok(())
+        })
+    }
+    struct PreparedFixture {
+        host: Host,
+        owner: Rc<RefCell<ResourceLifecycle>>,
+        asset: &'static support::PreparedAsset,
+        key: CacheKey,
+        canvas: HtmlCanvasElement,
+        busy: bool,
+    }
+    fn prepared_fixture(
+        asset: &'static support::PreparedAsset,
+    ) -> Result<PreparedFixture, JsValue> {
+        let document = web_sys::window()
+            .and_then(|window| window.document())
+            .ok_or_else(|| error("document unavailable"))?;
+        let host = Host(document.create_element("section")?);
+        host.0
+            .set_attribute("data-prepared-asset-route", asset.route)?;
+        host.0
+            .set_attribute("data-prepared-asset-mime", asset.mime)?;
+        let caption = document.create_element("p")?;
+        caption.set_text_content(Some(asset.route));
+        host.0.append_child(&caption)?;
+        document
+            .body()
+            .ok_or_else(|| error("body unavailable"))?
+            .append_child(&host.0)?;
+        // Fixture capacities only, deliberately finite; no production/device capacity claim.
+        let mut owner = ResourceLifecycle::mount(
+            &host.0,
+            support::scope(),
+            CacheLimits {
+                max_assets: 1,
+                max_pending: 1,
+                max_leases: 4,
+                max_bytes: 4 * 1024 * 1024,
+            },
+            ResourceLimits {
+                max_references: 1,
+                max_resident: 1,
+                max_pending: 1,
+                max_decoded_bytes: 8 * 1024 * 1024,
+                max_work_bytes: 64 * 1024 * 1024,
+            },
+            support::label("prepared-png-vp8-v1"),
+            16 * 1024 * 1024,
+        )
+        .map_err(error)?;
+        let key = asset.key();
+        owner
+            .apply_current(
+                support::scope(),
+                support::revision(1, 0),
+                std::slice::from_ref(&key),
+            )
+            .map_err(error)?;
+        owner
+            .update_scene(
+                support::label("prepared-scene"),
+                geometry::flat(support::revision(1, 0)),
+                std::slice::from_ref(&key),
+            )
+            .map_err(error)?;
+        let fetch = owner.fetch(&key).map_err(error)?;
+        owner
+            .complete_fetch(&fetch, asset.bytes.to_vec())
+            .map_err(error)?;
+        let canvas = host
+            .0
+            .query_selector("[data-scene-image-host] canvas")?
+            .ok_or_else(|| error("prepared canvas unavailable"))?
+            .dyn_into::<HtmlCanvasElement>()
+            .map_err(error)?;
+        canvas.set_attribute("style", "max-width:720px;width:100%;height:auto")?;
+        Ok(PreparedFixture {
+            host,
+            owner: Rc::new(RefCell::new(owner)),
+            asset,
+            key,
+            canvas,
+            busy: false,
+        })
+    }
+    fn prepared_start(fixture: &PreparedFixture) -> Result<BrowserImageDecode, JsValue> {
+        BrowserImageDecode::start_owned_prepared(
+            fixture.owner.clone(),
+            &fixture.key,
+            fixture.asset.metadata(),
+            support::prepared_limits(),
+            10_000,
+        )
+        .map_err(error)
+    }
+    fn prepared_flat_survives(fixture: &PreparedFixture) -> Result<(), JsValue> {
+        require(
+            fixture
+                .host
+                .0
+                .query_selector("[data-token-key]")?
+                .is_some_and(|node| node.is_connected()),
+            "prepared failure removed flat token",
+        )
+    }
+    fn prepared_install(fixture: &PreparedFixture) -> Result<(), JsValue> {
+        let mut owner = fixture.owner.borrow_mut();
+        let fetch = owner.fetch(&fixture.key).map_err(error)?;
+        owner
+            .complete_fetch(&fetch, fixture.asset.bytes.to_vec())
+            .map_err(error)
+    }
+    fn prepared_canvas_matches(fixture: &PreparedFixture) -> Result<(), JsValue> {
+        require(
+            (fixture.canvas.width(), fixture.canvas.height())
+                == (fixture.asset.width, fixture.asset.height),
+            "prepared canvas dimensions differ",
+        )?;
+        let context = fixture
+            .canvas
+            .get_context("2d")?
+            .ok_or_else(|| error("canvas context absent"))?
+            .dyn_into::<CanvasRenderingContext2d>()
+            .map_err(error)?;
+        let rgba = context
+            .get_image_data(
+                0.0,
+                0.0,
+                f64::from(fixture.asset.width),
+                f64::from(fixture.asset.height),
+            )?
+            .data()
+            .0;
+        let mut owner = fixture.owner.borrow_mut();
+        let resource = owner
+            .get(&fixture.key)
+            .map_err(error)?
+            .ok_or_else(|| error("selected prepared lease/surface absent"))?;
+        require(
+            resource.dimensions() == (fixture.asset.width, fixture.asset.height),
+            "decoded prepared dimensions differ",
+        )?;
+        require(
+            resource.pixels().map_err(error)? == rgba,
+            "mounted prepared RGBA differs from owned codec output",
+        )?;
+        require(
+            rgba.as_chunks::<4>()
+                .0
+                .iter()
+                .all(|pixel| pixel.get(3) == Some(&255)),
+            "opaque prepared RGB/VP8 produced unexpected alpha",
+        )?;
+        Ok(())
+    }
+
+    /// Every exact local public file passes the real codec and canonical mounted lifecycle.
+    /// Corrupt framing cases remain native preflight tests; no duplicate decoder or URL fetch.
+    #[wasm_bindgen]
+    pub async fn verify_prepared_public_assets() -> Result<(), JsValue> {
+        for asset in support::PREPARED_ASSETS {
+            let fixture = prepared_fixture(asset)?;
+            let plan =
+                inspect_prepared_image(asset.bytes, asset.metadata(), support::prepared_limits())
+                    .map_err(error)?;
+            let mut wrong = asset.metadata();
+            wrong.mime = if asset.mime == "image/png" {
+                "image/webp"
+            } else {
+                "image/png"
+            };
+            require(
+                BrowserImageDecode::start_owned_prepared(
+                    fixture.owner.clone(),
+                    &fixture.key,
+                    wrong,
+                    support::prepared_limits(),
+                    10_000,
+                )
+                .err()
+                    == Some(ImageDecodeError::MimeMismatch),
+                "prepared MIME mismatch admitted codec",
+            )?;
+            wrong = asset.metadata();
+            wrong.width += 1;
+            require(
+                BrowserImageDecode::start_owned_prepared(
+                    fixture.owner.clone(),
+                    &fixture.key,
+                    wrong,
+                    support::prepared_limits(),
+                    10_000,
+                )
+                .err()
+                    == Some(ImageDecodeError::WrongDimensions),
+                "prepared dimension mismatch admitted codec",
+            )?;
+            let mut insufficient = support::prepared_limits();
+            insufficient.max_work_bytes = plan.budget.work_bytes - 1;
+            require(
+                BrowserImageDecode::start_owned_prepared(
+                    fixture.owner.clone(),
+                    &fixture.key,
+                    asset.metadata(),
+                    insufficient,
+                    10_000,
+                )
+                .err()
+                    == Some(ImageDecodeError::ByteCapacity),
+                "prepared work-cap refusal admitted codec",
+            )?;
+            if asset.mime == "image/png" {
+                let mut too_small = asset.metadata();
+                too_small.max_ancillary_bytes = 23_653;
+                require(
+                    BrowserImageDecode::start_owned_prepared(
+                        fixture.owner.clone(),
+                        &fixture.key,
+                        too_small,
+                        support::prepared_limits(),
+                        10_000,
+                    )
+                    .err()
+                        == Some(ImageDecodeError::AncillaryCapacity),
+                    "prepared ancillary cap admitted codec",
+                )?;
+            }
+            require(
+                fixture.owner.borrow().work_bytes() == 0
+                    && fixture.owner.borrow().lease_count() == 0,
+                "prepared metadata/budget refusal retained work/lease",
+            )?;
+            let mut job = prepared_start(&fixture)?;
+            require(
+                fixture.owner.borrow().work_bytes() == plan.budget.work_bytes
+                    && fixture.owner.borrow().lease_count() == 1,
+                "prepared actual work not exactly reserved",
+            )?;
+            require(
+                job.wait().await.map_err(error)?,
+                "prepared actual codec failed to mount",
+            )?;
+            prepared_canvas_matches(&fixture)?;
+            require(
+                fixture.owner.borrow().decoded_bytes() == plan.budget.decoded_bytes
+                    && fixture.owner.borrow().surface_bytes() == plan.budget.decoded_bytes * 2
+                    && fixture.owner.borrow().resident_bytes() == asset.bytes.len()
+                    && fixture.owner.borrow().work_bytes() == 0
+                    && fixture.owner.borrow().lease_count() == 1,
+                "prepared terminal encoded/decoded/display accounting differs",
+            )?;
+            fixture
+                .owner
+                .borrow_mut()
+                .release(&fixture.key)
+                .map_err(error)?;
+            require(
+                fixture.canvas.width() == 0
+                    && fixture.owner.borrow().decoded_bytes() == 0
+                    && fixture.owner.borrow().lease_count() == 0,
+                "prepared byte-only revoke retained pixels",
+            )?;
+            prepared_flat_survives(&fixture)?;
+
+            prepared_install(&fixture)?;
+            let mut cancelled = prepared_start(&fixture)?;
+            cancelled.cancel().map_err(error)?;
+            require(
+                cancelled.status() == BrowserDecodeStatus::Draining(ImageDecodeError::Cancelled)
+                    && fixture.owner.borrow().work_bytes() == plan.budget.work_bytes,
+                "prepared abort request freed actual running codec work",
+            )?;
+            require(
+                BrowserImageDecode::start_owned_prepared(
+                    fixture.owner.clone(),
+                    &fixture.key,
+                    asset.metadata(),
+                    support::prepared_limits(),
+                    10_000,
+                )
+                .err()
+                    == Some(ImageDecodeError::Resource(ResourceError::AlreadyPending)),
+                "prepared cancelled duplicate admitted",
+            )?;
+            require(
+                cancelled.wait().await == Err(ImageDecodeError::Cancelled)
+                    && fixture.owner.borrow().work_bytes() == 0
+                    && fixture.canvas.width() == 0,
+                "prepared cancelled terminal installed or leaked work",
+            )?;
+
+            let mut revoked = prepared_start(&fixture)?;
+            fixture
+                .owner
+                .borrow_mut()
+                .release(&fixture.key)
+                .map_err(error)?;
+            prepared_install(&fixture)?;
+            require(
+                fixture.owner.borrow().work_bytes() == plan.budget.work_bytes,
+                "prepared revoke/refetch freed running codec",
+            )?;
+            require(
+                revoked.wait().await == Err(ImageDecodeError::Cancelled)
+                    && fixture.owner.borrow().work_bytes() == 0
+                    && fixture.canvas.width() == 0,
+                "prepared identical refetch revived obsolete lease",
+            )?;
+
+            #[cfg(feature = "image-decode-fixture")]
+            {
+                let mut expired = prepared_start(&fixture)?;
+                require(
+                    expired.fixture_fire_deadline()
+                        && fixture.owner.borrow().work_bytes() == plan.budget.work_bytes,
+                    "prepared actual deadline fence released work",
+                )?;
+                require(
+                    expired.wait().await == Err(ImageDecodeError::Deadline)
+                        && fixture.owner.borrow().work_bytes() == 0
+                        && fixture.canvas.width() == 0,
+                    "prepared deadline actual terminal installed pixels",
+                )?;
+                let mut next = prepared_start(&fixture)?;
+                require(
+                    !expired.fixture_fire_deadline()
+                        && fixture.owner.borrow().work_bytes() == plan.budget.work_bytes,
+                    "old prepared deadline released newer work",
+                )?;
+                next.cancel().map_err(error)?;
+                require(
+                    next.wait().await == Err(ImageDecodeError::Cancelled),
+                    "new prepared job fence lost",
+                )?;
+            }
+
+            let mut generation = prepared_start(&fixture)?;
+            fixture
+                .owner
+                .borrow_mut()
+                .apply_current(
+                    support::scope(),
+                    support::revision(2, 0),
+                    std::slice::from_ref(&fixture.key),
+                )
+                .map_err(error)?;
+            fixture
+                .owner
+                .borrow_mut()
+                .update_scene(
+                    support::label("prepared-next"),
+                    geometry::flat(support::revision(2, 0)),
+                    std::slice::from_ref(&fixture.key),
+                )
+                .map_err(error)?;
+            require(
+                fixture.owner.borrow().work_bytes() == plan.budget.work_bytes,
+                "prepared generation replacement freed pending codec",
+            )?;
+            require(
+                generation.wait().await == Err(ImageDecodeError::Cancelled)
+                    && fixture.owner.borrow().work_bytes() == 0
+                    && fixture.canvas.width() == 0,
+                "prepared stale generation installed",
+            )?;
+            prepared_flat_survives(&fixture)?;
+            let mut replaced = prepared_start(&fixture)?;
+            let mut scope = support::scope();
+            scope.binding = df_types::ClientBindingId::from_bytes(&[9; 16]).unwrap();
+            fixture
+                .owner
+                .borrow_mut()
+                .replace_scope(scope)
+                .map_err(error)?;
+            require(
+                !fixture.canvas.is_connected()
+                    && fixture.owner.borrow().work_bytes() == plan.budget.work_bytes,
+                "prepared scope replacement retained mount or released actual work",
+            )?;
+            require(
+                replaced.wait().await == Err(ImageDecodeError::Cancelled)
+                    && fixture.owner.borrow().work_bytes() == 0
+                    && fixture.owner.borrow().lease_count() == 0,
+                "prepared replaced-scope terminal published or leaked",
+            )?;
+            fixture.owner.borrow_mut().dispose().map_err(error)?;
+            fixture.owner.borrow_mut().dispose().map_err(error)?;
+        }
+        Ok(())
+    }
+
+    thread_local! { static PREPARED_OBSERVED: RefCell<Option<PreparedFixture>> = const { RefCell::new(None) }; }
+    /// One retained real prepared image for independent visual inspection; index is 0..4.
+    #[wasm_bindgen]
+    pub async fn prepared_assets_fixture_start(index: u32) -> Result<(), JsValue> {
+        PREPARED_OBSERVED
+            .with(|slot| require(slot.borrow().is_none(), "prepared fixture already owned"))?;
+        let asset = support::PREPARED_ASSETS
+            .get(index as usize)
+            .ok_or_else(|| error("prepared asset index outside 0..4"))?;
+        let mut fixture = prepared_fixture(asset)?;
+        fixture.busy = true;
+        let owner = fixture.owner.clone();
+        let mut job = prepared_start(&fixture)?;
+        PREPARED_OBSERVED.with(|slot| {
+            *slot.borrow_mut() = Some(fixture);
+        });
+        let terminal = job.wait().await;
+        if let Err(failure) = terminal {
+            owner.borrow_mut().dispose().map_err(error)?;
+            PREPARED_OBSERVED.with(|slot| {
+                *slot.borrow_mut() = None;
+            });
+            return Err(error(failure));
+        }
+        PREPARED_OBSERVED.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            let fixture = slot
+                .as_mut()
+                .ok_or_else(|| error("prepared fixture absent"))?;
+            fixture.busy = false;
+            prepared_canvas_matches(fixture)?;
+            fixture
+                .host
+                .0
+                .set_attribute("data-prepared-phase", "decoded")?;
+            Ok(())
+        })
+    }
+    #[wasm_bindgen]
+    pub fn prepared_assets_fixture_revoke() -> Result<(), JsValue> {
+        PREPARED_OBSERVED.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            let fixture = slot
+                .as_mut()
+                .ok_or_else(|| error("prepared fixture absent"))?;
+            require(!fixture.busy, "await actual prepared decode terminal")?;
+            fixture
+                .owner
+                .borrow_mut()
+                .release(&fixture.key)
+                .map_err(error)?;
+            require(
+                fixture.canvas.width() == 0,
+                "prepared observed revoke retained canvas",
+            )?;
+            prepared_flat_survives(fixture)?;
+            fixture
+                .host
+                .0
+                .set_attribute("data-prepared-phase", "revoked")?;
+            Ok(())
+        })
+    }
+    #[wasm_bindgen]
+    pub fn prepared_assets_fixture_dispose() -> Result<(), JsValue> {
+        PREPARED_OBSERVED.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            if let Some(fixture) = slot.as_mut() {
+                require(!fixture.busy, "await actual prepared decode terminal")?;
+                fixture.owner.borrow_mut().dispose().map_err(error)?;
+                require(
+                    fixture.owner.borrow().lease_count() == 0
+                        && fixture.owner.borrow().work_bytes() == 0,
+                    "prepared observed disposal leaked",
                 )?;
             }
             *slot = None;

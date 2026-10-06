@@ -557,13 +557,16 @@ mod browser {
             self.stop_source()
         }
 
+        /// The media event owner retains the AudioReceipt returned by replace.
+        /// Never select this player's newer current receipt for a delayed stop event.
         pub fn cancel_media(
             &mut self,
+            receipt: &AudioReceipt,
             lease: &AudioOutputLease,
             stopped: &SpeechStopped,
         ) -> Result<(), PlaybackError> {
             self.check_scope(lease)?;
-            self.queue.cancel_media(lease, stopped)?;
+            self.queue.cancel_media(receipt, lease, stopped)?;
             self.stop_source()
         }
 

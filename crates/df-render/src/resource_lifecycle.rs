@@ -1,7 +1,8 @@
 use crate::{
-    DecodeToken, DecodedImage, FlatScene, ImageDecodeError, ImageDecodeLimits, PresentationOutcome,
-    RenderError, ResourceError, ResourceLimits, ResourceReadiness, ResourceSceneError,
-    ResourceSceneRenderer, SceneRenderer, VerifiedPng, WorkOutcome,
+    DecodeToken, DecodedImage, FlatScene, ImageDecodeError, ImageDecodeLimits,
+    PreparedImageMetadata, PresentationOutcome, RenderError, ResourceError, ResourceLimits,
+    ResourceReadiness, ResourceSceneError, ResourceSceneRenderer, SceneRenderer, VerifiedImage,
+    VerifiedPng, WorkOutcome,
 };
 use df_client::cache::{
     AssetCache, CacheError, CacheKey, CacheLease, CacheLimits, CacheScope, FetchToken,
@@ -152,10 +153,10 @@ impl ResourceLifecycle {
     /// Revokes the existing decoder input's exact lease identity, including its clones.
     /// A PNG acquired from another canonical cache cannot affect this owner.
     pub fn release_lease(&mut self, input: &VerifiedPng) -> Result<(), ResourceLifecycleError> {
-        self.check_input(input)?;
+        self.check_input(input.image())?;
         self.bytes
             .borrow_mut()
-            .release_lease(input.cache_lease())
+            .release_lease(input.image().cache_lease())
             .map_err(ResourceLifecycleError::Cache)?;
         self.reconcile_leases()
     }
@@ -166,6 +167,17 @@ impl ResourceLifecycle {
         limits: ImageDecodeLimits,
     ) -> Result<VerifiedPng, ImageDecodeError> {
         VerifiedPng::acquire(Rc::clone(&self.bytes), key, limits)
+    }
+
+    /// MIME/dimensions describe this exact already permitted asset; they cannot authorize
+    /// acquisition. The prepared decoder still uses this owner's single canonical byte lease.
+    pub fn prepare_image(
+        &self,
+        key: &CacheKey,
+        metadata: PreparedImageMetadata<'_>,
+        limits: ImageDecodeLimits,
+    ) -> Result<VerifiedImage, ImageDecodeError> {
+        VerifiedImage::acquire_prepared(Rc::clone(&self.bytes), key, metadata, limits)
     }
 
     pub fn update_scene(
@@ -197,6 +209,16 @@ impl ResourceLifecycle {
         input: &VerifiedPng,
         abort: impl FnOnce() + 'static,
     ) -> Result<DecodeToken<CacheKey>, ResourceLifecycleError> {
+        self.begin_image(input.image(), abort)
+    }
+
+    /// Admits the neutral prepared image through the same exact canonical lease and token.
+    /// This shares legacy PNG bookkeeping and starts no browser allocation itself.
+    pub fn begin_image(
+        &mut self,
+        input: &VerifiedImage,
+        abort: impl FnOnce() + 'static,
+    ) -> Result<DecodeToken<CacheKey>, ResourceLifecycleError> {
         self.check_input(input)?;
         input
             .validate_current()
@@ -215,7 +237,7 @@ impl ResourceLifecycle {
     }
 
     /// Actual terminal codec success, never an abort request. The incoming decoded image
-    /// must carry the exact VerifiedPng lease admitted for this operation. A foreign or
+    /// must carry the exact verified image lease admitted for this operation. A foreign or
     /// unbound image is refused before consuming work; this owner does not copy pixels.
     pub fn complete(
         &mut self,
@@ -352,7 +374,7 @@ impl ResourceLifecycle {
         }
     }
 
-    fn check_input(&self, input: &VerifiedPng) -> Result<(), ResourceLifecycleError> {
+    fn check_input(&self, input: &VerifiedImage) -> Result<(), ResourceLifecycleError> {
         if !input.belongs_to(&self.bytes) {
             return Err(ResourceLifecycleError::Decode(ImageDecodeError::WrongOwner));
         }

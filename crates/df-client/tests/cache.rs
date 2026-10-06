@@ -542,3 +542,180 @@ fn consumer_lifetime_survives_same_epoch_but_not_recovery_epoch() {
     let current = cache.acquire(&asset).unwrap().unwrap();
     assert_eq!(cache.lease_bytes(&current).unwrap(), b"a");
 }
+
+fn assert_current_manifest_conflict_is_atomic(conflicting: CacheKey) {
+    let retained = key("immutable-version", b"old");
+    let pending = key("pending-version", b"job");
+    let proposed = key("fresh-version", b"fresh");
+    let mut cache = cache(16, 2);
+    cache
+        .apply_current(
+            scope(3),
+            revision(1, 1),
+            &[retained.clone(), pending.clone()],
+        )
+        .unwrap();
+    publish(&mut cache, &retained, b"old");
+    let lease = cache.acquire(&retained).unwrap().unwrap();
+    let token = cache.fetch(&pending).unwrap();
+
+    // This proposal would replace resident bytes/lease, remove pending work, and add a key.
+    assert_eq!(
+        cache.apply_current(
+            scope(3),
+            revision(1, 2),
+            &[conflicting.clone(), proposed.clone()]
+        ),
+        Err(CacheError::ConflictingReference)
+    );
+    assert_eq!(cache.scope(), scope(3));
+    assert_eq!(cache.resident_bytes(), 3);
+    assert_eq!(cache.lease_count(), 1);
+    assert_eq!(cache.pending_count(), 1);
+    assert_eq!(cache.get(&retained).unwrap(), Some(b"old".as_slice()));
+    assert_eq!(cache.lease_bytes(&lease).unwrap(), b"old");
+    assert_eq!(cache.get(&conflicting), Err(CacheError::NotCurrent));
+    assert_eq!(cache.fetch(&proposed).err(), Some(CacheError::NotCurrent));
+    assert_eq!(
+        cache.fetch(&pending).err(),
+        Some(CacheError::AlreadyPending)
+    );
+
+    // The same requested revision would be stale if rejection advanced the watermark.
+    cache
+        .apply_current(
+            scope(3),
+            revision(1, 2),
+            &[retained.clone(), pending.clone()],
+        )
+        .unwrap();
+    assert_eq!(cache.lease_bytes(&lease).unwrap(), b"old");
+    assert_eq!(cache.pending_count(), 1);
+    cache.complete(&token, b"job".to_vec()).unwrap();
+    assert_eq!(cache.get(&pending).unwrap(), Some(b"job".as_slice()));
+    assert_eq!(cache.lease_bytes(&lease).unwrap(), b"old");
+    assert_eq!(cache.resident_bytes(), 6);
+}
+
+#[test]
+fn digest_only_current_version_conflict_preserves_bytes_lease_work_and_revision() {
+    let original = key("immutable-version", b"old");
+    let conflicting = key("immutable-version", b"new");
+    assert_eq!(original.bytes.byte_len, conflicting.bytes.byte_len);
+    assert_ne!(original.bytes.sha256, conflicting.bytes.sha256);
+    assert_current_manifest_conflict_is_atomic(conflicting);
+}
+
+#[test]
+fn length_only_current_version_conflict_preserves_bytes_lease_work_and_revision() {
+    let original = key("immutable-version", b"old");
+    let mut conflicting = original.clone();
+    conflicting.bytes.byte_len += 1;
+    assert_eq!(original.bytes.sha256, conflicting.bytes.sha256);
+    assert_ne!(original.bytes.byte_len, conflicting.bytes.byte_len);
+    assert_current_manifest_conflict_is_atomic(conflicting);
+}
+
+#[test]
+fn identical_current_manifest_and_fresh_version_retain_existing_consumers_and_work() {
+    let retained = key("immutable-version", b"old");
+    let pending = key("pending-version", b"job");
+    let fresh = key("fresh-version", b"new");
+    let mut cache = cache(16, 2);
+    cache
+        .apply_current(
+            scope(3),
+            revision(1, 1),
+            &[retained.clone(), pending.clone()],
+        )
+        .unwrap();
+    publish(&mut cache, &retained, b"old");
+    let lease = cache.acquire(&retained).unwrap().unwrap();
+    let token = cache.fetch(&pending).unwrap();
+
+    cache
+        .apply_current(
+            scope(3),
+            revision(1, 2),
+            &[retained.clone(), pending.clone(), fresh.clone()],
+        )
+        .unwrap();
+    assert_eq!(cache.resident_bytes(), 3);
+    assert_eq!(cache.lease_count(), 1);
+    assert_eq!(cache.pending_count(), 1);
+    assert_eq!(cache.lease_bytes(&lease).unwrap(), b"old");
+    cache.complete(&token, b"job".to_vec()).unwrap();
+    publish(&mut cache, &fresh, b"new");
+    assert_eq!(cache.get(&fresh).unwrap(), Some(b"new".as_slice()));
+    assert_eq!(cache.lease_bytes(&lease).unwrap(), b"old");
+    assert_eq!(cache.resident_bytes(), 9);
+}
+
+#[test]
+fn recovery_version_conflict_is_atomic_but_identical_epoch_update_fences_old_work() {
+    let retained = key("immutable-version", b"old");
+    let pending = key("pending-version", b"job");
+    let conflicting = key("immutable-version", b"new");
+    let mut cache = cache(16, 2);
+    cache
+        .apply_current(
+            scope(3),
+            revision(1, 1),
+            &[retained.clone(), pending.clone()],
+        )
+        .unwrap();
+    publish(&mut cache, &retained, b"old");
+    let lease = cache.acquire(&retained).unwrap().unwrap();
+    let usable = cache.fetch(&pending).unwrap();
+
+    assert_eq!(
+        cache.apply_current(scope(3), revision(2, 0), &[conflicting, pending.clone()]),
+        Err(CacheError::ConflictingReference)
+    );
+    assert_eq!(cache.resident_bytes(), 3);
+    assert_eq!(cache.pending_count(), 1);
+    assert_eq!(cache.lease_bytes(&lease).unwrap(), b"old");
+    cache.complete(&usable, b"job".to_vec()).unwrap();
+    let old_epoch = cache.fetch(&pending).unwrap();
+
+    // Correct the refused manifest at the same requested recovery revision.
+    cache
+        .apply_current(
+            scope(3),
+            revision(2, 0),
+            &[retained.clone(), pending.clone()],
+        )
+        .unwrap();
+    assert_eq!(cache.pending_count(), 0);
+    assert_eq!(cache.lease_count(), 0);
+    assert_eq!(cache.lease_bytes(&lease), Err(CacheError::StaleLease));
+    assert_eq!(
+        cache.complete(&old_epoch, b"job".to_vec()),
+        Err(CacheError::StaleFetch)
+    );
+    assert_eq!(cache.get(&retained).unwrap(), Some(b"old".as_slice()));
+    let current_lease = cache.acquire(&retained).unwrap().unwrap();
+    assert_eq!(cache.lease_bytes(&current_lease).unwrap(), b"old");
+}
+
+#[test]
+fn unfetched_current_version_manifest_conflict_cannot_discard_its_pending_token() {
+    let original = key("immutable-version", b"old");
+    let conflicting = key("immutable-version", b"new");
+    let mut cache = cache(16, 1);
+    cache
+        .apply_current(scope(3), revision(1, 1), std::slice::from_ref(&original))
+        .unwrap();
+    let pending = cache.fetch(&original).unwrap();
+    assert_eq!(cache.resident_bytes(), 0);
+    assert_eq!(
+        cache.apply_current(scope(3), revision(1, 2), std::slice::from_ref(&conflicting)),
+        Err(CacheError::ConflictingReference)
+    );
+    assert_eq!(cache.pending_count(), 1);
+    cache.complete(&pending, b"old".to_vec()).unwrap();
+    assert_eq!(cache.get(&original).unwrap(), Some(b"old".as_slice()));
+    cache
+        .apply_current(scope(3), revision(1, 2), std::slice::from_ref(&original))
+        .unwrap();
+}

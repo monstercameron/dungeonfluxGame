@@ -1016,3 +1016,155 @@ fn canonically_valid_candidate_cannot_rewrite_accepted_decision_provenance() {
         assert_eq!(current, before);
     }
 }
+
+fn with_foreign_decision(
+    current: &Checkpoint,
+    candidate: &Checkpoint,
+    revision: SessionRevision,
+) -> Checkpoint {
+    let mut state = candidate.state().clone();
+    state.decisions.push(AcceptedDecision {
+        operation: OperationId::from_bytes(&[99; 16]).unwrap(),
+        revision,
+        facts: vec![],
+        draws: vec![],
+        effects: vec![],
+        source_policy: label("fixture-foreign-policy"),
+        semantic_output: None,
+    });
+    rebuilt(current, candidate.basis(), state)
+}
+
+#[test]
+fn canonical_requested_plus_foreign_decision_is_not_one_atomic_command() {
+    for with_history in [false, true] {
+        let current = if with_history {
+            current_with_accepted_history()
+        } else {
+            checkpoint(state()).unwrap()
+        };
+        let before = current.clone();
+        for backdated in [false, true] {
+            let mut handler = fixture(&current);
+            let foreign_revision = if backdated {
+                current.basis().revision
+            } else {
+                handler.candidate.basis().revision
+            };
+            handler.candidate =
+                with_foreign_decision(&current, &handler.candidate, foreign_revision);
+            assert_eq!(
+                handler.candidate.state().decisions.len(),
+                current.state().decisions.len() + 2
+            );
+            assert!(
+                handler
+                    .candidate
+                    .state()
+                    .decisions
+                    .starts_with(&current.state().decisions)
+            );
+
+            assert_eq!(
+                invoke_roll(&handler, &current, &input(), &[], 1024 * 1024),
+                Err(InvocationError::CandidateDecisionHistoryMismatch),
+                "history {with_history}, backdated {backdated}"
+            );
+            assert_eq!(handler.calls.get(), 1);
+            assert!(handler.observed_draws.borrow().is_empty());
+            assert_eq!(current, before);
+        }
+    }
+}
+
+#[test]
+fn one_atomic_decision_preserves_historical_prefix_and_zero_draw_outcome() {
+    for with_history in [false, true] {
+        let current = if with_history {
+            current_with_accepted_history()
+        } else {
+            checkpoint(state()).unwrap()
+        };
+        let before = current.clone();
+        let handler = fixture(&current);
+
+        let candidate = invoke_roll(&handler, &current, &input(), &[], 1024 * 1024).unwrap();
+
+        assert!(
+            candidate
+                .state()
+                .decisions
+                .starts_with(&current.state().decisions)
+        );
+        assert_eq!(
+            candidate.state().decisions.len(),
+            current.state().decisions.len() + 1
+        );
+        let appended = candidate.state().decisions.last().unwrap();
+        assert_eq!(
+            appended.operation,
+            OperationId::from_bytes(&[6; 16]).unwrap()
+        );
+        assert_eq!(
+            appended.revision,
+            current.basis().revision.next_sequence().unwrap()
+        );
+        assert!(appended.draws.is_empty());
+        assert_eq!(candidate.state().facts, current.state().facts);
+        assert_eq!(candidate.state().draws, current.state().draws);
+        assert_eq!(handler.calls.get(), 1);
+        assert!(handler.observed_draws.borrow().is_empty());
+        assert_eq!(current, before);
+    }
+}
+
+#[test]
+fn atomic_decision_count_preserves_existing_capacity_history_and_draw_refusal_priority() {
+    for case in 0..4 {
+        let current = if case < 2 {
+            checkpoint(state()).unwrap()
+        } else {
+            current_with_accepted_history()
+        };
+        let before = current.clone();
+        let mut handler = fixture(&current);
+        if case == 1 {
+            handler.candidate = candidate_with(
+                &current,
+                handler.candidate.basis(),
+                current.pins().clone(),
+                false,
+            );
+        }
+        handler.candidate = with_foreign_decision(
+            &current,
+            &handler.candidate,
+            handler.candidate.basis().revision,
+        );
+        let expected = match case {
+            0 => InvocationError::Capacity,
+            1 => InvocationError::MissingAcceptedDecision,
+            2 => {
+                let mut state = handler.candidate.state().clone();
+                state.decisions.first_mut().unwrap().source_policy = label("rewritten-history");
+                handler.candidate = rebuilt(&current, handler.candidate.basis(), state);
+                InvocationError::CandidateDecisionHistoryMismatch
+            }
+            _ => {
+                let mut state = handler.candidate.state().clone();
+                state.draws.first_mut().unwrap().value = 1;
+                handler.candidate = rebuilt(&current, handler.candidate.basis(), state);
+                InvocationError::CandidateDrawMismatch
+            }
+        };
+        let maximum = if case < 2 { 1 } else { 1024 * 1024 };
+
+        assert_eq!(
+            invoke_roll(&handler, &current, &input(), &[], maximum),
+            Err(expected),
+            "case {case}"
+        );
+        assert_eq!(handler.calls.get(), 1);
+        assert_eq!(current, before);
+    }
+}

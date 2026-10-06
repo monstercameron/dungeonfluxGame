@@ -436,3 +436,104 @@ fn foreign_same_key_and_unbound_surfaces_cannot_consume_the_original_pending_ope
     assert_eq!(owner.decoded_bytes(), 0);
     assert_eq!(owner.lease_count(), 0);
 }
+
+#[test]
+fn prepared_description_uses_the_exact_existing_lifecycle_lease_and_refuses_foreign_completion() {
+    let mut owner = support::lifecycle();
+    let key = support::key("prepared-description");
+    owner
+        .apply_current(
+            support::scope(),
+            support::revision(1, 0),
+            std::slice::from_ref(&key),
+        )
+        .unwrap();
+    owner
+        .update_scene(
+            support::label("prepared-scene"),
+            geometry::flat(support::revision(1, 0)),
+            std::slice::from_ref(&key),
+        )
+        .unwrap();
+    support::install(&mut owner, &key);
+    let metadata = df_render::PreparedImageMetadata {
+        mime: "image/png",
+        width: 1,
+        height: 1,
+        max_ancillary_bytes: 0,
+    };
+    let input = owner
+        .prepare_image(&key, metadata, support::decode_limits())
+        .unwrap();
+    assert_eq!(owner.lease_count(), 1);
+    let token = owner.begin_image(&input, || {}).unwrap();
+    let foreign = owner
+        .prepare_image(&key, metadata, support::decode_limits())
+        .unwrap();
+    let foreign = foreign
+        .finish_rgba(1, 1, vec![16, 32, 48, 255].into_boxed_slice())
+        .unwrap();
+    assert_eq!(
+        owner.complete(&token, foreign),
+        Err(df_render::ResourceError::WrongResource)
+    );
+    assert_eq!(owner.work_bytes(), 244);
+    assert_eq!(owner.lease_count(), 1);
+    let exact = input
+        .finish_rgba(1, 1, vec![16, 32, 48, 255].into_boxed_slice())
+        .unwrap();
+    owner.complete(&token, exact).unwrap();
+    assert_eq!(owner.work_bytes(), 0);
+    assert_eq!(owner.decoded_bytes(), 4);
+    assert_eq!(owner.lease_count(), 1);
+    owner.release(&key).unwrap();
+    assert_eq!(owner.decoded_bytes(), 0);
+    assert_eq!(owner.lease_count(), 0);
+    owner.dispose().unwrap();
+}
+
+#[test]
+fn prepared_metadata_refusal_cannot_retain_a_lease_or_reserve_codec_work() {
+    // Preflight temporarily acquires the canonical lease; refusal drops it before return.
+    let mut owner = support::lifecycle();
+    let key = support::key("prepared-refusal");
+    owner
+        .apply_current(
+            support::scope(),
+            support::revision(1, 0),
+            std::slice::from_ref(&key),
+        )
+        .unwrap();
+    owner
+        .update_scene(
+            support::label("prepared-scene"),
+            geometry::flat(support::revision(1, 0)),
+            std::slice::from_ref(&key),
+        )
+        .unwrap();
+    support::install(&mut owner, &key);
+    let mut metadata = df_render::PreparedImageMetadata {
+        mime: "image/webp",
+        width: 1,
+        height: 1,
+        max_ancillary_bytes: 0,
+    };
+    assert_eq!(
+        owner
+            .prepare_image(&key, metadata, support::decode_limits())
+            .err(),
+        Some(df_render::ImageDecodeError::MimeMismatch)
+    );
+    metadata.mime = "image/png";
+    metadata.height = 2;
+    assert_eq!(
+        owner
+            .prepare_image(&key, metadata, support::decode_limits())
+            .err(),
+        Some(df_render::ImageDecodeError::WrongDimensions)
+    );
+    assert_eq!(owner.lease_count(), 0);
+    assert_eq!(owner.work_bytes(), 0);
+    assert_eq!(owner.decoded_bytes(), 0);
+    owner.dispose().unwrap();
+}

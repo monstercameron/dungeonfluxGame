@@ -140,7 +140,7 @@ fn actual_media_stop_requests_old_playback_stop_without_freeing_the_replacement(
         .unwrap();
     assert_eq!(stopped.discarded_chunks, 1);
     assert_eq!(stopped.discarded_bytes, 1);
-    let cancel = audio.cancel_media(&lease(), &stopped).unwrap();
+    let cancel = audio.cancel_media(&old, &lease(), &stopped).unwrap();
     assert_eq!(
         cancel.stop_required.unwrap().sequence(),
         old_buffer.sequence()
@@ -162,7 +162,7 @@ fn actual_media_stop_requests_old_playback_stop_without_freeing_the_replacement(
     );
     assert_eq!(audio.snapshot().state, QueueState::WaitingForStop);
     assert_eq!(
-        audio.cancel_media(&lease(), &stopped).unwrap_err(),
+        audio.cancel_media(&old, &lease(), &stopped).unwrap_err(),
         QueueError::StaleReceipt
     );
     assert_eq!(

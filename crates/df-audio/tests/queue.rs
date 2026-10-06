@@ -2,7 +2,11 @@ mod common;
 
 use common::*;
 use df_audio::{AudioQueue, BufferCompletion, PcmBuffer, PcmFormat, QueueError, QueueState};
-use df_model::checkpoint::{AssetKind, AudioDestination};
+use df_media::schedule::ScheduleLimits;
+use df_media::speech::{
+    SpeechIdentity, SpeechLimits, SpeechScheduler, SpeechStopReason, SpeechStopped,
+};
+use df_model::checkpoint::{AssetKind, AudioDestination, JobId};
 use df_types::{ClientBindingId, RunId};
 
 #[test]
@@ -490,4 +494,154 @@ fn invalid_resource_limits_and_oversized_retained_audience_are_refused() {
         AudioQueue::new(binding(), oversized, basis(1, 7), limits(1, 8)),
         Err(QueueError::InvalidLease)
     ));
+}
+
+fn stopped_media(identity: SpeechIdentity) -> SpeechStopped {
+    let mut producer = SpeechScheduler::new(
+        identity.basis,
+        ScheduleLimits {
+            queue_items: 1,
+            queue_bytes: 1,
+            speech_items: 1,
+            speech_bytes: 1,
+            execution_slots: 1,
+            speech_slots: 1,
+        },
+        SpeechLimits {
+            maximum_chunks: 1,
+            maximum_bytes: 1,
+        },
+    )
+    .unwrap();
+    producer.admit(identity, Box::from([9_u8])).unwrap();
+    let dispatch = producer.begin().unwrap().unwrap();
+    producer
+        .stop(&dispatch, SpeechStopReason::Cancelled)
+        .unwrap()
+}
+
+#[test]
+fn delayed_media_stop_cannot_cancel_fresh_same_identity_after_another_cue() {
+    let mut audio = queue(2, 16);
+    let original = start(&mut audio, 11, 0);
+    let delayed = stopped_media(original.identity());
+    let mut middle = identity(1);
+    middle.job = JobId::from_bytes(&[8; 16]).unwrap();
+    audio
+        .replace(&lease(), basis(1, 7), middle, asset(), format(), 10)
+        .unwrap();
+    // Different jobs have no global generation order. Returning to this identity
+    // is valid current work, while the original receipt remains a stale capability.
+    let current = start(&mut audio, 11, 20);
+    assert_eq!(original.identity(), current.identity());
+    audio
+        .enqueue(&current, &lease(), manifest(), 0, 20, pcm(&[0.1, 0.2]))
+        .unwrap();
+    audio
+        .enqueue(&current, &lease(), manifest(), 1, 22, pcm(&[0.3]))
+        .unwrap();
+    let dispatched = audio.begin(&current, &lease()).unwrap().unwrap();
+    let before = audio.snapshot();
+    assert_eq!(
+        audio
+            .cancel_media(&original, &lease(), &delayed)
+            .unwrap_err(),
+        QueueError::StaleReceipt
+    );
+    assert_eq!(audio.snapshot(), before);
+    assert_eq!(
+        audio.dispatched(&dispatched).unwrap().buffer.samples(),
+        &[0.1, 0.2]
+    );
+    assert_eq!(
+        audio
+            .enqueue(&original, &lease(), manifest(), 2, 23, pcm(&[0.4]))
+            .unwrap_err()
+            .reason,
+        QueueError::StaleReceipt
+    );
+    // Refusing the old event must leave the whole current tail available to drain.
+    assert_eq!(
+        audio.close(&current, &lease(), 2, 23),
+        Ok(QueueState::Draining)
+    );
+    assert_eq!(
+        audio.complete(&dispatched),
+        Ok(BufferCompletion::Current(QueueState::Draining))
+    );
+    let tail = audio.begin(&current, &lease()).unwrap().unwrap();
+    assert_eq!(audio.dispatched(&tail).unwrap().buffer.samples(), &[0.3]);
+    assert_eq!(
+        audio.complete(&tail),
+        Ok(BufferCompletion::Current(QueueState::Drained))
+    );
+    let current_stop = stopped_media(current.identity());
+    let cancelled = audio
+        .cancel_media(&current, &lease(), &current_stop)
+        .unwrap();
+    assert_eq!(cancelled.discarded_buffers, 0);
+    assert!(cancelled.stop_required.is_none());
+    assert_eq!(audio.snapshot().state, QueueState::Cancelled);
+}
+
+#[test]
+fn media_stop_from_reconstructed_owner_cannot_retire_current_dispatch() {
+    let mut original_owner = queue(2, 16);
+    let original = start(&mut original_owner, 11, 0);
+    let delayed = stopped_media(original.identity());
+    original_owner.dispose();
+    drop(original_owner);
+
+    let mut reconstructed = queue(2, 16);
+    let current = start(&mut reconstructed, 11, 0);
+    assert_eq!(original.identity(), current.identity());
+    reconstructed
+        .enqueue(&current, &lease(), manifest(), 0, 0, pcm(&[0.1, 0.2]))
+        .unwrap();
+    reconstructed
+        .enqueue(&current, &lease(), manifest(), 1, 2, pcm(&[0.3]))
+        .unwrap();
+    let dispatch = reconstructed.begin(&current, &lease()).unwrap().unwrap();
+    let before = reconstructed.snapshot();
+    assert_eq!(
+        reconstructed
+            .cancel_media(&original, &lease(), &delayed)
+            .unwrap_err(),
+        QueueError::ForeignOwner
+    );
+    assert_eq!(reconstructed.snapshot(), before);
+    assert_eq!(
+        reconstructed
+            .dispatched(&dispatch)
+            .unwrap()
+            .buffer
+            .samples(),
+        &[0.1, 0.2]
+    );
+    let unrelated_stop = stopped_media(identity(12));
+    assert_eq!(
+        reconstructed
+            .cancel_media(&current, &lease(), &unrelated_stop)
+            .unwrap_err(),
+        QueueError::StaleReceipt
+    );
+    assert_eq!(reconstructed.snapshot(), before);
+
+    let current_stop = stopped_media(current.identity());
+    let cancelled = reconstructed
+        .cancel_media(&current, &lease(), &current_stop)
+        .unwrap();
+    assert_eq!(cancelled.discarded_buffers, 1);
+    assert_eq!(cancelled.discarded_sample_bytes, 4);
+    assert_eq!(
+        cancelled.stop_required.unwrap().identity(),
+        dispatch.identity()
+    );
+    assert_eq!(reconstructed.snapshot().state, QueueState::WaitingForStop);
+    assert_eq!(reconstructed.snapshot().sample_bytes, 8);
+    assert_eq!(
+        reconstructed.confirm_stopped(&dispatch),
+        Ok(BufferCompletion::Retired(QueueState::Cancelled))
+    );
+    assert_eq!(reconstructed.snapshot().sample_bytes, 0);
 }

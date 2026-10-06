@@ -7,9 +7,15 @@ mod browser {
     use std::cell::RefCell;
 
     use df_audio::browser_playback::{
-        BrowserPlayback, PlaybackError, PlaybackLimits, PlaybackStart, PlaybackState,
+        BrowserPlayback, PlaybackError, PlaybackLimits, PlaybackSnapshot, PlaybackStart,
+        PlaybackState,
     };
     use df_audio::{AudioReceipt, QueueError, QueueState};
+    use df_media::schedule::ScheduleLimits;
+    use df_media::speech::{
+        SpeechIdentity, SpeechLimits, SpeechScheduler, SpeechStopReason, SpeechStopped,
+    };
+    use df_model::checkpoint::JobId;
     use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
     use web_sys::{Element, Event};
 
@@ -25,6 +31,7 @@ mod browser {
         source: Option<LocalPcm>,
         receipt: Option<AudioReceipt>,
         old_receipt: Option<AudioReceipt>,
+        media_stop_before: Option<PlaybackSnapshot>,
         generation: u64,
         root: Element,
         status: Element,
@@ -47,6 +54,50 @@ mod browser {
 
     fn restore(fixture: Fixture) {
         FIXTURE.with(|cell| *cell.borrow_mut() = Some(fixture));
+    }
+
+    fn media_stopped(identity: SpeechIdentity) -> Result<SpeechStopped, JsValue> {
+        // Actual local media dispatch/stop facts. The opaque command is not a
+        // speech codec; the verified square-tone PCM fixture remains independent.
+        let mut producer = SpeechScheduler::new(
+            identity.basis,
+            ScheduleLimits {
+                queue_items: 1,
+                queue_bytes: 1,
+                speech_items: 1,
+                speech_bytes: 1,
+                execution_slots: 1,
+                speech_slots: 1,
+            },
+            SpeechLimits {
+                maximum_chunks: 1,
+                maximum_bytes: 1,
+            },
+        )
+        .map_err(error)?;
+        producer.admit(identity, Box::from([9_u8])).map_err(error)?;
+        let dispatch = producer
+            .begin()
+            .map_err(error)?
+            .ok_or_else(|| JsValue::from_str("media dispatch absent"))?;
+        producer
+            .stop(&dispatch, SpeechStopReason::Cancelled)
+            .map_err(error)
+    }
+
+    fn unchanged_resources(before: PlaybackSnapshot, after: PlaybackSnapshot) -> bool {
+        before.state == after.state
+            && before.queue == after.queue
+            && before.sources == after.sources
+            && before.ended_callbacks == after.ended_callbacks
+            && before.pending_promises == after.pending_promises
+            && before.retained_sample_bytes == after.retained_sample_bytes
+            && before.peak_sample_bytes == after.peak_sample_bytes
+            && before.completed_buffers == after.completed_buffers
+            && before.stopped_buffers == after.stopped_buffers
+            && before.scheduled_start_seconds == after.scheduled_start_seconds
+            && before.scheduling_lateness_seconds == after.scheduling_lateness_seconds
+            && before.unlock_refused == after.unlock_refused
     }
 
     impl Fixture {
@@ -203,6 +254,7 @@ mod browser {
             source: None,
             receipt: None,
             old_receipt: None,
+            media_stop_before: None,
             generation: 0,
             root: root.clone(),
             status,
@@ -350,6 +402,257 @@ mod browser {
                 return Err(error(snapshot));
             }
             fixture.render("Replacement waits for actual old ended; no new source released");
+            Ok(())
+        })
+    }
+
+    #[wasm_bindgen]
+    pub fn fixture_assert_media_stop_receipt_refusals() -> Result<(), JsValue> {
+        FIXTURE.with(|cell| {
+            let mut fixture = cell.borrow_mut();
+            let fixture = fixture
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("fixture busy"))?;
+            let initial = fixture.playback.snapshot();
+            if initial.state != PlaybackState::Ready
+                || initial.sources != 0
+                || initial.queue.retained_buffers != 0
+                || initial.pending_promises != 0
+            {
+                return Err(JsValue::from_str(
+                    "unlock and settle existing sources before media-stop probe",
+                ));
+            }
+            fixture.media_stop_before = None;
+            fixture.prepare(1).map_err(error)?;
+            let original = fixture
+                .receipt
+                .clone()
+                .ok_or_else(|| JsValue::from_str("original receipt absent"))?;
+            let delayed = media_stopped(original.identity())?;
+            let source = fixture
+                .source
+                .as_ref()
+                .ok_or_else(|| JsValue::from_str("local PCM absent"))?;
+            let reference = source.reference.clone();
+            let format = source
+                .buffer
+                .as_ref()
+                .ok_or_else(|| JsValue::from_str("local PCM buffer absent"))?
+                .format();
+            let mut middle = original.identity();
+            middle.job = JobId::from_bytes(&[8; 16]).map_err(error)?;
+            // A and B have no dispatched samples. This synchronous replacement
+            // needs no timer or invented ended event; fresh A owns the real source.
+            let _middle_receipt = fixture
+                .playback
+                .replace(
+                    &browser_pcm::lease(),
+                    browser_pcm::basis(),
+                    middle,
+                    reference.clone(),
+                    format,
+                    PlaybackStart {
+                        first_frame: 48_000,
+                        lead_seconds: 0.05,
+                    },
+                )
+                .map_err(error)?;
+            let current = fixture
+                .playback
+                .replace(
+                    &browser_pcm::lease(),
+                    browser_pcm::basis(),
+                    original.identity(),
+                    reference.clone(),
+                    format,
+                    PlaybackStart {
+                        first_frame: 48_000,
+                        lead_seconds: 0.05,
+                    },
+                )
+                .map_err(error)?;
+            fixture.old_receipt = Some(original.clone());
+            fixture.receipt = Some(current.clone());
+            let source = fixture
+                .source
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("local PCM absent"))?;
+            source.cache.lease_bytes(&source.source).map_err(error)?;
+            let first = source
+                .buffer
+                .take()
+                .ok_or_else(|| JsValue::from_str("local PCM buffer absent"))?;
+            fixture
+                .playback
+                .enqueue(
+                    &current,
+                    &browser_pcm::lease(),
+                    source.manifest,
+                    0,
+                    48_000,
+                    first,
+                )
+                .map_err(error)?;
+            let mut tail = browser_pcm::local_pcm(1);
+            tail.cache.lease_bytes(&tail.source).map_err(error)?;
+            fixture
+                .playback
+                .enqueue(
+                    &current,
+                    &browser_pcm::lease(),
+                    tail.manifest,
+                    1,
+                    48_000 + FRAMES,
+                    tail.buffer
+                        .take()
+                        .ok_or_else(|| JsValue::from_str("tail buffer absent"))?,
+                )
+                .map_err(error)?;
+            fixture
+                .playback
+                .close(&current, &browser_pcm::lease(), 2, 48_000 + FRAMES * 2)
+                .map_err(error)?;
+            fixture
+                .playback
+                .pump(&browser_pcm::lease())
+                .map_err(error)?;
+            let before = fixture.playback.snapshot();
+            if before.state != PlaybackState::Scheduled
+                || before.sources != 1
+                || before.ended_callbacks != 1
+                || before.queue.retained_buffers != 2
+                || before.queue.state != QueueState::Draining
+                || before.retained_sample_bytes == 0
+            {
+                return Err(error(before));
+            }
+            let refused = fixture
+                .playback
+                .cancel_media(&original, &browser_pcm::lease(), &delayed);
+            if refused != Err(PlaybackError::Queue(QueueError::StaleReceipt)) {
+                return Err(error(refused));
+            }
+            let after = fixture.playback.snapshot();
+            if !unchanged_resources(before, after) {
+                return Err(error((before, after)));
+            }
+
+            let mut foreign_owner = browser_pcm::queue();
+            let foreign = foreign_owner
+                .replace(
+                    &browser_pcm::lease(),
+                    browser_pcm::basis(),
+                    current.identity(),
+                    reference,
+                    format,
+                    48_000,
+                )
+                .map_err(error)?
+                .receipt;
+            foreign_owner.dispose();
+            drop(foreign_owner);
+            let refused = fixture
+                .playback
+                .cancel_media(&foreign, &browser_pcm::lease(), &delayed);
+            if refused != Err(PlaybackError::Queue(QueueError::ForeignOwner)) {
+                return Err(error(refused));
+            }
+            let after = fixture.playback.snapshot();
+            if !unchanged_resources(before, after) {
+                return Err(error((before, after)));
+            }
+            fixture.render(
+                "Media stop refused stale/foreign receipts; current real PCM and tail unchanged",
+            );
+            Ok(())
+        })
+    }
+
+    #[wasm_bindgen]
+    pub fn fixture_assert_current_media_stop_retains_until_terminal() -> Result<(), JsValue> {
+        FIXTURE.with(|cell| {
+            let mut fixture = cell.borrow_mut();
+            let fixture = fixture
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("fixture busy"))?;
+            let before = fixture.playback.snapshot();
+            if before.sources != 1
+                || before.queue.retained_buffers != 2
+                || before.queue.state != QueueState::Draining
+            {
+                return Err(JsValue::from_str(
+                    "run receipt-refusal probe before current media stop",
+                ));
+            }
+            let current = fixture
+                .receipt
+                .clone()
+                .ok_or_else(|| JsValue::from_str("current receipt absent"))?;
+            let stopped = media_stopped(current.identity())?;
+            fixture
+                .playback
+                .cancel_media(&current, &browser_pcm::lease(), &stopped)
+                .map_err(error)?;
+            let after = fixture.playback.snapshot();
+            if after.queue.state != QueueState::WaitingForStop
+                || after.queue.retained_buffers != 1
+                || !after.queue.dispatched
+                || after.queue.sample_bytes * 2 != before.queue.sample_bytes
+                || after.sources != 1
+                || after.ended_callbacks != 1
+                || after.retained_sample_bytes == 0
+                || after.stopped_buffers != before.stopped_buffers
+                || after.completed_buffers != before.completed_buffers
+            {
+                return Err(error((before, after)));
+            }
+            fixture.media_stop_before = Some(before);
+            fixture.render(
+                "Current media stop accepted; real source and PCM retained for actual ended",
+            );
+            Ok(())
+        })
+    }
+
+    #[wasm_bindgen]
+    pub fn fixture_assert_current_media_stop_settled() -> Result<(), JsValue> {
+        FIXTURE.with(|cell| {
+            let mut fixture = cell.borrow_mut();
+            let fixture = fixture
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("fixture busy"))?;
+            let before = fixture
+                .media_stop_before
+                .ok_or_else(|| JsValue::from_str("current media stop not observed"))?;
+            // Only the adapter's owned real onended event permits pump to release
+            // this source. Calling early refuses qualification without fake callbacks.
+            fixture
+                .playback
+                .pump(&browser_pcm::lease())
+                .map_err(error)?;
+            let after = fixture.playback.snapshot();
+            let expected_stopped = before
+                .stopped_buffers
+                .checked_add(1)
+                .ok_or_else(|| JsValue::from_str("fixture stop counter exhausted"))?;
+            if after.state != PlaybackState::Ready
+                || after.queue.state != QueueState::Cancelled
+                || after.queue.retained_buffers != 0
+                || after.queue.dispatched
+                || after.sources != 0
+                || after.ended_callbacks != 0
+                || after.pending_promises != 0
+                || after.retained_sample_bytes != 0
+                || after.stopped_buffers != expected_stopped
+                || after.completed_buffers != before.completed_buffers
+            {
+                return Err(error((before, after)));
+            }
+            fixture.media_stop_before = None;
+            fixture.render(
+                "Actual ended settled current media stop; source, callback and PCM released",
+            );
             Ok(())
         })
     }

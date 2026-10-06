@@ -208,12 +208,132 @@ impl ReactionSourceOwner for AuthoredCourierSource<'_> {
     }
 }
 
+impl df_engine::relationship_staging::RelationshipApplicationOwner for AuthoredCourierSource<'_> {
+    type Refusal = RepositoryError;
+
+    fn admit_application(
+        &self,
+        current: &Checkpoint,
+        command: &CommandInput,
+        requests: &[ReactionRequest],
+        entries: &[ReactionEntry],
+    ) -> Result<(), Self::Refusal> {
+        current
+            .validate_resume(self.current.basis(), &model::pins()?)
+            .map_err(bad)?;
+        let GameCommand::ProposeAction {
+            actor,
+            action,
+            targets,
+            choices,
+        } = &command.command
+        else {
+            return Err(RepositoryError::InvalidCandidate);
+        };
+        if current != self.current
+            || command.basis != current.basis()
+            || command.observed_revision != current.basis().revision
+            || *actor != super::player_entity(command.member, current)?
+            || *action != model::content("defend-courier")?
+            || !targets.is_empty()
+            || !choices.is_empty()
+            || super::phase(current)? != df_protocol::common::JourneyPhase::Dialogue
+            || !super::offered(current, command.member)?
+                .iter()
+                .any(|(kind, _)| *kind == df_protocol::common::GameplayActionKind::DefendCourier)
+            || entries != [entry()?]
+            || requests != request_on_defend(current, *actor)?.as_slice()
+        {
+            return Err(RepositoryError::InvalidCandidate);
+        }
+        Ok(())
+    }
+}
+
+fn relationship_limits() -> df_engine::relationship_staging::RelationshipStagingLimits {
+    df_engine::relationship_staging::RelationshipStagingLimits {
+        maximum_reactions: 1,
+        maximum_relationships: 512,
+        maximum_work: 1024 * 1024,
+        maximum_inventory_records: 512,
+        maximum_checkpoint_bytes: model::limits().maximum_retained_bytes,
+        maximum_pass_bytes: 8 * 1024 * 1024,
+        checkpoint: model::limits(),
+        reaction: ReactionLimits {
+            maximum_entries: 1,
+            maximum_policy_bytes: 4096,
+            maximum_work: 16_384,
+            maximum_proposal_bytes: 4096,
+        },
+    }
+}
+
+/// Registered native journey adapter; reactions observe the prior committed checkpoint.
+/// The inner journey preserves relationships and emits the authored causal fact. The engine
+/// then recomputes/selects the categorical replacement before returning a complete candidate.
+pub(super) struct CourierJourneyHandler<'a, Handler> {
+    pub command_handler: &'a Handler,
+}
+
+impl<Handler> df_rules::RulesCommandHandler for CourierJourneyHandler<'_, Handler>
+where
+    Handler: df_rules::RulesCommandHandler<Rejection = RepositoryError>,
+{
+    type Rejection = RepositoryError;
+
+    fn pins(&self) -> &CheckpointPins {
+        self.command_handler.pins()
+    }
+
+    fn bound_source(&self) -> Option<&RuleReference> {
+        self.command_handler.bound_source()
+    }
+
+    fn stage(
+        &self,
+        input: df_rules::RulesCommandInput<'_>,
+        current: &Checkpoint,
+    ) -> Result<Checkpoint, Self::Rejection> {
+        let GameInput::Game(command) = input.command else {
+            return self.command_handler.stage(input, current);
+        };
+        let GameCommand::ProposeAction { actor, action, .. } = &command.command else {
+            return self.command_handler.stage(input, current);
+        };
+        if action.entry.as_str() != "defend-courier" {
+            return self.command_handler.stage(input, current);
+        }
+        let source = AuthoredCourierSource { current };
+        let request = request_on_defend(current, *actor)?;
+        let entries = [entry()?];
+        let rules = [model::rule()?, super::rule()?];
+        let content = model::contents()?;
+        let resources = super::resources()?;
+        let handler = df_engine::relationship_staging::RelationshipReactionHandler {
+            command_handler: self.command_handler,
+            owner: &source,
+            current_basis: current.basis(),
+            admitted_pins: self.pins(),
+            inventory: ReferenceInventory {
+                rules: &rules,
+                content: &content,
+                resources: &resources,
+                assets: &[],
+            },
+            requests: request.as_slice(),
+            entries: &entries,
+            limits: relationship_limits(),
+        };
+        df_rules::RulesCommandHandler::stage(&handler, input, current).map_err(bad)
+    }
+}
+
 /// Evaluate only the prior checkpoint. The current Defend candidate cannot make
 /// its own staged facts look committed to df-interaction::react.
-pub(super) fn propose_on_defend(
+fn request_on_defend(
     current: &Checkpoint,
     target: EntityId,
-) -> Result<Option<Box<ReactionProposal>>, RepositoryError> {
+) -> Result<Option<ReactionRequest>, RepositoryError> {
     current
         .validate_resume(current.basis(), &model::pins()?)
         .map_err(bad)?;
@@ -270,6 +390,22 @@ pub(super) fn propose_on_defend(
     }) else {
         return Ok(None);
     };
+    Ok(Some(ReactionRequest {
+        expected_basis: current.basis(),
+        npc: courier,
+        target,
+        event: event.id,
+        witness: witness.id,
+    }))
+}
+
+pub(super) fn propose_on_defend(
+    current: &Checkpoint,
+    target: EntityId,
+) -> Result<Option<Box<ReactionProposal>>, RepositoryError> {
+    let Some(request) = request_on_defend(current, target)? else {
+        return Ok(None);
+    };
     let source = AuthoredCourierSource { current };
     let entries = [entry()?];
     let content = model::contents()?;
@@ -292,19 +428,7 @@ pub(super) fn propose_on_defend(
         },
     )
     .map_err(bad)?;
-    match react(
-        current,
-        ReactionRequest {
-            expected_basis: current.basis(),
-            npc: courier,
-            target,
-            event: event.id,
-            witness: witness.id,
-        },
-        &policy,
-    )
-    .map_err(bad)?
-    {
+    match react(current, request, &policy).map_err(bad)? {
         ReactionOutcome::Proposed(proposal) => Ok(Some(proposal)),
         ReactionOutcome::NoReaction(
             NoReactionReason::NotKnown
@@ -363,12 +487,11 @@ pub(super) fn stage_proposal(
     {
         return Err(RepositoryError::InvalidCandidate);
     }
-    let relationship = state
-        .relationships
-        .iter_mut()
-        .find(|relationship| **relationship == proposal.original)
-        .ok_or(RepositoryError::InvalidCandidate)?;
-    *relationship = proposal.proposed.clone();
+    if !state.relationships.contains(&proposal.original) {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    // The registered RelationshipReactionHandler owns the categorical replacement.
+    // The base journey contributes only this existing authored fact to its decision.
     state.facts.push(GameFact {
         id,
         revision,
@@ -572,3 +695,7 @@ mod tests {
         assert_eq!(reacted.state().continuity.npcs[0].known_facts.len(), 1);
     }
 }
+
+#[cfg(test)]
+#[path = "courier_relationship_tests.rs"]
+mod relationship_consumer_tests;

@@ -73,6 +73,7 @@ pub enum InvocationError<Rejection> {
 /// Invokes one compiled handler and verifies its canonical output binding without applying it.
 /// Structural command admission, source selection and dependency legality belong to their
 /// respective callers. Reuse this same boundary after registry selection for offer and submit.
+/// One command appends exactly its requested decision after the unchanged accepted history.
 pub fn stage_handler<Handler: RulesCommandHandler>(
     handler: &Handler,
     expected_pins: &CheckpointPins,
@@ -160,6 +161,17 @@ pub fn stage_handler<Handler: RulesCommandHandler>(
         return Err(InvocationError::Capacity);
     }
     validate_draw_accounting(input.supplied_draws, current, &candidate, operation)?;
+    // Canonical checkpoints retain past operations, but one staged command appends only its
+    // requested decision. Existing matching-decision and prefix guards bind this sole append.
+    if candidate
+        .state()
+        .decisions
+        .len()
+        .checked_sub(current.state().decisions.len())
+        != Some(1)
+    {
+        return Err(InvocationError::CandidateDecisionHistoryMismatch);
+    }
     Ok(candidate)
 }
 

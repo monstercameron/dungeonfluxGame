@@ -2395,7 +2395,10 @@ fn stage_with_supplier(
         },
     )
     .map_err(bad)?;
-    let handler = JourneyHandler { pins: pins.clone() };
+    let base_handler = JourneyHandler { pins: pins.clone() };
+    let handler = courier_reaction::CourierJourneyHandler {
+        command_handler: &base_handler,
+    };
     let registrations = [df_rules::HandlerRegistration::new(
         &selector, &source, &handler,
     )];

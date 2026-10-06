@@ -484,6 +484,13 @@ where
                     self.fence_uncertain(key);
                     return SubmissionOutcome::Refused(error);
                 }
+                if matches!(&self.cache, CacheState::Current)
+                    && receipt.basis().revision > self.checkpoint.basis().revision
+                {
+                    // A newer durable result disproves the cached basis. Fence before
+                    // reload so a failed read cannot admit another stale candidate.
+                    self.cache = CacheState::ReloadRequired;
+                }
                 let can_reload = match &self.cache {
                     CacheState::ReloadRequired => true,
                     CacheState::Uncertain(unresolved) => unresolved == &key,

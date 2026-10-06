@@ -22,6 +22,11 @@ pub enum ImageDecodeError {
     WrongOwner,
     CorruptPng,
     UnsupportedPng,
+    CorruptWebp,
+    UnsupportedWebp,
+    UnsupportedMime,
+    MimeMismatch,
+    AncillaryCapacity,
     DimensionCapacity,
     ByteCapacity,
     BrowserUnavailable,
@@ -32,13 +37,40 @@ pub enum ImageDecodeError {
     OwnerDisposed,
 }
 
-/// Validated static RGBA8 PNG layout. Ancillary metadata, animation, palettes, alternate
-/// bit depths and interlacing are explicitly unsupported in this bounded first decoder.
+/// Validated PNG/WebP presentation layout. Describes bounded work, never byte access.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ImageDecodePlan {
+    pub width: u32,
+    pub height: u32,
+    pub budget: DecodeBudget,
+}
+
+/// Strict legacy RGBA8 PNG layout; prepared PNG/WebP callers use ImageDecodePlan.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PngDecodePlan {
     pub width: u32,
     pub height: u32,
     pub budget: DecodeBudget,
+}
+
+impl ImageDecodePlan {
+    fn png(self) -> PngDecodePlan {
+        PngDecodePlan {
+            width: self.width,
+            height: self.height,
+            budget: self.budget,
+        }
+    }
+}
+
+/// Supplied format/dimensions and a finite opaque ancillary-payload cap. These values
+/// describe already permitted bytes; neither MIME nor embedded provenance grants access.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PreparedImageMetadata<'a> {
+    pub mime: &'a str,
+    pub width: u32,
+    pub height: u32,
+    pub max_ancillary_bytes: usize,
 }
 
 fn read_u32(bytes: &[u8]) -> Result<u32, ImageDecodeError> {
@@ -57,12 +89,7 @@ fn crc32(bytes: &[u8]) -> u32 {
     !crc
 }
 
-/// Allocation-free framing/CRC/dimension validation. Deflate validity remains the real
-/// browser codec's responsibility; a successful plan is never a decoded-resource hit.
-pub fn inspect_png(
-    bytes: &[u8],
-    limits: ImageDecodeLimits,
-) -> Result<PngDecodePlan, ImageDecodeError> {
+fn validate_limits(bytes: &[u8], limits: ImageDecodeLimits) -> Result<(), ImageDecodeError> {
     if limits.max_encoded_bytes == 0
         || limits.max_dimension == 0
         || limits.max_decoded_bytes == 0
@@ -73,12 +100,76 @@ pub fn inspect_png(
     if bytes.len() > limits.max_encoded_bytes {
         return Err(ImageDecodeError::ByteCapacity);
     }
+    Ok(())
+}
+
+fn image_plan(
+    width: u32,
+    height: u32,
+    encoded_bytes: usize,
+    channels: usize,
+    limits: ImageDecodeLimits,
+) -> Result<ImageDecodePlan, ImageDecodeError> {
+    if width > limits.max_dimension || height > limits.max_dimension {
+        return Err(ImageDecodeError::DimensionCapacity);
+    }
+    let decoded_bytes = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or(ImageDecodeError::ByteCapacity)?;
+    // Encoded cache input + Uint8Array + Blob, bitmap + scratch canvas + ImageData +
+    // returned Rust RGBA + conservative copy, plus a decoded scanline/work allowance.
+    // Codec-private allocator overhead remains subject to actual G08 device measurement.
+    let scanline_bytes = (width as usize)
+        .checked_mul(channels)
+        .and_then(|row| row.checked_add(1))
+        .and_then(|row| row.checked_mul(height as usize))
+        .ok_or(ImageDecodeError::ByteCapacity)?;
+    let work_bytes = encoded_bytes
+        .checked_mul(3)
+        .and_then(|encoded| {
+            decoded_bytes
+                .checked_mul(5)
+                .and_then(|pixels| encoded.checked_add(pixels))
+        })
+        .and_then(|total| total.checked_add(scanline_bytes))
+        .ok_or(ImageDecodeError::ByteCapacity)?;
+    if decoded_bytes > limits.max_decoded_bytes || work_bytes > limits.max_work_bytes {
+        return Err(ImageDecodeError::ByteCapacity);
+    }
+    Ok(ImageDecodePlan {
+        width,
+        height,
+        budget: DecodeBudget {
+            decoded_bytes,
+            work_bytes,
+        },
+    })
+}
+
+/// Strict legacy RGBA8 PNG entry point: no metadata, palette or animation support.
+/// CRC/framing validation never constitutes decoded success; the browser owns Deflate.
+pub fn inspect_png(
+    bytes: &[u8],
+    limits: ImageDecodeLimits,
+) -> Result<PngDecodePlan, ImageDecodeError> {
+    inspect_png_bytes(bytes, limits, None).map(ImageDecodePlan::png)
+}
+
+fn inspect_png_bytes(
+    bytes: &[u8],
+    limits: ImageDecodeLimits,
+    ancillary_cap: Option<usize>,
+) -> Result<ImageDecodePlan, ImageDecodeError> {
+    validate_limits(bytes, limits)?;
     if bytes.get(..8) != Some(b"\x89PNG\r\n\x1a\n") {
         return Err(ImageDecodeError::CorruptPng);
     }
     let mut cursor = 8_usize;
     let mut dimensions = None;
+    let mut channels = 4;
     let mut has_data = false;
+    let mut has_cabx = false;
     loop {
         let header_end = cursor.checked_add(8).ok_or(ImageDecodeError::CorruptPng)?;
         let header = bytes
@@ -118,10 +209,20 @@ pub fn inspect_png(
                 if width > limits.max_dimension || height > limits.max_dimension {
                     return Err(ImageDecodeError::DimensionCapacity);
                 }
-                if data.get(8..) != Some(&[8, 6, 0, 0, 0]) {
-                    return Err(ImageDecodeError::UnsupportedPng);
-                }
+                channels = match data.get(8..) {
+                    Some([8, 6, 0, 0, 0]) => 4,
+                    Some([8, 2, 0, 0, 0]) if ancillary_cap.is_some() => 3,
+                    _ => return Err(ImageDecodeError::UnsupportedPng),
+                };
                 dimensions = Some((width, height));
+            }
+            b"caBX" if dimensions.is_some() && !has_data && !has_cabx => {
+                let cap = ancillary_cap.ok_or(ImageDecodeError::UnsupportedPng)?;
+                if length > cap {
+                    return Err(ImageDecodeError::AncillaryCapacity);
+                }
+                // Opaque payload is CRC checked and bounded, never parsed as rights or authority.
+                has_cabx = true;
             }
             b"IDAT" if dimensions.is_some() && length != 0 => has_data = true,
             b"IEND" if dimensions.is_some() && has_data && length == 0 && end == bytes.len() => {
@@ -133,54 +234,136 @@ pub fn inspect_png(
         cursor = end;
     }
     let (width, height) = dimensions.ok_or(ImageDecodeError::CorruptPng)?;
-    let decoded_bytes = (width as usize)
-        .checked_mul(height as usize)
-        .and_then(|pixels| pixels.checked_mul(4))
-        .ok_or(ImageDecodeError::ByteCapacity)?;
-    // Encoded cache input + Uint8Array + Blob, bitmap + scratch canvas + ImageData +
-    // returned Rust RGBA + conservative copy, and one filtered scanline stream. Browser
-    // codec-private workspace/allocator overhead still requires G08 device measurement.
-    let scanline_bytes = (width as usize)
-        .checked_mul(4)
-        .and_then(|row| row.checked_add(1))
-        .and_then(|row| row.checked_mul(height as usize))
-        .ok_or(ImageDecodeError::ByteCapacity)?;
-    let work_bytes = bytes
-        .len()
-        .checked_mul(3)
-        .and_then(|encoded| {
-            decoded_bytes
-                .checked_mul(5)
-                .and_then(|pixels| encoded.checked_add(pixels))
-        })
-        .and_then(|total| total.checked_add(scanline_bytes))
-        .ok_or(ImageDecodeError::ByteCapacity)?;
-    if decoded_bytes > limits.max_decoded_bytes || work_bytes > limits.max_work_bytes {
-        return Err(ImageDecodeError::ByteCapacity);
-    }
-    Ok(PngDecodePlan {
-        width,
-        height,
-        budget: DecodeBudget {
-            decoded_bytes,
-            work_bytes,
-        },
-    })
+    image_plan(width, height, bytes.len(), channels, limits)
 }
 
-/// Owns one actual revocable canonical cache lease without copying input bytes. The
-/// caller admits plan.budget into its ResourceCache before allocating browser resources.
-pub struct VerifiedPng {
+fn read_webp_u32(bytes: &[u8]) -> Result<u32, ImageDecodeError> {
+    let array: [u8; 4] = bytes
+        .try_into()
+        .map_err(|_| ImageDecodeError::CorruptWebp)?;
+    Ok(u32::from_le_bytes(array))
+}
+
+fn inspect_webp(
+    bytes: &[u8],
+    limits: ImageDecodeLimits,
+) -> Result<ImageDecodePlan, ImageDecodeError> {
+    validate_limits(bytes, limits)?;
+    if bytes.get(..4) != Some(b"RIFF") || bytes.get(8..12) != Some(b"WEBP") {
+        return Err(ImageDecodeError::CorruptWebp);
+    }
+    let total = (read_webp_u32(bytes.get(4..8).ok_or(ImageDecodeError::CorruptWebp)?)? as usize)
+        .checked_add(8)
+        .ok_or(ImageDecodeError::CorruptWebp)?;
+    if total != bytes.len() {
+        return Err(ImageDecodeError::CorruptWebp);
+    }
+    if bytes.get(12..16) != Some(b"VP8 ") {
+        return Err(ImageDecodeError::UnsupportedWebp);
+    }
+    let length = read_webp_u32(bytes.get(16..20).ok_or(ImageDecodeError::CorruptWebp)?)? as usize;
+    let data_end = 20_usize
+        .checked_add(length)
+        .ok_or(ImageDecodeError::CorruptWebp)?;
+    let padded_end = data_end
+        .checked_add(length & 1)
+        .ok_or(ImageDecodeError::CorruptWebp)?;
+    if padded_end != bytes.len() || (length & 1 != 0 && bytes.get(data_end) != Some(&0)) {
+        return Err(ImageDecodeError::CorruptWebp);
+    }
+    let frame = bytes
+        .get(20..data_end)
+        .ok_or(ImageDecodeError::CorruptWebp)?;
+    let header = frame.get(..10).ok_or(ImageDecodeError::CorruptWebp)?;
+    let tag_bytes: [u8; 3] = header
+        .get(..3)
+        .ok_or(ImageDecodeError::CorruptWebp)?
+        .try_into()
+        .map_err(|_| ImageDecodeError::CorruptWebp)?;
+    let tag = u32::from_le_bytes([tag_bytes[0], tag_bytes[1], tag_bytes[2], 0]);
+    if tag & 1 != 0 || (tag >> 1) & 7 > 3 || tag & 16 == 0 {
+        return Err(ImageDecodeError::UnsupportedWebp);
+    }
+    if header.get(3..6) != Some(&[0x9d, 0x01, 0x2a]) {
+        return Err(ImageDecodeError::CorruptWebp);
+    }
+    let width_bytes: [u8; 2] = header
+        .get(6..8)
+        .ok_or(ImageDecodeError::CorruptWebp)?
+        .try_into()
+        .map_err(|_| ImageDecodeError::CorruptWebp)?;
+    let height_bytes: [u8; 2] = header
+        .get(8..10)
+        .ok_or(ImageDecodeError::CorruptWebp)?
+        .try_into()
+        .map_err(|_| ImageDecodeError::CorruptWebp)?;
+    let width = u16::from_le_bytes(width_bytes);
+    let height = u16::from_le_bytes(height_bytes);
+    if width & 0xc000 != 0 || height & 0xc000 != 0 {
+        return Err(ImageDecodeError::UnsupportedWebp);
+    }
+    if width == 0 || height == 0 || tag >> 5 == 0 || (tag >> 5) as usize > length - 10 {
+        return Err(ImageDecodeError::CorruptWebp);
+    }
+    // One actual prepared lossy keyframe only: VP8X, lossless, alpha, metadata, animations
+    // and additional RIFF chunks are explicitly unsupported rather than silently decoded.
+    image_plan(u32::from(width), u32::from(height), bytes.len(), 4, limits)
+}
+
+/// Checks MIME/container agreement, exact declared dimensions, finite payload limits and
+/// framing before any browser allocation. Complete/hash/current lease remain AssetCache work.
+pub fn inspect_prepared_image(
+    bytes: &[u8],
+    metadata: PreparedImageMetadata<'_>,
+    limits: ImageDecodeLimits,
+) -> Result<ImageDecodePlan, ImageDecodeError> {
+    let plan = match metadata.mime {
+        "image/png" => {
+            if bytes.get(..4) == Some(b"RIFF") {
+                return Err(ImageDecodeError::MimeMismatch);
+            }
+            inspect_png_bytes(bytes, limits, Some(metadata.max_ancillary_bytes))?
+        }
+        "image/webp" => {
+            if bytes.get(..8) == Some(b"\x89PNG\r\n\x1a\n") {
+                return Err(ImageDecodeError::MimeMismatch);
+            }
+            inspect_webp(bytes, limits)?
+        }
+        _ => return Err(ImageDecodeError::UnsupportedMime),
+    };
+    if (plan.width, plan.height) != (metadata.width, metadata.height) {
+        return Err(ImageDecodeError::WrongDimensions);
+    }
+    Ok(plan)
+}
+
+/// Owns one actual canonical lease for a validated prepared PNG/WebP without copying
+/// input bytes. Callers admit plan.budget before browser allocation. Metadata grants no access.
+pub struct VerifiedImage {
     cache: Rc<RefCell<AssetCache>>,
     lease: CacheLease,
-    plan: PngDecodePlan,
+    plan: ImageDecodePlan,
+    mime: &'static str,
 }
 
-impl VerifiedPng {
-    pub fn acquire(
+impl VerifiedImage {
+    /// Acquires the canonical lease to inspect approved bytes. Refusal drops that temporary
+    /// lease before returning and never reserves codec work; successful input retains one lease.
+    pub fn acquire_prepared(
+        cache: Rc<RefCell<AssetCache>>,
+        key: &CacheKey,
+        metadata: PreparedImageMetadata<'_>,
+        limits: ImageDecodeLimits,
+    ) -> Result<Self, ImageDecodeError> {
+        Self::acquire_input(cache, key, limits, Some(metadata))
+    }
+
+    fn acquire_input(
         cache: Rc<RefCell<AssetCache>>,
         key: &CacheKey,
         limits: ImageDecodeLimits,
+        metadata: Option<PreparedImageMetadata<'_>>,
     ) -> Result<Self, ImageDecodeError> {
         let lease = cache
             .try_borrow_mut()
@@ -188,19 +371,37 @@ impl VerifiedPng {
             .acquire(key)
             .map_err(ImageDecodeError::Lease)?
             .ok_or(ImageDecodeError::MissingBytes)?;
-        let plan = {
+        let (plan, mime) = {
             let owner = cache
                 .try_borrow()
                 .map_err(|_| ImageDecodeError::OwnerBusy)?;
-            inspect_png(
-                owner.lease_bytes(&lease).map_err(ImageDecodeError::Lease)?,
-                limits,
-            )?
+            let bytes = owner.lease_bytes(&lease).map_err(ImageDecodeError::Lease)?;
+            match metadata {
+                Some(metadata) => {
+                    let plan = inspect_prepared_image(bytes, metadata, limits)?;
+                    let mime = match metadata.mime {
+                        "image/png" => "image/png",
+                        "image/webp" => "image/webp",
+                        _ => return Err(ImageDecodeError::UnsupportedMime),
+                    };
+                    (plan, mime)
+                }
+                None => (inspect_png_bytes(bytes, limits, None)?, "image/png"),
+            }
         };
-        Ok(Self { cache, lease, plan })
+        Ok(Self {
+            cache,
+            lease,
+            plan,
+            mime,
+        })
     }
 
-    pub fn plan(&self) -> PngDecodePlan {
+    pub fn mime(&self) -> &'static str {
+        self.mime
+    }
+
+    pub fn plan(&self) -> ImageDecodePlan {
         self.plan
     }
     pub fn key(&self) -> &CacheKey {
@@ -258,6 +459,47 @@ impl VerifiedPng {
     }
 }
 
+/// Strict legacy carrier. Its private inner image is acquired only as RGBA8 PNG;
+/// there is no prepared-format constructor or neutral-to-PNG public conversion.
+pub struct VerifiedPng(VerifiedImage);
+
+impl VerifiedPng {
+    pub fn acquire(
+        cache: Rc<RefCell<AssetCache>>,
+        key: &CacheKey,
+        limits: ImageDecodeLimits,
+    ) -> Result<Self, ImageDecodeError> {
+        VerifiedImage::acquire_input(cache, key, limits, None).map(Self)
+    }
+
+    pub fn plan(&self) -> PngDecodePlan {
+        self.0.plan().png()
+    }
+    pub fn mime(&self) -> &'static str {
+        self.0.mime()
+    }
+    pub fn key(&self) -> &CacheKey {
+        self.0.key()
+    }
+    pub fn validate_current(&self) -> Result<(), ImageDecodeError> {
+        self.0.validate_current()
+    }
+
+    pub(crate) fn image(&self) -> &VerifiedImage {
+        &self.0
+    }
+
+    /// Uses the same terminal boundary and exact canonical lease as the neutral codec.
+    pub fn finish_rgba(
+        self,
+        width: u32,
+        height: u32,
+        pixels: Box<[u8]>,
+    ) -> Result<DecodedImage<CacheKey>, ImageDecodeError> {
+        self.0.finish_rgba(width, height, pixels)
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 mod browser {
     use super::*;
@@ -272,8 +514,8 @@ mod browser {
     use wasm_bindgen::{JsCast, closure::Closure};
     use wasm_bindgen_futures::{JsFuture, spawn_local};
     use web_sys::{
-        Blob, CanvasRenderingContext2d, ColorSpaceConversion, HtmlCanvasElement, ImageBitmap,
-        ImageBitmapOptions, PremultiplyAlpha, Window,
+        Blob, BlobPropertyBag, CanvasRenderingContext2d, ColorSpaceConversion, HtmlCanvasElement,
+        ImageBitmap, ImageBitmapOptions, PremultiplyAlpha, Window,
     };
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -333,7 +575,7 @@ mod browser {
     impl DecodeOwner {
         fn begin(
             &self,
-            input: &VerifiedPng,
+            input: &VerifiedImage,
             abort: impl FnOnce() + 'static,
         ) -> Result<DecodeToken<CacheKey>, ImageDecodeError> {
             match self {
@@ -345,7 +587,7 @@ mod browser {
                 Self::Lifecycle(lifecycle) => lifecycle
                     .try_borrow_mut()
                     .map_err(|_| ImageDecodeError::OwnerBusy)?
-                    .begin(input, abort)
+                    .begin_image(input, abort)
                     .map_err(lifecycle_error),
             }
         }
@@ -466,7 +708,7 @@ mod browser {
             if (scope.session, scope.run, scope.binding) != owner {
                 return Err(ImageDecodeError::WrongOwner);
             }
-            let input = VerifiedPng::acquire(cache, key, limits)?;
+            let input = VerifiedPng::acquire(cache, key, limits)?.0;
             Self::start_input(DecodeOwner::Scene(scene), input, window, deadline_ms)
         }
 
@@ -487,7 +729,33 @@ mod browser {
                 let owner = lifecycle
                     .try_borrow()
                     .map_err(|_| ImageDecodeError::OwnerBusy)?;
-                owner.prepare_png(key, limits)?
+                owner.prepare_png(key, limits)?.0
+            };
+            Self::start_input(
+                DecodeOwner::Lifecycle(lifecycle),
+                input,
+                window,
+                deadline_ms,
+            )
+        }
+
+        /// Same owned codec for a caller-described, already permitted prepared PNG/WebP.
+        pub fn start_owned_prepared(
+            lifecycle: Rc<RefCell<ResourceLifecycle>>,
+            key: &CacheKey,
+            metadata: PreparedImageMetadata<'_>,
+            limits: ImageDecodeLimits,
+            deadline_ms: i32,
+        ) -> Result<Self, ImageDecodeError> {
+            if deadline_ms <= 0 {
+                return Err(ImageDecodeError::InvalidLimits);
+            }
+            let window = web_sys::window().ok_or(ImageDecodeError::BrowserUnavailable)?;
+            let input = {
+                let owner = lifecycle
+                    .try_borrow()
+                    .map_err(|_| ImageDecodeError::OwnerBusy)?;
+                owner.prepare_image(key, metadata, limits)?
             };
             Self::start_input(
                 DecodeOwner::Lifecycle(lifecycle),
@@ -499,7 +767,7 @@ mod browser {
 
         fn start_input(
             owner: DecodeOwner,
-            input: VerifiedPng,
+            input: VerifiedImage,
             window: Window,
             deadline_ms: i32,
         ) -> Result<Self, ImageDecodeError> {
@@ -611,7 +879,7 @@ mod browser {
         }
     }
 
-    fn prepare(input: &VerifiedPng) -> Result<Prepared, ImageDecodeError> {
+    fn prepare(input: &VerifiedImage) -> Result<Prepared, ImageDecodeError> {
         let window = web_sys::window().ok_or(ImageDecodeError::BrowserUnavailable)?;
         let blob = {
             let cache = input
@@ -624,7 +892,10 @@ mod browser {
             let copy = Uint8Array::from(bytes);
             let parts = Array::new();
             parts.push(&copy);
-            Blob::new_with_u8_array_sequence(&parts).map_err(|_| ImageDecodeError::BrowserDecode)?
+            let properties = BlobPropertyBag::new();
+            properties.set_type(input.mime());
+            Blob::new_with_u8_array_sequence_and_options(&parts, &properties)
+                .map_err(|_| ImageDecodeError::BrowserDecode)?
         };
         let options = ImageBitmapOptions::new();
         options.set_color_space_conversion(ColorSpaceConversion::None);
@@ -636,7 +907,7 @@ mod browser {
     }
 
     async fn decode(
-        input: VerifiedPng,
+        input: VerifiedImage,
         prepared: Prepared,
         stop: &Cell<Option<ImageDecodeError>>,
     ) -> Result<DecodedImage<CacheKey>, ImageDecodeError> {

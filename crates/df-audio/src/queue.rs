@@ -529,23 +529,21 @@ impl AudioQueue {
         Ok(self.retire())
     }
 
-    /// Connects the actual current Media SpeechStopped facts; it does not claim
-    /// that media cancellation already stopped downstream playback.
+    /// Connects Media SpeechStopped facts to their original audio admission receipt.
+    /// The event owner retains the receipt returned by replace; selecting a newer
+    /// current receipt would let a delayed same-identity stop cancel replacement work.
+    /// Media cancellation does not already stop downstream playback.
     pub fn cancel_media(
         &mut self,
+        receipt: &AudioReceipt,
         lease: &AudioOutputLease,
         stopped: &SpeechStopped,
     ) -> Result<Cancellation, QueueError> {
-        let receipt = self
-            .cue
-            .as_ref()
-            .ok_or(QueueError::StaleReceipt)?
-            .receipt
-            .clone();
+        self.check(receipt, lease)?;
         if stopped.identity != receipt.identity {
             return Err(QueueError::StaleReceipt);
         }
-        self.cancel(&receipt, lease)
+        self.cancel(receipt, lease)
     }
 
     /// Permanently closes admission. At most one stop request remains; its exact

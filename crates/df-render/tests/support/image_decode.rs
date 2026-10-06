@@ -93,3 +93,86 @@ pub fn cached(source: &[u8], digest: [u8; 32]) -> (Rc<RefCell<AssetCache>>, Cach
     cache.complete(&fetch, source.to_vec()).unwrap();
     (Rc::new(RefCell::new(cache)), key)
 }
+
+// Exact current fixed public route fixtures, not server publication or authorization.
+pub struct PreparedAsset {
+    pub route: &'static str,
+    pub bytes: &'static [u8],
+    pub digest: [u8; 32],
+    pub mime: &'static str,
+    pub width: u32,
+    pub height: u32,
+}
+impl PreparedAsset {
+    pub fn metadata(&self) -> df_render::PreparedImageMetadata<'static> {
+        df_render::PreparedImageMetadata {
+            mime: self.mime,
+            width: self.width,
+            height: self.height,
+            max_ancillary_bytes: 32 * 1024,
+        }
+    }
+    pub fn key(&self) -> CacheKey {
+        CacheKey {
+            version: label(self.route),
+            bytes: AssetManifest {
+                byte_len: self.bytes.len() as u64,
+                sha256: self.digest,
+            },
+        }
+    }
+}
+pub fn prepared_limits() -> ImageDecodeLimits {
+    ImageDecodeLimits {
+        max_encoded_bytes: 4 * 1024 * 1024,
+        max_dimension: 2048,
+        max_decoded_bytes: 8 * 1024 * 1024,
+        max_work_bytes: 64 * 1024 * 1024,
+    }
+}
+pub const PREPARED_ASSETS: &[PreparedAsset] = &[
+    PreparedAsset {
+        route: "/assets/ui/scenes/mara-harbor-v4.png",
+        bytes: include_bytes!("../../../../assets/ui/scenes/mara-harbor-v4.png"),
+        digest: [
+            73, 131, 190, 194, 29, 120, 124, 64, 103, 104, 106, 154, 68, 0, 236, 94, 5, 183, 195,
+            221, 175, 182, 245, 166, 225, 136, 113, 198, 247, 118, 94, 162,
+        ],
+        mime: "image/png",
+        width: 1672,
+        height: 941,
+    },
+    PreparedAsset {
+        route: "/assets/concept-art/scene-campfire-under-stars.webp",
+        bytes: include_bytes!("../../../../assets/concept-art/scene-campfire-under-stars.webp"),
+        digest: [
+            156, 164, 177, 68, 61, 251, 33, 8, 183, 251, 107, 138, 29, 104, 17, 160, 22, 84, 50,
+            190, 219, 183, 243, 140, 75, 175, 94, 29, 151, 38, 202, 19,
+        ],
+        mime: "image/webp",
+        width: 1672,
+        height: 941,
+    },
+    PreparedAsset {
+        route: "/assets/concept-art/vell-avatar.webp",
+        bytes: include_bytes!("../../../../assets/concept-art/vell-avatar.webp"),
+        digest: [
+            140, 159, 26, 187, 62, 5, 185, 154, 41, 80, 238, 123, 213, 168, 102, 182, 74, 123, 131,
+            95, 213, 162, 78, 191, 172, 134, 162, 56, 55, 201, 155, 28,
+        ],
+        mime: "image/webp",
+        width: 1536,
+        height: 1024,
+    },
+    PreparedAsset {
+        route: "/assets/concept-art/scene-tavern-barkeep-talk-rain.webp",
+        bytes: include_bytes!("../../../../assets/concept-art/scene-tavern-barkeep-talk-rain.webp"),
+        digest: [
+            58, 212, 27, 247, 254, 235, 224, 7, 2, 181, 122, 131, 142, 17, 119, 86, 244, 113, 141,
+            146, 5, 203, 177, 9, 74, 151, 171, 158, 201, 164, 236, 216,
+        ],
+        mime: "image/webp",
+        width: 1672,
+        height: 941,
+    },
+];

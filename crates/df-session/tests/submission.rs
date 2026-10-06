@@ -1337,6 +1337,140 @@ fn seed_committed(db: &Arc<Mutex<Database>>, operation: &Scope) -> DecisionRecei
 }
 
 #[test]
+fn current_cache_discovers_peer_lost_ack_receipt_and_reloads_before_fresh_reduction() {
+    let db = database();
+    let mut stale_owner = owner(&db);
+    let mut committing_owner = owner(&db);
+    db.lock().unwrap().failure = Failure::LostCommittedAck;
+    assert_eq!(
+        submit(&mut committing_owner, scope(6)),
+        SubmissionOutcome::LookupRequired
+    );
+    let stored = db.lock().unwrap().receipts[&operation(6)].1.clone();
+    db.lock().unwrap().failure = Failure::None;
+    db.lock().unwrap().events.clear();
+    assert!(stale_owner.is_current());
+    assert_eq!(stale_owner.checkpoint(), &initial());
+
+    assert_eq!(assert_confirmed(submit(&mut stale_owner, scope(6))), stored);
+    assert!(stale_owner.is_current());
+    assert_eq!(stale_owner.checkpoint(), &db.lock().unwrap().checkpoint);
+    {
+        let db = db.lock().unwrap();
+        assert_eq!(db.events, ["lookup", "load"]);
+        assert_eq!(db.engine_calls, 1);
+        assert_eq!(db.commit_calls, 1);
+    }
+
+    let mut fresh = scope(7);
+    fresh.basis = stale_owner.checkpoint().basis();
+    let next = assert_confirmed(submit(&mut stale_owner, fresh));
+    assert_eq!(
+        next.basis().revision,
+        stored.basis().revision.next_sequence().unwrap()
+    );
+    let db = db.lock().unwrap();
+    assert_eq!(db.engine_calls, 2);
+    assert_eq!(db.commit_calls, 2);
+    assert_eq!(db.receipts.len(), 2);
+    assert_eq!(db.checkpoint.state().facts.len(), 2);
+    assert_eq!(db.checkpoint.state().intents.len(), 2);
+}
+
+#[test]
+fn newer_lookup_receipt_with_failed_reload_keeps_current_cache_fenced() {
+    let db = database();
+    let mut owner = owner(&db);
+    let stored = seed_committed(&db, &scope(6));
+    db.lock().unwrap().reload_failure = true;
+
+    assert_eq!(assert_confirmed(submit(&mut owner, scope(6))), stored);
+    assert!(!owner.is_current());
+    assert!(!owner.has_uncertain_operation());
+    assert_eq!(owner.checkpoint(), &initial());
+    assert_eq!(
+        submit(&mut owner, scope(7)),
+        SubmissionOutcome::LookupRequired
+    );
+    {
+        let db = db.lock().unwrap();
+        assert_eq!(db.events, ["lookup", "load", "lookup"]);
+        assert_eq!(db.engine_calls, 0);
+        assert_eq!(db.commit_calls, 0);
+        assert_eq!(db.receipts.len(), 1);
+    }
+
+    db.lock().unwrap().reload_failure = false;
+    db.lock().unwrap().events.clear();
+    assert_eq!(assert_confirmed(submit(&mut owner, scope(6))), stored);
+    assert!(owner.is_current());
+    assert_eq!(db.lock().unwrap().events, ["lookup", "load"]);
+    let mut fresh = scope(7);
+    fresh.basis = owner.checkpoint().basis();
+    assert_confirmed(submit(&mut owner, fresh));
+    assert_eq!(db.lock().unwrap().engine_calls, 1);
+    assert_eq!(db.lock().unwrap().commit_calls, 1);
+}
+
+#[test]
+fn newer_lookup_receipt_requires_nonregressing_reload_with_exact_stored_decision() {
+    for invalid_reload in [initial(), proposed(&initial(), &scope(7))] {
+        let db = database();
+        let mut owner = owner(&db);
+        let stored = seed_committed(&db, &scope(6));
+        db.lock().unwrap().reload_override = Some(invalid_reload);
+
+        assert_eq!(assert_confirmed(submit(&mut owner, scope(6))), stored);
+        assert!(!owner.is_current());
+        assert!(!owner.has_uncertain_operation());
+        assert_eq!(owner.checkpoint(), &initial());
+        assert_eq!(
+            submit(&mut owner, scope(7)),
+            SubmissionOutcome::LookupRequired
+        );
+        {
+            let db = db.lock().unwrap();
+            assert_eq!(db.events, ["lookup", "load", "lookup"]);
+            assert_eq!(db.engine_calls, 0);
+            assert_eq!(db.commit_calls, 0);
+            assert_eq!(db.receipts.len(), 1);
+        }
+
+        db.lock().unwrap().reload_override = None;
+        db.lock().unwrap().events.clear();
+        assert_eq!(assert_confirmed(submit(&mut owner, scope(6))), stored);
+        assert!(owner.is_current());
+        assert_eq!(owner.checkpoint(), &db.lock().unwrap().checkpoint);
+        assert_eq!(db.lock().unwrap().events, ["lookup", "load"]);
+        assert_eq!(db.lock().unwrap().engine_calls, 0);
+        assert_eq!(db.lock().unwrap().commit_calls, 0);
+    }
+}
+
+#[test]
+fn historical_and_equal_lookup_receipts_preserve_newer_current_snapshot_without_reload() {
+    let db = database();
+    let mut owner = owner(&db);
+    let historical = assert_confirmed(submit(&mut owner, scope(6)));
+    let mut fresh = scope(7);
+    fresh.basis = owner.checkpoint().basis();
+    let latest = assert_confirmed(submit(&mut owner, fresh.clone()));
+    let checkpoint = owner.checkpoint().clone();
+    db.lock().unwrap().events.clear();
+    db.lock().unwrap().reload_failure = true;
+
+    assert_eq!(assert_confirmed(submit(&mut owner, scope(6))), historical);
+    assert_eq!(assert_confirmed(submit(&mut owner, fresh)), latest);
+    assert!(owner.is_current());
+    assert_eq!(owner.checkpoint(), &checkpoint);
+    let db = db.lock().unwrap();
+    assert_eq!(db.events, ["lookup", "lookup"]);
+    assert_eq!(db.engine_calls, 2);
+    assert_eq!(db.commit_calls, 2);
+    assert_eq!(db.checkpoint, checkpoint);
+}
+
+#[test]
 fn inspecting_b_unknown_and_then_b_committed_cannot_erase_unresolved_a() {
     for second in [
         LookupBehavior::InProgress,

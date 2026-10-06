@@ -26,6 +26,7 @@ struct SyntheticHandler {
     draws: RefCell<Vec<Vec<ActualDraw>>>,
     draw_pointers: RefCell<Vec<usize>>,
     reject: bool,
+    append_foreign: bool,
 }
 impl SyntheticHandler {
     fn new() -> Self {
@@ -36,6 +37,7 @@ impl SyntheticHandler {
             draws: RefCell::new(vec![]),
             draw_pointers: RefCell::new(vec![]),
             reject: false,
+            append_foreign: false,
         }
     }
 }
@@ -125,6 +127,18 @@ impl RulesCommandHandler for SyntheticHandler {
             source_policy: label("fixture-handler-policy"),
             semantic_output: None,
         });
+        if self.append_foreign {
+            state.decisions.push(AcceptedDecision {
+                operation: OperationId::from_bytes(&[99; 16])
+                    .map_err(|_| SyntheticRefusal::InvalidCheckpoint)?,
+                revision: next.revision,
+                facts: vec![],
+                draws: vec![],
+                effects: vec![],
+                source_policy: label("fixture-foreign-policy"),
+                semantic_output: None,
+            });
+        }
         Checkpoint::new(
             CHECKPOINT_SCHEMA,
             next,
@@ -609,4 +623,139 @@ fn roll_without_trusted_actual_outcomes_is_refused_without_inventing_draws() {
     assert_eq!(handler.called.get(), 0);
     assert_eq!(current, before);
     assert!(handler.draws.borrow().is_empty());
+}
+
+fn current_with_atomic_history(reaction: bool, with_history: bool) -> Checkpoint {
+    waiting(reaction, |state| {
+        if with_history {
+            state.decisions.push(AcceptedDecision {
+                operation: OperationId::from_bytes(&[98; 16]).unwrap(),
+                revision: basis().revision,
+                facts: vec![],
+                draws: vec![],
+                effects: vec![],
+                source_policy: label("fixture-retained-policy"),
+                semantic_output: Some("retained-outcome".into()),
+            });
+        }
+    })
+}
+
+#[test]
+fn requested_plus_foreign_decision_is_refused_by_current_offer_and_submit() {
+    for reaction in [false, true] {
+        for with_history in [false, true] {
+            let current = current_with_atomic_history(reaction, with_history);
+            let before = current.clone();
+            let mut handler = SyntheticHandler::new();
+            handler.append_foreign = true;
+            let dependencies = [RuleDependency::PendingResolution(pending().id)];
+            let offered = with_pipeline(
+                &current,
+                &current,
+                &handler,
+                &dependencies,
+                |registry, context, selector| {
+                    offered_current_commands(
+                        &request(reaction),
+                        context,
+                        registry,
+                        selector,
+                        1024 * 1024,
+                    )
+                },
+            );
+            let input = GameInput::Game(request(reaction));
+            let submitted = with_pipeline(
+                &current,
+                &current,
+                &handler,
+                &dependencies,
+                |registry, context, selector| {
+                    prepare_current_response(
+                        without_draws(&input),
+                        context,
+                        registry,
+                        selector,
+                        1024 * 1024,
+                    )
+                },
+            );
+            let expected = ResponsePreparationError::Invocation(
+                InvocationError::CandidateDecisionHistoryMismatch,
+            );
+
+            assert_eq!(offered, Err(expected.clone()));
+            assert_eq!(submitted, Err(expected));
+            assert_eq!(handler.called.get(), 2);
+            assert!(handler.draws.borrow().iter().all(Vec::is_empty));
+            assert_eq!(current, before);
+        }
+    }
+}
+
+#[test]
+fn one_atomic_decision_preserves_history_through_current_offer_and_submit() {
+    for reaction in [false, true] {
+        let current = current_with_atomic_history(reaction, true);
+        let before = current.clone();
+        let handler = SyntheticHandler::new();
+        let dependencies = [RuleDependency::PendingResolution(pending().id)];
+        let offered = with_pipeline(
+            &current,
+            &current,
+            &handler,
+            &dependencies,
+            |registry, context, selector| {
+                offered_current_commands(
+                    &request(reaction),
+                    context,
+                    registry,
+                    selector,
+                    1024 * 1024,
+                )
+            },
+        )
+        .unwrap();
+        assert_eq!(offered.len(), 1);
+        let candidate = with_pipeline(
+            &current,
+            &current,
+            &handler,
+            &dependencies,
+            |registry, context, selector| {
+                prepare_current_response(
+                    without_draws(offered.first().unwrap()),
+                    context,
+                    registry,
+                    selector,
+                    1024 * 1024,
+                )
+            },
+        )
+        .unwrap();
+
+        assert!(
+            candidate
+                .state()
+                .decisions
+                .starts_with(&current.state().decisions)
+        );
+        assert_eq!(
+            candidate.state().decisions.len(),
+            current.state().decisions.len() + 1
+        );
+        let appended = candidate.state().decisions.last().unwrap();
+        assert_eq!(appended.operation, request(reaction).operation);
+        assert_eq!(
+            appended.revision,
+            current.basis().revision.next_sequence().unwrap()
+        );
+        assert!(appended.draws.is_empty());
+        assert_eq!(candidate.state().facts, current.state().facts);
+        assert_eq!(candidate.state().draws, current.state().draws);
+        assert_eq!(handler.called.get(), 2);
+        assert!(handler.draws.borrow().iter().all(Vec::is_empty));
+        assert_eq!(current, before);
+    }
 }

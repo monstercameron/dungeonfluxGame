@@ -28,7 +28,8 @@ mod browser_image_decode;
 #[cfg(target_arch = "wasm32")]
 pub use browser_image_decode::{BrowserDecodeStatus, BrowserImageDecode};
 pub use browser_image_decode::{
-    ImageDecodeError, ImageDecodeLimits, PngDecodePlan, VerifiedPng, inspect_png,
+    ImageDecodeError, ImageDecodeLimits, ImageDecodePlan, PngDecodePlan, PreparedImageMetadata,
+    VerifiedImage, VerifiedPng, inspect_png, inspect_prepared_image,
 };
 
 mod resource_lifecycle;

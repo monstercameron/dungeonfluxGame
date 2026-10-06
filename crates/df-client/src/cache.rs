@@ -137,6 +137,7 @@ impl AssetCache {
 
     /// Atomically installs a strictly newer complete permitted reference set. Rejected
     /// updates preserve the previous scope, current bytes, and outstanding fetch ownership.
+    /// A still-current version cannot change its immutable manifest, including across recovery.
     pub fn apply_current(
         &mut self,
         scope: CacheScope,
@@ -155,6 +156,13 @@ impl AssetCache {
                 .iter()
                 .take(index)
                 .any(|other| other.version == key.version)
+            {
+                return Err(CacheError::ConflictingReference);
+            }
+            if self
+                .references
+                .iter()
+                .any(|current| current.version == key.version && current.bytes != key.bytes)
             {
                 return Err(CacheError::ConflictingReference);
             }
