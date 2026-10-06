@@ -621,3 +621,85 @@ fn missing_backing_remains_typed_missing_for_confirm_and_unknown_ack_retry() {
         PublicationStatus::AlreadyPublished
     );
 }
+
+struct GrowingLookupMetadata {
+    retained: Metadata,
+    append_to_staging: Mutex<Option<PathBuf>>,
+}
+
+impl AssetMetadataStore for GrowingLookupMetadata {
+    type Version = u8;
+    type Metadata = &'static str;
+
+    fn lookup(
+        &self,
+        version: &u8,
+    ) -> Result<Option<PublishedBinding<&'static str>>, MetadataFailure> {
+        let binding = self.retained.lookup(version)?;
+        if let Some(path) = self.append_to_staging.lock().unwrap().take() {
+            use std::io::Write;
+            let mut writer = fs::OpenOptions::new().append(true).open(path).unwrap();
+            writer.write_all(b"-tail").unwrap();
+            writer.sync_all().unwrap();
+        }
+        Ok(binding)
+    }
+
+    fn publish_immutable(
+        &self,
+        publication: &Publication<u8, &'static str>,
+        object: DurableObject,
+    ) -> Result<PublicationStatus, MetadataFailure> {
+        self.retained.publish_immutable(publication, object)
+    }
+}
+
+#[test]
+fn retry_refuses_staged_growth_after_length_check_without_metadata_republication() {
+    let path = root();
+    let bytes = Arc::new(NativeFileStore::new(&path, 1024).unwrap());
+    let metadata = GrowingLookupMetadata {
+        retained: Metadata::new(bytes.clone()),
+        append_to_staging: Mutex::new(None),
+    };
+    let content = b"asset-v1";
+    let staged = bytes.stage(operation(30), &mut &content[..]).unwrap();
+    let initial = publication(operation(30), 1, "image", expected(content));
+    assert_eq!(
+        publish(&context(), &initial, &staged, bytes.as_ref(), &metadata)
+            .unwrap()
+            .status,
+        PublicationStatus::Published
+    );
+    let retained = metadata.lookup(&1).unwrap().unwrap();
+    let object = sole_object_path(&path);
+    let retry = bytes.stage(operation(31), &mut &content[..]).unwrap();
+    let staged_path = path.join("staging").join("1f".repeat(16));
+    *metadata.append_to_staging.lock().unwrap() = Some(staged_path.clone());
+    let candidate = publication(operation(31), 1, "image", expected(content));
+
+    assert!(matches!(
+        publish(&context(), &candidate, &retry, bytes.as_ref(), &metadata),
+        Err(PublicationError::VersionConflict)
+    ));
+    assert_eq!(fs::read(&staged_path).unwrap(), b"asset-v1-tail");
+    assert_eq!(fs::read(&object).unwrap(), content);
+    let after = metadata.lookup(&1).unwrap().unwrap();
+    assert_eq!(after.metadata, retained.metadata);
+    assert_eq!(after.bytes, retained.bytes);
+    assert_eq!(after.object, retained.object);
+    assert_eq!(metadata.retained.publish_calls.load(Ordering::Relaxed), 1);
+    assert_eq!(metadata.retained.count(), 1);
+    assert_eq!(fs::read_dir(path.join("promotion")).unwrap().count(), 0);
+
+    fs::write(&staged_path, content).unwrap();
+    assert_eq!(
+        publish(&context(), &candidate, &retry, bytes.as_ref(), &metadata)
+            .unwrap()
+            .status,
+        PublicationStatus::AlreadyPublished
+    );
+    assert_eq!(metadata.retained.publish_calls.load(Ordering::Relaxed), 2);
+    assert_eq!(metadata.retained.count(), 1);
+    bytes.confirm(retained.object).unwrap();
+}

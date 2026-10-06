@@ -148,13 +148,9 @@ impl AssetStore for NativeFileStore {
         published: &PublishedBinding<M>,
     ) -> Result<bool, StoreError> {
         self.check_staged(staged)?;
-        self.confirm(published.object)?;
-        if published.object.byte_len() != published.bytes.byte_len
-            || published.object.digest() != &published.bytes.sha256
-        {
-            return Err(StoreError::BackingIntegrity);
-        }
-        same_contents(&staged.path, &self.object_path(published.object.digest()))
+        let mut published_file = self.open_verified(published.object, published.bytes)?;
+        let mut staged_file = File::open(&staged.path)?;
+        same_contents(&mut staged_file, &mut published_file, published.bytes)
     }
 
     fn verify_and_promote(
@@ -234,13 +230,16 @@ impl AssetStore for NativeFileStore {
                         .map_err(StoreError::from)?;
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                    verify_file(&destination, expected).map_err(PublicationError::Store)?;
-                    if !same_contents(path, &destination).map_err(PublicationError::Store)? {
+                    let mut destination_file = self
+                        .open_verified(DurableObject::from_manifest(expected), expected)
+                        .map_err(PublicationError::Store)?;
+                    let mut promoted_file = File::open(path).map_err(StoreError::from)?;
+                    if !same_contents(&mut promoted_file, &mut destination_file, expected)
+                        .map_err(PublicationError::Store)?
+                    {
                         return Err(PublicationError::Store(StoreError::BackingIntegrity));
                     }
-                    File::open(&destination)
-                        .and_then(|object| object.sync_all())
-                        .map_err(StoreError::from)?;
+                    destination_file.sync_all().map_err(StoreError::from)?;
                     File::open(self.root.join("objects"))
                         .and_then(|dir| dir.sync_all())
                         .map_err(StoreError::from)?;
@@ -299,13 +298,29 @@ fn verify_file(path: &Path, expected: AssetManifest) -> Result<(), StoreError> {
     Ok(())
 }
 
-fn same_contents(left: &Path, right: &Path) -> Result<bool, StoreError> {
-    let mut left = File::open(left)?;
-    let mut right = File::open(right)?;
-    let mut remaining = left.metadata()?.len();
-    if remaining != right.metadata()?.len() {
+fn same_contents(
+    left: &mut File,
+    right: &mut File,
+    expected: AssetManifest,
+) -> Result<bool, StoreError> {
+    if right.metadata()?.len() != expected.byte_len {
+        return Err(StoreError::BackingIntegrity);
+    }
+    if left.metadata()?.len() != expected.byte_len {
         return Ok(false);
     }
+    same_contents_readers(left, right, expected)
+}
+
+// The private reader boundary permits deterministic mutation at a real file read in tests.
+// Both callers pass open files; successful prefix equality alone cannot prove completeness.
+fn same_contents_readers(
+    left: &mut dyn Read,
+    right: &mut dyn Read,
+    expected: AssetManifest,
+) -> Result<bool, StoreError> {
+    let mut remaining = expected.byte_len;
+    let mut hasher = Sha256::new();
     let mut left_bytes = [0_u8; 65536];
     let mut right_bytes = [0_u8; 65536];
     while remaining != 0 {
@@ -316,9 +331,16 @@ fn same_contents(left: &Path, right: &Path) -> Result<bool, StoreError> {
         if left_bytes[..length] != right_bytes[..length] {
             return Ok(false);
         }
+        hasher.update(&right_bytes[..length]);
         remaining -= u64::try_from(length).map_err(|_| StoreError::BackingIntegrity)?;
     }
-    Ok(true)
+    let left_end = left.read(&mut left_bytes[..1])?;
+    let right_end = right.read(&mut right_bytes[..1])?;
+    let digest: [u8; 32] = hasher.finalize().into();
+    if right_end != 0 || digest != expected.sha256 {
+        return Err(StoreError::BackingIntegrity);
+    }
+    Ok(left_end == 0)
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -375,5 +397,229 @@ impl AssetReadStore for NativeFileStore {
         }
         file.seek(SeekFrom::Start(0))?;
         Ok(file)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT_ROOT: AtomicUsize = AtomicUsize::new(0);
+
+    fn files(left: &[u8], right: &[u8]) -> (File, File, PathBuf, PathBuf) {
+        let temporary =
+            PathBuf::from(std::env::var_os("TMPDIR").expect("owned TMPDIR is required"));
+        let number = NEXT_ROOT.fetch_add(1, Ordering::Relaxed);
+        let root = temporary.join(format!(
+            "df-assets-comparison-{}-{number}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        let left_path = root.join("left");
+        let right_path = root.join("right");
+        fs::write(&left_path, left).unwrap();
+        fs::write(&right_path, right).unwrap();
+        (
+            File::open(&left_path).unwrap(),
+            File::open(&right_path).unwrap(),
+            left_path,
+            right_path,
+        )
+    }
+
+    fn manifest(bytes: &[u8]) -> AssetManifest {
+        AssetManifest {
+            byte_len: u64::try_from(bytes.len()).unwrap(),
+            sha256: Sha256::digest(bytes).into(),
+        }
+    }
+
+    fn verified_files(left: &[u8], right: &[u8]) -> (File, File, PathBuf, PathBuf) {
+        let (left_file, _, left_path, right_path) = files(left, right);
+        let store = NativeFileStore::new(right_path.parent().unwrap(), 1024).unwrap();
+        let expected = manifest(right);
+        let object_path = store.object_path(&expected.sha256);
+        fs::rename(&right_path, &object_path).unwrap();
+        let right_file = store
+            .open_verified(DurableObject::from_manifest(expected), expected)
+            .unwrap();
+        (left_file, right_file, left_path, object_path)
+    }
+
+    enum Mutation {
+        Append(PathBuf),
+        Truncate(PathBuf),
+    }
+
+    struct MutatingReader {
+        file: File,
+        remaining: u64,
+        mutation: Option<Mutation>,
+    }
+
+    impl Read for MutatingReader {
+        fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+            let read = self.file.read(output)?;
+            self.remaining = self.remaining.saturating_sub(u64::try_from(read).unwrap());
+            if self.remaining == 0 {
+                match self.mutation.take() {
+                    Some(Mutation::Append(path)) => {
+                        let mut writer = OpenOptions::new().append(true).open(path)?;
+                        writer.write_all(b"-tail")?;
+                        writer.sync_all()?;
+                    }
+                    Some(Mutation::Truncate(path)) => {
+                        OpenOptions::new().write(true).open(path)?.set_len(0)?;
+                    }
+                    None => {}
+                }
+            }
+            Ok(read)
+        }
+    }
+
+    struct EofFailure {
+        file: File,
+    }
+
+    impl Read for EofFailure {
+        fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+            let read = self.file.read(output)?;
+            if read == 0 {
+                return Err(io::Error::other("controlled EOF read failure"));
+            }
+            Ok(read)
+        }
+    }
+
+    #[test]
+    fn comparison_accepts_complete_equal_files_including_empty_and_multiple_chunks() {
+        for content in [Vec::new(), b"asset".to_vec(), vec![7; 131073]] {
+            let (mut left, mut right, _, _) = files(&content, &content);
+            assert!(same_contents(&mut left, &mut right, manifest(&content)).unwrap());
+        }
+    }
+
+    #[test]
+    fn comparison_refuses_different_content_and_non_manifest_lengths() {
+        let expected = manifest(b"asset");
+        for left_content in [
+            b"other".as_slice(),
+            b"asset-tail".as_slice(),
+            b"as".as_slice(),
+        ] {
+            let (mut left, mut right, _, _) = files(left_content, b"asset");
+            assert!(!same_contents(&mut left, &mut right, expected).unwrap());
+        }
+        for right_content in [b"asset-tail".as_slice(), b"as".as_slice()] {
+            let (mut left, mut right, _, _) = files(b"asset", right_content);
+            assert!(matches!(
+                same_contents(&mut left, &mut right, expected),
+                Err(StoreError::BackingIntegrity)
+            ));
+        }
+        let (mut left, mut right, _, _) = files(b"asset-tail", b"asset-tail");
+        assert!(matches!(
+            same_contents(&mut left, &mut right, expected),
+            Err(StoreError::BackingIntegrity)
+        ));
+    }
+
+    #[test]
+    fn comparison_refuses_staged_tail_appended_after_last_prefix_read() {
+        let content = vec![9; 65537];
+        let expected = manifest(&content);
+        let (left, mut right, left_path, _) = files(&content, &content);
+        assert_eq!(left.metadata().unwrap().len(), expected.byte_len);
+        assert_eq!(right.metadata().unwrap().len(), expected.byte_len);
+        let mut left = MutatingReader {
+            file: left,
+            remaining: expected.byte_len,
+            mutation: Some(Mutation::Append(left_path.clone())),
+        };
+        assert!(!same_contents_readers(&mut left, &mut right, expected).unwrap());
+        assert_eq!(
+            fs::metadata(left_path).unwrap().len(),
+            expected.byte_len + 5
+        );
+    }
+
+    #[test]
+    fn comparison_refuses_backing_tail_appended_after_last_prefix_read() {
+        let content = b"asset";
+        let expected = manifest(content);
+        let (mut left, right, _, right_path) = verified_files(content, content);
+        assert_eq!(left.metadata().unwrap().len(), expected.byte_len);
+        assert_eq!(right.metadata().unwrap().len(), expected.byte_len);
+        let mut right = MutatingReader {
+            file: right,
+            remaining: expected.byte_len,
+            mutation: Some(Mutation::Append(right_path.clone())),
+        };
+        assert!(matches!(
+            same_contents_readers(&mut left, &mut right, expected),
+            Err(StoreError::BackingIntegrity)
+        ));
+        assert_eq!(fs::read(right_path).unwrap(), b"asset-tail");
+    }
+
+    #[test]
+    fn comparison_propagates_truncation_after_initial_length_checks() {
+        let expected = manifest(b"asset");
+        let (left, mut right, _, right_path) = files(b"asset", b"asset");
+        assert_eq!(left.metadata().unwrap().len(), expected.byte_len);
+        assert_eq!(right.metadata().unwrap().len(), expected.byte_len);
+        let mut left = MutatingReader {
+            file: left,
+            remaining: expected.byte_len,
+            mutation: Some(Mutation::Truncate(right_path.clone())),
+        };
+        assert!(matches!(
+            same_contents_readers(&mut left, &mut right, expected),
+            Err(StoreError::Io(error)) if error.kind() == io::ErrorKind::UnexpectedEof
+        ));
+        assert_eq!(fs::metadata(right_path).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn comparison_propagates_both_eof_read_failures_including_empty_files() {
+        for content in [b"".as_slice(), b"asset".as_slice()] {
+            let expected = manifest(content);
+            let (left, mut right, _, _) = files(content, content);
+            assert!(matches!(
+                same_contents_readers(&mut EofFailure { file: left }, &mut right, expected),
+                Err(StoreError::Io(error)) if error.kind() == io::ErrorKind::Other
+            ));
+            let (mut left, right, _, _) = files(content, content);
+            assert!(matches!(
+                same_contents_readers(&mut left, &mut EofFailure { file: right }, expected),
+                Err(StoreError::Io(error)) if error.kind() == io::ErrorKind::Other
+            ));
+        }
+    }
+
+    #[test]
+    fn comparison_rechecks_digest_if_verified_backing_changes_to_matching_same_length_bytes() {
+        let expected = manifest(b"asset");
+        let (mut left, mut right, _, right_path) = verified_files(b"other", b"asset");
+        fs::write(&right_path, b"other").unwrap();
+        assert!(matches!(
+            same_contents(&mut left, &mut right, expected),
+            Err(StoreError::BackingIntegrity)
+        ));
+        assert_eq!(fs::read(right_path).unwrap(), b"other");
+    }
+
+    #[test]
+    fn comparison_keeps_verified_descriptor_when_digest_path_is_replaced() {
+        let content = b"asset";
+        let expected = manifest(content);
+        let (mut left, mut right, _, right_path) = verified_files(content, content);
+        fs::remove_file(&right_path).unwrap();
+        fs::write(&right_path, b"other").unwrap();
+        assert!(same_contents(&mut left, &mut right, expected).unwrap());
+        assert_eq!(fs::read(right_path).unwrap(), b"other");
     }
 }
