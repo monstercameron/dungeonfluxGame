@@ -46,6 +46,10 @@ impl<Path, Handler: RulesCommandHandler> RulesCommandHandler
         self.handler.pins()
     }
 
+    fn bound_source(&self) -> Option<&RuleReference> {
+        Some(self.source)
+    }
+
     fn stage(
         &self,
         input: RulesCommandInput<'_>,
@@ -58,7 +62,12 @@ impl<Path, Handler: RulesCommandHandler> RulesCommandHandler
         if selected.pins != self.prepared.pins() || selected.pins != current.pins() {
             return Err(MovementBindingError::PinsMismatch);
         }
-        if selected.facts.source != self.source {
+        if selected.facts.source != self.source
+            || self
+                .handler
+                .bound_source()
+                .is_some_and(|source| source != self.source)
+        {
             return Err(MovementBindingError::SourceMismatch);
         }
         let GameInput::Game(command) = input.command else {
