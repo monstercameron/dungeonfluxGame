@@ -1,0 +1,174 @@
+{
+  "schema": "dungeonflux.live-utterance-routing-decision/v1",
+  "task": {
+    "id": "B-C-df-media-D02",
+    "attempt": "B-C-df-media-D02-a2",
+    "input_revision": "2d2cbae3b11383e726e46187e504638196403a57",
+    "owner": "df-media"
+  },
+  "decision_status": "design_contract_example_only",
+  "acceptance_criteria_exact": [
+    "captions and audible output share approved text",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "decision": {
+    "invariant": "One current utterance delivery selects one qualified text revision. Its caption text and TTS request text are byte-for-byte the same approved text. A fallback is a new selected branch with its own approved text and matching audio request; it replaces the utterance's prior pending display instead of appending a mismatched line.",
+    "identity": {
+      "utterance": "A session/run/audience-scoped committed utterance decision. It is not a provider job ID, operation ID, retry generation, trace ID, or globally new df-types ID.",
+      "provider_attempt": "Each live TTS or prepared/replay retrieval attempt keeps the existing MediaJob identity: trusted Basis, JobId, OperationId, and generation. The utterance owner maps its selected attempt to the local utterance scope. A fallback does not reuse a canceled attempt's receipt; it has an independently fenced attempt identity.",
+      "currentness": "Before each caption projection, audio dispatch, and completion, the owner checks current session/run/revision, selected utterance attempt, authorized audience, and output lease. Trace context is correlation only."
+    },
+    "ownership": {
+      "utterance_and_text": "The session/interaction owner retains the committed utterance and the single approved, listener-safe text result. Qualification belongs to the existing df-ai expression boundary; media does not author, qualify, or reinterpret text.",
+      "media": "df-media owns bounded provider scheduling/stream completion and its existing job receipts. It may select only an already admitted, explicitly configured fallback branch; it does not commit gameplay, authorize listeners, publish captions, or claim playback.",
+      "caption_projection": "The authorized presentation/API consumer projects the selected approved text for its current audience, keyed to the local utterance scope. It discards stale/replaced revisions and never publishes raw partials or an unapproved candidate.",
+      "audio": "The client audio owner consumes only the selected branch's matching speech result under its current output lease and binding. It owns decode/playback stop and reports observations; scheduling or a successful callback alone does not prove speakers were audible."
+    },
+    "routing": {
+      "live": "Buffer the complete bounded candidate, qualify it for the exact listener scope/source/locale, then bind both caption and TTS request to that approved text. Stable-clause streaming remains disabled until qualification proves released clauses need no retraction and preserve scope. A provider result or clean EOF alone is not approval or audible playback.",
+      "live_failure": "A failed, rejected, stale, interrupted, or unavailable live branch may use only an explicitly configured prepared fallback that is itself approved for the same current scope. Give it its own attempt identity and pair its own text with its own audio. If none is usable, resolve to an explicit visible silent-gap/unavailable outcome; do not fabricate speech or leave a different old caption presented as the current utterance.",
+      "prepared_only": "Use only a complete validated prepared entry matching the full request key and current audience/source/locale contract. A miss is typed unavailable; it makes no live provider call.",
+      "replay": "Use only a complete recording matching the full request key and current audience/source/locale contract. A miss is typed unavailable; it makes no live provider call.",
+      "mode": "An automatic fallback in live mode is separately identified and does not change the admitted execution mode. Mode changes apply to a new admitted attempt after explicit cancel/reissue."
+    },
+    "cancellation_and_ordering": {
+      "before_commit": "A caller may cancel unaccepted capture/admission under its input contract.",
+      "after_commit": "A disconnected RPC, dropped receipt wait, or tab loss does not cancel committed utterance work. The session/run owner retains it until explicit interruption, supersession, rights revocation, run termination, or shutdown.",
+      "explicit_stop": "The owner invalidates the exact attempt, requests provider/media stop where supported, asks the audio owner to stop its exact playback ticket, and records the bounded terminal result. Media stop is not proof that downstream playback stopped.",
+      "late_completion": "A late provider completion, old-generation callback, wrong run/audience/revision, replaced attempt, or foreign-owner receipt is rejected before caption or audio publication. Preserve unknown provider spend and report its reconciliation separately.",
+      "delivery_order": "Do not publish candidate captions/TTS before qualification. Resolve one selected text/attempt and send both presentation projections from it. On fallback, update/replace the same utterance entry from the fallback branch; on silent failure, publish the explicit gap state rather than invented audio."
+    },
+    "bounds": "Use existing finite MediaScheduler/SpeechScheduler command, chunk, byte, and slot limits; additionally bound the qualification buffer, queued caption/audio delivery, and per-listener playback buffers at their owning boundaries. No unbounded transcript, queue, or decoder buffer is implied by this decision."
+  },
+  "source_evidence": {
+    "manifest": "development/evidence/fanout-20261001/media-routing-d02-20261006/ROOT-source-freeze-01.json",
+    "manifest_source_revision": "2d2cbae3b11383e726e46187e504638196403a57",
+    "manifest_build_identity_reference": "media-d02-76de87ac54a0736e",
+    "manifest_source_count": 550,
+    "manifest_source_fingerprint": "76de87ac54a0736ef0c16fa9e33639bd132c50307226a0e8ac817f4e9072b636",
+    "preimage_audit": {
+      "result": "HISTORICAL_A1_PASS; A2_CURRENT_OWNED_POSTIMAGES_PENDING_ROOT_AUTHORITY",
+      "checked": "Predecessor's frozen source input; a2 changes the two permitted owned postimages",
+      "files_per_view": 550,
+      "sha256_or_size_mismatches": 0,
+      "method": "Historical predecessor audit. Current a2 source/build binding is the coordinator's final postimage and fresh gate receipt, not this immutable predecessor manifest."
+    },
+    "submission_source_closure": {
+      "frozen_input_files": 548,
+      "permitted_owned_postimages": 2,
+      "combined_review_closure": 550,
+      "owned_paths": [
+        "crates/df-media/tests/live_utterance_routing.rs",
+        "crates/df-media/tests/fixtures/live_utterance_routing_decision.json"
+      ],
+      "meaning": "The original 548 source inputs and two a2-owned postimages are the intended review set. Root must bind final postimages to its fresh build receipt; the predecessor manifest is historical."
+    },
+    "attempt_worktree_revision": "2d2cbae3b11383e726e46187e504638196403a57",
+    "current_df_media_preimages": {
+      "crates/df-media/Cargo.toml": "7d899ded4462d5cd54ca3e0242a4c6ad76b026ed11907b25d477a625c77375e1",
+      "crates/df-media/src/lib.rs": "3f97e0a86c08aed6289088855190f3e0a38a94829ccf07d35a1d50bf1f40b955",
+      "crates/df-media/src/cancellation.rs": "bb3e2daea168dd1f6c2e9f764ca3a27f1febfe338bdb58b52ba7b28899bdf857",
+      "crates/df-media/src/speech.rs": "cea38457bffce81907efc1346c2e1a790bf40bec5d27f9bcf51192d22c541749"
+    },
+    "existing_consumer_preimages": {
+      "crates/df-audio/tests/consumers.rs": "a0cc2c3b595df1573cedefec1e11b4a9fad4aeebfb3f6f01ac4387d5f953d181",
+      "crates/df-audio/src/queue.rs": "30324c7f78590d35c9224410a3a2157e2a9b52b7bd155c9362a615287ac70b4f",
+      "crates/df-audio/src/browser_playback.rs": "9b9e5ccc0c2a14469150e9550520cadd639dae327811d5abeacdd04d1b1cfd87",
+      "crates/df-ai/src/admission.rs": "7983975491aff2e78e67fa4c471b9e43a267f02013c3af97eba0af2b7e0801ca",
+      "crates/df-ai/src/lookup.rs": "22d7794c6f86a4506af506c39d1180a167bc42052cff52206587da8629f665b0",
+      "crates/df-provider-api/src/lib.rs": "7d7c4d704e3dfdec7a92b6250174f744ce8847d4829169a3f0695867c02fbf95",
+      "crates/df-engine/src/semantic_candidate.rs": "f8eef0c672ef4d3485a3c5a89e59ebb9da4d30ce86e0676d5fda913640e1a0b9",
+      "crates/df-model/src/checkpoint.rs": "41b269359cfdf54357ae295bd9fc878ac85d25c37e45e395fa1081582f778676"
+    },
+    "effective_boundary_observed": "SpeechScheduler owns bounded opaque provider response chunks and checks Basis/session/run/revision plus JobId/OperationId/generation receipt identity. Clean EOF and finish establish stream completion only; they do not qualify text, publish an asset, connect captions, decode audio, or prove playback. MediaLifecycle fences owner/job callbacks. The existing adjacent consumer is crates/df-audio/tests/consumers.rs: it drains SpeechScheduler chunks into AudioQueue while supplying independently constructed PCM fixtures; it proves backpressure and stop/resource fencing, not a speech decoder or text join. AudioQueue accepts decoded PCM under an output lease and browser playback schedules those PCM buffers, with source comments explicitly disavowing audible proof. df-ai provides generic checked-request admission and prepared/replay lookup; there is no current expression qualifier/SpeechEnvelope or MediaService TTS request path in these files. df-engine's semantic-candidate entry explicitly excludes speech, and checkpoint JobOutcome stores AI semantic_output separately from a media AssetReference. BookendPlan captions are for bookends, not live utterances. No current consumer binds one qualified text value to caption projection and the TTS request.",
+    "smallest_actual_source_connection": "Do not add a df-media-to-df-audio dependency or a public global utterance ID. The production seam belongs at the native committed-effect composition owner: after a source-approved qualification result and a committed session-owned utterance scope are available, construct one private immutable selected-text value and pass it as both the planned SpeechProvider request text and caption projection input; send the resulting bounded media bytes through existing SpeechScheduler, then let the existing audio owner decode/queue under its output lease. The required native composition consumer and qualifying text result are absent from this source tree, so the seam cannot be implemented within the two admitted paths. A focused revision must first approve those exact owner files/contracts; current D02 delivers the routing decision and reference model, not that production connection.",
+    "compiler_or_runtime_build": {
+      "status": "PENDING_A2_ROOT_GATE",
+      "reason": "The predecessor a1 checks do not test these a2 postimages. Root owns fresh native/WASM/compiler/format gates after submission."
+    }
+  },
+  "executable_example": {
+    "path": "crates/df-media/tests/live_utterance_routing.rs",
+    "scope": "Private bounded reference model around the existing SpeechScheduler. It binds each admitted request to its immutable approved scope, branch, text, and actual selected receipt identity, and checks currentness before consuming media. It is not a production router or TTS provider.",
+    "historical_a1_preformat_postimage_sha256": "59cf2f6e0b6349ed513e8ee096910196538c3a9724b8f48b6aab34982d4c6bf6",
+    "current_postimage_authority": "Root final a2 source/build receipt after mechanical formatting; never infer current hash from historical preformat SHA.",
+    "audio_claim": "Opaque fixture bytes only. No codec decode, browser device, audible playback, or caption UI was exercised."
+  },
+  "alternatives": [
+    {
+      "option": "Publish independently generated caption text and TTS text",
+      "decision": "Rejected",
+      "reason": "Even semantically similar strings can diverge in names, numbers, negation, attribution, or fallback branch; one approved text value is the source for both."
+    },
+    {
+      "option": "Stream raw or merely tentative provider text immediately and correct captions later",
+      "decision": "Rejected",
+      "reason": "Later qualification or interruption cannot retract already disclosed private facts or already heard speech."
+    },
+    {
+      "option": "Alias the utterance to a provider JobId or introduce a new public/global UtteranceId contract here",
+      "decision": "Rejected",
+      "reason": "The lifetimes differ and the current task has no approved public contract change; keep the utterance scope local to its session owner."
+    },
+    {
+      "option": "Treat provider EOF, AudioContext scheduling, logs, or a completion callback as audible proof",
+      "decision": "Rejected",
+      "reason": "These establish internal stream/scheduling events, not actual sound at a listener."
+    }
+  ],
+  "verification_matrix": [
+    {
+      "criterion": "captions and audible output share approved text",
+      "bounded_example": "The private example admits exact approved text as the real SpeechScheduler command, carries immutable scope/branch/text/JobId/OperationId/generation binding through the actual selected receipt, and validates that binding before queueing bytes. It checks completion payload and derives caption/TTS-request fields from the same selected text. Prepared fallback uses its own text and attempt; stale/rebound selections cannot publish; silent failure yields an explicit gap with no audio.",
+      "example_execution": "PENDING_A2_ROOT_GATE: fresh focused test and independent counterexample rerun must target final a2 postimages.",
+      "existing_consumer": "PARTIAL ONLY: crates/df-audio/tests/consumers.rs connects SpeechScheduler chunk ownership to AudioQueue using independently supplied PCM; it does not pass or compare text.",
+      "production_text_join": "UNSUPPORTED: no current owner connects qualified text to both a caption projection and a speech-provider request.",
+      "actual_audible_observation": "UNPERFORMED: no decoder/device/browser playback observation in this attempt."
+    },
+    {
+      "criterion": "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit.",
+      "source_evidence": "HISTORICAL predecessor source freeze retained; the final a2 owned postimages and build identity require Root's current receipt after formatting.",
+      "build_evidence": "PENDING_A2_ROOT_GATE: old a1 compiler results and build identity do not establish current a2 behavior.",
+      "failed_checks": "HISTORICAL_A1_FAIL: independent three-case receipt rebinding counterexample returned 0 passed/3 failed; a2 rerun pending.",
+      "pending_checks": "PENDING: coordinator-owned fresh fmt/native/WASM tests and lint gates; independent a2 review and actual audible observation.",
+      "unsupported_checks": "UNSUPPORTED: the integrated approved-text/caption/TTS join is absent; this design/test-only task cannot establish production behavior.",
+      "unperformed_checks": "UNPERFORMED: browser integration, real decoder path for generated speech, output-device playback, audio-capable observation, actual provider call, and physical audible verification."
+    }
+  ],
+  "expected_failure_cases": [
+    "unapproved/raw text never routes",
+    "prepared fallback uses its own matching text+audio scope",
+    "stale/wrong audience/run/job/utterance/generation cannot publish",
+    "cancelled/superseded utterance late completion is refused",
+    "silent failure preserves visible explicit gap; no fabricated audible output"
+  ],
+  "required_next_admission": [
+    "Freeze a source-approved utterance scope/selected-branch contract in the correct shared owner without exposing a new df-media-global ID.",
+    "Connect the existing df-ai qualification result and df-media MediaService TTS request through the committed session owner so both caption and TTS consume the identical immutable approved text.",
+    "Connect the selected result to current audience projection and the df-audio output lease/decoder; fallback, cancellation, interruption, stale callback, replay/prepared miss, and rights revocation must be fenced end to end.",
+    "Define bounded output-buffer/qualification limits and typed terminal status at each actual owner, including explicit visible silent gap and provider-spend uncertainty.",
+    "Run the focused native/WASM gates and a browser/audio-capable frontier evaluation on the integrated build; retain playback capture/observation."
+  ],
+  "verification_results": {
+    "status_legend": "PASS means directly observed in this attempt; FAILED means executed and failed; PENDING means required evidence awaits a named owner/prerequisite; UNSUPPORTED means no current implementation boundary can perform the check; UNPERFORMED means not executed.",
+    "source_preimage_audit": "HISTORICAL_A1_PASS: predecessor manifest and snapshots were audited; A2 final owned postimages await Root authority.",
+    "fixture_json_parse": "PENDING_A2_WORKER_CHECK: parse after final JSON edit.",
+    "failed_checks": ["HISTORICAL_A1_FAIL: independent receipt rebinding counterexample, three failed assertions on predecessor source."],
+    "rustfmt": "PENDING_A2_ROOT_GATE: coordinator owns formatter/compiler gates.",
+    "focused_test": "PENDING_A2_ROOT_GATE: coordinator owns compiler/test gates.",
+    "native_crate_test": "PENDING_A2_ROOT_GATE: coordinator owns compiler/test gates.",
+    "native_clippy": "PENDING_A2_ROOT_GATE: coordinator owns lint gates.",
+    "wasm_check": "PENDING_A2_ROOT_GATE: coordinator owns wasm compiler gates.",
+    "wasm_clippy": "PENDING_A2_ROOT_GATE: coordinator owns wasm lint gates.",
+    "browser_build_or_preview": "UNPERFORMED: no application was launched by this attempt.",
+    "physical_or_audio_capable_observation": "UNPERFORMED: no actual audible output was produced or observed.",
+    "independent_frontier_review": "PENDING_A2: coordinator review required."
+  },
+  "a2_repair_evidence": {
+    "predecessor_rejection": "artifacts/tmp/wave51-session-submission-20261006/media-routing-d02-01/evaluator-01/whole-original-verdict-01.json",
+    "demonstrated_counterexample": "Original approved receipt A accepted independently approved B with the same Basis/text after audience 3 to 8, utterance 9 to 10, or Live to Prepared rebinding; all three independent assertions failed before this repair.",
+    "binding_rule": "Admission stores immutable approved audience/utterance/Basis, branch, exact text and JobId/OperationId/generation. begin uses the scheduler's actual selected receipt to retrieve its own context, including when a prior queued job is selected. Completion requires selected current context and supplied receipt match before queue_chunk/end/eof/next/acknowledge/finish.",
+    "bounded_negative_examples": ["rebound audience", "rebound utterance", "rebound branch", "rebound text", "wrong job", "wrong operation", "wrong generation", "wrong Basis", "previous queued selection", "superseded selection", "stale revision", "explicit visible silent gap"],
+    "audio_status": "UNVERIFIED: opaque fixture bytes and matching command text are not evidence of spoken content, playback or audibility; original literal criterion remains open for direct audio-capable observation."
+  }
+}
