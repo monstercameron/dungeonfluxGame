@@ -86,6 +86,70 @@ impl SceneImageLimits {
     }
 
     #[cfg(any(target_arch = "wasm32", test))]
+    fn prepared_layout(self, bytes: &[u8]) -> Result<((u32, u32), &'static str), SceneImageError> {
+        if bytes.get(..8) == Some(b"\x89PNG\r\n\x1a\n".as_slice()) {
+            return self
+                .dimensions(bytes)
+                .map(|dimensions| (dimensions, "image/png"));
+        }
+        // Only the canonical decoder's existing single static VP8 keyframe is added.
+        // The header supplies layout, never rights or a caller-controlled MIME contract.
+        if bytes.get(..4) != Some(b"RIFF".as_slice())
+            || bytes.get(8..12) != Some(b"WEBP".as_slice())
+        {
+            return Err(SceneImageError::Decode(
+                df_render::ImageDecodeError::UnsupportedMime,
+            ));
+        }
+        if bytes.get(12..16) != Some(b"VP8 ".as_slice()) {
+            return Err(SceneImageError::Decode(
+                df_render::ImageDecodeError::UnsupportedWebp,
+            ));
+        }
+        let width = bytes
+            .get(26..28)
+            .and_then(|value| value.try_into().ok())
+            .map(u16::from_le_bytes)
+            .ok_or(SceneImageError::Decode(
+                df_render::ImageDecodeError::CorruptWebp,
+            ))?;
+        let height = bytes
+            .get(28..30)
+            .and_then(|value| value.try_into().ok())
+            .map(u16::from_le_bytes)
+            .ok_or(SceneImageError::Decode(
+                df_render::ImageDecodeError::CorruptWebp,
+            ))?;
+        let (decoded, work, _) = self.capacities()?;
+        let plan = df_render::inspect_prepared_image(
+            bytes,
+            df_render::PreparedImageMetadata {
+                mime: "image/webp",
+                width: u32::from(width),
+                height: u32::from(height),
+                max_ancillary_bytes: self.cache.max_bytes,
+            },
+            df_render::ImageDecodeLimits {
+                max_encoded_bytes: self.cache.max_bytes,
+                max_dimension: self.max_width.max(self.max_height),
+                max_decoded_bytes: decoded,
+                max_work_bytes: work,
+            },
+        )
+        .map_err(|error| match error {
+            df_render::ImageDecodeError::DimensionCapacity => SceneImageError::Dimensions,
+            error => SceneImageError::Decode(error),
+        })?;
+        if plan.width > self.max_width
+            || plan.height > self.max_height
+            || u64::from(plan.width) * u64::from(plan.height) > self.max_pixels
+        {
+            return Err(SceneImageError::Dimensions);
+        }
+        Ok(((plan.width, plan.height), "image/webp"))
+    }
+
+    #[cfg(any(target_arch = "wasm32", test))]
     fn dimensions(self, bytes: &[u8]) -> Result<(u32, u32), SceneImageError> {
         // IHDR is fixed size. Validate dimensions before any browser image decoder sees bytes.
         if bytes.len() < 33
@@ -165,6 +229,7 @@ pub(crate) mod browser {
     }
     struct Layout {
         key: CacheKey,
+        mime: &'static str,
         dimensions: (u32, u32),
     }
 
@@ -182,8 +247,10 @@ pub(crate) mod browser {
         requested: Option<FetchToken>,
         layouts: Vec<Layout>,
         active: Option<ActiveDecode>,
+        terminal: Option<Box<dyn FnOnce()>>,
         root: Element,
         fallback: Element,
+        existing_art_host: bool,
         watch: Option<MountWatch>,
         closed: bool,
         failure: RefCell<Option<CampaignError>>,
@@ -222,7 +289,7 @@ pub(crate) mod browser {
             let (decoded, work, surface) =
                 limits.capacities().map_err(CampaignError::SceneImage)?;
             // This is the actual local decoder configuration revision, never a server scene label.
-            let preparation = RevisionLabel::new(Some("campaign-png-rgba-v1"))
+            let preparation = RevisionLabel::new(Some("campaign-static-png-vp8-rgba-v1"))
                 .map_err(|_| CampaignError::SceneImage(SceneImageError::InvalidLimits))?;
             let lifecycle = ResourceLifecycle::mount_illustration(
                 root,
@@ -256,8 +323,10 @@ pub(crate) mod browser {
                 requested: None,
                 layouts: Vec::new(),
                 active: None,
+                terminal: None,
                 root: root.clone(),
                 fallback: fallback.clone(),
+                existing_art_host: false,
                 watch: None,
                 closed: false,
                 failure: RefCell::new(None),
@@ -295,6 +364,19 @@ pub(crate) mod browser {
                 });
             }
             Ok(owner)
+        }
+
+        pub(crate) fn after_terminal(&mut self, callback: Box<dyn FnOnce()>) -> bool {
+            if self.active.is_none() {
+                return false;
+            }
+            // One newest consumer notification; never release codec work early.
+            self.terminal = Some(callback);
+            true
+        }
+
+        pub(crate) fn use_existing_art_host(&mut self) {
+            self.existing_art_host = true;
         }
 
         pub(crate) fn take_failure(&mut self) -> Result<(), CampaignError> {
@@ -408,7 +490,7 @@ pub(crate) mod browser {
             }
             // Describe the incoming actual bytes, but publish no layout until canonical
             // hash/length/token verification consumes that exact Vec successfully.
-            let dimensions = current.limits.dimensions(&bytes);
+            let prepared = current.limits.prepared_layout(&bytes);
             let completion = current.lifecycle.borrow_mut().complete_fetch(token, bytes);
             if let Err(error) = completion {
                 if !matches!(
@@ -420,10 +502,11 @@ pub(crate) mod browser {
                 return Err(resource(error));
             }
             current.requested = None;
-            let dimensions = dimensions.map_err(CampaignError::SceneImage)?;
+            let (dimensions, mime) = prepared.map_err(CampaignError::SceneImage)?;
             current.layouts.retain(|layout| &layout.key != token.key());
             current.layouts.push(Layout {
                 key: token.key().clone(),
+                mime,
                 dimensions,
             });
             drop(current);
@@ -474,11 +557,11 @@ pub(crate) mod browser {
                 current.requested = Some(token.clone());
                 return Ok(Some(token));
             }
-            let dimensions = current
+            let (dimensions, mime) = current
                 .layouts
                 .iter()
                 .find(|layout| layout.key == key)
-                .map(|layout| layout.dimensions)
+                .map(|layout| (layout.dimensions, layout.mime))
                 .ok_or(CampaignError::SceneImage(SceneImageError::InvalidPng))?;
             // No decode while detached, and no replacement operation until real terminal.
             // Retain only the newest selected key/layout while the single old runner drains.
@@ -490,7 +573,7 @@ pub(crate) mod browser {
                 current.lifecycle.clone(),
                 &key,
                 PreparedImageMetadata {
-                    mime: "image/png",
+                    mime,
                     width: dimensions.0,
                     height: dimensions.1,
                     max_ancillary_bytes: current.limits.cache.max_bytes,
@@ -524,7 +607,12 @@ pub(crate) mod browser {
                     return;
                 }
                 current.active = None;
+                let terminal = current.terminal.take();
                 if current.closed {
+                    drop(current);
+                    if let Some(callback) = terminal {
+                        callback();
+                    }
                     return;
                 }
                 let same_selection = current.selected.as_ref() == Some(&key)
@@ -549,11 +637,19 @@ pub(crate) mod browser {
                 if deferred && let Err(error) = Self::install_selected(&owner, false) {
                     *owner.borrow().failure.borrow_mut() = Some(error);
                 }
+                if let Some(callback) = terminal {
+                    callback();
+                }
             });
             Ok(None)
         }
 
         fn show_generated(&mut self) -> Result<(), CampaignError> {
+            if self.existing_art_host
+                && let Some(canvas) = self.lifecycle.borrow().illustration_canvas()
+            {
+                canvas.set_class_name("art");
+            }
             self.lifecycle
                 .borrow_mut()
                 .set_illustration_visible(true)
@@ -713,6 +809,67 @@ mod tests {
         assert_eq!(
             limits().dimensions(&wrong),
             Err(SceneImageError::InvalidPng)
+        );
+    }
+    #[test]
+    fn actual_public_png_and_static_vp8_use_the_canonical_prepared_decoder() {
+        let limits = SceneImageLimits {
+            cache: CacheLimits {
+                max_assets: 2,
+                max_pending: 1,
+                max_leases: 1,
+                max_bytes: 2_316_859,
+            },
+            max_width: 1672,
+            max_height: 941,
+            max_pixels: 1_573_352,
+        };
+        assert_eq!(
+            limits.prepared_layout(include_bytes!(
+                "../../../assets/ui/scenes/mara-harbor-v4.png"
+            )),
+            Ok(((1672, 941), "image/png"))
+        );
+        let webp =
+            include_bytes!("../../../assets/concept-art/scene-tavern-barkeep-talk-rain.webp");
+        assert_eq!(
+            limits.prepared_layout(webp),
+            Ok(((1672, 941), "image/webp"))
+        );
+        let mut corrupt = webp.to_vec();
+        corrupt[4] ^= 1;
+        assert_eq!(
+            limits.prepared_layout(&corrupt),
+            Err(SceneImageError::Decode(
+                df_render::ImageDecodeError::CorruptWebp
+            ))
+        );
+        assert_eq!(
+            SceneImageLimits {
+                max_width: 1671,
+                ..limits
+            }
+            .prepared_layout(webp),
+            Err(SceneImageError::Dimensions)
+        );
+    }
+    #[test]
+    fn private_decoder_selection_does_not_admit_extended_animated_or_unknown_formats() {
+        let mut bytes = b"RIFF\x16\0\0\0WEBPVP8X\x0a\0\0\0\0\0\0\0\0\0\0\0\0\0".to_vec();
+        for kind in [b"VP8X", b"VP8L", b"ANIM"] {
+            bytes[12..16].copy_from_slice(kind);
+            assert_eq!(
+                limits().prepared_layout(&bytes),
+                Err(SceneImageError::Decode(
+                    df_render::ImageDecodeError::UnsupportedWebp
+                ))
+            );
+        }
+        assert_eq!(
+            limits().prepared_layout(b"image/jpeg"),
+            Err(SceneImageError::Decode(
+                df_render::ImageDecodeError::UnsupportedMime
+            ))
         );
     }
 }

@@ -601,6 +601,7 @@ dependencies = [
  "bytes",
  "df-ai",
  "df-api",
+ "df-assets",
  "df-client",
  "df-auth",
  "df-combat",

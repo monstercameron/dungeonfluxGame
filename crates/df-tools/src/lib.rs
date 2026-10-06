@@ -7,6 +7,8 @@ pub mod fixture;
 pub mod gameplay;
 #[cfg(target_arch = "wasm32")]
 mod gameplay_browser;
+#[cfg(all(target_arch = "wasm32", feature = "public-scene-delivery-fixture"))]
+pub use gameplay_browser::fixture as public_scene_delivery_fixture;
 #[cfg(target_arch = "wasm32")]
 mod generated_browser_bindings;
 #[cfg(not(target_arch = "wasm32"))]

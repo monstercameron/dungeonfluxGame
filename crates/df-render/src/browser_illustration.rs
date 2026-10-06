@@ -148,6 +148,12 @@ impl BrowserIllustration {
         self.clear();
         Ok(false)
     }
+    pub(crate) fn canvas(&self) -> Option<&HtmlCanvasElement> {
+        if self.closed {
+            return None;
+        }
+        self.surface.as_ref().map(|(canvas, _)| canvas)
+    }
     pub(crate) fn set_visible(&self, visible: bool) {
         if let Some((canvas, _)) = &self.surface {
             canvas.set_hidden(!visible);

@@ -236,6 +236,191 @@ mod browser {
         parent.append_child(&node)?;
         Ok(node)
     }
+    /// Illustration attachment for an existing visible scene. Text, layout and controls
+    /// stay owned by the caller; this facade owns only its supplied fallback and lifecycle.
+    pub struct CampaignIllustration {
+        root: Element,
+        fallback: Element,
+        owner: RefCell<Option<Rc<RefCell<SceneImageOwner>>>>,
+        disposed: Cell<bool>,
+    }
+    fn replace_image_owner(
+        slot: &RefCell<Option<Rc<RefCell<SceneImageOwner>>>>,
+        root: &Element,
+        fallback: &Element,
+        scope: CacheScope,
+        limits: SceneImageLimits,
+        existing_art_host: bool,
+    ) -> Result<(), CampaignError> {
+        let previous = slot.borrow().as_ref().cloned();
+        if let Some(old) = &previous
+            && old.borrow().scope() != scope
+        {
+            old.borrow_mut().dispose()?;
+        }
+        limits.validate().map_err(CampaignError::SceneImage)?;
+        if let Some(old) = &previous {
+            old.borrow_mut().dispose()?;
+            old.borrow().ensure_drained()?;
+        }
+        let owner = SceneImageOwner::new(scope, limits, root, fallback)?;
+        if existing_art_host {
+            owner.borrow_mut().use_existing_art_host();
+        }
+        *slot.borrow_mut() = Some(owner);
+        Ok(())
+    }
+    impl CampaignIllustration {
+        pub fn mount_existing(root: &Element, fallback: &Element) -> Result<Self, CampaignError> {
+            let document = root.owner_document().ok_or(CampaignError::Disposed)?;
+            if fallback.dyn_ref::<web_sys::HtmlImageElement>().is_none()
+                || !fallback
+                    .owner_document()
+                    .is_some_and(|owner| owner.is_same_node(Some(document.as_ref())))
+                || !fallback
+                    .parent_node()
+                    .is_some_and(|parent| parent.is_same_node(Some(root.as_ref())))
+            {
+                return Err(CampaignError::Disposed);
+            }
+            Ok(Self {
+                root: root.clone(),
+                fallback: fallback.clone(),
+                owner: RefCell::new(None),
+                disposed: Cell::new(false),
+            })
+        }
+        pub fn is_attached(&self) -> bool {
+            self.fallback.parent_node().is_some()
+                || self.root.get_attribute("data-scene-image").as_deref() == Some("generated")
+        }
+        pub fn attach(&self) -> Result<(), CampaignError> {
+            if self.disposed.get() {
+                return Err(CampaignError::Disposed);
+            }
+            if self.fallback.parent_node().is_none() {
+                self.root.append_child(&self.fallback)?;
+            }
+            Ok(())
+        }
+        pub fn enable_scene_assets(
+            &self,
+            scope: CacheScope,
+            limits: SceneImageLimits,
+        ) -> Result<(), CampaignError> {
+            if self.disposed.get() {
+                return Err(CampaignError::Disposed);
+            }
+            replace_image_owner(&self.owner, &self.root, &self.fallback, scope, limits, true)
+        }
+        pub fn update_with_scene_assets(
+            &self,
+            scene: ConceptScene,
+            assets: CampaignSceneAssets<'_>,
+        ) -> Result<Option<FetchToken>, CampaignError> {
+            if self.disposed.get() {
+                return Err(CampaignError::Disposed);
+            }
+            let owner = self
+                .owner
+                .borrow()
+                .as_ref()
+                .cloned()
+                .ok_or(CampaignError::SceneImage(SceneImageError::NotEnabled))?;
+            owner.borrow().validate(assets)?;
+            owner.borrow_mut().take_failure()?;
+            let token = SceneImageOwner::reconcile(&owner, assets)?;
+            // Exact closed ConceptScene paths remain the existing fallback contract.
+            self.set_concept_fallback(scene)?;
+            owner.borrow().set_description(scene.description());
+            Ok(token)
+        }
+        /// Closed public concept fallback; it neither reopens a codec nor restores old pixels.
+        pub fn set_concept_fallback(&self, scene: ConceptScene) -> Result<(), CampaignError> {
+            if self.disposed.get() {
+                return Err(CampaignError::Disposed);
+            }
+            self.fallback.set_attribute("alt", scene.description())?;
+            let path = format!("/{}", scene.asset_path());
+            if self.fallback.get_attribute("src").as_deref() != Some(path.as_str()) {
+                self.fallback.set_attribute("src", &path)?;
+            }
+            if self.root.get_attribute("data-scene-image").as_deref() != Some("generated") {
+                if self.fallback.parent_node().is_none() {
+                    self.root.append_child(&self.fallback)?;
+                }
+                self.root.set_attribute("data-scene-image", "fallback")?;
+            }
+            Ok(())
+        }
+        pub fn complete_scene_asset(
+            &self,
+            token: &FetchToken,
+            bytes: Vec<u8>,
+        ) -> Result<(), CampaignError> {
+            if self.disposed.get() {
+                return Err(CampaignError::Disposed);
+            }
+            let owner = self
+                .owner
+                .borrow()
+                .as_ref()
+                .cloned()
+                .ok_or(CampaignError::SceneImage(SceneImageError::NotEnabled))?;
+            owner.borrow_mut().take_failure()?;
+            SceneImageOwner::complete(&owner, token, bytes)
+        }
+        /// One bounded replay notification after the currently owned codec's terminal.
+        /// False means no pending codec exists; no idle subscription is retained.
+        pub fn after_decode_terminal(&self, callback: Box<dyn FnOnce()>) -> bool {
+            if self.disposed.get() {
+                return false;
+            }
+            self.owner
+                .borrow()
+                .as_ref()
+                .is_some_and(|owner| owner.borrow_mut().after_terminal(callback))
+        }
+        pub fn take_scene_failure(&self) -> Result<(), CampaignError> {
+            if self.disposed.get() {
+                return Err(CampaignError::Disposed);
+            }
+            if let Some(owner) = self.owner.borrow().as_ref() {
+                owner.borrow_mut().take_failure()?;
+            }
+            Ok(())
+        }
+        pub fn show_fallback(&self) -> Result<(), CampaignError> {
+            if self.disposed.get() {
+                return Err(CampaignError::Disposed);
+            }
+            if let Some(owner) = self.owner.borrow().as_ref() {
+                owner.borrow_mut().legacy()?;
+            }
+            Ok(())
+        }
+        /// Keep the closed owner reachable while its real codec cancellation drains.
+        pub fn retire(&self) -> Result<(), CampaignError> {
+            if let Some(owner) = self.owner.borrow().as_ref() {
+                owner.borrow_mut().dispose()?;
+            }
+            self.fallback.remove();
+            self.fallback.remove_attribute("src")?;
+            self.root.remove_attribute("data-scene-image")?;
+            Ok(())
+        }
+        pub fn dispose(&self) -> Result<(), CampaignError> {
+            if self.disposed.replace(true) {
+                return Ok(());
+            }
+            self.retire()
+        }
+    }
+    impl Drop for CampaignIllustration {
+        fn drop(&mut self) {
+            let _cleanup = self.dispose();
+        }
+    }
     impl CampaignSurface {
         pub fn create(
             document: &Document,
@@ -353,25 +538,14 @@ mod browser {
             if self.disposed.get() {
                 return Err(CampaignError::Disposed);
             }
-            let previous = self.scene_assets.borrow().as_ref().cloned();
-            if let Some(old) = &previous {
-                let replaced_scope = old.borrow().scope() != scope;
-                if replaced_scope {
-                    // The caller replaced an obsolete scope. Scrub its pixels immediately,
-                    // even if replacement presentation limits subsequently refuse.
-                    old.borrow_mut().dispose()?;
-                }
-            }
-            limits.validate().map_err(CampaignError::SceneImage)?;
-            if let Some(old) = &previous {
-                old.borrow_mut().dispose()?;
-                // Keep the closed owner reachable while actual browser work drains.
-                // A fresh lifecycle must not reset the cancelled runner's finite budget.
-                old.borrow().ensure_drained()?;
-            }
-            let owner = SceneImageOwner::new(scope, limits, &self.root, &self.art.borrow())?;
-            *self.scene_assets.borrow_mut() = Some(owner);
-            Ok(())
+            replace_image_owner(
+                &self.scene_assets,
+                &self.root,
+                &self.art.borrow(),
+                scope,
+                limits,
+                false,
+            )
         }
         pub(crate) fn validate_scene_assets(
             &self,
@@ -623,7 +797,7 @@ mod browser {
     }
 }
 #[cfg(target_arch = "wasm32")]
-pub use browser::{CampaignError, CampaignSurface};
+pub use browser::{CampaignError, CampaignIllustration, CampaignSurface};
 
 #[cfg(test)]
 mod tests {

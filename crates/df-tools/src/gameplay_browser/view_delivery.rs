@@ -1,4 +1,5 @@
 use df_client::{
+    cache::CacheScope,
     connection::ConnectionGeneration,
     connection_views::{ConnectionViewAcceptance, ConnectionViews},
 };
@@ -29,6 +30,14 @@ pub(super) enum ViewDeliveryError {
 }
 
 impl ViewScope {
+    pub(super) fn cache_scope(self) -> CacheScope {
+        CacheScope {
+            session: self.session,
+            run: self.run,
+            binding: self.binding,
+        }
+    }
+
     pub(super) fn from_wire(
         session: Option<&rpc::SessionId>,
         run: Option<&rpc::RunId>,
@@ -121,6 +130,10 @@ impl GameplayViews {
             return Err(ViewDeliveryError::InvalidProjection);
         }
         Ok(self.views.accept(generation, scope.binding, revision, view))
+    }
+
+    pub(super) fn current_revision(&self) -> Option<SessionRevision> {
+        self.views.current().map(|(revision, _)| revision)
     }
 
     pub(super) fn current(&self) -> Option<&rpc::ViewMessage> {

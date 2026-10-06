@@ -344,7 +344,8 @@ pub(super) async fn wait_for_cancellation(
     }
     Err("server cancellation cleanup not observed within 500ms".to_owned())
 }
-#[wasm_bindgen(start)]
+#[cfg_attr(not(feature = "public-scene-delivery-fixture"), wasm_bindgen(start))]
+#[cfg_attr(feature = "public-scene-delivery-fixture", wasm_bindgen)]
 pub fn start() -> Result<(), JsValue> {
     if web_sys::window().is_some_and(|window| {
         window

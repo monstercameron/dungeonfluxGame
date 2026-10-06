@@ -1,4 +1,5 @@
 //! Thin server-projected room, creation, dialogue and combat clients.
+mod public_scene_assets;
 mod view_delivery;
 
 use df_client::{
@@ -13,6 +14,7 @@ use df_ui::{
     CharacterOption, CharacterPhaseSurface, CharacterPhaseView, CharacterStatus,
 };
 use futures::future::{AbortHandle, Abortable};
+use public_scene_assets::browser::PublicSceneDelivery;
 use std::{cell::RefCell, rc::Rc};
 use view_delivery::{GameplayViews, ViewRole, ViewScope};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
@@ -43,7 +45,25 @@ struct Client {
     watch_abort: Option<AbortHandle>,
     callbacks: Vec<Callback>,
     creation: Option<CharacterPhaseSurface>,
+    scene_delivery: Option<Rc<PublicSceneDelivery>>,
     busy: bool,
+}
+impl Drop for Client {
+    fn drop(&mut self) {
+        if let Some(abort) = self.watch_abort.take() {
+            abort.abort();
+        }
+        if let Some(connection) = self.connection.take() {
+            connection.close();
+        }
+        clear_callbacks(self);
+        if let Some(scene) = self.scene_delivery.take() {
+            let _cleanup = scene.dispose();
+        }
+        if let Some(creation) = self.creation.take() {
+            let _cleanup = creation.dispose();
+        }
+    }
 }
 thread_local! {static CLIENTS:RefCell<Vec<Rc<RefCell<Client>>>>=const {RefCell::new(Vec::new())};}
 fn node(
@@ -128,6 +148,14 @@ fn request<T>(body: T, credential: &str) -> Result<tonic::Request<T>, String> {
     Ok(request)
 }
 fn retire_transport(client: &mut Client) {
+    if let Some(scene) = &client.scene_delivery
+        && scene.suspend().is_err()
+    {
+        status(
+            client,
+            "The optional scene illustration is using its fallback.",
+        );
+    }
     if let Some(abort) = client.watch_abort.take() {
         abort.abort();
     }
@@ -139,6 +167,11 @@ fn retire_transport(client: &mut Client) {
     client.busy = false;
 }
 fn clear_view_scope(client: &mut Client) -> Result<(), JsValue> {
+    if let Some(scene) = &client.scene_delivery {
+        scene
+            .retire()
+            .map_err(|_| JsValue::from_str("retired scene scope cleanup failed"))?;
+    }
     client.views.take();
     client.revision = None;
     client.last_request = None;
@@ -873,6 +906,11 @@ fn render(client: &Rc<RefCell<Client>>, view: rpc::ViewMessage) -> Result<(), Js
         .ok_or_else(|| JsValue::from_str("view absent"))?;
     root.set_attribute("data-phase", &journey.phase.to_string())?;
     if let Some(creation_offer) = journey.creation.as_ref() {
+        if let Some(scene) = &client.borrow().scene_delivery {
+            scene
+                .retire()
+                .map_err(|_| JsValue::from_str("retired scene cleanup failed"))?;
+        }
         let offered = offers
             .iter()
             .find(|offer| offer.action_kind == rpc::GameplayActionKind::CreateCharacter as i32)
@@ -904,20 +942,61 @@ fn render(client: &Rc<RefCell<Client>>, view: rpc::ViewMessage) -> Result<(), Js
             .dispose()
             .map_err(|_| JsValue::from_str("character retirement failed"))?;
     }
-    surface.set_text_content(None);
     let scene = scene.ok_or_else(|| JsValue::from_str("server scene missing"))?;
-    if !matches!(
-        scene.scene_asset.as_str(),
-        "assets/ui/scenes/mara-harbor-v4.png"
-            | "assets/concept-art/scene-tavern-barkeep-talk-rain.webp"
-    ) {
-        return Err(JsValue::from_str("unknown required scene asset"));
+    public_scene_assets::resolve(&scene.scene_asset)
+        .map_err(|_| JsValue::from_str("unknown required public scene asset"))?;
+    let (delivery, scope, revision) = {
+        let mut state = client.borrow_mut();
+        let views = state
+            .views
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("scene view owner absent"))?;
+        let scope = views.scope().cache_scope();
+        let revision = views
+            .current_revision()
+            .ok_or_else(|| JsValue::from_str("scene revision absent"))?;
+        if state.scene_delivery.is_none() {
+            surface.set_text_content(None);
+            state.scene_delivery = Some(
+                PublicSceneDelivery::new(&document, &surface)
+                    .map_err(|error| JsValue::from_str(&error.to_string()))?,
+            );
+        }
+        let delivery = state
+            .scene_delivery
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| JsValue::from_str("campaign scene owner absent"))?;
+        (delivery, scope, revision)
+    };
+    if !delivery.is_attached() {
+        surface.set_text_content(None);
+        delivery
+            .attach()
+            .map_err(|_| JsValue::from_str("scene fallback attachment failed"))?;
     }
-    let art = node(&document, &surface, "img", "art", "")?;
-    art.set_attribute("src", &format!("/{}", scene.scene_asset))?;
-    art.set_attribute("alt", "Authored scene concept illustration")?;
+    // Only GameplayViews' admitted canonical scope/revision reaches the byte producer.
+    // Optional image failure leaves the existing server-projected inputs available.
+    if delivery
+        .update(scope, revision, &scene.scene_asset)
+        .is_err()
+        || delivery.take_failure().is_some()
+    {
+        status(
+            &client.borrow(),
+            "The scene illustration is using its fallback.",
+        );
+    }
+    let (active, queued) = delivery.work_counts();
+    surface.set_attribute("data-public-scene-active", &active.to_string())?;
+    surface.set_attribute("data-public-scene-queued", &queued.to_string())?;
     surface.set_attribute("data-destination", &scene.destination.to_string())?;
-    let body = node(&document, &surface, "div", "scene-copy", "")?;
+    let body = if let Some(body) = surface.query_selector(".scene-copy")? {
+        body.set_text_content(None);
+        body
+    } else {
+        node(&document, &surface, "div", "scene-copy", "")?
+    };
     node(
         &document,
         &body,
@@ -1144,7 +1223,64 @@ fn render(client: &Rc<RefCell<Client>>, view: rpc::ViewMessage) -> Result<(), Js
     node(&document, &body, "p", "feedback", "")?;
     Ok(())
 }
+fn new_client(
+    document: &Document,
+    root: Element,
+    role: &'static str,
+) -> Result<Rc<RefCell<Client>>, JsValue> {
+    let credential = root.get_attribute("data-local-binding").unwrap_or_default();
+    root.remove_attribute("data-local-binding")?;
+    let room_code = root
+        .get_attribute("data-room")
+        .unwrap_or_else(|| "LANTERN".to_owned());
+    Ok(Rc::new(RefCell::new(Client {
+        document: document.clone(),
+        root,
+        role,
+        credential,
+        room_code,
+        session: if role == "display" {
+            Some(rpc::SessionId {
+                value: Some(vec![0x41; 16]),
+            })
+        } else {
+            None
+        },
+        run: if role == "display" {
+            Some(rpc::RunId {
+                value: Some(vec![0x42; 16]),
+            })
+        } else {
+            None
+        },
+        binding: if role == "display" {
+            Some(rpc::ClientBindingId {
+                value: Some(vec![0x72; 16]),
+            })
+        } else {
+            None
+        },
+        generation: 0,
+        revision: None,
+        views: None,
+        join_request: None,
+        last_request: None,
+        first_attack: None,
+        last_confirmed: false,
+        action: None,
+        connection: None,
+        watch_abort: None,
+        callbacks: Vec::new(),
+        creation: None,
+        scene_delivery: None,
+        busy: false,
+    })))
+}
+
 pub(super) fn start() -> Result<(), JsValue> {
+    if CLIENTS.with(|clients| !clients.borrow().is_empty()) {
+        return Err(JsValue::from_str("gameplay clients already mounted"));
+    }
     let document = web_sys::window()
         .and_then(|window| window.document())
         .ok_or_else(|| JsValue::from_str("document absent"))?;
@@ -1152,52 +1288,7 @@ pub(super) fn start() -> Result<(), JsValue> {
         let Some(root) = document.get_element_by_id(role) else {
             continue;
         };
-        let credential = root.get_attribute("data-local-binding").unwrap_or_default();
-        root.remove_attribute("data-local-binding")?;
-        let room_code = root
-            .get_attribute("data-room")
-            .unwrap_or_else(|| "LANTERN".to_owned());
-        let client = Rc::new(RefCell::new(Client {
-            document: document.clone(),
-            root,
-            role,
-            credential,
-            room_code,
-            session: if role == "display" {
-                Some(rpc::SessionId {
-                    value: Some(vec![0x41; 16]),
-                })
-            } else {
-                None
-            },
-            run: if role == "display" {
-                Some(rpc::RunId {
-                    value: Some(vec![0x42; 16]),
-                })
-            } else {
-                None
-            },
-            binding: if role == "display" {
-                Some(rpc::ClientBindingId {
-                    value: Some(vec![0x72; 16]),
-                })
-            } else {
-                None
-            },
-            generation: 0,
-            revision: None,
-            views: None,
-            join_request: None,
-            last_request: None,
-            first_attack: None,
-            last_confirmed: false,
-            action: None,
-            connection: None,
-            watch_abort: None,
-            callbacks: Vec::new(),
-            creation: None,
-            busy: false,
-        }));
+        let client = new_client(&document, root, role)?;
         CLIENTS.with(|clients| clients.borrow_mut().push(client.clone()));
         if role == "player" {
             render_join(&client)?;
@@ -1206,4 +1297,207 @@ pub(super) fn start() -> Result<(), JsValue> {
         }
     }
     Ok(())
+}
+
+// Development fixture reaches the same production Client, admission and render paths.
+// It issues local connection generations, never credentials or a network game decision.
+#[cfg(feature = "public-scene-delivery-fixture")]
+pub mod fixture {
+    use super::*;
+    thread_local! {
+        static CLIENT: RefCell<Option<Rc<RefCell<Client>>>> = const { RefCell::new(None) };
+        static CONNECTION: RefCell<Option<RpcConnection<()>>> = const { RefCell::new(None) };
+        static OLD: RefCell<Option<ConnectionGeneration>> = const { RefCell::new(None) };
+        static CLOSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+    fn client() -> Result<Rc<RefCell<Client>>, JsValue> {
+        CLIENT
+            .with(|client| client.borrow().as_ref().cloned())
+            .ok_or_else(|| JsValue::from_str("fixture owner absent"))
+    }
+    fn scope(binding: u8) -> Result<ViewScope, JsValue> {
+        ViewScope::from_wire(
+            Some(&rpc::SessionId {
+                value: Some(vec![0x41; 16]),
+            }),
+            Some(&rpc::RunId {
+                value: Some(vec![0x42; 16]),
+            }),
+            Some(&rpc::ClientBindingId {
+                value: Some(vec![binding; 16]),
+            }),
+            ViewRole::Player,
+        )
+        .map_err(|_| JsValue::from_str("fixture scope invalid"))
+    }
+    pub fn mount() -> Result<(), JsValue> {
+        if CLOSED.with(std::cell::Cell::get) || CLIENT.with(|client| client.borrow().is_some()) {
+            return Err(JsValue::from_str("fixture already mounted or disposed"));
+        }
+        // Referenced for the same module's real production entry point; not invoked here.
+        let _production_entry: fn() -> Result<(), JsValue> = start;
+        let document = web_sys::window()
+            .and_then(|window| window.document())
+            .ok_or_else(|| JsValue::from_str("document absent"))?;
+        let root = document
+            .get_element_by_id("player")
+            .ok_or_else(|| JsValue::from_str("actual player host absent"))?;
+        let client = new_client(&document, root, "player")?;
+        let connection = RpcConnection::new(());
+        client.borrow_mut().views = Some(GameplayViews::new(scope(0x71)?, connection.generation()));
+        CLIENT.with(|slot| *slot.borrow_mut() = Some(client));
+        CONNECTION.with(|slot| *slot.borrow_mut() = Some(connection));
+        Ok(())
+    }
+    pub fn present(
+        epoch: u32,
+        sequence: u32,
+        tavern: bool,
+        display: bool,
+        wrong_scope: bool,
+        old_generation: bool,
+    ) -> Result<(), JsValue> {
+        let client = client()?;
+        let generation = if old_generation {
+            OLD.with(|slot| slot.borrow().clone())
+        } else {
+            CONNECTION.with(|slot| slot.borrow().as_ref().map(RpcConnection::generation))
+        }
+        .ok_or_else(|| JsValue::from_str("generation absent"))?;
+        let current_scope = client
+            .borrow()
+            .views
+            .as_ref()
+            .map(GameplayViews::scope)
+            .ok_or_else(|| JsValue::from_str("view scope absent"))?;
+        let scene = rpc::GameplayScene {
+            destination: rpc::HarborDestination::HarborInn as i32,
+            title: if tavern {
+                "The harbor inn"
+            } else {
+                "Greyhaven harbor"
+            }
+            .to_owned(),
+            scene_asset: if tavern {
+                "assets/concept-art/scene-tavern-barkeep-talk-rain.webp"
+            } else {
+                "assets/ui/scenes/mara-harbor-v4.png"
+            }
+            .to_owned(),
+        };
+        let journey = rpc::JourneyView {
+            phase: rpc::JourneyPhase::Opening as i32,
+            ..Default::default()
+        };
+        let audience = if display {
+            rpc::view_message::Audience::Display(rpc::DisplayGameplayView {
+                narration: "Public narration".to_owned(),
+                scene: Some(scene),
+                journey: Some(journey),
+                ..Default::default()
+            })
+        } else {
+            rpc::view_message::Audience::Player(rpc::PlayerGameplayView {
+                narration: "Accepted player narration".to_owned(),
+                scene: Some(scene),
+                journey: Some(journey),
+                offers: vec![rpc::GameplayActionOffer {
+                    offer_id: "fixture-public-offer".to_owned(),
+                    action_kind: rpc::GameplayActionKind::ExamineHarborSeal as i32,
+                    label: "Examine the seal".to_owned(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            })
+        };
+        receive_view(
+            &client,
+            &generation,
+            if wrong_scope {
+                scope(0x73)?
+            } else {
+                current_scope
+            },
+            rpc::ViewMessage {
+                revision: Some(rpc::SessionRevision {
+                    epoch: Some(rpc::RecoveryEpoch {
+                        value: Some(u64::from(epoch)),
+                    }),
+                    sequence: Some(u64::from(sequence)),
+                }),
+                audience: Some(audience),
+            },
+        )
+    }
+    pub fn reconnect() -> Result<(), JsValue> {
+        let client = client()?;
+        retire_transport(&mut client.borrow_mut());
+        CONNECTION.with(|slot| {
+            if let Some(old) = slot.borrow_mut().take() {
+                OLD.with(|saved| *saved.borrow_mut() = Some(old.generation()));
+                old.close();
+            }
+        });
+        let connection = RpcConnection::new(());
+        if !client
+            .borrow_mut()
+            .views
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("view owner absent"))?
+            .reconnect(connection.generation())
+        {
+            return Err(JsValue::from_str("reconnect refused"));
+        }
+        CONNECTION.with(|slot| *slot.borrow_mut() = Some(connection));
+        redraw_current(&client)
+    }
+    pub fn replace_scope(binding: u8) -> Result<(), JsValue> {
+        let client = client()?;
+        clear_view_scope(&mut client.borrow_mut())?;
+        let generation = CONNECTION
+            .with(|slot| slot.borrow().as_ref().map(RpcConnection::generation))
+            .ok_or_else(|| JsValue::from_str("generation absent"))?;
+        client.borrow_mut().views = Some(GameplayViews::new(scope(binding)?, generation));
+        Ok(())
+    }
+    pub fn counts() -> Result<u32, JsValue> {
+        let client = client()?;
+        let state = client.borrow();
+        let (active, queued) = state
+            .scene_delivery
+            .as_ref()
+            .map_or((0, 0), |owner| owner.work_counts());
+        Ok((active as u32) << 16 | queued as u32)
+    }
+    pub fn failure() -> Result<String, JsValue> {
+        let client = client()?;
+        let state = client.borrow();
+        Ok(state
+            .scene_delivery
+            .as_ref()
+            .and_then(|owner| owner.take_failure())
+            .map_or_else(|| "none".to_owned(), |error| format!("{error:?}")))
+    }
+    pub fn dispose() -> Result<(), JsValue> {
+        CLOSED.with(|closed| closed.set(true));
+        let client = CLIENT
+            .with(|slot| slot.borrow_mut().take())
+            .ok_or_else(|| JsValue::from_str("fixture owner absent"))?;
+        let mut state = client.borrow_mut();
+        retire_transport(&mut state);
+        clear_callbacks(&mut state);
+        if let Some(owner) = state.scene_delivery.take() {
+            owner
+                .dispose()
+                .map_err(|_| JsValue::from_str("scene disposal failed"))?;
+        }
+        state.views = None;
+        CONNECTION.with(|slot| {
+            if let Some(connection) = slot.borrow_mut().take() {
+                connection.close();
+            }
+        });
+        OLD.with(|slot| slot.borrow_mut().take());
+        Ok(())
+    }
 }

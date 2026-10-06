@@ -17,7 +17,7 @@ mod phase_assets;
 mod theme;
 
 #[cfg(target_arch = "wasm32")]
-pub use campaign_surface::{CampaignError, CampaignSurface};
+pub use campaign_surface::{CampaignError, CampaignIllustration, CampaignSurface};
 pub use campaign_surface::{
     CampaignLimits, CampaignMember, CampaignObjective, CampaignValidationError, CampaignView,
     ConceptScene, ObjectiveState,

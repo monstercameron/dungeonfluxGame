@@ -27,6 +27,8 @@ mod narrative_transition;
 mod objective_outcome;
 #[cfg(test)]
 mod objective_outcome_tests;
+#[cfg(test)]
+mod session_flow_tests;
 
 pub(super) const ROOM_CODE: &str = "LANTERN";
 pub(super) const ROOM_ENTITY: [u8; 16] = [0x45; 16];

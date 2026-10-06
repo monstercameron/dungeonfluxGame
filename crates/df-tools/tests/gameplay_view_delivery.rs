@@ -4,11 +4,11 @@
 mod view_delivery;
 
 use df_client::{
-    connection::RpcConnection, connection_views::ConnectionViewAcceptance,
+    cache::CacheScope, connection::RpcConnection, connection_views::ConnectionViewAcceptance,
     revisions::ViewAcceptance,
 };
 use df_protocol::common as rpc;
-use df_types::{RecoveryEpoch, SessionRevision};
+use df_types::{ClientBindingId, RecoveryEpoch, RunId, SessionId, SessionRevision};
 use prost::Message;
 use view_delivery::{GameplayViews, ViewDeliveryError, ViewRole, ViewScope};
 
@@ -114,6 +114,7 @@ fn reconnect_retains_wire_view_and_durable_recovery_watermark() {
     let owner = RpcConnection::new(());
     let generation = owner.generation();
     assert!(views.reconnect(generation.clone()));
+    assert_eq!(views.current_revision(), Some(revision(2, 99)));
     let recovered = frame(3, 0, "current recovered view");
     assert_eq!(
         views.accept(&generation, scope, recovered.clone()),
@@ -130,6 +131,7 @@ fn reconnect_retains_wire_view_and_durable_recovery_watermark() {
             }))
         );
         assert_eq!(views.current(), Some(&recovered));
+        assert_eq!(views.current_revision(), Some(revision(3, 0)));
     }
     assert_eq!(
         views.accept(&generation, scope, frame(3, 0, "changed duplicate")),
@@ -139,11 +141,20 @@ fn reconnect_retains_wire_view_and_durable_recovery_watermark() {
     );
     // Receipt/busy redraws borrow this exact retained wire revision for next input.
     assert_eq!(views.current(), Some(&recovered));
+    assert_eq!(views.current_revision(), Some(revision(3, 0)));
 }
 
 #[test]
 fn cross_scope_and_invalid_wire_frames_cannot_seed_or_replace_private_view() {
     let permitted = scope(1, 2, 3, ViewRole::Player);
+    assert_eq!(
+        permitted.cache_scope(),
+        CacheScope {
+            session: SessionId::from_bytes(&[1; 16]).unwrap(),
+            run: RunId::from_bytes(&[2; 16]).unwrap(),
+            binding: ClientBindingId::from_bytes(&[3; 16]).unwrap(),
+        }
+    );
     let owner = RpcConnection::new(());
     let generation = owner.generation();
     let mut views = GameplayViews::new(permitted, generation.clone());
@@ -158,6 +169,7 @@ fn cross_scope_and_invalid_wire_frames_cannot_seed_or_replace_private_view() {
             Err(ViewDeliveryError::WrongScope)
         );
         assert_eq!(views.current(), None);
+        assert_eq!(views.current_revision(), None);
     }
     let current = frame(3, 8, "permitted private view");
     assert_eq!(
@@ -196,6 +208,7 @@ fn cross_scope_and_invalid_wire_frames_cannot_seed_or_replace_private_view() {
             Err(ViewDeliveryError::InvalidRevision)
         );
         assert_eq!(views.current(), Some(&current));
+        assert_eq!(views.current_revision(), Some(revision(3, 8)));
     }
     let mut wrong_audience = frame(9, 99, "wrong audience");
     wrong_audience.audience = Some(rpc::view_message::Audience::Display(Default::default()));
@@ -256,6 +269,7 @@ fn replacing_authorized_scope_starts_with_no_previous_private_view() {
     views = GameplayViews::new(new_scope, new.generation());
     assert_eq!(views.scope(), new_scope);
     assert_eq!(views.current(), None);
+    assert_eq!(views.current_revision(), None);
     assert_eq!(
         views.accept(
             &old_generation,

@@ -116,6 +116,18 @@ impl ResourceLifecycle {
         Ok(Self::new(scope, bytes, Target::Illustration(target)))
     }
 
+    /// The exact owned illustration surface; closed owners expose no live DOM handle.
+    #[cfg(target_arch = "wasm32")]
+    pub fn illustration_canvas(&self) -> Option<&web_sys::HtmlCanvasElement> {
+        if self.closed {
+            return None;
+        }
+        match &self.target {
+            Target::Illustration(target) => target.canvas(),
+            _ => None,
+        }
+    }
+
     #[cfg(target_arch = "wasm32")]
     pub fn set_illustration_visible(
         &mut self,
