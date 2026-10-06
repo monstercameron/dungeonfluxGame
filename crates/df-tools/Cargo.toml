@@ -14,6 +14,8 @@ path = "src/main.rs"
 [dependencies]
 web-time = "=1.1.0"
 df-protocol = { path = "../df-protocol" }
+df-client = { path = "../df-client" }
+df-types = { path = "../df-types" }
 df-rpc-bridge = { path = "../df-rpc-bridge" }
 df-observe = { path = "../df-observe" }
 bytes.workspace = true
@@ -42,7 +44,6 @@ df-world = { path = "../df-world" }
 df-persistence = { path = "../df-persistence" }
 df-rules = { path = "../df-rules" }
 df-session = { path = "../df-session" }
-df-types = { path = "../df-types" }
 prost.workspace = true
 sha2 = "=0.10.9"
 tokio-postgres = "=0.7.15"

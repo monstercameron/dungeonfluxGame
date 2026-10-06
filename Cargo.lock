@@ -257,6 +257,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-audio"
+version = "0.1.0"
+dependencies = [
+ "df-assets",
+ "df-client",
+ "df-media",
+ "df-model",
+ "df-types",
+]
+
+[[package]]
 name = "df-auth"
 version = "0.1.0"
 dependencies = [
@@ -462,6 +473,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-render"
+version = "0.1.0"
+dependencies = [
+ "df-assets",
+ "df-client",
+ "df-model",
+ "df-observe",
+ "df-types",
+ "df-ui",
+ "sha2 0.10.9",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "df-rpc-bridge"
 version = "0.1.0"
 dependencies = [
@@ -546,6 +572,7 @@ dependencies = [
  "bytes",
  "df-ai",
  "df-api",
+ "df-client",
  "df-auth",
  "df-combat",
  "df-content",

@@ -27,11 +27,27 @@ const DISPLAY: &str = "525252525252525252525252525252525252525252525252525252525
 
 #[derive(Clone)]
 struct Service {
-    events: broadcast::Sender<()>,
+    events: broadcast::Sender<FixtureFrame>,
+    current: Arc<Mutex<FixtureSnapshot>>,
+    last_binding: Arc<Mutex<Option<Vec<u8>>>>,
     watches: Arc<AtomicUsize>,
     stale_sent: Arc<AtomicUsize>,
     input: Arc<Mutex<Option<(u64, u64)>>>,
     streams: Arc<Semaphore>,
+}
+
+#[derive(Clone, Copy)]
+struct FixtureSnapshot {
+    epoch: u64,
+    sequence: u64,
+    creation: bool,
+}
+
+#[derive(Clone, Copy)]
+enum FixtureFrame {
+    Current(FixtureSnapshot),
+    Stale,
+    ConflictingDuplicate(FixtureSnapshot),
 }
 
 fn revision(epoch: u64, sequence: u64) -> rpc::SessionRevision {
@@ -53,21 +69,84 @@ fn role<T>(request: &Request<T>) -> Result<bool, Status> {
     }
 }
 
-fn view(player: bool, stale: bool) -> rpc::ViewMessage {
+fn view(player: bool, frame: FixtureFrame) -> rpc::ViewMessage {
+    let stale = matches!(frame, FixtureFrame::Stale);
+    let conflicting = matches!(frame, FixtureFrame::ConflictingDuplicate(_));
+    let snapshot = match frame {
+        FixtureFrame::Current(snapshot) | FixtureFrame::ConflictingDuplicate(snapshot) => snapshot,
+        FixtureFrame::Stale => FixtureSnapshot {
+            epoch: 1,
+            sequence: 99,
+            creation: false,
+        },
+    };
+    let sequence = snapshot.sequence;
     let scene = rpc::GameplayScene {
         destination: rpc::HarborDestination::LanternWharf as i32,
-        title: if stale {
-            "STALE retired epoch must never appear"
+        title: if conflicting {
+            "CONFLICTING duplicate must never appear".to_owned()
+        } else if stale {
+            "STALE retired epoch must never appear".to_owned()
+        } else if snapshot.epoch == 2 && sequence == 1 {
+            "Recovered epoch 2 — Lantern Wharf".to_owned()
         } else {
-            "Recovered epoch 2 — Lantern Wharf"
-        }
-        .to_owned(),
+            format!(
+                "Current epoch {} sequence {sequence} — Lantern Wharf",
+                snapshot.epoch
+            )
+        },
         scene_asset: "assets/ui/scenes/mara-harbor-v4.png".to_owned(),
     };
-    let narration = if stale { "This delayed snapshot belongs to epoch 1, sequence 99." } else { "Current permitted view: epoch 2, sequence 1. The recovered scene must remain after delayed old traffic." }.to_owned();
+    let narration = if stale {
+        "This delayed snapshot belongs to epoch 1, sequence 99.".to_owned()
+    } else if conflicting {
+        "Conflicting same-revision data must not replace the retained view.".to_owned()
+    } else {
+        format!(
+            "Current permitted view: epoch {}, sequence {sequence}. The recovered scene must remain after delayed old traffic.",
+            snapshot.epoch
+        )
+    };
     let journey = rpc::JourneyView {
-        phase: rpc::JourneyPhase::Opening as i32,
+        phase: if snapshot.creation {
+            rpc::JourneyPhase::CharacterCreation
+        } else {
+            rpc::JourneyPhase::Opening
+        } as i32,
         room_code: "LANTERN".to_owned(),
+        creation: if player && snapshot.creation {
+            Some(rpc::CharacterCreationOffer {
+                description: if conflicting {
+                    "CONFLICTING duplicate creation must never appear".to_owned()
+                } else {
+                    format!(
+                        "Creation fixture · stable binding 53 · epoch {}. Enter a draft and select an offered option before reconnecting.",
+                        snapshot.epoch
+                    )
+                },
+                source_revision: "synthetic-creation-contract-v1".to_owned(),
+                groups: vec![rpc::JourneyGroup {
+                    group_id: "fixture-choice".to_owned(),
+                    label: "Draft fixture choice".to_owned(),
+                    options: vec![
+                        rpc::JourneyOption {
+                            option_id: "lantern".to_owned(),
+                            label: "Lantern".to_owned(),
+                            description: "First synthetic offered choice for draft preservation."
+                                .to_owned(),
+                        },
+                        rpc::JourneyOption {
+                            option_id: "compass".to_owned(),
+                            label: "Compass".to_owned(),
+                            description: "Second synthetic offered choice for draft preservation."
+                                .to_owned(),
+                        },
+                    ],
+                }],
+            })
+        } else {
+            None
+        },
         ..Default::default()
     };
     let audience = if player {
@@ -76,8 +155,17 @@ fn view(player: bool, stale: bool) -> rpc::ViewMessage {
             scene: Some(scene),
             journey: Some(journey),
             offers: vec![rpc::GameplayActionOffer {
-                offer_id: "recovery-basis-check".to_owned(),
-                action_kind: rpc::GameplayActionKind::ExamineHarborSeal as i32,
+                offer_id: if snapshot.creation {
+                    "creation-basis-check"
+                } else {
+                    "recovery-basis-check"
+                }
+                .to_owned(),
+                action_kind: if snapshot.creation {
+                    rpc::GameplayActionKind::CreateCharacter
+                } else {
+                    rpc::GameplayActionKind::ExamineHarborSeal
+                } as i32,
                 label: "Check recovered view basis".to_owned(),
                 ..Default::default()
             }],
@@ -95,7 +183,7 @@ fn view(player: bool, stale: bool) -> rpc::ViewMessage {
         revision: Some(if stale {
             revision(1, 99)
         } else {
-            revision(2, 1)
+            revision(snapshot.epoch, sequence)
         }),
         audience: Some(audience),
     }
@@ -122,6 +210,19 @@ impl rpc::session_service_server::SessionService for Service {
         {
             return Err(Status::invalid_argument("fixture session/run required"));
         }
+        let expected_binding = if player { 0x53 } else { 0x72 };
+        let binding = request
+            .client_binding_id
+            .as_ref()
+            .and_then(|id| id.value.as_deref());
+        if binding != Some([expected_binding; 16].as_slice()) {
+            return Err(Status::permission_denied("fixture watch binding denied"));
+        }
+        *self
+            .last_binding
+            .lock()
+            .map_err(|_| Status::internal("fixture binding record unavailable"))? =
+            binding.map(Vec::from);
         let permit = self
             .streams
             .clone()
@@ -130,6 +231,10 @@ impl rpc::session_service_server::SessionService for Service {
         self.watches.fetch_add(1, Ordering::SeqCst);
         let events = self.events.subscribe();
         let sent = self.stale_sent.clone();
+        let snapshot = *self
+            .current
+            .lock()
+            .map_err(|_| Status::internal("fixture snapshot unavailable"))?;
         let stream = futures::stream::unfold(
             (true, events, permit, false),
             move |(first, mut events, permit, ended)| {
@@ -139,12 +244,14 @@ impl rpc::session_service_server::SessionService for Service {
                         return None;
                     }
                     let result = if first {
-                        Ok(view(player, false))
+                        Ok(view(player, FixtureFrame::Current(snapshot)))
                     } else {
                         match events.recv().await {
-                            Ok(()) => {
-                                sent.fetch_add(1, Ordering::SeqCst);
-                                Ok(view(player, true))
+                            Ok(frame) => {
+                                if matches!(frame, FixtureFrame::Stale) {
+                                    sent.fetch_add(1, Ordering::SeqCst);
+                                }
+                                Ok(view(player, frame))
                             }
                             Err(error) => Err(Status::unavailable(format!(
                                 "fixture stream ended: {error}"
@@ -261,12 +368,112 @@ async fn page(State(state): State<PageState>) -> Html<String> {
     Html(state.html)
 }
 async fn stale(State(state): State<PageState>) -> impl IntoResponse {
-    match state.service.events.send(()) {
+    match state.service.events.send(FixtureFrame::Stale) {
         Ok(receivers) => (
             StatusCode::OK,
             format!("stale snapshot queued for {receivers} watchers"),
         ),
         Err(_) => (StatusCode::CONFLICT, "no active watcher".to_owned()),
+    }
+}
+async fn newer(State(state): State<PageState>) -> impl IntoResponse {
+    let snapshot = match state.service.current.lock() {
+        Ok(mut current) => {
+            let Some(sequence) = current.sequence.checked_add(1) else {
+                return (
+                    StatusCode::CONFLICT,
+                    "fixture sequence exhausted".to_owned(),
+                );
+            };
+            current.sequence = sequence;
+            *current
+        }
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "fixture snapshot unavailable".to_owned(),
+            );
+        }
+    };
+    match state.service.events.send(FixtureFrame::Current(snapshot)) {
+        Ok(receivers) => (
+            StatusCode::OK,
+            format!("newer snapshot queued for {receivers} watchers"),
+        ),
+        Err(_) => (StatusCode::CONFLICT, "no active watcher".to_owned()),
+    }
+}
+async fn conflicting_duplicate(State(state): State<PageState>) -> impl IntoResponse {
+    let snapshot = match state.service.current.lock() {
+        Ok(current) => *current,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "fixture snapshot unavailable".to_owned(),
+            );
+        }
+    };
+    match state
+        .service
+        .events
+        .send(FixtureFrame::ConflictingDuplicate(snapshot))
+    {
+        Ok(receivers) => (
+            StatusCode::OK,
+            format!("conflicting duplicate queued for {receivers} watchers"),
+        ),
+        Err(_) => (StatusCode::CONFLICT, "no active watcher".to_owned()),
+    }
+}
+async fn creation(State(state): State<PageState>) -> impl IntoResponse {
+    publish_creation(&state, false)
+}
+async fn creation_new_epoch(State(state): State<PageState>) -> impl IntoResponse {
+    publish_creation(&state, true)
+}
+fn publish_creation(state: &PageState, new_epoch: bool) -> (StatusCode, String) {
+    let snapshot = match state.service.current.lock() {
+        Ok(mut current) => {
+            let next = if new_epoch {
+                current.epoch.checked_add(1).map(|epoch| (epoch, 0))
+            } else {
+                current
+                    .sequence
+                    .checked_add(1)
+                    .map(|sequence| (current.epoch, sequence))
+            };
+            let Some((epoch, sequence)) = next else {
+                return (
+                    StatusCode::CONFLICT,
+                    "fixture revision exhausted".to_owned(),
+                );
+            };
+            *current = FixtureSnapshot {
+                epoch,
+                sequence,
+                creation: true,
+            };
+            *current
+        }
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "fixture snapshot unavailable".to_owned(),
+            );
+        }
+    };
+    match state.service.events.send(FixtureFrame::Current(snapshot)) {
+        Ok(receivers) => (
+            StatusCode::OK,
+            format!(
+                "creation epoch {} sequence {} queued for {receivers} watchers",
+                snapshot.epoch, snapshot.sequence
+            ),
+        ),
+        Err(_) => (
+            StatusCode::CONFLICT,
+            "no active watcher; current creation snapshot retained".to_owned(),
+        ),
     }
 }
 async fn fixture_status(State(state): State<PageState>) -> Result<String, StatusCode> {
@@ -275,10 +482,29 @@ async fn fixture_status(State(state): State<PageState>) -> Result<String, Status
         .input
         .lock()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let current = *state
+        .service
+        .current
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let last_binding = state
+        .service
+        .last_binding
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let binding = last_binding.as_ref().map(|bytes| {
+        bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    });
     Ok(format!(
-        "watches={} stale_sent={} last_input={input:?}",
+        "watches={} stale_sent={} current_epoch={} current_sequence={} creation={} last_binding={binding:?} last_input={input:?}",
         state.service.watches.load(Ordering::SeqCst),
-        state.service.stale_sent.load(Ordering::SeqCst)
+        state.service.stale_sent.load(Ordering::SeqCst),
+        current.epoch,
+        current.sequence,
+        current.creation
     ))
 }
 async fn socket(
@@ -343,9 +569,21 @@ async fn serve_actual_gameplay_client_with_late_old_epoch() -> Result<(), Box<dy
     let html = html
         .replace("__ROOTS__", &roots)
         .replace("__LAYOUT__", "clients");
+    let creation_mode = match std::env::var("DF_REVISION_FIXTURE_MODE") {
+        Ok(mode) if mode == "creation" => true,
+        Ok(mode) if mode == "opening" => false,
+        Err(std::env::VarError::NotPresent) => false,
+        _ => return Err("fixture mode must be opening or creation".into()),
+    };
     let (events, _) = broadcast::channel(8);
     let service = Service {
         events,
+        current: Arc::new(Mutex::new(FixtureSnapshot {
+            epoch: 2,
+            sequence: 1,
+            creation: creation_mode,
+        })),
+        last_binding: Arc::new(Mutex::new(None)),
         watches: Arc::new(AtomicUsize::new(0)),
         stale_sent: Arc::new(AtomicUsize::new(0)),
         input: Arc::new(Mutex::new(None)),
@@ -386,6 +624,10 @@ async fn serve_actual_gameplay_client_with_late_old_epoch() -> Result<(), Box<dy
         .route("/gameplay", get(page))
         .route("/gameplay/tunnel", get(socket))
         .route("/fixture/stale", get(stale))
+        .route("/fixture/newer", get(newer))
+        .route("/fixture/conflicting-duplicate", get(conflicting_duplicate))
+        .route("/fixture/creation", get(creation))
+        .route("/fixture/creation-new-epoch", get(creation_new_epoch))
         .route("/fixture/status", get(fixture_status))
         .nest_service("/pkg", tower_http::services::ServeDir::new(web))
         .nest_service("/assets", tower_http::services::ServeDir::new(assets))

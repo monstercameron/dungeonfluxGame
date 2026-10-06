@@ -1,0 +1,36 @@
+[package]
+name = "df-render"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+df-types = { path = "../df-types" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+web-sys = { workspace = true, features = ["Document", "Element", "Node", "CanvasRenderingContext2d", "HtmlCanvasElement", "ImageData"] }
+
+[dev-dependencies]
+df-assets = { path = "../df-assets" }
+df-client = { path = "../df-client" }
+df-ui = { path = "../df-ui" }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen.workspace = true
+web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "Event", "EventTarget", "HtmlElement", "HtmlInputElement", "HtmlButtonElement", "HtmlCanvasElement", "CanvasRenderingContext2d", "ImageData"] }
+
+[[example]]
+name = "scene_layers_fixture"
+path = "tests/fixtures/scene_layers_fixture.rs"
+crate-type = ["cdylib"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+df-model = { path = "../df-model" }
+df-observe = { path = "../df-observe" }
+sha2 = { version = "=0.10.9", default-features = false, features = ["std"] }
+
+[[example]]
+name = "resource_scene_fixture"
+path = "tests/fixtures/resource_scene_fixture.rs"
+crate-type = ["cdylib"]

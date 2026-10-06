@@ -1,6 +1,11 @@
 //! Thin server-projected room, creation, dialogue and combat clients.
-mod revisions;
+mod view_delivery;
 
+use df_client::{
+    connection::{ConnectionGeneration, RpcConnection},
+    connection_views::ConnectionViewAcceptance,
+    revisions::ViewAcceptance,
+};
 use df_protocol::common as rpc;
 use df_rpc_bridge::{BrowserChannel, BrowserConnection};
 use df_ui::{
@@ -9,6 +14,7 @@ use df_ui::{
 };
 use futures::future::{AbortHandle, Abortable};
 use std::{cell::RefCell, rc::Rc};
+use view_delivery::{GameplayViews, ViewRole, ViewScope};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use web_sys::{Document, Element, HtmlSelectElement};
 
@@ -27,13 +33,13 @@ struct Client {
     binding: Option<rpc::ClientBindingId>,
     generation: u64,
     revision: Option<rpc::SessionRevision>,
-    last_view: Option<rpc::ViewMessage>,
+    views: Option<GameplayViews>,
     join_request: Option<rpc::JoinRoomRequest>,
     last_request: Option<rpc::SubmitActionRequest>,
     first_attack: Option<rpc::SubmitActionRequest>,
     last_confirmed: bool,
     action: Option<ActionClient>,
-    connection: Option<BrowserConnection>,
+    connection: Option<RpcConnection<SessionClient>>,
     watch_abort: Option<AbortHandle>,
     callbacks: Vec<Callback>,
     creation: Option<CharacterPhaseSurface>,
@@ -131,6 +137,28 @@ fn retire_transport(client: &mut Client) {
     client.action.take();
     client.generation += 1;
     client.busy = false;
+}
+fn clear_view_scope(client: &mut Client) -> Result<(), JsValue> {
+    client.views.take();
+    client.revision = None;
+    client.last_request = None;
+    client.first_attack = None;
+    client.last_confirmed = false;
+    clear_callbacks(client);
+    let cleanup = client
+        .creation
+        .take()
+        .map(|creation| creation.dispose())
+        .transpose();
+    if let Some(surface) = client.root.query_selector(".view")? {
+        surface.set_text_content(None);
+        surface.remove_attribute("data-destination")?;
+    }
+    client.root.remove_attribute("data-phase")?;
+    client.root.remove_attribute("data-last-receipt-sequence")?;
+    client.root.remove_attribute("data-last-receipt-replayed")?;
+    cleanup.map_err(|_| JsValue::from_str("retired character scope cleanup failed"))?;
+    Ok(())
 }
 fn render_join(client: &Rc<RefCell<Client>>) -> Result<(), JsValue> {
     let (document, surface, code, uncertain) = {
@@ -328,18 +356,44 @@ fn connect(client: Rc<RefCell<Client>>) {
         let _ = render_join(&client);
         return;
     }
-    let (generation, credential, session, run, binding, observed) = {
+    let prepared = (|| -> Result<_, JsValue> {
         let mut state = client.borrow_mut();
         retire_transport(&mut state);
+        let scope = ViewScope::from_wire(
+            state.session.as_ref(),
+            state.run.as_ref(),
+            state.binding.as_ref(),
+            if state.role == "player" {
+                ViewRole::Player
+            } else {
+                ViewRole::Display
+            },
+        )
+        .map_err(|_| JsValue::from_str("saved view scope invalid"))?;
+        if state
+            .views
+            .as_ref()
+            .is_some_and(|views| views.scope() != scope)
+        {
+            clear_view_scope(&mut state)?;
+        }
         status(&state, "Connecting to your saved game…");
-        (
+        Ok((
             state.generation,
             state.credential.clone(),
             state.session.clone(),
             state.run.clone(),
             state.binding.clone(),
             state.revision,
-        )
+            scope,
+        ))
+    })();
+    let (generation, credential, session, run, binding, observed, scope) = match prepared {
+        Ok(prepared) => prepared,
+        Err(_) => {
+            status(&client.borrow(), "Saved view scope could not be recovered.");
+            return;
+        }
     };
     let (abort, registration) = AbortHandle::new_pair();
     client.borrow_mut().watch_abort = Some(abort);
@@ -357,8 +411,17 @@ fn connect(client: Rc<RefCell<Client>>) {
             let mut sessions = SessionClient::new(channel.clone())
                 .max_decoding_message_size(8192)
                 .max_encoding_message_size(8192);
+            let connection = RpcConnection::from_browser(sessions.clone(), connection);
+            let view_generation = connection.generation();
             {
                 let mut state = owned.borrow_mut();
+                if let Some(views) = state.views.as_mut() {
+                    if !views.reconnect(view_generation.clone()) {
+                        return Err("Game connection retired before view recovery".to_owned());
+                    }
+                } else {
+                    state.views = Some(GameplayViews::new(scope, view_generation.clone()));
+                }
                 state.action = Some(
                     ActionClient::new(channel)
                         .max_decoding_message_size(8192)
@@ -366,6 +429,9 @@ fn connect(client: Rc<RefCell<Client>>) {
                 );
                 state.connection = Some(connection);
             }
+            // Reconnect refreshes local input/busy state from the retained snapshot.
+            // A duplicate server frame never replaces that snapshot.
+            redraw_current(&owned).map_err(|_| "Saved view could not be displayed")?;
             let body = rpc::WatchViewRequest {
                 session_id: session,
                 run_id: run,
@@ -386,7 +452,8 @@ fn connect(client: Rc<RefCell<Client>>) {
                 if owned.borrow().generation != generation {
                     return Ok(());
                 }
-                render(&owned, view).map_err(|_| "Server view could not be displayed")?;
+                receive_view(&owned, &view_generation, scope, view)
+                    .map_err(|_| "Server view could not be displayed")?;
             }
             Ok(())
         };
@@ -523,9 +590,8 @@ fn send(client: Rc<RefCell<Client>>, body: rpc::SubmitActionRequest, replay: boo
                 Err(error) => error.to_owned(),
             }
         };
-        let view = client.borrow().last_view.clone();
-        if let Some(view) = view {
-            let _ = render(&client, view);
+        if redraw_current(&client).is_err() {
+            status(&client.borrow(), "Saved view could not be displayed.");
         }
         feedback(&client.borrow(), &message);
     });
@@ -575,7 +641,7 @@ fn creation(
         })
         .ok_or_else(|| JsValue::from_str("character owner absent"))?;
     let editable = true;
-    let view=CharacterPhaseView {generation:1,owner_key:owner,revision:state.revision.and_then(|revision|revision.sequence).ok_or_else(||JsValue::from_str("creation revision absent"))?,
+    let view=CharacterPhaseView {generation:state.revision.and_then(|revision|revision.epoch).and_then(|epoch|epoch.value).ok_or_else(||JsValue::from_str("creation epoch absent"))?,owner_key:owner,revision:state.revision.and_then(|revision|revision.sequence).ok_or_else(||JsValue::from_str("creation revision absent"))?,
         chapter:"Your hero".to_owned(),title:"A story begins with you".to_owned(),description:offer.description.clone(),
         connection:"Connected to your shared room".to_owned(),status:CharacterStatus::Editing,
         status_message:"Choose one option in every group, then confirm. Character names use letters, dashes or underscores (up to 24 characters).".to_owned(),
@@ -734,21 +800,51 @@ fn action_button(
     }
     Ok(())
 }
-fn render(client: &Rc<RefCell<Client>>, view: rpc::ViewMessage) -> Result<(), JsValue> {
-    let previous = client.borrow().revision;
-    let next = view
-        .revision
-        .ok_or_else(|| JsValue::from_str("server revision missing"))?;
-    if !revisions::accept_revision(previous, next)
-        .map_err(|_| JsValue::from_str("server revision incomplete"))?
-    {
-        return Ok(());
+fn receive_view(
+    client: &Rc<RefCell<Client>>,
+    generation: &ConnectionGeneration,
+    scope: ViewScope,
+    view: rpc::ViewMessage,
+) -> Result<(), JsValue> {
+    let acceptance = {
+        let mut state = client.borrow_mut();
+        let views = state
+            .views
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("view owner absent"))?;
+        views
+            .accept(generation, scope, view)
+            .map_err(|_| JsValue::from_str("server view scope or projection invalid"))?
+    };
+    if acceptance == ConnectionViewAcceptance::View(ViewAcceptance::Applied) {
+        let mut state = client.borrow_mut();
+        state.revision = state
+            .views
+            .as_ref()
+            .and_then(|views| views.current().and_then(|view| view.revision));
+        drop(state);
+        redraw_current(client)?;
     }
+    Ok(())
+}
+
+fn redraw_current(client: &Rc<RefCell<Client>>) -> Result<(), JsValue> {
+    let view = client
+        .borrow()
+        .views
+        .as_ref()
+        .and_then(|views| views.current().cloned());
+    if let Some(view) = view {
+        render(client, view)?;
+    }
+    Ok(())
+}
+
+/// Only admitted snapshots or a local redraw of the retained snapshot reach rendering.
+fn render(client: &Rc<RefCell<Client>>, view: rpc::ViewMessage) -> Result<(), JsValue> {
     let (document, root, role) = {
         let mut state = client.borrow_mut();
         clear_callbacks(&mut state);
-        state.revision = Some(next);
-        state.last_view = Some(view.clone());
         (state.document.clone(), state.root.clone(), state.role)
     };
     let (narration, scene, journey, offers, clue) = match view.audience {
@@ -1090,7 +1186,7 @@ pub(super) fn start() -> Result<(), JsValue> {
             },
             generation: 0,
             revision: None,
-            last_view: None,
+            views: None,
             join_request: None,
             last_request: None,
             first_attack: None,

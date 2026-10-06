@@ -1,0 +1,14 @@
+[package]
+name = "df-audio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+df-assets = { path = "../df-assets" }
+df-media = { path = "../df-media" }
+df-model = { path = "../df-model" }
+df-types = { path = "../df-types" }
+
+[dev-dependencies]
+df-client = { path = "../df-client" }

@@ -18,6 +18,8 @@ mod encounter_admission;
 mod encounter_outcome;
 mod enemy_tactics;
 mod narrative_phase;
+#[cfg(test)]
+mod narrative_runtime_tests;
 
 pub(super) const ROOM_CODE: &str = "LANTERN";
 pub(super) const ROOM_ENTITY: [u8; 16] = [0x45; 16];
@@ -414,10 +416,13 @@ pub(super) fn offered(
                 "Offer to protect the courier",
             ),
         ],
-        rpc::JourneyPhase::Dialogue => vec![(
-            rpc::GameplayActionKind::DefendCourier,
-            "Stand between the courier and the bandit",
-        )],
+        rpc::JourneyPhase::Dialogue if narrative_phase::courier_encounter_permitted(current)? => {
+            vec![(
+                rpc::GameplayActionKind::DefendCourier,
+                "Stand between the courier and the bandit",
+            )]
+        }
+        rpc::JourneyPhase::Dialogue => vec![],
         rpc::JourneyPhase::Combat => {
             let encounter = current
                 .state()

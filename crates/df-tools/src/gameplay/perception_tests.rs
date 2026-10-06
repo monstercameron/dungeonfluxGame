@@ -326,8 +326,24 @@ fn current_canonical_audience_removal_omits_saved_cue_even_with_a_knowledge_gran
     let (current, first, second) = completed();
     let original = current.clone();
     let mut expected_first = player(&current, first);
+    let mut expected_second = player(&current, second);
+    assert_eq!(expected_first.private_clue, courier_ai::RESPONSE);
+    assert!(expected_second.private_clue.is_empty());
+    for view in [&expected_first, &expected_second] {
+        assert!(view.action_available);
+        assert_eq!(view.offers.len(), 1);
+        assert_eq!(
+            view.offers[0].action_kind,
+            rpc::GameplayActionKind::DefendCourier as i32
+        );
+    }
+    // Removing current disclosure also removes its encounter prerequisite for either player.
+    // Exact expected views retain every other narration, character, scene and journey field.
     expected_first.private_clue.clear();
-    let expected_second = player(&current, second);
+    expected_first.offers.clear();
+    expected_first.action_available = false;
+    expected_second.offers.clear();
+    expected_second.action_available = false;
     let expected_display = display(&current);
     for audience in [
         AudienceScope::Host,
@@ -343,11 +359,24 @@ fn current_canonical_audience_removal_omits_saved_cue_even_with_a_knowledge_gran
             source: id,
         });
         let removed = model::checkpoint(current.basis(), state).unwrap();
-        assert_eq!(player(&removed, first), expected_first);
-        assert_eq!(player(&removed, second), expected_second);
+        let before_projection = removed.clone();
+        for (principal, expected) in [(first, &expected_first), (second, &expected_second)] {
+            let projected = journey_view(&removed, LocalDemoRole::Player, principal).unwrap();
+            assert_eq!(projected.revision, expected_display.revision);
+            let Some(rpc::view_message::Audience::Player(view)) = projected.audience else {
+                panic!("player projection required")
+            };
+            assert_eq!(&view, expected);
+            assert!(view.private_clue.is_empty());
+            assert!(view.offers.is_empty());
+            assert!(!view.action_available);
+        }
         assert_eq!(display(&removed), expected_display);
         // A fresh projection, including a reconnect snapshot, never uses the old cue.
         assert!(player(&removed, first).private_clue.is_empty());
+        assert!(player(&removed, second).private_clue.is_empty());
+        assert_eq!(removed.state().draws, current.state().draws);
+        assert_eq!(removed, before_projection);
     }
     assert_eq!(current, original);
 }

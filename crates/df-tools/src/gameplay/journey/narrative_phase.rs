@@ -122,7 +122,173 @@ fn shared_empty(fact: &GameFact) -> bool {
         && matches!(&fact.value, FactValue::ContentEvent { subjects, .. } if subjects.is_empty())
 }
 
+// Historical narrative progress survives disclosure changes. A new encounter offer
+// still requires the current source shape admitted by encounter_admission.
+pub(super) fn courier_encounter_permitted(current: &Checkpoint) -> Result<bool, RepositoryError> {
+    let state = current.state();
+    if state.narrative.active_beats == [model::content("courier-answer-escort")?] {
+        return Ok(shared_empty(source(
+            state,
+            "escort-courier",
+            rpc::JourneyPhase::Dialogue,
+        )?));
+    }
+    if state.narrative.active_beats != [model::content("courier-answer-seal")?] {
+        return Ok(false);
+    }
+    let note = source(state, "private-courier-note", rpc::JourneyPhase::Dialogue)?;
+    let definition = model::content("private-courier-note")?;
+    Ok(
+        matches!(&note.value, FactValue::ContentEvent { definition: actual, subjects }
+        if *actual == definition && subjects.is_empty())
+            && matches!(&note.audience, AudienceScope::Members(members)
+            if members.len() == 1 && members.first().is_some_and(|member|
+                participants(current).into_iter().any(|link|
+                    link.member == *member && link.character.is_some()))),
+    )
+}
+
 pub(super) fn validate(current: &Checkpoint) -> Result<rpc::JourneyPhase, RepositoryError> {
+    let phase = validate_phase(current)?;
+    validate_thread_progress(current, phase)?;
+    Ok(phase)
+}
+
+// Phase markers alone do not establish ownership of the narrative ledger. Qualify the
+// terminal native sources before offers or the registered rules handler can consume it.
+fn validate_thread_progress(
+    current: &Checkpoint,
+    phase: rpc::JourneyPhase,
+) -> Result<(), RepositoryError> {
+    use df_narrative::{
+        ProgressLimits, ThreadCheckpointRequest, ThreadConsequenceSelection, ThreadDisposition,
+        stage_checkpoint_thread_progress,
+    };
+
+    let state = current.state();
+    let packet = model::content(PACKET_THREAD)?;
+    let threat = model::content(THREAT_THREAD)?;
+    let mut threads = Vec::new();
+    if phase != rpc::JourneyPhase::Room {
+        threads.push(packet.clone());
+    }
+    if phase == rpc::JourneyPhase::Combat
+        || (phase == rpc::JourneyPhase::Complete && !combat_victory(state)?)
+    {
+        threads.push(threat.clone());
+    }
+    if state.narrative.open_threads != threads {
+        return invalid();
+    }
+    let private = if state
+        .narrative
+        .active_beats
+        .iter()
+        .chain(&state.narrative.completed_beats)
+        .any(|beat| beat.entry.as_str() == "courier-answer-seal")
+    {
+        Some(source(state, "private-courier-note", rpc::JourneyPhase::Dialogue)?.id)
+    } else {
+        None
+    };
+    let events = super::THREAD_EVENTS
+        .iter()
+        .map(|(event, thread)| Ok((model::content(event)?, model::content(thread)?)))
+        .collect::<Result<Vec<_>, RepositoryError>>()?;
+    let mut sources = Vec::new();
+    let mut last = None;
+    for fact in &state.facts {
+        let definition = match &fact.value {
+            FactValue::ContentEvent { definition, .. } => Some(definition),
+            _ => None,
+        };
+        let thread = if Some(fact.id) == private {
+            Some(&packet)
+        } else {
+            events
+                .iter()
+                .find_map(|(event, thread)| (Some(event) == definition).then_some(thread))
+        };
+        let Some(thread) = thread else {
+            continue;
+        };
+        let decision = state
+            .decisions
+            .iter()
+            .find(|decision| {
+                decision.operation == fact.operation
+                    && decision.revision == fact.revision
+                    && decision.facts.last() == Some(&fact.id)
+            })
+            .ok_or(RepositoryError::InvalidCandidate)?;
+        let receipt = accepted(decision).map_err(|_| RepositoryError::InvalidCandidate)?;
+        if definition.is_none_or(|event| event.entry.as_str() != "harbor-inn") {
+            validate_terminal_cause(state, fact, decision)?;
+        }
+        let resolved = thread == &threat
+            && receipt.combat.iter().any(|outcome| {
+                outcome.knocked_out && outcome.target_id.as_slice() == BANDIT.as_slice()
+            });
+        sources.push(fact.id);
+        last = definition.map(|definition| ThreadConsequenceSelection {
+            thread,
+            event_definition: definition,
+            source: fact.id,
+            disposition: if resolved {
+                ThreadDisposition::Resolve
+            } else {
+                ThreadDisposition::Continue
+            },
+        });
+    }
+    if state.narrative.accepted_facts != sources {
+        return invalid();
+    }
+
+    // Re-stage only the last admitted consequence, not a replay of historical rules.
+    // Current private payload replacement can remove its ContentEvent shape; in that case
+    // the reducer validates the unchanged ledger without restoring revoked disclosure.
+    let mut before = state.clone();
+    if let Some(selection) = &last {
+        if before.narrative.accepted_facts.pop() != Some(selection.source) {
+            return invalid();
+        }
+        if selection.disposition == ThreadDisposition::Resolve {
+            before.narrative.open_threads.push(selection.thread.clone());
+        }
+    }
+    let before = model::checkpoint(current.basis(), before)?;
+    let policy = model::label(THREAD_POLICY)?;
+    let proposed = stage_checkpoint_thread_progress(
+        &before,
+        ThreadCheckpointRequest {
+            expected_basis: current.basis(),
+            admitted_pins: current.pins(),
+            policy: &policy,
+            expected_policy: &policy,
+            inventory: ReferenceInventory {
+                rules: &[model::rule()?, rule()?],
+                content: &model::contents()?,
+                resources: &super::resources()?,
+                assets: &[],
+            },
+            checkpoint_limits: model::limits(),
+            selections: last.as_slice(),
+        },
+        ProgressLimits {
+            records: 512,
+            consequences: 1,
+            work: 1024 * 1024,
+        },
+    )
+    .map_err(|_| RepositoryError::InvalidCandidate)?;
+    if proposed.checkpoint != *current {
+        return invalid();
+    }
+    Ok(())
+}
+
+fn validate_phase(current: &Checkpoint) -> Result<rpc::JourneyPhase, RepositoryError> {
     current
         .validate_resume(current.basis(), &model::pins()?)
         .map_err(|_| RepositoryError::InvalidCandidate)?;
