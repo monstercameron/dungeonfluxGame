@@ -361,6 +361,61 @@ fn mixed_visible_and_hidden_evidence_omits_entire_mapping_before_clock_validatio
 }
 
 #[test]
+fn hidden_or_unknown_evidence_omits_oversized_clock_reference_before_admission() {
+    let fixture = Fixture::new();
+    let current = fixture.checkpoint(fixture.state.clone());
+    let mut limits = limits();
+    limits.maximum_reference_bytes = 32;
+    let mut oversized = current.state().threats[1].clone();
+    oversized.definition.entry = label("hidden_clock_definition_with_long_valid_label");
+    let visible = [fact_id(10)];
+    let hidden = [fact_id(13)];
+    let unknown = [fact_id(99)];
+
+    for evidence in [&hidden[..], &unknown[..]] {
+        let baseline_mapping = [AdmittedThreatEvidence {
+            expected: &current.state().threats[1],
+            evidence,
+        }];
+        let oversized_mapping = [AdmittedThreatEvidence {
+            expected: &oversized,
+            evidence,
+        }];
+        let baseline = select_threat_relevance(
+            &current,
+            fixture.request(&current, Some(&baseline_mapping), ObserverScope::Shared),
+            limits,
+        )
+        .unwrap();
+        let selected = select_threat_relevance(
+            &current,
+            fixture.request(&current, Some(&oversized_mapping), ObserverScope::Shared),
+            limits,
+        )
+        .unwrap();
+        assert_eq!(selected.facts(), baseline.facts());
+        assert_eq!(
+            selected.accounted_output_bytes(),
+            baseline.accounted_output_bytes()
+        );
+    }
+
+    let visible_mapping = [AdmittedThreatEvidence {
+        expected: &oversized,
+        evidence: &visible,
+    }];
+    assert_eq!(
+        select_threat_relevance(
+            &current,
+            fixture.request(&current, Some(&visible_mapping), ObserverScope::Shared),
+            limits,
+        )
+        .unwrap_err(),
+        ThreatRelevanceError::InputCapacity
+    );
+}
+
+#[test]
 fn hidden_clock_and_fact_changes_with_stale_hidden_mapping_preserve_identical_safe_output() {
     let fixture = Fixture::new();
     let original = fixture.checkpoint(fixture.state.clone());

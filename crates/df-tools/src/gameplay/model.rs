@@ -14,6 +14,7 @@ use df_types::{
 };
 use sha2::{Digest, Sha256};
 use std::io::Read;
+use std::sync::OnceLock;
 
 pub(super) const SOURCE: &[u8] = b"SRD5.2.1 page6 D20 Tests Ability Checks; https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf; Wizards of the Coast LLC; CC BY 4.0; normal single-d20 check only";
 const CONTENT: &[u8] = b"DungeonFlux authored local journey profile6: Share the Lantern room. Two independently joined members create source-selected Dwarf Fighter/Soldier heroes; their selections and starting equipment persist. Begin at Lantern Wharf only after both builds. The physically present unnamed courier is canonical lantern-wharf-courier, with cautious-courier personality, deliver-dispatch motivation, and directional unfamiliar relationships to each hero. Asking reveals a member-private delivery clue; it grants no courier knowledge or witness. Accepted escort creates a shared courier-escort-contact fact with the acting hero as subject and an actual same-scene courier witness/known fact. The terminal escort-courier event remains shared with empty subjects for current phase admission. On a subsequent Defend command, source-bound courier-escort-reaction-policy may change only that witnessed hero's relationship to escort-supported through df-interaction::react on the prior committed contact. The change is categorical story policy, without a D&D bonus, action success, resource grant, or packet delivery. Defending begins the normal adjacent nonlethal Bandit encounter with actual initiative, player-selected attacks/SecondWind/endturn, source-qualified damage, unconscious one-HP knockout and no wall-time rest completion. Source knockout starts persist due schedules. After combat a joined member may propose an uninterrupted campaign Short Rest: one hour, no Hit Point Dice or HP healing, Fighter one-use SecondWind recharge capped2. Knockout waking retains Prone and dropped held gear and preserves the battle outcome. Versioned local-journey-rpc-3-threads-1-rest-1-inn-1-npc-1 maps begin-story/private-courier-note/escort-courier events to continued sealed-packet-delivery-thread; defend-courier/greatsword-attack/second-wind/end-turn events continue dockside-threat-thread, resolving only on the current operation accepted bandit unconscious transition. A conscious joined hero may select Harbor Inn from the current source-bound victory offer, before or after Short Rest. The admitted harbor-inn ContentEvent continues the unresolved packet thread and retains party, knowledge, resource, encounter and schedule records at unchanged logical time; this is scene continuation, not timed physical travel or delivery. Current phase admission requires exact accepted source receipts, prerequisite beats and historical native encounter outcome. Native Bandit tactics enumerate at most two source-legal authored adjacent targets in joined party order, select the first legal target without utility weights and preserve attack/draw authority. Delivery remains unresolved after combat; unmapped events consume no narrative source. Preconfigured Investigation/next-scene draft remains an earlier source lineage, not the active browser room.";
@@ -67,60 +68,72 @@ pub(super) fn contents() -> Result<Vec<ContentReference>, RepositoryError> {
 pub(super) fn source_manifest() -> Vec<u8> {
     [SOURCE, df_rules::local_journey::SOURCE.as_bytes()].concat()
 }
+
+struct SourceDigests {
+    manifest: ContentDigest,
+    handler: ContentDigest,
+    content: ContentDigest,
+}
+
+fn source_digests() -> &'static SourceDigests {
+    static DIGESTS: OnceLock<SourceDigests> = OnceLock::new();
+    DIGESTS.get_or_init(|| {
+        // All inputs are literals or include_bytes! data fixed in this compiled artifact.
+        let mut manifest = Sha256::new();
+        manifest.update(SOURCE);
+        manifest.update(df_rules::local_journey::SOURCE.as_bytes());
+
+        let mut handler = Sha256::new();
+        for source in [
+            include_bytes!("../../../df-rules/src/ability_check.rs").as_slice(),
+            include_bytes!("../../../df-rules/src/local_journey.rs").as_slice(),
+            include_bytes!("journey.rs").as_slice(),
+            include_bytes!("journey/narrative_phase.rs").as_slice(),
+            include_bytes!("journey/enemy_tactics.rs").as_slice(),
+            include_bytes!("journey/courier_reaction.rs").as_slice(),
+            include_bytes!("journey/encounter_outcome.rs").as_slice(),
+        ] {
+            handler.update(source);
+        }
+
+        let mut content = Sha256::new();
+        for source in [
+            CONTENT,
+            include_bytes!("courier_ai.rs").as_slice(),
+            include_bytes!("journey/narrative_phase.rs").as_slice(),
+            include_bytes!("journey/enemy_tactics.rs").as_slice(),
+            include_bytes!("journey/courier_reaction.rs").as_slice(),
+            include_bytes!("journey/encounter_outcome.rs").as_slice(),
+        ] {
+            content.update(source);
+        }
+
+        SourceDigests {
+            manifest: ContentDigest(manifest.finalize().into()),
+            handler: ContentDigest(handler.finalize().into()),
+            content: ContentDigest(content.finalize().into()),
+        }
+    })
+}
+
 pub(super) fn pins() -> Result<CheckpointPins, RepositoryError> {
+    let digests = source_digests();
     Ok(CheckpointPins {
         rules: RulesPins {
             mode: RulesMode::Standard2024,
             ruleset: label("srd521-journey-subset-2")?,
             catalog: label("srd521-journey-subset-2")?,
-            catalog_digest: ContentDigest(Sha256::digest(source_manifest()).into()),
+            catalog_digest: digests.manifest,
             source_manifest: label("srd521-creation-combat-rest-reviewed-subset")?,
-            source_manifest_digest: ContentDigest(Sha256::digest(source_manifest()).into()),
+            source_manifest_digest: digests.manifest,
             handler: label("source-qualified-journey-compiled-3")?,
-            handler_digest: ContentDigest(
-                Sha256::digest(
-                    [
-                        include_bytes!("../../../df-rules/src/ability_check.rs").as_slice(),
-                        include_bytes!("../../../df-rules/src/local_journey.rs").as_slice(),
-                        include_bytes!("journey.rs").as_slice(),
-                        include_bytes!("journey/narrative_phase.rs").as_slice(),
-                        include_bytes!("journey/enemy_tactics.rs").as_slice(),
-                        include_bytes!("journey/courier_reaction.rs").as_slice(),
-                    ]
-                    .concat(),
-                )
-                .into(),
-            ),
+            handler_digest: digests.handler,
         },
         content: ContentPins {
             content: label("harbor-investigation-demo-5-threads-1-rest-1-inn-1")?,
-            content_digest: ContentDigest(
-                Sha256::digest(
-                    [
-                        CONTENT,
-                        include_bytes!("courier_ai.rs").as_slice(),
-                        include_bytes!("journey/narrative_phase.rs").as_slice(),
-                        include_bytes!("journey/enemy_tactics.rs").as_slice(),
-                        include_bytes!("journey/courier_reaction.rs").as_slice(),
-                    ]
-                    .concat(),
-                )
-                .into(),
-            ),
+            content_digest: digests.content,
             package: label("harbor-investigation-demo-profile6-npc-1")?,
-            package_digest: ContentDigest(
-                Sha256::digest(
-                    [
-                        CONTENT,
-                        include_bytes!("courier_ai.rs").as_slice(),
-                        include_bytes!("journey/narrative_phase.rs").as_slice(),
-                        include_bytes!("journey/enemy_tactics.rs").as_slice(),
-                        include_bytes!("journey/courier_reaction.rs").as_slice(),
-                    ]
-                    .concat(),
-                )
-                .into(),
-            ),
+            package_digest: digests.content,
         },
         build: BuildIdentity::new(
             Some(crate::BUILD_ID),

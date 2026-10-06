@@ -1,0 +1,23 @@
+[package]
+name = "df-tempo"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+autotests = false
+
+[dependencies]
+df-model = { path = "../df-model" }
+
+[dev-dependencies]
+df-types = { path = "../df-types" }
+df-engine = { path = "../df-engine" }
+df-world = { path = "../df-world" }
+
+[[test]]
+name = "elapsed"
+path = "tests/elapsed.rs"
+
+[[test]]
+name = "engine_elapsed"
+path = "tests/engine_elapsed.rs"

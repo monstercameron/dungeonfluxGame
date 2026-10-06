@@ -659,6 +659,21 @@ pub fn encode_owned_demo_checkpoint(
     encode_checkpoint(checkpoint, limits).map_err(|_| RepositoryError::InvalidCandidate)
 }
 
+/// Decode a stored receipt for the owned native gameplay qualification only.
+/// The canonical codec validates its version and expected session and operation.
+pub fn decode_owned_demo_receipt(
+    document: &[u8],
+    session: SessionId,
+    operation: OperationId,
+    limits: NativeCodecLimits,
+) -> Result<df_session::submission::DecisionReceipt, RepositoryError> {
+    if document.len() > 4096 {
+        return Err(RepositoryError::InvalidReceipt);
+    }
+    crate::checkpoint_codec::decode_receipt(document, session, operation, 4096, limits)
+        .map_err(|_| RepositoryError::InvalidReceipt)
+}
+
 /// Operator-only loopback qualification on already owned sockets. No bind/connect,
 /// scope authority, transaction replay, or normal gameplay fault control is supplied.
 pub use crate::owned_pg_commit_proxy_fixture::{

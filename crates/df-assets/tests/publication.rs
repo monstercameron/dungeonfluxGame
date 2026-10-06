@@ -336,32 +336,103 @@ fn configured_byte_ceiling_accepts_edge_and_refuses_excess_before_publication() 
 }
 
 #[test]
-fn occupied_promotion_path_survives_failed_publish_and_staged_retry() {
+fn abandoned_promotion_path_does_not_block_resumed_publication() {
     let path = root();
     let bytes = Arc::new(NativeFileStore::new(&path, 1024).unwrap());
     let metadata = Metadata::new(bytes.clone());
     let content = b"complete bytes";
-    let staged = bytes.stage(operation(12), &mut &content[..]).unwrap();
+    bytes.stage(operation(12), &mut &content[..]).unwrap();
     let marker = path.join("promotion").join("0c".repeat(16));
-    let marker_bytes = b"another attempt owns this temporary";
+    let marker_bytes = b"abandoned promotion from a previous process";
     fs::write(&marker, marker_bytes).unwrap();
 
     let candidate = publication(operation(12), 12, "still", expected(content));
-    assert!(matches!(
-        publish(&context(), &candidate, &staged, bytes.as_ref(), &metadata),
-        Err(PublicationError::Store(StoreError::Io(error)))
-            if error.kind() == io::ErrorKind::AlreadyExists
-    ));
-    assert_eq!(fs::read(&marker).unwrap().as_slice(), marker_bytes);
-    assert_eq!(metadata.publish_calls.load(Ordering::Relaxed), 0);
+    let restarted = NativeFileStore::new(&path, 1024).unwrap();
+    let resumed = restarted.resume_staged(operation(12)).unwrap();
     assert_eq!(metadata.count(), 0);
+    assert_eq!(
+        publish(&context(), &candidate, &resumed, &restarted, &metadata)
+            .unwrap()
+            .status,
+        PublicationStatus::Published
+    );
+    assert_eq!(fs::read(&marker).unwrap().as_slice(), marker_bytes);
+    restarted
+        .confirm(metadata.lookup(&12).unwrap().unwrap().object)
+        .unwrap();
+    assert_eq!(
+        publish(&context(), &candidate, &resumed, &restarted, &metadata)
+            .unwrap()
+            .status,
+        PublicationStatus::AlreadyPublished
+    );
+    assert_eq!(metadata.count(), 1);
+}
 
-    fs::remove_file(&marker).unwrap();
+#[test]
+fn two_occupied_promotion_slots_survive_publication_through_next_slot() {
+    let path = root();
+    let bytes = Arc::new(NativeFileStore::new(&path, 1024).unwrap());
+    let metadata = Metadata::new(bytes.clone());
+    let content = b"complete bytes";
+    let staged = bytes.stage(operation(14), &mut &content[..]).unwrap();
+    let promotion = path.join("promotion");
+    let operation_name = "0e".repeat(16);
+    let first = promotion.join(&operation_name);
+    let second = promotion.join(format!("{operation_name}-1"));
+    let first_marker = b"first abandoned promotion";
+    let second_marker = b"second abandoned promotion";
+    fs::write(&first, first_marker).unwrap();
+    fs::write(&second, second_marker).unwrap();
+
+    let candidate = publication(operation(14), 14, "still", expected(content));
     assert_eq!(
         publish(&context(), &candidate, &staged, bytes.as_ref(), &metadata)
             .unwrap()
             .status,
         PublicationStatus::Published
     );
+    assert_eq!(fs::read(&first).unwrap().as_slice(), first_marker);
+    assert_eq!(fs::read(&second).unwrap().as_slice(), second_marker);
+    assert!(!promotion.join(format!("{operation_name}-2")).exists());
+    bytes
+        .confirm(metadata.lookup(&14).unwrap().unwrap().object)
+        .unwrap();
     assert_eq!(metadata.count(), 1);
+}
+
+#[test]
+fn occupied_promotion_slot_bound_refuses_without_visibility_or_overwrite() {
+    let path = root();
+    let bytes = Arc::new(NativeFileStore::new(&path, 1024).unwrap());
+    let metadata = Metadata::new(bytes.clone());
+    let content = b"complete bytes";
+    let staged = bytes.stage(operation(13), &mut &content[..]).unwrap();
+    let promotion = path.join("promotion");
+    let operation_name = "0d".repeat(16);
+    let marker_bytes = b"occupied";
+    let mut occupied = Vec::with_capacity(1024);
+    for slot in 0..1024 {
+        let name = if slot == 0 {
+            operation_name.clone()
+        } else {
+            format!("{operation_name}-{slot}")
+        };
+        let marker = promotion.join(name);
+        fs::write(&marker, marker_bytes).unwrap();
+        occupied.push(marker);
+    }
+
+    let candidate = publication(operation(13), 13, "still", expected(content));
+    assert!(matches!(
+        publish(&context(), &candidate, &staged, bytes.as_ref(), &metadata),
+        Err(PublicationError::Store(StoreError::StagingConflict))
+    ));
+    assert_eq!(metadata.publish_calls.load(Ordering::Relaxed), 0);
+    assert_eq!(metadata.count(), 0);
+    assert_eq!(fs::read_dir(path.join("objects")).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(&promotion).unwrap().count(), 1024);
+    for marker in occupied {
+        assert_eq!(fs::read(marker).unwrap().as_slice(), marker_bytes);
+    }
 }

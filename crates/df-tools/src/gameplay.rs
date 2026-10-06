@@ -2,6 +2,7 @@
 //! membership, not production bootstrap. The action and its outcome use generated RPC.
 mod actor;
 mod courier_ai;
+mod courier_npc_qualification;
 mod courier_process_qualification;
 mod inn_qualification;
 mod journey;
@@ -319,6 +320,10 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => None,
         Err(error) => return Err(error.into()),
     };
+    let npc_phase = courier_npc_qualification::phase();
+    let npc_budget = npc_phase
+        .map(courier_npc_qualification::call_budget)
+        .transpose()?;
     let inn_phase = inn_qualification::phase();
     let inn_budget = inn_phase.map(inn_qualification::call_budget).transpose()?;
     let courier_phase = courier_process_qualification::phase();
@@ -445,6 +450,21 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         join_grant_driver(grant_driver).await?;
         released.map_err(|_| io::Error::other("courier wrong-phase exact-fence release failed"))?;
         return Err(io::Error::other("courier phase admission kind refused").into());
+    }
+    if let Some(phase) = npc_phase
+        && admitted.restored != (phase == courier_npc_qualification::Phase::B)
+    {
+        let released = df_persistence::local_demo_scope::release_owner(
+            &grant_client,
+            admitted.checkpoint.basis().session,
+            fence,
+        )
+        .await;
+        drop(grant_client);
+        join_grant_driver(grant_driver).await?;
+        released
+            .map_err(|_| io::Error::other("courier NPC wrong-phase exact-fence release failed"))?;
+        return Err(io::Error::other("courier NPC phase admission kind refused").into());
     }
     if let Some(phase) = inn_phase
         && admitted.restored != (phase == inn_qualification::Phase::B)
@@ -619,12 +639,14 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         fenced: false,
         recovery_wakeup: updates,
         intent_notifications,
-        calls_remaining: inn_budget
+        calls_remaining: npc_budget
+            .or(inn_budget)
             .or(courier_budget)
             .or(restart_budget)
             .or(rest_budget)
             .unwrap_or(128),
-        qualification_joins: if inn_phase.is_some()
+        qualification_joins: if npc_phase.is_some()
+            || inn_phase.is_some()
             || courier_phase.is_some()
             || rest_phase.is_some()
             || restart_phase.is_some()
@@ -637,7 +659,8 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         completion_retry: None,
         #[cfg(test)]
         completion_observer: None,
-        qualification_inputs: if inn_phase.is_some()
+        qualification_inputs: if npc_phase.is_some()
+            || inn_phase.is_some()
             || courier_phase.is_some()
             || rest_phase.is_some()
             || restart_phase.is_some()
@@ -768,6 +791,16 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
             portrait: portrait_bytes,
             inn: inn_bytes,
         }));
+    let npc = npc_phase.map(|phase| {
+        tokio::spawn(courier_npc_qualification::run(
+            service.clone(),
+            display_credential,
+            codec,
+            database.clone(),
+            phase,
+            fence,
+        ))
+    });
     let inn = inn_phase.map(|phase| {
         tokio::spawn(inn_qualification::run(
             service.clone(),
@@ -890,6 +923,25 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Ok(())
     };
+    let npc_outcome = if let Some(mut task) = npc {
+        match tokio::time::timeout(Duration::from_secs(47), &mut task).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(io::Error::other(
+                "courier NPC consumer panicked; cleanup required",
+            )),
+            Err(_) => {
+                task.abort();
+                let joined = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
+                Err(io::Error::other(if joined.is_ok() {
+                    "courier NPC consumer deadline; aborted task joined"
+                } else {
+                    "courier NPC consumer deadline; join pending"
+                }))
+            }
+        }
+    } else {
+        Ok(())
+    };
     let inn_outcome = if let Some(mut task) = inn {
         match tokio::time::timeout(Duration::from_secs(47), &mut task).await {
             Ok(Ok(result)) => result,
@@ -923,7 +975,11 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     qualification_outcome?;
     restart_outcome?;
     rest_outcome?;
+    npc_outcome?;
     inn_outcome?;
+    if let Some(phase) = npc_phase {
+        courier_npc_qualification::closed(phase, remaining)?;
+    }
     if let Some(phase) = inn_phase {
         inn_qualification::closed(phase, remaining)?;
     }

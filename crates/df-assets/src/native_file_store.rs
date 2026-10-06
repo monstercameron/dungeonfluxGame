@@ -8,6 +8,8 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
+const MAX_PROMOTION_SLOTS: u32 = 1024;
+
 /// Native file-backed byte port. The caller configures a durable root outside caches.
 pub struct NativeFileStore {
     root: PathBuf,
@@ -164,19 +166,29 @@ impl AssetStore for NativeFileStore {
         if expected.byte_len > self.max_object_bytes {
             return Err(PublicationError::Store(StoreError::Capacity));
         }
-        let temporary = self
-            .root
-            .join("promotion")
-            .join(hex(staged.operation.as_bytes()));
-        let mut owns_temporary = false;
+        let mut temporary = None;
         let result = (|| {
             let mut input = File::open(&staged.path).map_err(StoreError::from)?;
-            let mut output = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temporary)
-                .map_err(StoreError::from)?;
-            owns_temporary = true;
+            let operation_name = hex(staged.operation.as_bytes());
+            let mut output = None;
+            for slot in 0..MAX_PROMOTION_SLOTS {
+                let name = if slot == 0 {
+                    operation_name.clone()
+                } else {
+                    format!("{operation_name}-{slot}")
+                };
+                let path = self.root.join("promotion").join(name);
+                match OpenOptions::new().write(true).create_new(true).open(&path) {
+                    Ok(file) => {
+                        temporary = Some(path);
+                        output = Some(file);
+                        break;
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                    Err(error) => return Err(PublicationError::Store(StoreError::Io(error))),
+                }
+            }
+            let mut output = output.ok_or(StoreError::StagingConflict)?;
             let mut hasher = Sha256::new();
             let mut length = 0_u64;
             let mut buffer = [0_u8; 65536];
@@ -214,7 +226,8 @@ impl AssetStore for NativeFileStore {
             output.flush().map_err(StoreError::from)?;
             output.sync_all().map_err(StoreError::from)?;
             let destination = self.object_path(&expected.sha256);
-            match fs::hard_link(&temporary, &destination) {
+            let path = temporary.as_ref().ok_or(StoreError::StagingConflict)?;
+            match fs::hard_link(path, &destination) {
                 Ok(()) => {
                     File::open(self.root.join("objects"))
                         .and_then(|dir| dir.sync_all())
@@ -222,7 +235,7 @@ impl AssetStore for NativeFileStore {
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                     verify_file(&destination, expected).map_err(PublicationError::Store)?;
-                    if !same_contents(&temporary, &destination).map_err(PublicationError::Store)? {
+                    if !same_contents(path, &destination).map_err(PublicationError::Store)? {
                         return Err(PublicationError::Store(StoreError::BackingIntegrity));
                     }
                     File::open(&destination)
@@ -236,7 +249,7 @@ impl AssetStore for NativeFileStore {
             }
             Ok(DurableObject::from_manifest(expected))
         })();
-        if owns_temporary {
+        if let Some(temporary) = temporary {
             let removed = fs::remove_file(&temporary);
             if result.is_ok() {
                 removed.map_err(StoreError::from)?;

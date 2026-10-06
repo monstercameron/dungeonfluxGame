@@ -1,4 +1,7 @@
-use df_model::checkpoint::{Basis, Checkpoint, CommandInput, GameCommand, GameInput};
+use df_model::checkpoint::{
+    AcceptedDecision, AudienceScope, Basis, Checkpoint, CommandInput, FactValue, GameCommand,
+    GameFact, GameInput, GameState,
+};
 use df_protocol::common as rpc;
 use df_session::submission::RepositoryError;
 use df_types::{OperationId, SessionRevision};
@@ -281,6 +284,129 @@ fn party_member(
         participant_id: who.as_bytes().to_vec(),
     })
 }
+
+fn shared_source_decision(
+    state: &GameState,
+    selected: &[&GameFact],
+    source: &GameFact,
+    terminal_entry: &str,
+    phase: rpc::JourneyPhase,
+) -> Result<(), RepositoryError> {
+    let mut owners = state.decisions.iter().filter(|decision| {
+        decision.operation == source.operation
+            && decision.revision == source.revision
+            && decision.source_policy.as_str() == super::journey::THREAD_POLICY
+            && decision.facts.get(source.ordinal as usize) == Some(&source.id)
+    });
+    let owner: &AcceptedDecision = owners.next().ok_or(RepositoryError::InvalidCandidate)?;
+    if owners.next().is_some() || super::journey::accepted(owner)?.phase != phase as i32 {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    let terminal = selected
+        .iter()
+        .copied()
+        .find(|fact| Some(&fact.id) == owner.facts.last())
+        .ok_or(RepositoryError::InvalidCandidate)?;
+    if source.audience != AudienceScope::Shared
+        || terminal.audience != AudienceScope::Shared
+        || source.ordinal.checked_add(1) != Some(terminal.ordinal)
+        || terminal.cause != Some(source.id)
+        || !matches!(&terminal.value, FactValue::ContentEvent { definition, subjects }
+            if *definition == model::content(terminal_entry)? && subjects.is_empty())
+    {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    Ok(())
+}
+
+fn witnessed_courier_support(
+    state: &GameState,
+    selected: &[&GameFact],
+    party: &[rpc::PartyMemberView],
+) -> Result<Option<String>, RepositoryError> {
+    let reaction_definition = model::content("courier-escort-reaction")?;
+    let mut reactions = selected.iter().copied().filter(|fact| {
+        matches!(&fact.value, FactValue::ContentEvent { definition, .. }
+            if *definition == reaction_definition)
+    });
+    let Some(reaction) = reactions.next() else {
+        return Ok(None);
+    };
+    if reactions.next().is_some() {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    let courier = super::journey::entity([0x67; 16])?;
+    let FactValue::ContentEvent { subjects, .. } = &reaction.value else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
+    let [observer, hero] = subjects.as_slice() else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
+    if *observer != courier {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    let contact = selected
+        .iter()
+        .copied()
+        .find(|fact| Some(fact.id) == reaction.cause)
+        .ok_or(RepositoryError::InvalidCandidate)?;
+    if !matches!(&contact.value, FactValue::ContentEvent { definition, subjects }
+        if *definition == model::content("courier-escort-contact")? && subjects.as_slice() == [*hero])
+    {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    shared_source_decision(
+        state,
+        selected,
+        contact,
+        "escort-courier",
+        rpc::JourneyPhase::Dialogue,
+    )?;
+    shared_source_decision(
+        state,
+        selected,
+        reaction,
+        "defend-courier",
+        rpc::JourneyPhase::Combat,
+    )?;
+    let witness_source = model::content("courier-escort-perception")?;
+    let relationship_policy = model::content("courier-escort-relationship")?;
+    let courier_definition = model::content("lantern-wharf-courier")?;
+    let courier_revision = model::label("lantern-wharf-courier-1")?;
+    let personality = model::content("cautious-courier")?;
+    let motivation = model::content("deliver-dispatch")?;
+    if !state.entities.iter().any(|entity| {
+        entity.id == courier
+            && entity.definition == courier_definition
+            && entity.identity_revision == courier_revision
+            && entity.location.is_none()
+            && entity.position.is_none()
+    }) || !state.continuity.npcs.iter().any(|npc| {
+        npc.entity == courier
+            && npc.personality == personality
+            && npc.motivations.as_slice() == std::slice::from_ref(&motivation)
+            && npc.known_facts.contains(&contact.id)
+    }) || !state.continuity.witnesses.iter().any(|witness| {
+        witness.observer == courier
+            && witness.fact == contact.id
+            && witness.source == witness_source
+    }) || !state.relationships.iter().any(|relationship| {
+        relationship.subject == courier
+            && relationship.object == *hero
+            && relationship.policy == relationship_policy
+            && relationship.state.as_str() == "escort-supported"
+    }) {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    let member = party
+        .iter()
+        .find(|member| {
+            member.character_ready && member.participant_id.as_slice() == hero.as_bytes()
+        })
+        .ok_or(RepositoryError::InvalidCandidate)?;
+    Ok(Some(member.name.clone()))
+}
+
 pub(super) fn journey_view(
     current: &Checkpoint,
     role: df_persistence::local_demo_scope::LocalDemoRole,
@@ -509,6 +635,12 @@ pub(super) fn journey_view(
         }
         _ => return Err(RepositoryError::InvalidCandidate),
     };
+    let narration = match witnessed_courier_support(state, perceived.facts(), &party)? {
+        Some(name) => {
+            format!("{narration} The courier now looks to {name} for support on the escort.")
+        }
+        None => narration.to_owned(),
+    };
     let journey = rpc::JourneyView {
         phase: if creation.is_some() {
             rpc::JourneyPhase::CharacterCreation as i32
@@ -536,14 +668,14 @@ pub(super) fn journey_view(
 
     let audience = match role {
         LocalDemoRole::Display => rpc::view_message::Audience::Display(rpc::DisplayGameplayView {
-            narration: narration.to_owned(),
+            narration: narration.clone(),
             scene_asset: scene.scene_asset.clone(),
             scene: Some(scene),
             journey: Some(journey),
         }),
         LocalDemoRole::Player => rpc::view_message::Audience::Player(rpc::PlayerGameplayView {
             offer_id: String::new(),
-            narration: narration.to_owned(),
+            narration,
             check: None,
             private_clue,
             action_available: !offers.is_empty(),

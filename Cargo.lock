@@ -507,6 +507,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-tempo"
+version = "0.1.0"
+dependencies = [
+ "df-engine",
+ "df-model",
+ "df-types",
+ "df-world",
+]
+
+[[package]]
 name = "df-testkit"
 version = "0.1.0"
 dependencies = [

@@ -190,7 +190,6 @@ pub fn select_threat_relevance<'a>(
         .admitted_content
         .iter()
         .chain([request.policy, request.expected_policy])
-        .chain(mappings.iter().map(|mapping| &mapping.expected.definition))
     {
         if reference_bytes(reference).is_none_or(|bytes| bytes > limits.maximum_reference_bytes) {
             return Err(ThreatRelevanceError::InputCapacity);
@@ -233,6 +232,11 @@ pub fn select_threat_relevance<'a>(
         }
         if !permitted {
             continue;
+        }
+        if reference_bytes(&mapping.expected.definition)
+            .is_none_or(|bytes| bytes > limits.maximum_reference_bytes)
+        {
+            return Err(ThreatRelevanceError::InputCapacity);
         }
         let mut found = None;
         for clock in &current.state().threats {

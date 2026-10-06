@@ -11,7 +11,11 @@ use std::time::Duration;
 use super::{model, wire};
 
 pub(super) mod courier_reaction;
+#[cfg(test)]
+#[path = "creation_tests.rs"]
+mod creation_tests;
 mod encounter_admission;
+mod encounter_outcome;
 mod enemy_tactics;
 mod narrative_phase;
 
@@ -146,7 +150,9 @@ pub(super) fn initial() -> Result<Checkpoint, RepositoryError> {
     model::checkpoint(model::basis()?, state)
 }
 pub(super) fn phase(current: &Checkpoint) -> Result<rpc::JourneyPhase, RepositoryError> {
-    narrative_phase::validate(current)
+    let phase = narrative_phase::validate(current)?;
+    encounter_outcome::validate(current, phase)?;
+    Ok(phase)
 }
 pub(super) fn resources() -> Result<Vec<ResourceConstraint>, RepositoryError> {
     let mut result = Vec::new();
@@ -1454,20 +1460,20 @@ fn start_knockout_rest(
 }
 
 pub(super) fn combat_victory(state: &GameState) -> Result<bool, RepositoryError> {
-    let encounter = state
-        .encounters
-        .first()
-        .ok_or(RepositoryError::InvalidCandidate)?;
-    let victory = encounter
-        .objectives
-        .contains(&model::content("combat-victory")?);
-    let defeat = encounter
-        .objectives
-        .contains(&model::content("combat-defeat")?);
-    if encounter.active_turn.is_some() || victory == defeat {
+    let [encounter] = state.encounters.as_slice() else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
+    if encounter.active_turn.is_some() {
         return Err(RepositoryError::InvalidCandidate);
     }
-    Ok(victory)
+    let objective = model::content("defend-courier")?;
+    if encounter.objectives == [objective.clone(), model::content("combat-victory")?] {
+        Ok(true)
+    } else if encounter.objectives == [objective, model::content("combat-defeat")?] {
+        Ok(false)
+    } else {
+        Err(RepositoryError::InvalidCandidate)
+    }
 }
 fn knockout_rest_started(
     current: &Checkpoint,
@@ -1739,6 +1745,15 @@ fn attack(
     })
 }
 fn finish_combat(state: &mut GameState) -> Result<bool, RepositoryError> {
+    let [encounter] = state.encounters.as_slice() else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
+    if state.characters.len() != 2
+        || encounter.objectives != [model::content("defend-courier")?]
+        || encounter.active_turn.is_none()
+    {
+        return Err(RepositoryError::InvalidCandidate);
+    }
     let enemy = entity(BANDIT)?;
     let all_players_down = state
         .characters
@@ -1747,8 +1762,12 @@ fn finish_combat(state: &mut GameState) -> Result<bool, RepositoryError> {
         .collect::<Result<Vec<_>, _>>()?
         .iter()
         .all(|value| *value != 0);
-    if value(state, enemy, "unconscious")? != 0 || all_players_down {
-        let outcome = model::content(if value(state, enemy, "unconscious")? != 0 {
+    let enemy_down = value(state, enemy, "unconscious")? != 0;
+    if enemy_down && all_players_down {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    if enemy_down || all_players_down {
+        let outcome = model::content(if enemy_down {
             "combat-victory"
         } else {
             "combat-defeat"
@@ -3184,6 +3203,95 @@ mod tests {
         assert_eq!(wrapped.state().logical_time.ticks, 6);
         assert_eq!(combat_round(&wrapped), Ok(2));
         wrapped
+    }
+
+    #[test]
+    fn actual_combat_refuses_reordered_initiative_before_action_draws() {
+        let combat = round_combat();
+        assert_eq!(phase(&combat).unwrap(), rpc::JourneyPhase::Combat);
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let mut state = combat.state().clone();
+        state.encounters[0].turn_order.swap(0, 1);
+        let forged = model::checkpoint(combat.basis(), state).unwrap();
+        assert_eq!(phase(&forged), Err(RepositoryError::InvalidCandidate));
+        assert!(offered(&forged, first).is_err());
+        let command = input(
+            &forged,
+            first,
+            30,
+            "greatsword-attack",
+            vec![
+                (
+                    model::label("savage-attacker").unwrap(),
+                    model::label("no").unwrap(),
+                ),
+                (model::label("graze").unwrap(), model::label("no").unwrap()),
+            ],
+        );
+        let before = forged.clone();
+        let mut draws = 0;
+        assert_eq!(
+            stage_with_supplier(&forged, &command, &mut |sides| {
+                draws += 1;
+                Ok(if sides == 20 { 10 } else { 6 })
+            }),
+            Err(RepositoryError::InvalidCandidate)
+        );
+        assert_eq!(draws, 0);
+        assert_eq!(forged, before);
+    }
+
+    #[test]
+    fn actual_victory_refuses_current_resource_contradicting_unrested_outcome() {
+        let victory = inn_victory();
+        assert_eq!(phase(&victory).unwrap(), rpc::JourneyPhase::Complete);
+        let mut state = victory.state().clone();
+        set(&mut state, entity(BANDIT).unwrap(), "unconscious", 0).unwrap();
+        let forged = model::checkpoint(victory.basis(), state).unwrap();
+        assert_eq!(phase(&forged), Err(RepositoryError::InvalidCandidate));
+    }
+
+    #[test]
+    fn actual_combat_refuses_unsourced_knockout_before_action_draws() {
+        let combat = round_combat();
+        let first = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let mut state = combat.state().clone();
+        let other = entity(ENTITIES[1]).unwrap();
+        for (resource, value) in [
+            ("hit-points", 1),
+            ("unconscious", 1),
+            ("prone", 1),
+            ("held-weapon", 0),
+        ] {
+            set(&mut state, other, resource, value).unwrap();
+        }
+        let forged = model::checkpoint(combat.basis(), state).unwrap();
+        assert_eq!(phase(&forged), Err(RepositoryError::InvalidCandidate));
+        assert!(offered(&forged, first).is_err());
+        let command = input(
+            &forged,
+            first,
+            30,
+            "greatsword-attack",
+            vec![
+                (
+                    model::label("savage-attacker").unwrap(),
+                    model::label("no").unwrap(),
+                ),
+                (model::label("graze").unwrap(), model::label("no").unwrap()),
+            ],
+        );
+        let before = forged.clone();
+        let mut draws = 0;
+        assert_eq!(
+            stage_with_supplier(&forged, &command, &mut |_| {
+                draws += 1;
+                Ok(10)
+            }),
+            Err(RepositoryError::InvalidCandidate)
+        );
+        assert_eq!(draws, 0);
+        assert_eq!(forged, before);
     }
     fn round_view(current: &Checkpoint, member: MemberId, display: bool) -> rpc::ViewMessage {
         use df_persistence::local_demo_scope::LocalDemoRole;

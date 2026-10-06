@@ -139,6 +139,148 @@ fn note_mut(state: &mut GameState) -> &mut GameFact {
 }
 
 #[test]
+fn witnessed_shared_courier_reaction_reaches_both_players_and_display_without_private_cue() {
+    let (opening, first, second) = before_answer();
+    let escorted = journey::stage(
+        &opening,
+        &command(&opening, first, 6, "escort-courier", vec![]),
+    )
+    .unwrap();
+    let defended = journey::stage(
+        &escorted,
+        &command(&escorted, first, 7, "defend-courier", vec![]),
+    )
+    .unwrap();
+    let witnessed = "The courier now looks to Brynn for support on the escort.";
+    for view in [
+        journey_view(&defended, LocalDemoRole::Player, first).unwrap(),
+        journey_view(&defended, LocalDemoRole::Player, second).unwrap(),
+        display(&defended),
+    ] {
+        let narration = match view.audience.as_ref().unwrap() {
+            rpc::view_message::Audience::Player(player) => &player.narration,
+            rpc::view_message::Audience::Display(display) => &display.narration,
+        };
+        assert!(narration.contains(witnessed));
+        let encoded = view.encode_to_vec();
+        assert!(
+            encoded
+                .windows(witnessed.len())
+                .any(|bytes| bytes == witnessed.as_bytes())
+        );
+        assert!(
+            !encoded
+                .windows(courier_ai::RESPONSE.len())
+                .any(|bytes| bytes == courier_ai::RESPONSE.as_bytes())
+        );
+    }
+
+    let (private, recipient, other) = completed();
+    let private_defended = journey::stage(
+        &private,
+        &command(&private, recipient, 7, "defend-courier", vec![]),
+    )
+    .unwrap();
+    assert_eq!(
+        player(&private_defended, recipient).private_clue,
+        courier_ai::RESPONSE
+    );
+    for view in [
+        journey_view(&private_defended, LocalDemoRole::Player, other).unwrap(),
+        display(&private_defended),
+    ] {
+        let encoded = view.encode_to_vec();
+        assert!(
+            !encoded
+                .windows(witnessed.len())
+                .any(|bytes| bytes == witnessed.as_bytes())
+        );
+        assert!(
+            !encoded
+                .windows(courier_ai::RESPONSE.len())
+                .any(|bytes| bytes == courier_ai::RESPONSE.as_bytes())
+        );
+    }
+}
+
+#[test]
+fn witnessed_courier_reaction_requires_current_shared_cause_and_npc_evidence() {
+    let (opening, first, second) = before_answer();
+    let escorted = journey::stage(
+        &opening,
+        &command(&opening, first, 6, "escort-courier", vec![]),
+    )
+    .unwrap();
+    let defended = journey::stage(
+        &escorted,
+        &command(&escorted, first, 7, "defend-courier", vec![]),
+    )
+    .unwrap();
+    let mut without_witness = defended.state().clone();
+    without_witness.continuity.witnesses.clear();
+    let mut without_knowledge = defended.state().clone();
+    without_knowledge.continuity.npcs[0].known_facts.clear();
+    let mut without_relationship = defended.state().clone();
+    without_relationship
+        .relationships
+        .iter_mut()
+        .find(|relationship| relationship.state.as_str() == "escort-supported")
+        .unwrap()
+        .state = model::label("unfamiliar").unwrap();
+    let mut private_contact = defended.state().clone();
+    private_contact
+        .facts
+        .iter_mut()
+        .find(|fact| {
+            matches!(&fact.value, FactValue::ContentEvent { definition, .. }
+            if definition.entry.as_str() == "courier-escort-contact")
+        })
+        .unwrap()
+        .audience = AudienceScope::Members(vec![first]);
+    let mut wrong_cause = defended.state().clone();
+    let escort_terminal = wrong_cause
+        .facts
+        .iter()
+        .find(|fact| {
+            matches!(&fact.value, FactValue::ContentEvent { definition, .. }
+            if definition.entry.as_str() == "escort-courier")
+        })
+        .unwrap()
+        .id;
+    wrong_cause
+        .facts
+        .iter_mut()
+        .find(|fact| {
+            matches!(&fact.value, FactValue::ContentEvent { definition, .. }
+            if definition.entry.as_str() == "courier-escort-reaction")
+        })
+        .unwrap()
+        .cause = Some(escort_terminal);
+    for state in [
+        without_witness,
+        without_knowledge,
+        without_relationship,
+        private_contact,
+        wrong_cause,
+    ] {
+        let changed = model::checkpoint(defended.basis(), state).unwrap();
+        for (role, principal) in [
+            (LocalDemoRole::Player, first),
+            (LocalDemoRole::Player, second),
+            (
+                LocalDemoRole::Display,
+                MemberId::from_bytes(&DISPLAY).unwrap(),
+            ),
+        ] {
+            assert_eq!(
+                journey_view(&changed, role, principal),
+                Err(RepositoryError::InvalidCandidate)
+            );
+        }
+    }
+}
+
+#[test]
 fn real_prepared_completion_projects_exact_source_to_only_its_current_recipient() {
     let (pending, first, second) = pending();
     let before = pending.clone();
