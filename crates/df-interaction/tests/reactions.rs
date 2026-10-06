@@ -420,6 +420,85 @@ fn exact_basis_and_accepted_decision_are_required() {
 }
 
 #[test]
+fn reordered_accepted_event_membership_refuses_without_changing_checkpoint() {
+    let mut supplied = state();
+    supplied.decisions[0].facts.reverse();
+    let supplied = checkpoint(supplied);
+    let before = supplied.clone();
+
+    assert_eq!(
+        run(&supplied, request(), &[entry()]),
+        Err(ReactionError::UnacceptedEvent)
+    );
+    assert_eq!(
+        run(&supplied, request(), &[entry()]),
+        Err(ReactionError::UnacceptedEvent)
+    );
+    assert_eq!(supplied, before);
+}
+
+#[test]
+fn sparse_accepted_event_membership_cannot_replace_its_canonical_ordinal() {
+    let mut exact = state();
+    exact.facts[1].cause = None;
+    let exact = checkpoint(exact);
+    let exact_before = exact.clone();
+    let valid = run(&exact, request(), &[entry()]).unwrap();
+    let ReactionOutcome::Proposed(proposal) = &valid else {
+        panic!("expected exact-ordinal event proposal");
+    };
+    assert_eq!(proposal.event, fact_id(7));
+    assert_eq!(proposal.cause, None);
+    assert_eq!(valid, run(&exact, request(), &[entry()]).unwrap());
+    assert_eq!(exact, exact_before);
+
+    let mut sparse = exact.state().clone();
+    sparse.decisions[0].facts = vec![fact_id(7)];
+    let sparse = checkpoint(sparse);
+    let sparse_before = sparse.clone();
+    assert_eq!(
+        run(&sparse, request(), &[entry()]),
+        Err(ReactionError::UnacceptedEvent)
+    );
+    assert_eq!(sparse, sparse_before);
+}
+
+#[test]
+fn exact_event_membership_does_not_admit_a_reordered_direct_cause() {
+    let mut exact = state();
+    let mut filler = exact.facts[0].clone();
+    filler.id = fact_id(9);
+    exact.facts[0].ordinal = 1;
+    exact.facts[1].ordinal = 2;
+    exact.facts.insert(0, filler);
+    exact.decisions[0].facts = vec![fact_id(9), fact_id(6), fact_id(7)];
+    let exact = checkpoint(exact);
+    let exact_before = exact.clone();
+    let valid = run(&exact, request(), &[entry()]).unwrap();
+    let ReactionOutcome::Proposed(proposal) = &valid else {
+        panic!("expected exact-ordinal cause proposal");
+    };
+    assert_eq!(proposal.event, fact_id(7));
+    assert_eq!(proposal.cause, Some(fact_id(6)));
+    assert_eq!(valid, run(&exact, request(), &[entry()]).unwrap());
+    assert_eq!(exact, exact_before);
+
+    let mut reordered = exact.state().clone();
+    reordered.decisions[0].facts.swap(0, 1);
+    let reordered = checkpoint(reordered);
+    let reordered_before = reordered.clone();
+    assert_eq!(
+        reordered.state().decisions[0].facts[2],
+        reordered.state().facts[2].id
+    );
+    assert_eq!(
+        run(&reordered, request(), &[entry()]),
+        Err(ReactionError::UnacceptedEvent)
+    );
+    assert_eq!(reordered, reordered_before);
+}
+
+#[test]
 fn authored_identity_motivation_event_and_state_must_match_without_fallback() {
     let supplied = checkpoint(state());
     for change in 0..4 {

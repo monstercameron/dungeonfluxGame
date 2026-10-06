@@ -370,7 +370,7 @@ fn accepted_decision<'a>(
         .find(|decision| {
             decision.operation == fact.operation
                 && decision.revision == fact.revision
-                && decision.facts.contains(&fact.id)
+                && decision.facts.get(fact.ordinal as usize) == Some(&fact.id)
         })
         .ok_or(ReactionError::UnacceptedEvent)
 }
