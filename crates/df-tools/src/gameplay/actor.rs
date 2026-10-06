@@ -288,6 +288,14 @@ pub(super) fn unavailable(error: RepositoryError) -> tonic::Status {
         _ => tonic::Status::unavailable("gameplay authority unavailable; retain your operation"),
     }
 }
+
+fn after_grant_reconnect<T>(
+    reconnected: Result<(), RepositoryError>,
+    dispatch: impl FnOnce() -> Result<T, tonic::Status>,
+) -> Result<T, tonic::Status> {
+    reconnected.map_err(unavailable)?;
+    dispatch()
+}
 impl Actor {
     pub(super) fn next_completion_wake(&self) -> Option<Instant> {
         self.completion_retry.as_ref().and_then(|retry| retry.next)
@@ -774,6 +782,12 @@ impl Reducer<Call> for Actor {
             build: crate::BUILD_ID.to_owned(),
         };
         let mut span = df_observe::begin(&context, "gameplay.local_demo_call");
+        // Charge the ordinary call first. Reconnection repairs only its owned
+        // transport; the original handler still checks current authority and fences.
+        let reconnected = match &call {
+            Call::QualificationInputs { .. } => Ok(()),
+            _ => self.issuer.reconnect_if_closed(),
+        };
         let delivered = match call {
             Call::QualificationInputs { reply } => reply
                 .send(
@@ -793,17 +807,27 @@ impl Reducer<Call> for Actor {
                         .ok_or_else(|| tonic::Status::permission_denied("qualification disabled")),
                 )
                 .is_ok(),
-            Call::Join { request, reply } => reply.send(self.join(request)).is_ok(),
+            Call::Join { request, reply } => reply
+                .send(after_grant_reconnect(reconnected, || self.join(request)))
+                .is_ok(),
             Call::Submit {
                 credential,
                 request,
                 reply,
-            } => reply.send(self.submit(credential, request)).is_ok(),
+            } => reply
+                .send(after_grant_reconnect(reconnected, || {
+                    self.submit(credential, request)
+                }))
+                .is_ok(),
             Call::View {
                 credential,
                 request,
                 reply,
-            } => reply.send(self.view(credential, request)).is_ok(),
+            } => reply
+                .send(after_grant_reconnect(reconnected, || {
+                    self.view(credential, request)
+                }))
+                .is_ok(),
         };
         span.finish_unmeasured(if delivered {
             "actor_outcome_delivered"
@@ -817,6 +841,29 @@ impl Reducer<Call> for Actor {
 #[cfg(test)]
 mod qualification_tests {
     use super::*;
+
+    #[test]
+    fn failed_grant_reconnect_never_dispatches_the_original_call() {
+        let calls = std::cell::Cell::new(0);
+        let result = after_grant_reconnect(Err(RepositoryError::Unavailable), || {
+            calls.set(calls.get() + 1);
+            Ok(())
+        });
+        assert_eq!(result.unwrap_err().code(), tonic::Code::Unavailable);
+        assert_eq!(calls.get(), 0);
+    }
+
+    #[test]
+    fn reconnected_call_dispatches_once_and_preserves_current_authority_refusal() {
+        let calls = std::cell::Cell::new(0);
+        let result: Result<(), _> = after_grant_reconnect(Ok(()), || {
+            calls.set(calls.get() + 1);
+            Err(tonic::Status::permission_denied("current grant refused"))
+        });
+        assert_eq!(result.unwrap_err().code(), tonic::Code::PermissionDenied);
+        assert_eq!(calls.get(), 1);
+        assert_eq!(after_grant_reconnect(Ok(()), || Ok(7)).unwrap(), 7);
+    }
 
     #[test]
     fn completion_retry_has_controlled_spacing_and_terminal_exhaustion() {

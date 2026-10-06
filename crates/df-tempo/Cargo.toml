@@ -21,3 +21,7 @@ path = "tests/elapsed.rs"
 [[test]]
 name = "engine_elapsed"
 path = "tests/engine_elapsed.rs"
+
+[[test]]
+name = "fatigue"
+path = "tests/fatigue.rs"

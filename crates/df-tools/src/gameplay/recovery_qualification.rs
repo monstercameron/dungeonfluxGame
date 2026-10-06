@@ -129,7 +129,7 @@ impl RunningActor {
         codec: NativeCodecLimits,
         counter: Arc<AtomicUsize>,
     ) -> Result<Self, Error> {
-        Self::start_observed(repository, issuer, checkpoint, codec, counter, None).await
+        Self::start_observed(repository, issuer, checkpoint, codec, counter, None, 20).await
     }
     async fn start_observed(
         repository: PostgresRepository<LocalDemoAuthority>,
@@ -138,6 +138,7 @@ impl RunningActor {
         codec: NativeCodecLimits,
         counter: Arc<AtomicUsize>,
         completion_observer: Option<actor::CompletionObserver>,
+        calls_remaining: u16,
     ) -> Result<Self, Error> {
         let (updates, receiver) = watch::channel(checkpoint.clone());
         let (publication, intent_notifications) = actor::Publication::new(updates.clone());
@@ -163,7 +164,7 @@ impl RunningActor {
             fenced: false,
             recovery_wakeup: updates,
             intent_notifications,
-            calls_remaining: 20,
+            calls_remaining,
             qualification_inputs: Some(Vec::new()),
             qualification_joins: Some(Vec::new()),
             completion_retry: None,
@@ -429,8 +430,16 @@ async fn join_driver(
     }
 }
 async fn exercise() -> Result<(), Error> {
+    exercise_grant_recovery(false).await
+}
+
+async fn exercise_grant_recovery(recover_grant: bool) -> Result<(), Error> {
     let started = Instant::now();
-    let configuration = configuration()?;
+    let configuration = if recover_grant {
+        ordinary_grant_configuration("df_gameplay_demo_20261006_grant_uncertain01")?
+    } else {
+        configuration()?
+    };
     let (mut inspector, connection) =
         timeout(Duration::from_secs(2), configuration.connect(NoTls)).await??;
     let inspector_driver = tokio::spawn(connection);
@@ -458,14 +467,35 @@ async fn exercise() -> Result<(), Error> {
     grants.application_name("df-engine-recovery-grant-01");
     let (grant_client, grant_connection) =
         timeout(Duration::from_secs(2), grants.connect(NoTls)).await??;
-    let grant_driver = tokio::spawn(grant_connection);
-    let issuer = LocalDemoScopeIssuer::new(
+    let (grant_closed, grant_close) = oneshot::channel();
+    let mut grant_driver = Some(tokio::spawn(async move {
+        let result = grant_connection.await;
+        let _observed = grant_closed.send(());
+        result
+    }));
+    let grant_pid: i32 = grant_client
+        .query_one("SELECT pg_backend_pid()", &[])
+        .await?
+        .try_get(0)?;
+    let mut issuer = LocalDemoScopeIssuer::new(
         tokio::runtime::Handle::current(),
         grant_client,
         initial.basis().session,
         fence,
     )
     .map_err(repository_error)?;
+    if recover_grant {
+        let driver = grant_driver
+            .take()
+            .ok_or_else(|| io::Error::other("grant driver absent"))?;
+        if let Err((error, driver)) = issuer.configure_reconnect(grants.clone(), driver) {
+            let closed = issuer.close_owned().await;
+            let joined = join_driver(driver).await;
+            closed.map_err(repository_error)?;
+            joined?;
+            return Err(repository_error(error));
+        }
+    }
     let mut calls = Calls {
         count: 0,
         deadline: started + Duration::from_secs(45),
@@ -519,7 +549,10 @@ async fn exercise() -> Result<(), Error> {
         .await
     });
     // Config::port appends, so build a fresh single-host proxy configuration.
-    let proxied = trusted_configuration(55518, "df-engine-recovery-repository-01");
+    let mut proxied = trusted_configuration(55518, "df-engine-recovery-repository-01");
+    if recover_grant {
+        proxied.dbname("df_gameplay_demo_20261006_grant_uncertain01");
+    }
     let counter = Arc::new(AtomicUsize::new(0));
     let mut fault = RunningActor::start(
         repository(&proxied, &direct, codec).await?,
@@ -534,10 +567,15 @@ async fn exercise() -> Result<(), Error> {
         expect_unknown_initial_submission(
             submit(&fault.service, &original, first, &mut calls).await,
         )?;
-        required(counter.load(Ordering::SeqCst) == 1)?;
+        require_reductions(&counter, 1, "original unknown commit")?;
         required(*fault.service.updates.borrow() == baseline)?;
         let before = durable(&inspector, 0x93).await?;
         required(before.counts[3] == 0 && before.intents.is_empty())?;
+        if recover_grant {
+            let stopped: bool = inspector.query_one("SELECT pg_terminate_backend($1::integer)", &[&grant_pid]).await?.try_get(0)?;
+            required(stopped)?;
+            timeout(Duration::from_secs(2), grant_close).await??;
+        }
         let mut different = create(&baseline, 0x94);
         required(
             submit(&fault.service, &different, second, &mut calls)
@@ -629,7 +667,8 @@ async fn exercise() -> Result<(), Error> {
         )?;
         different = create(&restored.checkpoint, 0x94);
         let later = committed(submit(&fault.service, &different, second, &mut calls).await?)?;
-        required(!later.replayed && counter.load(Ordering::SeqCst) == 2)?;
+        required(!later.replayed)?;
+        require_reductions(&counter, 2, "later distinct character creation")?;
         let after = durable(&inspector, 0x94).await?;
         required(
             after.counts[0] == before.counts[0] + 1 && after.counts[2] == before.counts[2] + 1,
@@ -684,6 +723,7 @@ async fn exercise() -> Result<(), Error> {
         drop(external_exit.issuer);
         join_driver(external_driver).await?;
         let advanced = advance?;
+        let before_courier = durable(&inspector, 0x95).await?;
         let stale = action(
             &current.checkpoint,
             0x96,
@@ -696,20 +736,71 @@ async fn exercise() -> Result<(), Error> {
         )?;
         let known = snapshot(&fault.service, &mut calls).await?;
         required(known.fenced && !known.uncertain && known.checkpoint == current.checkpoint)?;
+        require_reductions(&counter, 3, "stale compare-and-swap reduction")?;
+        required(durable(&inspector, 0x95).await? == before_courier)?;
         let courier = action(&advanced, 0x97, rpc::GameplayActionKind::AskCourier);
-        required(!committed(submit(&fault.service, &courier, first, &mut calls).await?)?.replayed)?;
+        let courier_receipt = committed(submit(&fault.service, &courier, first, &mut calls).await?)?;
+        required(!courier_receipt.replayed)?;
         let resumed = snapshot(&fault.service, &mut calls).await?;
         required(!resumed.fenced && !resumed.uncertain)?;
-        required(
-            local_demo_scope::encode_owned_demo_checkpoint(&resumed.checkpoint, codec)
-                .map_err(repository_error)?
-                == durable(&inspector, 0x97).await?.envelope,
-        )?;
-        required(counter.load(Ordering::SeqCst) == 4)?;
+        // Engine::decide counts both the accepted Ask and its separate Job input.
+        // They follow original creation, later creation, and the rejected stale CAS.
+        require_reductions(&counter, 5, "AskCourier and its committed completion")?;
+        let completed = &resumed.checkpoint;
+        let after_courier = durable(&inspector, 0x97).await?;
+        required(after_courier.envelope == local_demo_scope::encode_owned_demo_checkpoint(completed, codec)
+            .map_err(repository_error)?)?;
+        let [intent] = completed.state().intents.as_slice() else {
+            return Err(io::Error::other("expected one courier completion intent").into());
+        };
+        required(intent.kind == df_model::checkpoint::EffectKind::RunAi
+            && intent.status == df_model::checkpoint::DurableStatus::Completed
+            && intent.operation.as_bytes() == &[0x97; 16])?;
+        let completion = super::courier_ai::expected_completion(intent)
+            .map_err(|_| io::Error::other("courier completion binding"))?;
+        let operation = super::courier_ai::completion_operation(intent)
+            .map_err(|_| io::Error::other("courier completion operation"))?;
+        let recipient = super::courier_ai::recipient(completed, intent)
+            .map_err(|_| io::Error::other("courier completion recipient"))?;
+        let completion_decisions = completed.state().decisions.iter()
+            .filter(|decision| decision.operation == operation).count();
+        required(completion_decisions == 1
+            && super::courier_ai::saved_response(completed, recipient).map_err(repository_error)?
+                == Some(super::courier_ai::RESPONSE))?;
+        // Recover the pre-completion envelope by undoing only its documented
+        // status/decision/revision changes, then bind it to the actual Ask checkpoint.
+        let mut pending_state = completed.state().clone();
+        pending_state.decisions.retain(|decision| decision.operation != operation);
+        pending_state.intents[0].status = df_model::checkpoint::DurableStatus::Pending;
+        let pending = model::checkpoint(intent.basis, pending_state).map_err(repository_error)?;
+        let pending_bytes = local_demo_scope::encode_owned_demo_checkpoint(&pending, codec)
+            .map_err(repository_error)?;
+        let epoch = intent.basis.revision.epoch().get().to_string();
+        let source_sequence = intent.basis.revision.sequence().to_string();
+        let source_envelope: Vec<u8> = inspector.query_one("SELECT CASE WHEN octet_length(complete_envelope)<=1048576 THEN complete_envelope END FROM df_game.checkpoints WHERE tenant_id=$1::bytea AND session_id=$2::bytea AND recovery_epoch=$3::text::numeric AND in_epoch_sequence=$4::text::numeric", &[&local_demo_scope::TENANT.as_slice(), &intent.basis.session.as_bytes().as_slice(), &epoch, &source_sequence]).await?.try_get(0)?;
+        required(source_envelope == pending_bytes
+            && super::courier_ai::stage_completion(&pending, &completion, operation)
+                .map_err(|_| io::Error::other("expected courier completion checkpoint"))? == *completed)?;
+        let fingerprint = super::courier_ai::completion_fingerprint(&completion)
+            .map_err(|_| io::Error::other("courier completion fingerprint"))?;
+        let sequence = completed.basis().revision.sequence().to_string();
+        let completion_rows: i64 = inspector.query_one("SELECT count(*)::bigint FROM df_game.operations WHERE tenant_id=$1::bytea AND session_id=$2::bytea AND principal_id=$3::bytea AND command_namespace=$4::bytea AND recovery_epoch=$5::text::numeric AND operation_id=$6::bytea AND fingerprint_version=1 AND canonical_fingerprint=$7::bytea AND committed_epoch=$5::text::numeric AND committed_sequence=$8::text::numeric AND receipt_version=2 AND receipt IS NOT NULL", &[&local_demo_scope::TENANT.as_slice(), &intent.basis.session.as_bytes().as_slice(), &recipient.as_bytes().as_slice(), &b"local-courier-completion-v1".as_slice(), &epoch, &operation.as_bytes().as_slice(), &fingerprint.as_slice(), &sequence]).await?.try_get(0)?;
+        required(completion_rows == 1
+            && after_courier.counts[0] == before_courier.counts[0] + 2
+            && after_courier.counts[2] == before_courier.counts[2] + 2
+            && after_courier.counts[3] == before_courier.counts[3] + 1
+            && before_courier.operations.iter().all(|row| after_courier.operations.contains(row))
+            && before_courier.facts.iter().all(|row| after_courier.facts.contains(row))
+            && before_courier.checkpoints.iter().all(|row| after_courier.checkpoints.contains(row)))?;
+        let replayed_courier = committed(submit(&fault.service, &courier, first, &mut calls).await?)?;
+        required(replayed_courier.replayed && replayed_courier.outcome == courier_receipt.outcome
+            && replayed_courier.revision == courier_receipt.revision
+            && durable(&inspector, 0x97).await? == after_courier)?;
+        require_reductions(&counter, 5, "exact AskCourier receipt replay")?;
         Ok::<_, Error>(resumed.checkpoint)
     }
     .await;
-    let fault_exit = fault.close().await?;
+    let mut fault_exit = fault.close().await?;
     let proxy_join = timeout(Duration::from_secs(2), &mut proxy).await;
     let observation = match proxy_join {
         Ok(joined) => joined?.map_err(|error| {
@@ -726,34 +817,57 @@ async fn exercise() -> Result<(), Error> {
             Err(io::Error::other("owned ACK proxy joined after deadline"))
         }
     };
+    fault_exit
+        .issuer
+        .close_owned()
+        .await
+        .map_err(repository_error)?;
     drop(fault_exit.issuer);
-    join_driver(grant_driver).await?;
-    // The primary Service/Actor assertion is retained even if its cleanup closes
-    // the proxy before COMMIT. A proxy failure never certifies a committed write.
-    let final_checkpoint = flow?;
-    let observation = observation?;
-    required(fault_exit.checkpoint == final_checkpoint)?;
-    required(
-        observation.frontend_commit_forwarded
-            && observation.postgres_commit_complete_observed
-            && observation.postgres_ready_idle_observed
-            && observation.suppressed_response_bytes > 0,
-    )?;
-    let remaining = timeout(Duration::from_secs(2), async {
-        loop {
-            let count: i64 = inspector.query_one("SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'df-engine-recovery-%' AND application_name <> 'df-engine-recovery-inspector-01'", &[]).await?.try_get(0)?;
-            if count == 0 { return Ok::<_, tokio_postgres::Error>(count); }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    }).await??;
+    if let Some(driver) = grant_driver {
+        join_driver(driver).await?;
+    }
+    // Preserve the original fault result while still closing the inspector and
+    // releasing the new fixture's exact fence on both proof success and failure.
+    let verified = async {
+        let final_checkpoint = flow?;
+        let observation = observation?;
+        required(fault_exit.checkpoint == final_checkpoint)?;
+        required(
+            observation.frontend_commit_forwarded
+                && observation.postgres_commit_complete_observed
+                && observation.postgres_ready_idle_observed
+                && observation.suppressed_response_bytes > 0,
+        )?;
+        let remaining = timeout(Duration::from_secs(2), async {
+            loop {
+                let count: i64 = inspector.query_one("SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'df-engine-recovery-%' AND application_name <> 'df-engine-recovery-inspector-01'", &[]).await?.try_get(0)?;
+                if count == 0 { return Ok::<_, tokio_postgres::Error>(count); }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        }).await??;
+        required(remaining == 0 && calls.count <= 20 && started.elapsed() <= Duration::from_secs(45))?;
+        Ok::<_, Error>((observation, remaining))
+    }.await;
+    let released = if recover_grant {
+        local_demo_scope::release_owner(&inspector, baseline.basis().session, fence).await
+    } else {
+        Ok(())
+    };
     drop(inspector);
-    join_driver(inspector_driver).await?;
-    required(remaining == 0 && calls.count <= 20 && started.elapsed() <= Duration::from_secs(45))?;
+    let inspector_joined = join_driver(inspector_driver).await;
+    released.map_err(repository_error)?;
+    inspector_joined?;
+    let (observation, remaining) = verified?;
     let calls = calls.count;
+    let grant_drivers = if recover_grant { 3 } else { 2 };
     std::fs::write(
-        REPORT,
+        if recover_grant {
+            "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/wave28-grant-recovery-20261006/ordinary-grant-uncertainty-report-02.json"
+        } else {
+            REPORT
+        },
         format!(
-            "{{\"pass\":true,\"actor_calls\":{calls},\"actor_calls_limit\":20,\"exercise_milliseconds\":{},\"exercise_milliseconds_limit\":45000,\"original_engine_reductions\":1,\"total_fault_engine_reductions\":4,\"exact_retry_stored_receipt\":true,\"physical_operation_rows_unchanged\":true,\"physical_fact_rows_unchanged\":true,\"physical_intent_rows_unchanged\":true,\"observed_intent_rows\":0,\"checkpoint_reload_byte_equality\":true,\"later_action_once\":true,\"known_reload_resumed\":true,\"proxy_commit_complete\":true,\"proxy_ready_idle\":true,\"proxy_suppressed_bytes\":{},\"proxy_task_joined\":true,\"actor_threads_joined\":3,\"native_repository_drivers_joined\":4,\"auxiliary_grant_drivers_joined\":2,\"inspector_driver_joined\":true,\"remaining_owned_backends\":{remaining},\"owned_backend_application_prefix\":\"df-engine-recovery-\"}}\n",
+            "{{\"pass\":true,\"actor_calls\":{calls},\"actor_calls_limit\":20,\"exercise_milliseconds\":{},\"exercise_milliseconds_limit\":45000,\"original_engine_reductions\":1,\"total_fault_engine_reductions\":5,\"stale_cas_reductions\":1,\"courier_action_reductions\":1,\"courier_completion_reductions\":1,\"completed_courier_intents\":1,\"courier_exact_replay_unchanged\":true,\"exact_retry_stored_receipt\":true,\"physical_operation_rows_unchanged\":true,\"physical_fact_rows_unchanged\":true,\"physical_intent_rows_unchanged\":true,\"observed_intent_rows\":0,\"checkpoint_reload_byte_equality\":true,\"later_action_once\":true,\"known_reload_resumed\":true,\"proxy_commit_complete\":true,\"proxy_ready_idle\":true,\"proxy_suppressed_bytes\":{},\"proxy_task_joined\":true,\"actor_threads_joined\":3,\"native_repository_drivers_joined\":4,\"auxiliary_grant_drivers_joined\":{grant_drivers},\"grant_reconnect_while_uncertain\":{recover_grant},\"inspector_driver_joined\":true,\"remaining_owned_backends\":{remaining},\"owned_backend_application_prefix\":\"df-engine-recovery-\"}}\n",
             started.elapsed().as_millis(),
             observation.suppressed_response_bytes
         ),
@@ -762,6 +876,20 @@ async fn exercise() -> Result<(), Error> {
 }
 fn repository_error(error: df_session::submission::RepositoryError) -> Error {
     io::Error::other(format!("recovery repository {error:?}")).into()
+}
+fn require_reductions(
+    counter: &AtomicUsize,
+    expected: usize,
+    stage: &'static str,
+) -> Result<(), Error> {
+    let actual = counter.load(Ordering::SeqCst);
+    if actual != expected {
+        return Err(io::Error::other(format!(
+            "recovery reductions at {stage}: expected {expected}, observed {actual}"
+        ))
+        .into());
+    }
+    Ok(())
 }
 fn expect_unknown_initial_submission(
     outcome: Result<rpc::SubmitActionResponse, tonic::Status>,
@@ -1085,6 +1213,7 @@ async fn courier_idle_recovery(
         codec,
         reductions.clone(),
         Some(observe),
+        20,
     )
     .await?;
     let before_calls = calls.count;
@@ -1387,4 +1516,356 @@ fn actual_registered_pg_generated_service_recovers_lost_commit_ack() {
     runtime
         .block_on(exercise())
         .expect("actual generated-service recovery proof");
+}
+
+fn ordinary_grant_configuration(database: &'static str) -> Result<Config, Error> {
+    required(
+        std::env::var("DF_ORDINARY_GRANT_QUALIFICATION").as_deref()
+            == Ok("owned-loopback-grant-recovery01"),
+    )?;
+    let mut config = trusted_configuration(55517, "df-ordinary-grant-inspector-01");
+    config.dbname(database);
+    Ok(config)
+}
+
+async fn ordinary_grant_issuer(
+    configuration: &Config,
+    reconnect: &Config,
+    checkpoint: &Checkpoint,
+    fence: [u8; 16],
+) -> Result<(LocalDemoScopeIssuer, oneshot::Receiver<()>), Error> {
+    let (client, connection) =
+        timeout(Duration::from_secs(2), configuration.connect(NoTls)).await??;
+    let (closed, observed) = oneshot::channel();
+    let driver = tokio::spawn(async move {
+        let result = connection.await;
+        let _observed = closed.send(());
+        result
+    });
+    let mut issuer = match LocalDemoScopeIssuer::new(
+        tokio::runtime::Handle::current(),
+        client,
+        checkpoint.basis().session,
+        fence,
+    ) {
+        Ok(issuer) => issuer,
+        Err(error) => {
+            join_driver(driver).await?;
+            return Err(repository_error(error));
+        }
+    };
+    if let Err((error, driver)) = issuer.configure_reconnect(reconnect.clone(), driver) {
+        let closed = issuer.close_owned().await;
+        let joined = join_driver(driver).await;
+        closed.map_err(repository_error)?;
+        joined?;
+        return Err(repository_error(error));
+    }
+    Ok((issuer, observed))
+}
+
+async fn terminate_ordinary_grant(inspector: &Client) -> Result<i32, Error> {
+    // Exactly one issuer is expected in this dedicated fresh fixture database.
+    let row = inspector.query_one("SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND application_name='df-ordinary-grant-issuer-01'", &[]).await?;
+    let pid: i32 = row.try_get(0)?;
+    let stopped: bool = inspector
+        .query_one("SELECT pg_terminate_backend($1::integer)", &[&pid])
+        .await?
+        .try_get(0)?;
+    required(stopped)?;
+    timeout(Duration::from_secs(2), async {
+        loop {
+            let gone: bool = inspector
+                .query_one(
+                    "SELECT NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid=$1::integer)",
+                    &[&pid],
+                )
+                .await?
+                .try_get(0)?;
+            if gone {
+                return Ok::<_, Error>(());
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await??;
+    Ok(pid)
+}
+
+async fn ordinary_watch(
+    service: &Service,
+    checkpoint: &Checkpoint,
+    member: df_types::MemberId,
+    credential: [u8; 32],
+    calls: &mut Calls,
+) -> Result<rpc::ViewMessage, tonic::Status> {
+    use futures::StreamExt;
+    admit(calls).map_err(|_| tonic::Status::resource_exhausted("fixture call bound"))?;
+    let body = rpc::WatchViewRequest {
+        session_id: Some(rpc::SessionId {
+            value: Some(checkpoint.basis().session.as_bytes().to_vec()),
+        }),
+        run_id: Some(rpc::RunId {
+            value: Some(checkpoint.basis().run.as_bytes().to_vec()),
+        }),
+        client_binding_id: Some(rpc::ClientBindingId {
+            value: Some(member.as_bytes().to_vec()),
+        }),
+        ..Default::default()
+    };
+    let decoded = rpc::WatchViewRequest::decode(body.encode_to_vec().as_slice())
+        .map_err(|_| tonic::Status::internal("fixture watch encoding"))?;
+    let mut request = Request::new(decoded);
+    request.metadata_mut().insert(
+        "x-df-local-binding",
+        hex(&credential)
+            .parse()
+            .map_err(|_| tonic::Status::internal("fixture watch metadata"))?,
+    );
+    let mut stream = rpc::session_service_server::SessionService::watch(service, request)
+        .await?
+        .into_inner();
+    timeout(Duration::from_secs(5), stream.next())
+        .await
+        .map_err(|_| tonic::Status::deadline_exceeded("fixture watch deadline"))?
+        .ok_or_else(|| tonic::Status::unavailable("fixture watch closed"))?
+}
+
+#[test]
+#[ignore = "Root fresh owned grant_recovery01 DB and finite native resource grant required"]
+fn ordinary_calls_reconnect_without_pending_ai_and_refuse_revoked_or_unavailable_grants() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(ordinary_grant_recovery()).unwrap();
+}
+
+async fn ordinary_grant_recovery() -> Result<(), Error> {
+    let started = Instant::now();
+    let configuration = ordinary_grant_configuration("df_gameplay_demo_20261006_grant_recovery01")?;
+    let (mut inspector, connection) =
+        timeout(Duration::from_secs(2), configuration.connect(NoTls)).await??;
+    let inspector_driver = tokio::spawn(connection);
+    let initial = journey::initial().map_err(repository_error)?;
+    let codec = NativeCodecLimits {
+        maximum_document_bytes: 1024 * 1024,
+        maximum_allocated_bytes: 2 * 1024 * 1024,
+        maximum_collection_items: 1024,
+        maximum_text_bytes: 4096,
+    };
+    let fence = [0x83; 16];
+    let initialized = local_demo_scope::initialize(
+        &mut inspector,
+        &initial,
+        fence,
+        [0x81; 32],
+        [0x82; 32],
+        codec,
+    )
+    .await;
+    if initialized.is_err() {
+        drop(inspector);
+        join_driver(inspector_driver).await?;
+        return Err(io::Error::other("fresh registered ordinary-grant database required").into());
+    }
+    let result = async {
+        let mut grants = configuration.clone();
+        grants.application_name("df-ordinary-grant-issuer-01");
+        let mut native_repository = repository(&configuration, &configuration, codec).await?;
+        let (issuer, grant_closed) = match ordinary_grant_issuer(&grants, &grants, &initial, fence).await {
+            Ok(issuer) => issuer,
+            Err(error) => {
+                native_repository.close_owned().await.map_err(repository_error)?;
+                return Err(error);
+            }
+        };
+        let reductions = Arc::new(AtomicUsize::new(0));
+        let mut running = RunningActor::start(native_repository, issuer, initial.clone(), codec, reductions.clone()).await?;
+        let mut calls = Calls { count: 0, deadline: started + Duration::from_secs(45) };
+        let flow = async {
+            let credential = join(&running.service, 0x91, &mut calls).await?;
+            let joined = running.service.updates.borrow().clone();
+            let member = journey::participants(&joined).first()
+                .ok_or_else(|| io::Error::other("joined member absent"))?.member;
+            let request = create(&joined, 0x93);
+            let original = committed(submit(&running.service, &request, credential, &mut calls).await?)?;
+            let current = running.service.updates.borrow().clone();
+            required(current.state().intents.is_empty() && reductions.load(Ordering::SeqCst) == 2)?;
+            let physical = durable(&inspector, 0x93).await?;
+            required(physical.envelope == local_demo_scope::encode_owned_demo_checkpoint(&current, codec)
+                .map_err(repository_error)?)?;
+            let expected = ordinary_watch(&running.service, &current, member, credential, &mut calls).await?;
+            terminate_ordinary_grant(&inspector).await?;
+            timeout(Duration::from_secs(2), grant_closed).await??;
+            let recovered = ordinary_watch(&running.service, &current, member, credential, &mut calls).await?;
+            required(recovered == expected && durable(&inspector, 0x93).await? == physical)?;
+            let replayed = committed(submit(&running.service, &request, credential, &mut calls).await?)?;
+            required(replayed.replayed && replayed.outcome == original.outcome && replayed.revision == original.revision)?;
+            required(join(&running.service, 0x91, &mut calls).await? == credential)?;
+            let observed = snapshot(&running.service, &mut calls).await?;
+            required(observed.calls_remaining == 13 && observed.checkpoint == current
+                && !observed.fenced && !observed.uncertain && reductions.load(Ordering::SeqCst) == 2
+                && durable(&inspector, 0x93).await? == physical)?;
+            Ok::<_, Error>((credential, member, request, physical, current))
+        }.await;
+        let mut exited = running.close().await?;
+        exited.issuer.close_owned().await.map_err(repository_error)?;
+        let (credential, member, request, physical, current) = flow?;
+        required(exited.checkpoint == current)?;
+
+        let mut native_repository = repository(&configuration, &configuration, codec).await?;
+        let (issuer, grant_closed) = match ordinary_grant_issuer(&grants, &grants, &current, fence).await {
+            Ok(issuer) => issuer,
+            Err(error) => {
+                native_repository.close_owned().await.map_err(repository_error)?;
+                return Err(error);
+            }
+        };
+        let mut joining = RunningActor::start(native_repository, issuer, current.clone(), codec, reductions.clone()).await?;
+        let replayed_join = async {
+            terminate_ordinary_grant(&inspector).await?;
+            timeout(Duration::from_secs(2), grant_closed).await??;
+            required(join(&joining.service, 0x91, &mut calls).await? == credential)?;
+            let observed = snapshot(&joining.service, &mut calls).await?;
+            required(observed.calls_remaining == 18 && observed.checkpoint == current
+                && reductions.load(Ordering::SeqCst) == 2
+                && durable(&inspector, 0x93).await? == physical)?;
+            Ok::<_, Error>(())
+        }.await;
+        let mut exited = joining.close().await?;
+        exited.issuer.close_owned().await.map_err(repository_error)?;
+        replayed_join?;
+        required(exited.checkpoint == current)?;
+
+        let mut native_repository = repository(&configuration, &configuration, codec).await?;
+        let (issuer, grant_closed) = match ordinary_grant_issuer(&grants, &grants, &current, fence).await {
+            Ok(issuer) => issuer,
+            Err(error) => {
+                native_repository.close_owned().await.map_err(repository_error)?;
+                return Err(error);
+            }
+        };
+        let mut revoked = RunningActor::start(native_repository, issuer, current.clone(), codec, reductions.clone()).await?;
+        let denied = async {
+            inspector.execute("UPDATE df_local_demo.grants SET active=false WHERE credential=$1::bytea", &[&credential.as_slice()]).await?;
+            terminate_ordinary_grant(&inspector).await?;
+            timeout(Duration::from_secs(2), grant_closed).await??;
+            required(ordinary_watch(&revoked.service, &current, member, credential, &mut calls).await
+                .is_err_and(|error| error.code() == tonic::Code::PermissionDenied))?;
+            let observed = snapshot(&revoked.service, &mut calls).await?;
+            required(observed.calls_remaining == 18 && observed.checkpoint == current
+                && !observed.fenced && !observed.uncertain && reductions.load(Ordering::SeqCst) == 2
+                && durable(&inspector, 0x93).await? == physical)?;
+            Ok::<_, Error>(())
+        }.await;
+        let mut exited = revoked.close().await?;
+        exited.issuer.close_owned().await.map_err(repository_error)?;
+        denied?;
+        required(exited.checkpoint == current)?;
+
+        // A failed trusted reconnect setup must refuse all three ordinary calls
+        // before their original handlers and retain their exact canonical state.
+        let absent: bool = inspector.query_one("SELECT NOT EXISTS (SELECT 1 FROM pg_database WHERE datname='df_gameplay_demo_20261006_grant_absent01')", &[]).await?.try_get(0)?;
+        required(absent)?;
+        let mut unavailable_configuration = grants.clone();
+        unavailable_configuration.dbname("df_gameplay_demo_20261006_grant_absent01");
+        let mut native_repository = repository(&configuration, &configuration, codec).await?;
+        let (issuer, grant_closed) = match ordinary_grant_issuer(&grants, &unavailable_configuration, &current, fence).await {
+            Ok(issuer) => issuer,
+            Err(error) => {
+                native_repository.close_owned().await.map_err(repository_error)?;
+                return Err(error);
+            }
+        };
+        let mut failed = RunningActor::start(native_repository, issuer, current.clone(), codec, reductions.clone()).await?;
+        let refused = async {
+            terminate_ordinary_grant(&inspector).await?;
+            timeout(Duration::from_secs(2), grant_closed).await??;
+            required(ordinary_watch(&failed.service, &current, member, credential, &mut calls).await
+                .is_err_and(|error| error.code() == tonic::Code::Unavailable))?;
+            required(submit(&failed.service, &request, credential, &mut calls).await
+                .is_err_and(|error| error.code() == tonic::Code::Unavailable))?;
+            admit(&mut calls)?;
+            let request = rpc::JoinRoomRequest { room_code: journey::ROOM_CODE.to_owned(),
+                join_secret: vec![0x91; 32], operation_id: Some(rpc::OperationId { value: Some(vec![0x91; 16]) }) };
+            required(rpc::room_service_server::RoomService::join(&failed.service, Request::new(request)).await
+                .is_err_and(|error| error.code() == tonic::Code::Unavailable))?;
+            let observed = snapshot(&failed.service, &mut calls).await?;
+            required(observed.calls_remaining == 16 && observed.checkpoint == current
+                && !observed.fenced && !observed.uncertain && reductions.load(Ordering::SeqCst) == 2
+                && durable(&inspector, 0x93).await? == physical)?;
+            Ok::<_, Error>(())
+        }.await;
+        let mut exited = failed.close().await?;
+        exited.issuer.close_owned().await.map_err(repository_error)?;
+        refused?;
+        required(exited.checkpoint == current)?;
+
+        // Budget refusal must precede even transport repair. A healthy replacement
+        // configuration makes an accidental reconnect observable as a new backend.
+        let mut native_repository = repository(&configuration, &configuration, codec).await?;
+        let (issuer, grant_closed) = match ordinary_grant_issuer(&grants, &grants, &current, fence).await {
+            Ok(issuer) => issuer,
+            Err(error) => {
+                native_repository.close_owned().await.map_err(repository_error)?;
+                return Err(error);
+            }
+        };
+        let mut exhausted = RunningActor::start_observed(native_repository, issuer, current.clone(),
+            codec, reductions.clone(), None, 0).await?;
+        let exhausted_flow = async {
+            terminate_ordinary_grant(&inspector).await?;
+            timeout(Duration::from_secs(2), grant_closed).await??;
+            required(ordinary_watch(&exhausted.service, &current, member, credential, &mut calls).await
+                .is_err_and(|error| error.code() == tonic::Code::ResourceExhausted))?;
+            required(submit(&exhausted.service, &request, credential, &mut calls).await
+                .is_err_and(|error| error.code() == tonic::Code::ResourceExhausted))?;
+            admit(&mut calls)?;
+            let request = rpc::JoinRoomRequest { room_code: journey::ROOM_CODE.to_owned(),
+                join_secret: vec![0x91; 32], operation_id: Some(rpc::OperationId { value: Some(vec![0x91; 16]) }) };
+            required(rpc::room_service_server::RoomService::join(&exhausted.service, Request::new(request)).await
+                .is_err_and(|error| error.code() == tonic::Code::ResourceExhausted))?;
+            let replacements: i64 = inspector.query_one("SELECT count(*)::bigint FROM pg_stat_activity WHERE datname=current_database() AND application_name='df-ordinary-grant-issuer-01'", &[]).await?.try_get(0)?;
+            let observed = exhausted.service.updates.borrow().clone();
+            required(replacements == 0 && reductions.load(Ordering::SeqCst) == 2
+                && observed == current
+                && durable(&inspector, 0x93).await? == physical)?;
+            Ok::<_, Error>(())
+        }.await;
+        let mut exited = exhausted.close().await?;
+        exited.issuer.close_owned().await.map_err(repository_error)?;
+        exhausted_flow?;
+        required(exited.checkpoint == current && calls.count == 18 && Instant::now() < calls.deadline)?;
+        let remaining: i64 = inspector.query_one("SELECT count(*)::bigint FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND application_name LIKE 'df-ordinary-grant-%'", &[]).await?.try_get(0)?;
+        required(remaining == 0)?;
+        Ok::<_, Error>(calls.count)
+    }.await;
+    let released =
+        local_demo_scope::release_owner(&inspector, initial.basis().session, fence).await;
+    drop(inspector);
+    let joined = join_driver(inspector_driver).await;
+    released.map_err(repository_error)?;
+    joined?;
+    let calls = result?;
+    std::fs::write(
+        "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/wave28-grant-recovery-20261006/ordinary-grant-recovery-report-02.json",
+        format!(
+            "{{\"pass\":true,\"pid\":{},\"actor_calls\":{calls},\"engine_reductions\":2,\"pending_ai\":0,\"ordinary_view_recovered\":true,\"exact_submit_and_join_replayed\":true,\"revoked_denied\":true,\"failed_reconnect_three_calls_refused\":true,\"canonical_rows_unchanged\":true,\"original_and_replacement_drivers_joined\":true,\"actor_threads_joined\":5,\"zero_budget_three_calls_refused_without_reconnect\":true,\"exact_fence_released\":true,\"inspector_joined\":true}}\n",
+            std::process::id()
+        ),
+    )?;
+    Ok(())
+}
+
+#[test]
+#[ignore = "Root fresh owned grant_uncertain01 DB, ACK proxy55518 and finite native resource grant required"]
+fn ordinary_submit_reconnect_keeps_the_exact_uncertain_operation() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(exercise_grant_recovery(true)).unwrap();
 }
