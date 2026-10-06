@@ -162,7 +162,7 @@ impl DecisionAdapter {
         let value = timeout_at(deadline, async {
             configure_deadline(&transaction, deadline).await?;
             self.verifier.verify(&transaction, scope).await?;
-            let current = lock_session(&transaction, scope).await?;
+            lock_session(&transaction, scope).await?;
             // Waiting for the common lock must not carry an expired current grant into a read.
             self.verifier.verify(&transaction, scope).await?;
             match request {
@@ -176,6 +176,8 @@ impl DecisionAdapter {
                 .await
                 .map(ReadValue::Lookup),
                 ReadRequest::Checkpoint => {
+                    // The owner lease can expire while the current grant verifier waits.
+                    let current = lock_session(&transaction, scope).await?;
                     current.validate_current_owner(scope)?;
                     let recovery = self
                         .recovery
