@@ -471,13 +471,13 @@ where
             Ok(key) => key,
             Err(error) => return SubmissionOutcome::Refused(error),
         };
-        if let CacheState::Uncertain(unresolved) = &self.cache {
-            if unresolved != &key {
-                return SubmissionOutcome::LookupRequired;
-            }
-            if let Err(error) = self.repository.recover_connection(context) {
-                return SubmissionOutcome::Refused(error);
-            }
+        // Only the exact unresolved key may recover its displaced connection.
+        // Other keys still require independently authorized retained lookup; a
+        // not-recorded result cannot pass the current-cache gate below.
+        if matches!(&self.cache, CacheState::Uncertain(unresolved) if unresolved == &key)
+            && let Err(error) = self.repository.recover_connection(context)
+        {
+            return SubmissionOutcome::Refused(error);
         }
         match self.repository.lookup_operation(operation, context) {
             Ok(OperationLookup::Committed(receipt)) => {

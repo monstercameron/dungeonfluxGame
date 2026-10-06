@@ -1772,7 +1772,9 @@ fn assert_lookup_fences_new_key(behavior: LookupBehavior) {
     let db = db.lock().unwrap();
     assert_eq!(db.engine_calls, 0);
     assert_eq!(db.commit_calls, 0);
-    assert_eq!(db.events, ["lookup"]);
+    assert_eq!(db.events, ["lookup", "lookup"]);
+    assert_eq!(db.reconnect_calls, 0);
+    assert!(owner.has_uncertain_operation());
     assert_eq!(owner.checkpoint(), &initial());
     assert!(db.receipts.is_empty());
 }
@@ -1964,13 +1966,29 @@ fn inspecting_b_unknown_and_then_b_committed_cannot_erase_unresolved_a() {
             SubmissionOutcome::LookupRequired
         );
         let second_outcome = submit(&mut owner, scope(7));
-        assert!(!matches!(second_outcome, SubmissionOutcome::Confirmed(_)));
-        let _receipt = seed_committed(&db, &scope(7));
-        assert_eq!(
-            submit(&mut owner, scope(7)),
-            SubmissionOutcome::LookupRequired
+        let expected = match second {
+            LookupBehavior::InProgress => SubmissionOutcome::LookupRequired,
+            LookupBehavior::Expired => SubmissionOutcome::ExpiredOrIndeterminate,
+            LookupBehavior::Unavailable => SubmissionOutcome::Refused(RepositoryError::Unavailable),
+            LookupBehavior::Malformed => {
+                SubmissionOutcome::Refused(RepositoryError::InvalidReceipt)
+            }
+            LookupBehavior::TooLarge => SubmissionOutcome::Refused(RepositoryError::Capacity),
+        };
+        assert_eq!(second_outcome, expected);
+        let retained_b = seed_committed(&db, &scope(7));
+        assert_eq!(assert_confirmed(submit(&mut owner, scope(7))), retained_b);
+        assert_eq!(db.lock().unwrap().events, ["lookup", "lookup", "lookup"]);
+        assert!(
+            owner
+                .matches_uncertain_retry(&scope(6), &input(&scope(6)))
+                .unwrap()
         );
-        assert_eq!(db.lock().unwrap().events, ["lookup"]);
+        assert!(
+            !owner
+                .matches_uncertain_retry(&scope(7), &input(&scope(7)))
+                .unwrap()
+        );
         assert_eq!(
             submit(&mut owner, scope(8)),
             SubmissionOutcome::LookupRequired
@@ -1978,7 +1996,12 @@ fn inspecting_b_unknown_and_then_b_committed_cannot_erase_unresolved_a() {
         let db = db.lock().unwrap();
         assert_eq!(db.engine_calls, 0);
         assert_eq!(db.commit_calls, 0);
+        assert_eq!(db.events, ["lookup", "lookup", "lookup", "lookup"]);
+        assert_eq!(db.reconnect_calls, 0);
+        assert!(owner.has_uncertain_operation());
         assert!(!db.events.contains(&"load"));
+        assert!(!db.events.contains(&"publish"));
+        assert!(!db.events.contains(&"wake"));
         assert_eq!(owner.checkpoint(), &initial());
     }
 }
@@ -2148,10 +2171,20 @@ fn assert_full_scope_collision_stays_fenced(dimension: &str) {
         SubmissionOutcome::LookupRequired
     );
     assert_eq!(
-        submit(&mut owner, historical),
-        SubmissionOutcome::LookupRequired
+        assert_confirmed(submit(&mut owner, historical.clone())),
+        historical_receipt
     );
-    assert_eq!(db.lock().unwrap().events, ["lookup"]);
+    assert_eq!(db.lock().unwrap().events, ["lookup", "lookup"]);
+    assert!(
+        owner
+            .matches_uncertain_retry(&unresolved, &input(&unresolved))
+            .unwrap()
+    );
+    assert!(
+        !owner
+            .matches_uncertain_retry(&historical, &input(&historical))
+            .unwrap()
+    );
     assert!(matches!(
         db.lock().unwrap().lookup.get(&unresolved.operation),
         Some(LookupBehavior::InProgress)
@@ -2163,7 +2196,12 @@ fn assert_full_scope_collision_stays_fenced(dimension: &str) {
         "another {dimension} sharing OperationId must not resolve the first full key"
     );
     let db = db.lock().unwrap();
-    assert!(db.events.is_empty());
+    assert_eq!(db.events, ["lookup"]);
+    assert_eq!(db.reconnect_calls, 0);
+    assert!(owner.has_uncertain_operation());
+    assert!(!db.events.contains(&"load"));
+    assert!(!db.events.contains(&"publish"));
+    assert!(!db.events.contains(&"wake"));
     assert_eq!(db.engine_calls, 0);
     assert_eq!(db.commit_calls, 0);
     assert_eq!(owner.checkpoint(), &initial());
@@ -2599,7 +2637,14 @@ fn exact_recovery_connection_failure_keeps_original_key_and_blocks_other_lookup(
         SubmissionOutcome::LookupRequired
     );
     assert_eq!(owner.checkpoint(), &initial());
-    assert!(db.lock().unwrap().events.is_empty());
+    assert_eq!(db.lock().unwrap().events, ["lookup"]);
+    assert!(
+        owner
+            .matches_uncertain_retry(&scope(6), &input(&scope(6)))
+            .unwrap()
+    );
+    assert_eq!(db.lock().unwrap().engine_calls, 1);
+    assert_eq!(db.lock().unwrap().commit_calls, 1);
     assert_eq!(db.lock().unwrap().reconnect_calls, 1);
     db.lock().unwrap().reconnect_failure = false;
     db.lock().unwrap().failure = Failure::None;
@@ -2632,9 +2677,88 @@ fn valid_new_snapshot_omitting_the_exact_stored_decision_cannot_release_uncertai
         submit(&mut owner, scope(7)),
         SubmissionOutcome::LookupRequired
     );
-    assert!(db.lock().unwrap().events.is_empty());
+    assert_eq!(db.lock().unwrap().events, ["lookup"]);
+    assert!(
+        owner
+            .matches_uncertain_retry(&scope(6), &input(&scope(6)))
+            .unwrap()
+    );
     db.lock().unwrap().reload_override = None;
     assert_eq!(assert_confirmed(submit(&mut owner, scope(6))), stored);
     assert!(owner.is_current());
     assert_eq!(db.lock().unwrap().engine_calls, 1);
+}
+
+#[test]
+fn conflicting_other_key_cannot_recover_or_erase_first_uncertainty() {
+    let db = database();
+    db.lock()
+        .unwrap()
+        .lookup
+        .insert(operation(6), LookupBehavior::InProgress);
+    let mut owner = owner(&db);
+    assert_eq!(
+        submit(&mut owner, scope(6)),
+        SubmissionOutcome::LookupRequired
+    );
+    let _retained = seed_committed(&db, &scope(7));
+    let mut conflicting = scope(7);
+    conflicting.fingerprint += 1;
+    db.lock().unwrap().events.clear();
+    assert_eq!(
+        submit(&mut owner, conflicting),
+        SubmissionOutcome::OperationConflict
+    );
+    assert!(
+        owner
+            .matches_uncertain_retry(&scope(6), &input(&scope(6)))
+            .unwrap()
+    );
+    assert_eq!(
+        submit(&mut owner, scope(8)),
+        SubmissionOutcome::LookupRequired
+    );
+    let db = db.lock().unwrap();
+    assert_eq!(db.events, ["lookup", "lookup"]);
+    assert_eq!(db.reconnect_calls, 0);
+    assert_eq!(db.engine_calls, 0);
+    assert_eq!(db.commit_calls, 0);
+    assert_eq!(owner.checkpoint(), &initial());
+}
+
+#[test]
+fn independently_unauthorized_other_lookup_preserves_first_uncertainty() {
+    let db = database();
+    db.lock()
+        .unwrap()
+        .lookup
+        .insert(operation(6), LookupBehavior::InProgress);
+    let mut owner = owner(&db);
+    assert_eq!(
+        submit(&mut owner, scope(6)),
+        SubmissionOutcome::LookupRequired
+    );
+    let mut unauthorized = scope(7);
+    unauthorized.basis.session = SessionId::from_bytes(&[70; 16]).unwrap();
+    db.lock().unwrap().events.clear();
+    assert_eq!(
+        submit(&mut owner, unauthorized),
+        SubmissionOutcome::Refused(RepositoryError::Unauthorized)
+    );
+    assert!(
+        owner
+            .matches_uncertain_retry(&scope(6), &input(&scope(6)))
+            .unwrap()
+    );
+    assert_eq!(
+        submit(&mut owner, scope(8)),
+        SubmissionOutcome::LookupRequired
+    );
+    let db = db.lock().unwrap();
+    assert_eq!(db.events, ["lookup", "lookup"]);
+    assert_eq!(db.reconnect_calls, 0);
+    assert_eq!(db.engine_calls, 0);
+    assert_eq!(db.commit_calls, 0);
+    assert!(db.receipts.is_empty());
+    assert_eq!(owner.checkpoint(), &initial());
 }
