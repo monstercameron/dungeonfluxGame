@@ -262,12 +262,29 @@ impl<I: ActorInput> ActorLoop<I> {
                         .map_err(|_| InboxFailure::Poisoned)?;
                 }
             }
+            if queue.usage.accepting && deadline.is_some_and(|deadline| Instant::now() >= deadline)
+            {
+                drop(queue);
+                wake(reducer);
+                queue = self
+                    .shared
+                    .queue
+                    .lock()
+                    .map_err(|_| InboxFailure::Poisoned)?;
+                // One due wake may precede the next FIFO reduction. A callback
+                // that leaves its deadline due must not starve admitted inputs.
+                // With no input, start another turn to obtain the new deadline.
+                if queue.inputs.is_empty() {
+                    if !queue.usage.accepting {
+                        return Ok(outcome);
+                    }
+                    continue;
+                }
+            }
             let Some(queued) = queue.inputs.pop_front() else {
                 if !queue.usage.accepting {
                     return Ok(outcome);
                 }
-                drop(queue);
-                wake(reducer);
                 continue;
             };
             drop(queue);
