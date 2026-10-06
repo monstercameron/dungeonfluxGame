@@ -1359,3 +1359,75 @@ fn records_with_owned_ids_are_unique_within_each_canonical_family() {
         );
     }
 }
+
+fn retained_mode_demand(mode: ExecutionMode, maximum_bytes: u64) -> GameState {
+    let mut state = state();
+    let moment = RecordId::from_bytes(&[91; 16]).unwrap();
+    state.continuity.moments.push(NarrativeMoment {
+        id: moment,
+        location: entity(4),
+        characters: vec![entity(4)],
+        facts: vec![],
+        attributed_claims: vec![],
+        audience: AudienceScope::Members(vec![member(3)]),
+        semantic_focus: content(),
+        identity_revision: label("fixture-entity-1"),
+    });
+    state.continuity.demands.push(AssetDemand {
+        id: RecordId::from_bytes(&[92; 16]).unwrap(),
+        basis: basis(),
+        key: AssetRequestKey {
+            schema: CHECKPOINT_SCHEMA,
+            source: pins().content.content_digest,
+            moment,
+            identity: label("fixture-entity-1"),
+            style: label("fixture-style-1"),
+            voice: None,
+            provider: label("fixture-provider-1"),
+            model: label("fixture-model-1"),
+            format: label("png-v1"),
+            references: vec![],
+            audience: AudienceScope::Members(vec![member(3)]),
+            parameters: label("fixture-parameters-1"),
+        },
+        priority: DemandPriority::Optional,
+        mode,
+        expires: LogicalTime {
+            ticks: 240,
+            ticks_per_second: 10,
+        },
+        budget_reservation: label("fixture-reservation-1"),
+        maximum_bytes,
+        policy: content(),
+    });
+    state
+}
+
+#[test]
+fn retained_mode_demand_keeps_its_admitted_mode_when_default_changes() {
+    let modes = [
+        ExecutionMode::Live,
+        ExecutionMode::PreparedOnly,
+        ExecutionMode::Replay,
+    ];
+    for admitted in modes {
+        for configured in modes {
+            let mut supplied = retained_mode_demand(admitted, 1024);
+            let retained = supplied.continuity.demands.clone();
+            supplied.mode = configured;
+            let checkpoint = checkpoint(supplied).unwrap();
+            assert_eq!(checkpoint.state().mode, configured);
+            assert_eq!(checkpoint.state().continuity.demands, retained);
+            checkpoint.validate_resume(basis(), &pins()).unwrap();
+        }
+    }
+}
+
+#[test]
+fn retained_mode_difference_does_not_relax_demand_byte_bound() {
+    for configured in [ExecutionMode::Live, ExecutionMode::PreparedOnly] {
+        let mut supplied = retained_mode_demand(ExecutionMode::Replay, 0);
+        supplied.mode = configured;
+        assert_eq!(checkpoint(supplied), Err(CheckpointError::Capacity));
+    }
+}

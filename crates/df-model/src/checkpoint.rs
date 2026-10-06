@@ -2586,10 +2586,8 @@ fn validate_continuity(
         request_key(&x.key, &mut progress.records)?;
         content(&x.policy)?;
         valid_time(x.expires)?;
-        require(
-            x.maximum_bytes > 0 && x.mode == state.mode,
-            CheckpointError::Capacity,
-        )?;
+        // Retained demand mode is its admission policy; the default applies to new jobs.
+        require(x.maximum_bytes > 0, CheckpointError::Capacity)?;
         count!(&x.key.references);
     }
     for x in &all.asset_jobs {

@@ -1387,3 +1387,297 @@ fn later_mechanical_choices_do_not_authorize_changed_visual_identity_or_outfit()
         );
     }
 }
+
+fn queued_in_mode(mode: ExecutionMode) -> (Checkpoint, CharacterReferencePlan) {
+    let original = current();
+    let mut state = original.state().clone();
+    state.mode = mode;
+    let current = make(original.basis(), state, &[]).unwrap();
+    let accepted = accepted(&current);
+    let plan = plan(&accepted);
+    let handler = AcceptedCreation {
+        candidate: accepted,
+        calls: Cell::new(0),
+        rejected: false,
+    };
+    let output = registered(&current, &input(), &handler, &plan, bounds()).unwrap();
+    assert_eq!(output.reference, ReferenceSheetAdmission::Queued);
+    (output.checkpoint, plan)
+}
+
+// Synthetic canonical default-mode change only; no host authorization or provider execution.
+fn changed_default_mode(
+    current: &Checkpoint,
+    mode: ExecutionMode,
+    assets: &[AssetReference],
+) -> Checkpoint {
+    let mut state = current.state().clone();
+    state.mode = mode;
+    let changed = make(current.basis(), state, assets).unwrap();
+    assert_eq!(changed.state().continuity, current.state().continuity);
+    assert_eq!(changed.state().intents, current.state().intents);
+    assert_eq!(changed.state().characters, current.state().characters);
+    changed
+}
+
+#[test]
+fn retained_mode_queued_and_generating_jobs_finish_under_their_admitted_mode() {
+    let modes = [
+        ExecutionMode::Live,
+        ExecutionMode::PreparedOnly,
+        ExecutionMode::Replay,
+    ];
+    for admitted in modes {
+        for configured in modes {
+            if admitted == configured {
+                continue;
+            }
+            for already_started in [false, true] {
+                let (queued, plan) = queued_in_mode(admitted);
+                let active = if already_started {
+                    started(&queued, &plan)
+                } else {
+                    queued
+                };
+                let changed = changed_default_mode(&active, configured, &[]);
+                let specification =
+                    reference_sheet_specification(&changed, job_id(), bounds()).unwrap();
+                assert_eq!(specification.demand, &plan.demand);
+                assert_eq!(specification.demand.mode, admitted);
+                let running = started(&changed, &plan);
+                assert_eq!(running.state().mode, configured);
+                assert_eq!(
+                    reference_sheet_specification(&running, job_id(), bounds())
+                        .unwrap()
+                        .demand
+                        .mode,
+                    admitted
+                );
+                let completion = completed(
+                    &plan,
+                    JobOutcome::Media {
+                        asset: asset(),
+                        demand: plan.demand.id,
+                    },
+                );
+                let pack = published_pack();
+                let ready = event(
+                    &running,
+                    ReferenceSheetEvent::Completed {
+                        completion: &completion,
+                        canonical_pack: Some(&pack),
+                    },
+                    &[asset()],
+                )
+                .unwrap();
+                assert_eq!(ready.state().mode, configured);
+                assert_eq!(
+                    ready.state().continuity.demands,
+                    changed.state().continuity.demands
+                );
+                assert_eq!(ready.state().characters, changed.state().characters);
+                assert_eq!(
+                    ready.state().continuity.asset_jobs[0].state,
+                    AssetLifecycle::Ready
+                );
+                assert_eq!(
+                    event(
+                        &ready,
+                        ReferenceSheetEvent::Completed {
+                            completion: &completion,
+                            canonical_pack: Some(&pack),
+                        },
+                        &[asset()]
+                    )
+                    .unwrap(),
+                    ready
+                );
+                let (scene, key) = scene(&ready);
+                assert_eq!(scene_key(&scene, &key).unwrap().references, vec![asset()]);
+            }
+        }
+    }
+}
+
+#[test]
+fn retained_mode_ready_sheet_survives_a_later_default_change_without_requeueing() {
+    let (ready, plan, _, _) = ready();
+    for configured in [ExecutionMode::Live, ExecutionMode::PreparedOnly] {
+        let changed = changed_default_mode(&ready, configured, &[asset()]);
+        let (scene, key) = scene(&changed);
+        let request = scene_key(&scene, &key).unwrap();
+        assert_eq!(request.references, vec![asset()]);
+        assert_eq!(request.identity, key.identity);
+        assert_eq!(scene_key(&scene, &request).unwrap(), request);
+        assert_eq!(scene.state().continuity.demands[0], plan.demand);
+        assert_eq!(
+            scene.state().continuity.asset_jobs,
+            ready.state().continuity.asset_jobs
+        );
+        assert_eq!(
+            scene.state().continuity.canonical_packs,
+            ready.state().continuity.canonical_packs
+        );
+    }
+}
+
+#[test]
+fn retained_mode_change_never_admits_a_new_sheet_under_the_wrong_default() {
+    let modes = [
+        ExecutionMode::Live,
+        ExecutionMode::PreparedOnly,
+        ExecutionMode::Replay,
+    ];
+    for configured in modes {
+        let original = current();
+        let mut state = original.state().clone();
+        state.mode = configured;
+        let current = make(original.basis(), state, &[]).unwrap();
+        let accepted = accepted(&current);
+        let handler = AcceptedCreation {
+            candidate: accepted.clone(),
+            calls: Cell::new(0),
+            rejected: false,
+        };
+        for wrong_mode in modes {
+            if wrong_mode == configured {
+                continue;
+            }
+            let mut plan = plan(&accepted);
+            plan.demand.mode = wrong_mode;
+            let output = registered(&current, &input(), &handler, &plan, bounds()).unwrap();
+            assert_eq!(
+                output.reference,
+                ReferenceSheetAdmission::Unavailable(ReferenceSheetError::PlanBinding)
+            );
+            assert_eq!(output.checkpoint, accepted);
+            assert!(output.checkpoint.state().continuity.asset_jobs.is_empty());
+        }
+    }
+}
+
+#[test]
+fn retained_mode_change_preserves_completion_identity_and_audience_fences() {
+    let (queued, plan) = queue();
+    let changed = changed_default_mode(&queued, ExecutionMode::Live, &[]);
+    let running = started(&changed, &plan);
+    let mut completion = completed(
+        &plan,
+        JobOutcome::Media {
+            asset: asset(),
+            demand: plan.demand.id,
+        },
+    );
+    completion.generation += 1;
+    assert_eq!(
+        event(
+            &running,
+            ReferenceSheetEvent::Completed {
+                completion: &completion,
+                canonical_pack: Some(&published_pack()),
+            },
+            &[asset()]
+        ),
+        Err(ReferenceSheetError::StaleCompletion)
+    );
+    for identity_changed in [false, true] {
+        let mut state = changed.state().clone();
+        let expected = if identity_changed {
+            state.entities[0].identity_revision = label("different-identity-v2");
+            ReferenceSheetError::IdentityChanged
+        } else {
+            state.members.push(MembershipLink {
+                member: fixture::member(99),
+                character: Some(fixture::entity(4)),
+            });
+            state.characters[0].owner = fixture::member(99);
+            ReferenceSheetError::AudienceUnavailable
+        };
+        let invalid = make(changed.basis(), state, &[]).unwrap();
+        assert!(
+            matches!(reference_sheet_specification(&invalid, job_id(), bounds()), Err(error) if error == expected)
+        );
+        assert_eq!(
+            event(
+                &invalid,
+                ReferenceSheetEvent::Started {
+                    basis: plan.intent.basis,
+                    operation: plan.intent.operation,
+                    job: job_id(),
+                    generation: 2,
+                },
+                &[]
+            ),
+            Err(expected)
+        );
+        assert_eq!(
+            invalid.state().continuity.asset_jobs,
+            changed.state().continuity.asset_jobs
+        );
+    }
+}
+
+#[test]
+fn retained_mode_failure_preserves_unknown_dispatch_and_never_restarts() {
+    let (queued, plan) = queue();
+    let running = started(&queued, &plan);
+    let changed = changed_default_mode(&running, ExecutionMode::PreparedOnly, &[]);
+    let completion = completed(&plan, JobOutcome::Failed(NativeFailure::Unavailable));
+    let failed = event(
+        &changed,
+        ReferenceSheetEvent::Completed {
+            completion: &completion,
+            canonical_pack: None,
+        },
+        &[],
+    )
+    .unwrap();
+    assert_eq!(failed.state().mode, ExecutionMode::PreparedOnly);
+    assert_eq!(
+        failed.state().continuity.demands,
+        changed.state().continuity.demands
+    );
+    assert_eq!(
+        failed.state().continuity.asset_jobs[0].state,
+        AssetLifecycle::Failed
+    );
+    assert_eq!(
+        failed.state().continuity.asset_jobs[0].dispatch,
+        DurableStatus::SentUnknown
+    );
+    assert_eq!(failed.state().characters, changed.state().characters);
+    assert_eq!(failed.state().resources, changed.state().resources);
+    assert_eq!(
+        failed.state().continuity.canonical_packs,
+        changed.state().continuity.canonical_packs
+    );
+    assert_eq!(
+        event(
+            &failed,
+            ReferenceSheetEvent::Completed {
+                completion: &completion,
+                canonical_pack: None,
+            },
+            &[]
+        )
+        .unwrap(),
+        failed
+    );
+    assert_eq!(
+        event(
+            &failed,
+            ReferenceSheetEvent::Started {
+                basis: plan.intent.basis,
+                operation: plan.intent.operation,
+                job: job_id(),
+                generation: 2,
+            },
+            &[]
+        ),
+        Err(ReferenceSheetError::InvalidTransition)
+    );
+    assert!(matches!(
+        reference_sheet_specification(&failed, job_id(), bounds()),
+        Err(ReferenceSheetError::InvalidTransition)
+    ));
+}
