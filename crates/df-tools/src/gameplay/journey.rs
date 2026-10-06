@@ -10,6 +10,9 @@ use std::time::Duration;
 
 use super::{model, wire};
 
+mod combat_transition;
+#[cfg(test)]
+mod combat_transition_tests;
 pub(super) mod courier_reaction;
 #[cfg(test)]
 #[path = "creation_tests.rs"]
@@ -20,6 +23,7 @@ mod enemy_tactics;
 mod narrative_phase;
 #[cfg(test)]
 mod narrative_runtime_tests;
+mod narrative_transition;
 mod objective_outcome;
 #[cfg(test)]
 mod objective_outcome_tests;
@@ -404,10 +408,15 @@ pub(super) fn offered(
         )]);
     }
     let result = match phase {
-        rpc::JourneyPhase::Room if current.state().characters.len() == 2 => vec![(
-            rpc::GameplayActionKind::BeginStory,
-            "Enter the Lantern Wharf",
-        )],
+        rpc::JourneyPhase::Room
+            if current.state().characters.len() == 2
+                && narrative_transition::story_permitted(current, member)? =>
+        {
+            vec![(
+                rpc::GameplayActionKind::BeginStory,
+                "Enter the Lantern Wharf",
+            )]
+        }
         rpc::JourneyPhase::Room => vec![],
         rpc::JourneyPhase::Opening => vec![
             (
@@ -438,7 +447,7 @@ pub(super) fn offered(
                 vec![]
             } else {
                 let mut offered = Vec::new();
-                if value(current.state(), who, "action-used")? == 0 {
+                if combat_transition::available(current, who)? {
                     offered.push((
                         rpc::GameplayActionKind::GreatswordAttack,
                         "Greatsword strike · nonlethal",
@@ -2163,23 +2172,20 @@ fn stage_using(
             if !choices.is_empty() {
                 return Err(RepositoryError::InvalidCandidate);
             }
-            beat(&mut state, "opening")?;
-            state
+            state.narrative = narrative_transition::select(current, input)?
+                .state()
                 .narrative
-                .open_threads
-                .push(model::content(PACKET_THREAD)?);
+                .clone();
             courier_reaction::enter_opening(&mut state)?;
         }
         rpc::GameplayActionKind::AskCourier | rpc::GameplayActionKind::EscortCourier => {
             if !choices.is_empty() {
                 return Err(RepositoryError::InvalidCandidate);
             }
-            let answer = if kind == rpc::GameplayActionKind::AskCourier {
-                "courier-answer-seal"
-            } else {
-                "courier-answer-escort"
-            };
-            beat(&mut state, answer)?;
+            state.narrative = narrative_transition::select(current, input)?
+                .state()
+                .narrative
+                .clone();
             private = kind == rpc::GameplayActionKind::AskCourier;
         }
         rpc::GameplayActionKind::DefendCourier => {
@@ -2200,30 +2206,14 @@ fn stage_using(
             )?;
         }
         rpc::GameplayActionKind::GreatswordAttack => {
-            let savage = choice(choices, "savage-attacker")? == "yes";
-            let graze = choice(choices, "graze")? == "yes";
-            let economy = rules::ActionEconomy {
-                action_used: value(&state, *who, "action-used")? != 0,
-                bonus_action_used: value(&state, *who, "bonus-used")? != 0,
-            }
-            .attack()
-            .map_err(bad)?;
-            outcomes.push(attack(
+            combat_transition::stage(
+                current,
+                command,
                 &mut state,
-                command.operation,
-                *who,
-                entity(BANDIT)?,
-                AttackOptions { savage, graze },
                 &mut draws,
+                &mut outcomes,
                 supplier,
-            )?);
-            set(
-                &mut state,
-                *who,
-                "action-used",
-                u32::from(economy.action_used),
             )?;
-            finish_combat(&mut state)?;
         }
         rpc::GameplayActionKind::SecondWind => {
             if !choices.is_empty() {

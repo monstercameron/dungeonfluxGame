@@ -44,6 +44,7 @@ df-world = { path = "../df-world" }
 df-persistence = { path = "../df-persistence" }
 df-rules = { path = "../df-rules" }
 df-session = { path = "../df-session" }
+df-tempo = { path = "../df-tempo" }
 prost.workspace = true
 sha2 = "=0.10.9"
 tokio-postgres = "=0.7.15"

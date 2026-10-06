@@ -14,6 +14,8 @@ mod recovery_qualification;
 mod rest_qualification;
 mod restart_qualification;
 mod room;
+#[cfg(test)]
+mod tempo_clock;
 mod wire;
 
 use axum::{

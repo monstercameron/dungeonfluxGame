@@ -617,6 +617,7 @@ dependencies = [
  "df-rpc-bridge",
  "df-rules",
  "df-session",
+ "df-tempo",
  "df-types",
  "df-ui",
  "df-world",
