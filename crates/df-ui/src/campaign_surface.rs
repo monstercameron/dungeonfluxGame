@@ -353,10 +353,23 @@ mod browser {
             if self.disposed.get() {
                 return Err(CampaignError::Disposed);
             }
-            let owner = SceneImageOwner::new(scope, limits, &self.root, &self.art.borrow())?;
-            if let Some(old) = self.scene_assets.borrow_mut().take() {
-                old.borrow_mut().dispose()?;
+            let previous = self.scene_assets.borrow().as_ref().cloned();
+            if let Some(old) = &previous {
+                let replaced_scope = old.borrow().scope() != scope;
+                if replaced_scope {
+                    // The caller replaced an obsolete scope. Scrub its pixels immediately,
+                    // even if replacement presentation limits subsequently refuse.
+                    old.borrow_mut().dispose()?;
+                }
             }
+            limits.validate().map_err(CampaignError::SceneImage)?;
+            if let Some(old) = &previous {
+                old.borrow_mut().dispose()?;
+                // Keep the closed owner reachable while actual browser work drains.
+                // A fresh lifecycle must not reset the cancelled runner's finite budget.
+                old.borrow().ensure_drained()?;
+            }
+            let owner = SceneImageOwner::new(scope, limits, &self.root, &self.art.borrow())?;
             *self.scene_assets.borrow_mut() = Some(owner);
             Ok(())
         }

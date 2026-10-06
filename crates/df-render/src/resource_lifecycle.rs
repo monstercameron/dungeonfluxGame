@@ -17,6 +17,7 @@ pub enum ResourceLifecycleError {
     Decode(ImageDecodeError),
     Resource(ResourceError),
     Scene(ResourceSceneError),
+    UnsupportedTarget,
     #[cfg(target_arch = "wasm32")]
     Surface(crate::ImageSurfaceError),
 }
@@ -25,6 +26,8 @@ enum Target {
     Flat(ResourceSceneRenderer<DecodedImage<CacheKey>>),
     #[cfg(target_arch = "wasm32")]
     Browser(crate::BrowserResourceScene<CacheKey>),
+    #[cfg(target_arch = "wasm32")]
+    Illustration(crate::browser_illustration::BrowserIllustration),
 }
 
 struct PendingLease {
@@ -89,6 +92,56 @@ impl ResourceLifecycle {
         Ok(Self::new(scope, bytes, Target::Browser(target)))
     }
 
+    /// Illustration-only target: no scene geometry or synthetic scene label. The
+    /// canvas is allocated lazily on first connected presentation; one canonical
+    /// encoded cache is owned from enablement through real terminal codec settlement.
+    #[cfg(target_arch = "wasm32")]
+    pub fn mount_illustration(
+        parent: &web_sys::Element,
+        scope: CacheScope,
+        cache_limits: CacheLimits,
+        resource_limits: ResourceLimits,
+        preparation_revision: RevisionLabel,
+        max_surface_bytes: usize,
+    ) -> Result<Self, ResourceLifecycleError> {
+        let bytes = AssetCache::new(scope, cache_limits).map_err(ResourceLifecycleError::Cache)?;
+        let target = crate::browser_illustration::BrowserIllustration::new(
+            parent,
+            (scope.session, scope.run, scope.binding),
+            resource_limits,
+            preparation_revision,
+            max_surface_bytes,
+        )
+        .map_err(ResourceLifecycleError::Surface)?;
+        Ok(Self::new(scope, bytes, Target::Illustration(target)))
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn set_illustration_visible(
+        &mut self,
+        visible: bool,
+    ) -> Result<(), ResourceLifecycleError> {
+        match &self.target {
+            Target::Illustration(target) => {
+                target.set_visible(visible);
+                Ok(())
+            }
+            _ => Err(ResourceLifecycleError::UnsupportedTarget),
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    pub fn set_illustration_description(
+        &mut self,
+        description: &str,
+    ) -> Result<(), ResourceLifecycleError> {
+        match &mut self.target {
+            Target::Illustration(target) => target
+                .set_description(description)
+                .map_err(ResourceLifecycleError::Resource),
+            _ => Err(ResourceLifecycleError::UnsupportedTarget),
+        }
+    }
+
     fn new(scope: CacheScope, bytes: AssetCache, target: Target) -> Self {
         Self {
             scope,
@@ -113,11 +166,37 @@ impl ResourceLifecycle {
         revision: SessionRevision,
         references: &[CacheKey],
     ) -> Result<(), ResourceLifecycleError> {
+        if self.closed {
+            return Err(ResourceLifecycleError::Cache(CacheError::Closed));
+        }
+        if scope != self.scope {
+            return Err(ResourceLifecycleError::Cache(CacheError::WrongScope));
+        }
+        #[cfg(target_arch = "wasm32")]
+        if let Target::Illustration(target) = &self.target {
+            target
+                .validate_current(revision, references)
+                .map_err(ResourceLifecycleError::Resource)?;
+        }
         self.bytes
             .borrow_mut()
             .apply_current(scope, revision, references)
             .map_err(ResourceLifecycleError::Cache)?;
+        #[cfg(target_arch = "wasm32")]
+        if let Target::Illustration(target) = &mut self.target {
+            target
+                .apply_current(revision, references)
+                .map_err(ResourceLifecycleError::Resource)?;
+        }
         self.reconcile_leases()
+    }
+
+    /// Current encoded presence only; no byte/cache handle escapes this owner.
+    pub fn contains_bytes(&mut self, key: &CacheKey) -> Result<bool, CacheError> {
+        self.bytes
+            .borrow_mut()
+            .get(key)
+            .map(|bytes| bytes.is_some())
     }
 
     pub fn fetch(&mut self, key: &CacheKey) -> Result<FetchToken, CacheError> {
@@ -195,6 +274,8 @@ impl ResourceLifecycle {
             Target::Browser(target) => target
                 .update(owner, scene_label, flat, references)
                 .map_err(ResourceLifecycleError::Surface)?,
+            #[cfg(target_arch = "wasm32")]
+            Target::Illustration(_) => return Err(ResourceLifecycleError::UnsupportedTarget),
         };
         if matches!(outcome, PresentationOutcome::Applied { .. }) {
             self.reconcile_leases()?;
@@ -227,6 +308,8 @@ impl ResourceLifecycle {
             Target::Flat(target) => target.begin(input.key(), input.plan().budget, abort),
             #[cfg(target_arch = "wasm32")]
             Target::Browser(target) => target.begin(input.key(), input.plan().budget, abort),
+            #[cfg(target_arch = "wasm32")]
+            Target::Illustration(target) => target.begin(input.key(), input.plan().budget, abort),
         }
         .map_err(ResourceLifecycleError::Resource)?;
         self.pending.push(PendingLease {
@@ -265,6 +348,8 @@ impl ResourceLifecycle {
             Target::Flat(target) => target.complete(token, image),
             #[cfg(target_arch = "wasm32")]
             Target::Browser(target) => target.complete(token, image),
+            #[cfg(target_arch = "wasm32")]
+            Target::Illustration(target) => target.complete(token, image),
         };
         // Only StaleDecode means the scene did not consume an operation. Old callbacks
         // therefore cannot retire a newer pending lease with a reused immutable key.
@@ -287,6 +372,8 @@ impl ResourceLifecycle {
             Target::Flat(target) => target.finish_failed(token),
             #[cfg(target_arch = "wasm32")]
             Target::Browser(target) => target.finish_failed(token),
+            #[cfg(target_arch = "wasm32")]
+            Target::Illustration(target) => target.finish_failed(token),
         };
         if result.is_ok() {
             self.pending
@@ -300,6 +387,8 @@ impl ResourceLifecycle {
             Target::Flat(target) => target.cancel(token),
             #[cfg(target_arch = "wasm32")]
             Target::Browser(target) => target.cancel(token),
+            #[cfg(target_arch = "wasm32")]
+            Target::Illustration(target) => target.cancel(token),
         }
     }
 
@@ -311,6 +400,8 @@ impl ResourceLifecycle {
             Target::Flat(target) => target.get(key),
             #[cfg(target_arch = "wasm32")]
             Target::Browser(target) => target.get(key),
+            #[cfg(target_arch = "wasm32")]
+            Target::Illustration(target) => target.get(key),
         }
     }
 
@@ -319,6 +410,8 @@ impl ResourceLifecycle {
         match &mut self.target {
             Target::Flat(_) => Err(crate::ImageSurfaceError::Browser),
             Target::Browser(target) => target.present(key),
+            #[cfg(target_arch = "wasm32")]
+            Target::Illustration(target) => target.present(key),
         }
     }
 
@@ -343,6 +436,8 @@ impl ResourceLifecycle {
             Target::Flat(target) => target.dispose(),
             #[cfg(target_arch = "wasm32")]
             Target::Browser(target) => target.dispose(),
+            #[cfg(target_arch = "wasm32")]
+            Target::Illustration(target) => target.dispose(),
         }
     }
 
@@ -357,6 +452,8 @@ impl ResourceLifecycle {
             Target::Flat(target) => target.work_bytes(),
             #[cfg(target_arch = "wasm32")]
             Target::Browser(target) => target.work_bytes(),
+            #[cfg(target_arch = "wasm32")]
+            Target::Illustration(target) => target.work_bytes(),
         }
     }
     pub fn decoded_bytes(&self) -> usize {
@@ -364,6 +461,8 @@ impl ResourceLifecycle {
             Target::Flat(target) => target.decoded_bytes(),
             #[cfg(target_arch = "wasm32")]
             Target::Browser(target) => target.decoded_bytes(),
+            #[cfg(target_arch = "wasm32")]
+            Target::Illustration(target) => target.decoded_bytes(),
         }
     }
     #[cfg(target_arch = "wasm32")]
@@ -371,6 +470,8 @@ impl ResourceLifecycle {
         match &self.target {
             Target::Flat(_) => 0,
             Target::Browser(target) => target.surface_bytes(),
+            #[cfg(target_arch = "wasm32")]
+            Target::Illustration(target) => target.surface_bytes(),
         }
     }
 
@@ -392,6 +493,8 @@ impl ResourceLifecycle {
                     Target::Flat(target) => target.cancel(&pending.token),
                     #[cfg(target_arch = "wasm32")]
                     Target::Browser(target) => target.cancel(&pending.token),
+                    #[cfg(target_arch = "wasm32")]
+                    Target::Illustration(target) => target.cancel(&pending.token),
                 }
                 .map_err(ResourceLifecycleError::Resource)?;
             }
@@ -403,6 +506,8 @@ impl ResourceLifecycle {
                     Target::Flat(target) => target.release(lease.key()),
                     #[cfg(target_arch = "wasm32")]
                     Target::Browser(target) => target.release(lease.key()),
+                    #[cfg(target_arch = "wasm32")]
+                    Target::Illustration(target) => target.release(lease.key()),
                 }
                 .map_err(ResourceLifecycleError::Resource)?;
             }
@@ -410,8 +515,14 @@ impl ResourceLifecycle {
         self.prune_resident_leases()
             .map_err(ResourceLifecycleError::Resource)?;
         #[cfg(target_arch = "wasm32")]
-        if let Target::Browser(target) = &mut self.target {
-            target.refresh().map_err(ResourceLifecycleError::Surface)?;
+        match &mut self.target {
+            Target::Browser(target) => {
+                target.refresh().map_err(ResourceLifecycleError::Surface)?;
+            }
+            Target::Illustration(target) => {
+                target.refresh().map_err(ResourceLifecycleError::Surface)?;
+            }
+            Target::Flat(_) => {}
         }
         Ok(())
     }
@@ -424,6 +535,8 @@ impl ResourceLifecycle {
                 Target::Flat(target) => target.readiness(lease.key()),
                 #[cfg(target_arch = "wasm32")]
                 Target::Browser(target) => target.readiness(lease.key()),
+                #[cfg(target_arch = "wasm32")]
+                Target::Illustration(target) => target.readiness(lease.key()),
             };
             match result {
                 Ok(ResourceReadiness::Resident) => index += 1,
@@ -433,6 +546,8 @@ impl ResourceLifecycle {
                         Target::Flat(target) => target.release(lease.key()),
                         #[cfg(target_arch = "wasm32")]
                         Target::Browser(target) => target.release(lease.key()),
+                        #[cfg(target_arch = "wasm32")]
+                        Target::Illustration(target) => target.release(lease.key()),
                     }?;
                     self.resident_leases.remove(index);
                 }

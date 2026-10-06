@@ -63,3 +63,22 @@ fn zero_image_or_cache_bounds_reject_without_a_browser() {
         assert_eq!(invalid.validate(), Err(SceneImageError::InvalidLimits));
     }
 }
+
+#[test]
+fn arithmetic_budget_overflow_is_rejected_before_a_browser_allocation() {
+    let invalid = SceneImageLimits {
+        cache: CacheLimits {
+            max_bytes: usize::MAX,
+            ..limits().cache
+        },
+        ..limits()
+    };
+    assert_eq!(invalid.validate(), Err(SceneImageError::InvalidLimits));
+    let invalid = SceneImageLimits {
+        max_width: u32::MAX,
+        max_height: u32::MAX,
+        max_pixels: u64::MAX,
+        ..limits()
+    };
+    assert_eq!(invalid.validate(), Err(SceneImageError::InvalidLimits));
+}

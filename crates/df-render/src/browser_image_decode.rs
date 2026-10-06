@@ -161,6 +161,9 @@ fn inspect_png_bytes(
     limits: ImageDecodeLimits,
     ancillary_cap: Option<usize>,
 ) -> Result<ImageDecodePlan, ImageDecodeError> {
+    if let Some(cap) = ancillary_cap {
+        return inspect_prepared_png_bytes(bytes, limits, cap);
+    }
     validate_limits(bytes, limits)?;
     if bytes.get(..8) != Some(b"\x89PNG\r\n\x1a\n") {
         return Err(ImageDecodeError::CorruptPng);
@@ -235,6 +238,171 @@ fn inspect_png_bytes(
     }
     let (width, height) = dimensions.ok_or(ImageDecodeError::CorruptPng)?;
     image_plan(width, height, bytes.len(), channels, limits)
+}
+
+// The campaign's existing PNG scope includes gray/indexed/RGB/alpha, 16-bit and
+// Adam7 input. Browser ImageBitmap converts these to the same bounded RGBA8 output.
+// Native checks validate framing/layout only; CRC/header success is never decode success.
+fn inspect_prepared_png_bytes(
+    bytes: &[u8],
+    limits: ImageDecodeLimits,
+    ancillary_cap: usize,
+) -> Result<ImageDecodePlan, ImageDecodeError> {
+    validate_limits(bytes, limits)?;
+    if bytes.get(..8) != Some(b"\x89PNG\r\n\x1a\n") {
+        return Err(ImageDecodeError::CorruptPng);
+    }
+    let mut cursor = 8_usize;
+    let mut layout = None;
+    let mut palette = None;
+    let mut transparency = false;
+    let mut has_cabx = false;
+    let mut has_data = false;
+    let mut data_ended = false;
+    let mut ancillary = 0_usize;
+    loop {
+        let header_end = cursor.checked_add(8).ok_or(ImageDecodeError::CorruptPng)?;
+        let header = bytes
+            .get(cursor..header_end)
+            .ok_or(ImageDecodeError::CorruptPng)?;
+        let len = read_u32(header.get(..4).ok_or(ImageDecodeError::CorruptPng)?)? as usize;
+        let kind = header.get(4..).ok_or(ImageDecodeError::CorruptPng)?;
+        if kind.iter().any(|value| !value.is_ascii_alphabetic())
+            || kind.get(2).is_some_and(u8::is_ascii_lowercase)
+        {
+            return Err(ImageDecodeError::CorruptPng);
+        }
+        let data_end = header_end
+            .checked_add(len)
+            .ok_or(ImageDecodeError::CorruptPng)?;
+        let end = data_end
+            .checked_add(4)
+            .ok_or(ImageDecodeError::CorruptPng)?;
+        let data = bytes
+            .get(header_end..data_end)
+            .ok_or(ImageDecodeError::CorruptPng)?;
+        let checksum = read_u32(
+            bytes
+                .get(data_end..end)
+                .ok_or(ImageDecodeError::CorruptPng)?,
+        )?;
+        if crc32(
+            bytes
+                .get(cursor + 4..data_end)
+                .ok_or(ImageDecodeError::CorruptPng)?,
+        ) != checksum
+        {
+            return Err(ImageDecodeError::CorruptPng);
+        }
+        match kind {
+            b"IHDR" if cursor == 8 && len == 13 => {
+                let width = read_u32(data.get(..4).ok_or(ImageDecodeError::CorruptPng)?)?;
+                let height = read_u32(data.get(4..8).ok_or(ImageDecodeError::CorruptPng)?)?;
+                let tail = data.get(8..).ok_or(ImageDecodeError::CorruptPng)?;
+                let (depth, color, interlace) = match tail {
+                    [depth, color, 0, 0, interlace] if *interlace <= 1 => {
+                        (*depth, *color, *interlace)
+                    }
+                    _ => return Err(ImageDecodeError::UnsupportedPng),
+                };
+                let channels = match (color, depth) {
+                    (0, 1 | 2 | 4 | 8) | (3, 1 | 2 | 4 | 8) => 1,
+                    (0, 16) | (4, 8) => 2,
+                    (2, 8) => 3,
+                    (6, 8) | (4, 16) => 4,
+                    (2, 16) => 6,
+                    (6, 16) => 8,
+                    _ => return Err(ImageDecodeError::UnsupportedPng),
+                };
+                if width == 0 || height == 0 {
+                    return Err(ImageDecodeError::CorruptPng);
+                }
+                layout = Some((width, height, depth, color, interlace, channels));
+            }
+            b"PLTE" if layout.is_some() && !has_data && palette.is_none() => {
+                let (_, _, depth, color, _, _) = layout.ok_or(ImageDecodeError::CorruptPng)?;
+                if matches!(color, 0 | 4)
+                    || len == 0
+                    || !len.is_multiple_of(3)
+                    || len > 768
+                    || (color == 3 && len / 3 > 1_usize << depth)
+                {
+                    return Err(ImageDecodeError::CorruptPng);
+                }
+                palette = Some(len / 3);
+            }
+            b"tRNS" if layout.is_some() && !has_data && !transparency => {
+                let (_, _, _, color, _, _) = layout.ok_or(ImageDecodeError::CorruptPng)?;
+                let valid = match color {
+                    0 => len == 2,
+                    2 => len == 6,
+                    3 => palette.is_some_and(|colors| len > 0 && len <= colors),
+                    _ => false,
+                };
+                if !valid {
+                    return Err(ImageDecodeError::CorruptPng);
+                }
+                transparency = true;
+            }
+            b"IDAT" if layout.is_some() && !data_ended => {
+                if layout.is_some_and(|(_, _, _, color, _, _)| color == 3) && palette.is_none() {
+                    return Err(ImageDecodeError::CorruptPng);
+                }
+                has_data |= len > 0;
+            }
+            b"IEND" if layout.is_some() && has_data && len == 0 && end == bytes.len() => break,
+            b"IHDR" | b"PLTE" | b"IDAT" | b"IEND" | b"tRNS" => {
+                return Err(ImageDecodeError::CorruptPng);
+            }
+            // Compressed text/profiles and APNG need separate decoded metadata/frame budgets.
+            b"iCCP" | b"zTXt" | b"acTL" | b"fcTL" | b"fdAT" => {
+                return Err(ImageDecodeError::UnsupportedPng);
+            }
+            b"iTXt"
+                if data
+                    .iter()
+                    .position(|byte| *byte == 0)
+                    .and_then(|separator| data.get(separator + 1))
+                    .is_some_and(|flag| *flag == 0) => {}
+            b"caBX" if layout.is_some() && !has_data && !has_cabx => {
+                has_cabx = true;
+            }
+            b"tEXt" | b"gAMA" | b"cHRM" | b"sRGB" | b"bKGD" | b"pHYs" | b"sBIT" | b"tIME"
+                if layout.is_some() => {}
+            _ => return Err(ImageDecodeError::UnsupportedPng),
+        }
+        if kind != b"IDAT" && has_data {
+            data_ended = true;
+        }
+        if kind.first().is_some_and(u8::is_ascii_lowercase) {
+            ancillary = ancillary
+                .checked_add(len)
+                .ok_or(ImageDecodeError::AncillaryCapacity)?;
+            if ancillary > ancillary_cap {
+                return Err(ImageDecodeError::AncillaryCapacity);
+            }
+        }
+        cursor = end;
+    }
+    let (width, height, _, _, interlace, channels) = layout.ok_or(ImageDecodeError::CorruptPng)?;
+    let mut plan = image_plan(width, height, bytes.len(), channels, limits)?;
+    if interlace == 1 {
+        // At most seven pass scanline filter bytes per source row; image_plan already
+        // reserves one. Source sample bytes stay bounded by channels*width*height.
+        plan.budget.work_bytes = plan
+            .budget
+            .work_bytes
+            .checked_add(
+                (height as usize)
+                    .checked_mul(6)
+                    .ok_or(ImageDecodeError::ByteCapacity)?,
+            )
+            .ok_or(ImageDecodeError::ByteCapacity)?;
+        if plan.budget.work_bytes > limits.max_work_bytes {
+            return Err(ImageDecodeError::ByteCapacity);
+        }
+    }
+    Ok(plan)
 }
 
 fn read_webp_u32(bytes: &[u8]) -> Result<u32, ImageDecodeError> {
@@ -667,7 +835,9 @@ mod browser {
             ResourceLifecycleError::Cache(error) => ImageDecodeError::Lease(error),
             ResourceLifecycleError::Decode(error) => error,
             ResourceLifecycleError::Resource(error) => ImageDecodeError::Resource(error),
-            ResourceLifecycleError::Scene(_) => ImageDecodeError::BrowserDecode,
+            ResourceLifecycleError::Scene(_) | ResourceLifecycleError::UnsupportedTarget => {
+                ImageDecodeError::BrowserDecode
+            }
             ResourceLifecycleError::Surface(error) => surface_error(error),
         }
     }

@@ -194,13 +194,34 @@ impl<R: RendererResource> ResourceCache<R> {
         scene: RevisionLabel,
         references: &[R::Key],
     ) -> Result<(), ResourceError> {
+        self.apply_references(owner, revision, Some(scene), references)
+    }
+
+    /// Illustration references have no geometry or scene label. Scope and accepted
+    /// revision still fence every resource, including real cancelled work reservations.
+    pub fn apply_current(
+        &mut self,
+        owner: SceneOwner,
+        revision: SessionRevision,
+        references: &[R::Key],
+    ) -> Result<(), ResourceError> {
+        self.apply_references(owner, revision, None, references)
+    }
+
+    fn apply_references(
+        &mut self,
+        owner: SceneOwner,
+        revision: SessionRevision,
+        scene: Option<RevisionLabel>,
+        references: &[R::Key],
+    ) -> Result<(), ResourceError> {
         self.validate_scene(owner, revision, references)?;
-        let same_generation = self.scene.as_ref() == Some(&scene)
+        let same_generation = self.scene.as_ref() == scene.as_ref()
             && self
                 .revision
                 .is_some_and(|current| current.epoch() == revision.epoch());
         self.references = references.to_vec().into_boxed_slice();
-        self.scene = Some(scene);
+        self.scene = scene;
         self.revision = Some(revision);
         for pending in &mut self.pending {
             if !same_generation || !self.references.contains(&pending.token.key) {

@@ -5,14 +5,16 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+df-render = { path = "../df-render" }
 df-locale = { path = "../df-locale" }
 df-client = { path = "../df-client" }
 df-types = { path = "../df-types" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
 js-sys = "=0.3.106"
-web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "Event", "EventTarget", "HtmlElement", "HtmlButtonElement", "HtmlInputElement", "KeyboardEvent", "KeyboardEventInit", "Blob", "BlobPropertyBag", "Url", "HtmlImageElement"] }
+web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "Event", "EventTarget", "HtmlElement", "HtmlButtonElement", "HtmlInputElement", "KeyboardEvent", "KeyboardEventInit", "Blob", "BlobPropertyBag", "Url", "HtmlImageElement", "MutationObserver", "MutationObserverInit", "CanvasRenderingContext2d", "HtmlCanvasElement", "ImageData"] }
 
 [[example]]
 name = "ui_browser_fixture"
@@ -72,4 +74,12 @@ crate-type = ["cdylib"]
 [[example]]
 name = "locale_transition_fixture"
 path = "tests/fixtures/locale_transition_fixture.rs"
+crate-type = ["cdylib"]
+
+[dev-dependencies]
+df-assets = { path = "../df-assets" }
+
+[[example]]
+name = "campaign_scene_resource_fixture"
+path = "tests/fixtures/campaign_scene_resource_fixture.rs"
 crate-type = ["cdylib"]

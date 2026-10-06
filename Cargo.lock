@@ -646,11 +646,14 @@ version = "0.1.0"
 name = "df-ui"
 version = "0.1.0"
 dependencies = [
+ "df-assets",
  "df-client",
  "df-locale",
+ "df-render",
  "df-types",
  "js-sys",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

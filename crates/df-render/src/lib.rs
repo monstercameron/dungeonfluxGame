@@ -11,6 +11,8 @@ pub use scene::{
 };
 
 #[cfg(target_arch = "wasm32")]
+mod browser_illustration;
+#[cfg(target_arch = "wasm32")]
 mod browser_resource_scene;
 mod decoded_image;
 mod resource_cache;

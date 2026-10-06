@@ -27,6 +27,8 @@ pub enum SceneImageError {
     InvalidPng,
     Dimensions,
     Cache(CacheError),
+    Decode(df_render::ImageDecodeError),
+    Resource(df_render::ResourceLifecycleError),
 }
 
 impl SceneImageLimits {
@@ -41,7 +43,46 @@ impl SceneImageLimits {
         {
             return Err(SceneImageError::InvalidLimits);
         }
+        self.capacities()?;
         Ok(())
+    }
+
+    // One selected illustration, one real codec operation. Checked ceilings include
+    // canonical input/browser copies, RGBA staging and the persistent presentation surface.
+    fn capacities(self) -> Result<(usize, usize, usize), SceneImageError> {
+        let pixels = u64::from(self.max_width)
+            .checked_mul(u64::from(self.max_height))
+            .ok_or(SceneImageError::InvalidLimits)?
+            .min(self.max_pixels);
+        let decoded = usize::try_from(pixels)
+            .ok()
+            .and_then(|value| value.checked_mul(4))
+            .ok_or(SceneImageError::InvalidLimits)?;
+        let scanline = usize::try_from(self.max_width)
+            .ok()
+            .and_then(|width| width.checked_mul(8))
+            .and_then(|row| row.checked_add(7))
+            .and_then(|row| {
+                usize::try_from(self.max_height)
+                    .ok()
+                    .and_then(|height| row.checked_mul(height))
+            })
+            .ok_or(SceneImageError::InvalidLimits)?;
+        let work = self
+            .cache
+            .max_bytes
+            .checked_mul(3)
+            .and_then(|input| {
+                decoded
+                    .checked_mul(5)
+                    .and_then(|rgba| input.checked_add(rgba))
+            })
+            .and_then(|sum| sum.checked_add(scanline))
+            .ok_or(SceneImageError::InvalidLimits)?;
+        let surface = decoded
+            .checked_mul(2)
+            .ok_or(SceneImageError::InvalidLimits)?;
+        Ok((decoded, work, surface))
     }
 
     #[cfg(any(target_arch = "wasm32", test))]
@@ -95,77 +136,81 @@ impl SceneImageLimits {
 pub(crate) mod browser {
     use super::*;
     use crate::CampaignError;
-    use df_client::cache::{AssetCache, CacheLease, FetchToken};
-    use std::{
-        cell::RefCell,
-        rc::{Rc, Weak},
+    use df_client::cache::FetchToken;
+    use df_render::{
+        BrowserImageDecode, ImageDecodeError, ImageDecodeLimits, PreparedImageMetadata,
+        ResourceError, ResourceLifecycle, ResourceLifecycleError, ResourceLimits,
     };
+    use df_types::RevisionLabel;
+    use std::{cell::RefCell, rc::Rc};
     use wasm_bindgen::{JsCast, closure::Closure};
-    use web_sys::{Blob, BlobPropertyBag, Element, Event, HtmlImageElement, Url};
+    use wasm_bindgen_futures::spawn_local;
+    use web_sys::{Element, HtmlImageElement, MutationObserver, MutationObserverInit};
 
-    struct Listener {
-        node: HtmlImageElement,
-        event: &'static str,
-        callback: Closure<dyn FnMut(Event)>,
-        registered: bool,
+    // Presentation policy selected by this owner, not a provider timeout or measured device cap.
+    const DECODE_DEADLINE_MS: i32 = 10_000;
+
+    struct MountWatch {
+        observer: MutationObserver,
+        _callback: Closure<dyn FnMut(js_sys::Array, MutationObserver)>,
     }
-    impl Listener {
-        fn new(
-            node: &HtmlImageElement,
-            event: &'static str,
-            callback: impl FnMut(Event) + 'static,
-        ) -> Result<Self, CampaignError> {
-            let callback = Closure::wrap(Box::new(callback) as Box<dyn FnMut(Event)>);
-            node.add_event_listener_with_callback(event, callback.as_ref().unchecked_ref())?;
-            Ok(Self {
-                node: node.clone(),
-                event,
-                callback,
-                registered: true,
-            })
-        }
-        fn unregister(&mut self) -> Result<(), CampaignError> {
-            if self.registered {
-                self.node.remove_event_listener_with_callback(
-                    self.event,
-                    self.callback.as_ref().unchecked_ref(),
-                )?;
-                self.registered = false;
-            }
-            Ok(())
-        }
-    }
-    impl Drop for Listener {
+    impl Drop for MountWatch {
         fn drop(&mut self) {
-            // The owner explicitly reports cleanup errors; Drop still fences this callback.
-            let _cleanup = self.unregister();
+            self.observer.disconnect();
         }
     }
-    struct Slot {
+    struct ActiveDecode {
         identity: Rc<()>,
         key: CacheKey,
-        lease: Option<CacheLease>,
-        image: HtmlImageElement,
-        url: Option<String>,
-        listeners: Vec<Listener>,
-        displayed: bool,
+    }
+    struct Layout {
+        key: CacheKey,
         dimensions: (u32, u32),
     }
 
-    /// The only owner of encoded bytes, one browser PNG slot and its callback identities.
+    /// One canonical lifecycle owns encoded bytes, exact leases, decoded handles and
+    /// actual codec reservations. This component owns selection and fallback only.
     pub(crate) struct SceneImageOwner {
-        cache: AssetCache,
+        lifecycle: Rc<RefCell<ResourceLifecycle>>,
         scope: CacheScope,
         limits: SceneImageLimits,
+        decode_limits: ImageDecodeLimits,
         revision: Option<SessionRevision>,
+        references: Box<[CacheKey]>,
         selected: Option<CacheKey>,
+        selection: Rc<()>,
         requested: Option<FetchToken>,
+        layouts: Vec<Layout>,
+        active: Option<ActiveDecode>,
         root: Element,
         fallback: Element,
-        slot: Option<Slot>,
+        watch: Option<MountWatch>,
         closed: bool,
-        failure: Option<CampaignError>,
+        failure: RefCell<Option<CampaignError>>,
     }
+
+    fn resource(error: ResourceLifecycleError) -> CampaignError {
+        match error {
+            ResourceLifecycleError::Cache(error) => {
+                CampaignError::SceneImage(SceneImageError::Cache(error))
+            }
+            ResourceLifecycleError::Decode(error) => decode(error),
+            error => CampaignError::SceneImage(SceneImageError::Resource(error)),
+        }
+    }
+    fn decode(error: ImageDecodeError) -> CampaignError {
+        match error {
+            ImageDecodeError::CorruptPng => CampaignError::SceneImage(SceneImageError::InvalidPng),
+            ImageDecodeError::DimensionCapacity => {
+                CampaignError::SceneImage(SceneImageError::Dimensions)
+            }
+            ImageDecodeError::Lease(error) => {
+                CampaignError::SceneImage(SceneImageError::Cache(error))
+            }
+            error => CampaignError::SceneImage(SceneImageError::Decode(error)),
+        }
+    }
+
     impl SceneImageOwner {
         pub(crate) fn new(
             scope: CacheScope,
@@ -174,27 +219,100 @@ pub(crate) mod browser {
             fallback: &Element,
         ) -> Result<Rc<RefCell<Self>>, CampaignError> {
             limits.validate().map_err(CampaignError::SceneImage)?;
-            let cache = AssetCache::new(scope, limits.cache)
-                .map_err(|e| CampaignError::SceneImage(SceneImageError::Cache(e)))?;
-            Ok(Rc::new(RefCell::new(Self {
-                cache,
+            let (decoded, work, surface) =
+                limits.capacities().map_err(CampaignError::SceneImage)?;
+            // This is the actual local decoder configuration revision, never a server scene label.
+            let preparation = RevisionLabel::new(Some("campaign-png-rgba-v1"))
+                .map_err(|_| CampaignError::SceneImage(SceneImageError::InvalidLimits))?;
+            let lifecycle = ResourceLifecycle::mount_illustration(
+                root,
+                scope,
+                limits.cache,
+                ResourceLimits {
+                    max_references: limits.cache.max_assets,
+                    max_resident: 1,
+                    max_pending: 1,
+                    max_decoded_bytes: decoded,
+                    max_work_bytes: work,
+                },
+                preparation,
+                surface,
+            )
+            .map_err(resource)?;
+            let owner = Rc::new(RefCell::new(Self {
+                lifecycle: Rc::new(RefCell::new(lifecycle)),
                 scope,
                 limits,
+                decode_limits: ImageDecodeLimits {
+                    max_encoded_bytes: limits.cache.max_bytes,
+                    max_dimension: limits.max_width.max(limits.max_height),
+                    max_decoded_bytes: decoded,
+                    max_work_bytes: work,
+                },
                 revision: None,
+                references: Box::default(),
                 selected: None,
+                selection: Rc::new(()),
                 requested: None,
+                layouts: Vec::new(),
+                active: None,
                 root: root.clone(),
                 fallback: fallback.clone(),
-                slot: None,
+                watch: None,
                 closed: false,
-                failure: None,
-            })))
+                failure: RefCell::new(None),
+            }));
+            if !root.is_connected() {
+                let document = root.owner_document().ok_or(CampaignError::Disposed)?;
+                let weak = Rc::downgrade(&owner);
+                let callback = Closure::<dyn FnMut(js_sys::Array, MutationObserver)>::new(
+                    move |_: js_sys::Array, observer: MutationObserver| {
+                        let Some(owner) = weak.upgrade() else {
+                            observer.disconnect();
+                            return;
+                        };
+                        if owner.borrow().closed {
+                            observer.disconnect();
+                            return;
+                        }
+                        if owner.borrow().root.is_connected() {
+                            observer.disconnect();
+                            // One finite mount notification; the closure stays owned until disposal.
+                            if let Err(error) = Self::install_selected(&owner, false) {
+                                *owner.borrow().failure.borrow_mut() = Some(error);
+                            }
+                        }
+                    },
+                );
+                let observer = MutationObserver::new(callback.as_ref().unchecked_ref())?;
+                let options = MutationObserverInit::new();
+                options.set_child_list(true);
+                options.set_subtree(true);
+                observer.observe_with_options(&document, &options)?;
+                owner.borrow_mut().watch = Some(MountWatch {
+                    observer,
+                    _callback: callback,
+                });
+            }
+            Ok(owner)
         }
+
         pub(crate) fn take_failure(&mut self) -> Result<(), CampaignError> {
-            match self.failure.take() {
+            match self.failure.borrow_mut().take() {
                 Some(error) => Err(error),
                 None => Ok(()),
             }
+        }
+        pub(crate) fn scope(&self) -> CacheScope {
+            self.scope
+        }
+        pub(crate) fn ensure_drained(&self) -> Result<(), CampaignError> {
+            if self.lifecycle.borrow().work_bytes() != 0 {
+                return Err(decode(ImageDecodeError::Resource(
+                    ResourceError::PendingCapacity,
+                )));
+            }
+            Ok(())
         }
         pub(crate) fn validate(
             &self,
@@ -206,7 +324,7 @@ pub(crate) mod browser {
                 Some(SceneImageError::Cache(CacheError::WrongScope))
             } else if self
                 .revision
-                .is_some_and(|current| assets.revision <= current)
+                .is_some_and(|revision| assets.revision <= revision)
             {
                 Some(SceneImageError::Cache(CacheError::StaleRevision))
             } else if assets.references.len() > self.limits.cache.max_assets {
@@ -242,57 +360,43 @@ pub(crate) mod browser {
         ) -> Result<Option<FetchToken>, CampaignError> {
             let mut current = owner.borrow_mut();
             current.validate(assets)?;
-            let recovery = current
-                .revision
-                .is_some_and(|old| old.epoch() != assets.revision.epoch());
             current
-                .cache
+                .lifecycle
+                .borrow_mut()
                 .apply_current(assets.scope, assets.revision, assets.references)
-                .map_err(|e| CampaignError::SceneImage(SceneImageError::Cache(e)))?;
+                .map_err(resource)?;
+            let replaced = current
+                .revision
+                .is_some_and(|old| old.epoch() != assets.revision.epoch())
+                || current.selected.as_ref() != assets.selected;
             current.revision = Some(assets.revision);
-            let replaced = recovery || current.selected.as_ref() != assets.selected;
-            current.selected = assets.selected.cloned();
+            current.references = assets.references.to_vec().into_boxed_slice();
+            current
+                .layouts
+                .retain(|layout| assets.references.contains(&layout.key));
             if replaced {
-                if let Some(request) = current.requested.take() {
-                    match current.cache.cancel(&request) {
-                        Ok(()) | Err(CacheError::StaleFetch) => {}
-                        Err(e) => return Err(CampaignError::SceneImage(SceneImageError::Cache(e))),
+                current.selection = Rc::new(());
+                current.cancel_request()?;
+                if let Some(old) = current.selected.take() {
+                    match current.lifecycle.borrow_mut().release(&old) {
+                        Ok(()) | Err(ResourceLifecycleError::Cache(CacheError::NotCurrent)) => {}
+                        Err(error) => return Err(resource(error)),
                     }
                 }
-                current.clear_slot()?;
+                current.show_fallback()?;
             }
-            let Some(key) = current.selected.clone() else {
-                return Ok(None);
-            };
-            if current.slot.as_ref().is_some_and(|slot| {
-                slot.key == key
-                    && slot
-                        .lease
-                        .as_ref()
-                        .is_some_and(|lease| current.cache.lease_bytes(lease).is_ok())
-            }) {
+            current.selected = assets.selected.cloned();
+            if current.selected.is_none() {
+                current.show_fallback()?;
                 return Ok(None);
             }
             if current.requested.is_some() {
                 return Ok(None);
             }
-            if current
-                .cache
-                .get(&key)
-                .map_err(|e| CampaignError::SceneImage(SceneImageError::Cache(e)))?
-                .is_some()
-            {
-                drop(current);
-                Self::install(owner, &key)?;
-                return Ok(None);
-            }
-            let token = current
-                .cache
-                .fetch(&key)
-                .map_err(|e| CampaignError::SceneImage(SceneImageError::Cache(e)))?;
-            current.requested = Some(token.clone());
-            Ok(Some(token))
+            drop(current);
+            Self::install_selected(owner, true)
         }
+
         pub(crate) fn complete(
             owner: &Rc<RefCell<Self>>,
             token: &FetchToken,
@@ -302,141 +406,179 @@ pub(crate) mod browser {
             if current.closed || current.selected.as_ref() != Some(token.key()) {
                 return Err(CampaignError::SceneImage(SceneImageError::NotSelected));
             }
-            if let Err(error) = current.cache.complete(token, bytes) {
-                if !matches!(error, CacheError::StaleFetch | CacheError::Closed) {
+            // Describe the incoming actual bytes, but publish no layout until canonical
+            // hash/length/token verification consumes that exact Vec successfully.
+            let dimensions = current.limits.dimensions(&bytes);
+            let completion = current.lifecycle.borrow_mut().complete_fetch(token, bytes);
+            if let Err(error) = completion {
+                if !matches!(
+                    error,
+                    ResourceLifecycleError::Cache(CacheError::StaleFetch | CacheError::Closed)
+                ) {
                     current.requested = None;
                 }
-                return Err(CampaignError::SceneImage(SceneImageError::Cache(error)));
+                return Err(resource(error));
             }
             current.requested = None;
-            drop(current);
-            Self::install(owner, token.key())
-        }
-        fn install(owner: &Rc<RefCell<Self>>, key: &CacheKey) -> Result<(), CampaignError> {
-            let mut current = owner.borrow_mut();
-            let lease = current
-                .cache
-                .acquire(key)
-                .map_err(|e| CampaignError::SceneImage(SceneImageError::Cache(e)))?
-                .ok_or(CampaignError::SceneImage(SceneImageError::NotSelected))?;
-            let bytes = current
-                .cache
-                .lease_bytes(&lease)
-                .map_err(|e| CampaignError::SceneImage(SceneImageError::Cache(e)))?;
-            let dimensions = match current.limits.dimensions(bytes) {
-                Ok(dimensions) => dimensions,
-                Err(error) => {
-                    current
-                        .cache
-                        .release(key)
-                        .map_err(|e| CampaignError::SceneImage(SceneImageError::Cache(e)))?;
-                    return Err(CampaignError::SceneImage(error));
-                }
-            };
-            let array = js_sys::Uint8Array::from(bytes);
-            let parts = js_sys::Array::new();
-            parts.push(&array);
-            let options = BlobPropertyBag::new();
-            options.set_type("image/png");
-            let blob = Blob::new_with_u8_array_sequence_and_options(&parts, &options)?;
-            let image: HtmlImageElement = current
-                .root
-                .owner_document()
-                .ok_or(CampaignError::Disposed)?
-                .create_element("img")?
-                .dyn_into()
-                .map_err(|_| CampaignError::SceneImage(SceneImageError::InvalidPng))?;
-            image.set_class_name("scene-art");
-            image.set_alt(
-                current
-                    .fallback
-                    .get_attribute("alt")
-                    .as_deref()
-                    .unwrap_or("Scene artwork"),
-            );
-            let identity = Rc::new(());
-            current.clear_slot()?;
-            let url = Url::create_object_url_with_blob(&blob)?;
-            current.slot = Some(Slot {
-                identity: identity.clone(),
-                key: key.clone(),
-                lease: Some(lease),
-                image: image.clone(),
-                url: Some(url.clone()),
-                listeners: Vec::new(),
-                displayed: false,
+            let dimensions = dimensions.map_err(CampaignError::SceneImage)?;
+            current.layouts.retain(|layout| &layout.key != token.key());
+            current.layouts.push(Layout {
+                key: token.key().clone(),
                 dimensions,
             });
             drop(current);
-            let mut listeners = Vec::new();
-            for (event, success) in [("load", true), ("error", false)] {
-                let weak: Weak<RefCell<Self>> = Rc::downgrade(owner);
-                let operation = identity.clone();
-                let listener = Listener::new(&image, event, move |_| {
-                    if let Some(owner) = weak.upgrade() {
-                        let mut owner = owner.borrow_mut();
-                        if let Err(error) = owner.loaded(&operation, success) {
-                            // The next owning API reports the typed DOM failure. Input remains usable.
-                            owner.failure = Some(error);
-                            if let Err(cleanup) = owner.retire_slot() {
-                                owner.failure = Some(cleanup);
-                            }
-                        }
-                    }
-                });
-                match listener {
-                    Ok(listener) => listeners.push(listener),
-                    Err(error) => {
-                        owner.borrow_mut().clear_slot()?;
-                        return Err(error);
-                    }
-                }
-            }
-            owner
-                .borrow_mut()
-                .slot
-                .as_mut()
-                .ok_or(CampaignError::Disposed)?
-                .listeners = listeners;
-            let loading = owner
-                .borrow()
-                .root
-                .set_attribute("data-scene-image", "loading");
-            if let Err(error) = loading {
-                owner.borrow_mut().clear_slot()?;
-                return Err(error.into());
-            }
-            image.set_src(&url);
-            Ok(())
+            Self::install_selected(owner, false).map(|_| ())
         }
-        fn loaded(&mut self, identity: &Rc<()>, success: bool) -> Result<(), CampaignError> {
-            let Some(slot) = &self.slot else {
-                return Ok(());
+
+        fn install_selected(
+            owner: &Rc<RefCell<Self>>,
+            allow_fetch: bool,
+        ) -> Result<Option<FetchToken>, CampaignError> {
+            let mut current = owner.borrow_mut();
+            if current.closed {
+                return Ok(None);
+            }
+            let Some(key) = current.selected.clone() else {
+                return Ok(None);
             };
-            if self.closed || !Rc::ptr_eq(&slot.identity, identity) {
-                return Ok(());
+            let resident = current
+                .lifecycle
+                .borrow_mut()
+                .get(&key)
+                .map_err(|error| decode(ImageDecodeError::Resource(error)))?
+                .is_some();
+            if resident && current.root.is_connected() {
+                current
+                    .lifecycle
+                    .borrow_mut()
+                    .present(&key)
+                    .map_err(|error| resource(ResourceLifecycleError::Surface(error)))?;
+                current.show_generated()?;
+                return Ok(None);
             }
-            let valid = (slot.image.natural_width(), slot.image.natural_height())
-                == slot.dimensions
-                && self.selected.as_ref() == Some(&slot.key)
-                && slot
-                    .lease
-                    .as_ref()
-                    .is_some_and(|lease| self.cache.lease_bytes(lease).is_ok());
-            if !valid || !success {
-                // Unregister now, but retain executing closures until the next owner operation.
-                self.retire_slot()?;
-                return Ok(());
-            }
-            if !slot.displayed {
-                let parent = self.fallback.parent_node().ok_or(CampaignError::Disposed)?;
-                parent.replace_child(&slot.image, &self.fallback)?;
-                if let Some(slot) = self.slot.as_mut() {
-                    slot.displayed = true;
+            let present = current
+                .lifecycle
+                .borrow_mut()
+                .contains_bytes(&key)
+                .map_err(|error| CampaignError::SceneImage(SceneImageError::Cache(error)))?;
+            if !present {
+                current.layouts.retain(|layout| layout.key != key);
+                if current.requested.is_some() || !allow_fetch {
+                    return Ok(None);
                 }
+                let token = current
+                    .lifecycle
+                    .borrow_mut()
+                    .fetch(&key)
+                    .map_err(|error| CampaignError::SceneImage(SceneImageError::Cache(error)))?;
+                current.requested = Some(token.clone());
+                return Ok(Some(token));
             }
+            let dimensions = current
+                .layouts
+                .iter()
+                .find(|layout| layout.key == key)
+                .map(|layout| layout.dimensions)
+                .ok_or(CampaignError::SceneImage(SceneImageError::InvalidPng))?;
+            // No decode while detached, and no replacement operation until real terminal.
+            // Retain only the newest selected key/layout while the single old runner drains.
+            if !current.root.is_connected() || current.active.is_some() {
+                return Ok(None);
+            }
+            current.root.set_attribute("data-scene-image", "loading")?;
+            let mut operation = match BrowserImageDecode::start_owned_prepared(
+                current.lifecycle.clone(),
+                &key,
+                PreparedImageMetadata {
+                    mime: "image/png",
+                    width: dimensions.0,
+                    height: dimensions.1,
+                    max_ancillary_bytes: current.limits.cache.max_bytes,
+                },
+                current.decode_limits,
+                DECODE_DEADLINE_MS,
+            ) {
+                Ok(operation) => operation,
+                Err(error) => {
+                    current.show_fallback()?;
+                    return Err(decode(error));
+                }
+            };
+            let identity = Rc::new(());
+            let selection = current.selection.clone();
+            current.active = Some(ActiveDecode {
+                identity: identity.clone(),
+                key: key.clone(),
+            });
+            let weak = Rc::downgrade(owner);
+            drop(current);
+            spawn_local(async move {
+                let result = operation.wait().await;
+                let Some(owner) = weak.upgrade() else {
+                    return;
+                };
+                let mut current = owner.borrow_mut();
+                if !current.active.as_ref().is_some_and(|active| {
+                    Rc::ptr_eq(&active.identity, &identity) && active.key == key
+                }) {
+                    return;
+                }
+                current.active = None;
+                if current.closed {
+                    return;
+                }
+                let same_selection = current.selected.as_ref() == Some(&key)
+                    && Rc::ptr_eq(&current.selection, &selection);
+                let display = if same_selection && result == Ok(true) && current.root.is_connected()
+                {
+                    current.show_generated()
+                } else {
+                    current.show_fallback()
+                };
+                if let Err(error) = display {
+                    *current.failure.borrow_mut() = Some(error);
+                    if let Err(cleanup) = current.show_fallback() {
+                        *current.failure.borrow_mut() = Some(cleanup);
+                    }
+                }
+                if same_selection && let Err(error) = result {
+                    *current.failure.borrow_mut() = Some(decode(error));
+                }
+                let deferred = !same_selection && current.selected.is_some();
+                drop(current);
+                if deferred && let Err(error) = Self::install_selected(&owner, false) {
+                    *owner.borrow().failure.borrow_mut() = Some(error);
+                }
+            });
+            Ok(None)
+        }
+
+        fn show_generated(&mut self) -> Result<(), CampaignError> {
+            self.lifecycle
+                .borrow_mut()
+                .set_illustration_visible(true)
+                .map_err(resource)?;
+            self.fallback.remove();
             self.root.set_attribute("data-scene-image", "generated")?;
             Self::failed_class(&self.root, false);
+            Ok(())
+        }
+        fn show_fallback(&mut self) -> Result<(), CampaignError> {
+            self.lifecycle
+                .borrow_mut()
+                .set_illustration_visible(false)
+                .map_err(resource)?;
+            if self.fallback.parent_node().is_none() {
+                self.root.append_child(&self.fallback)?;
+            }
+            let failed = self
+                .fallback
+                .dyn_ref::<HtmlImageElement>()
+                .is_some_and(|image| {
+                    image.has_attribute("src") && image.complete() && image.natural_width() == 0
+                });
+            Self::failed_class(&self.root, failed);
+            self.root.set_attribute("data-scene-image", "fallback")?;
             Ok(())
         }
         fn failed_class(root: &Element, failed: bool) {
@@ -451,100 +593,64 @@ pub(crate) mod browser {
             }
             root.set_class_name(&names.join(" "));
         }
-        fn retire_slot(&mut self) -> Result<(), CampaignError> {
-            let mut failure = None;
-            if let Some(slot) = self.slot.as_mut() {
-                if slot.displayed {
-                    if let Some(parent) = slot.image.parent_node()
-                        && let Err(e) = parent.replace_child(&self.fallback, &slot.image)
-                    {
-                        failure = Some(CampaignError::from(e));
-                    }
-                    slot.displayed = false;
-                }
-                slot.image.remove();
-                slot.image
-                    .remove_attribute("src")
-                    .map_err(CampaignError::from)
-                    .unwrap_or_else(|e| {
-                        if failure.is_none() {
-                            failure = Some(e);
-                        }
-                    });
-                for listener in &mut slot.listeners {
-                    if let Err(e) = listener.unregister()
-                        && failure.is_none()
-                    {
-                        failure = Some(e);
-                    }
-                }
-                if let Some(url) = slot.url.take()
-                    && let Err(e) = Url::revoke_object_url(&url)
-                    && failure.is_none()
-                {
-                    failure = Some(e.into());
-                }
-                if let Some(lease) = slot.lease.take() {
-                    match self.cache.release_lease(&lease) {
-                        Ok(()) | Err(CacheError::StaleLease | CacheError::Closed) => {}
-                        Err(e) if failure.is_none() => {
-                            failure = Some(CampaignError::SceneImage(SceneImageError::Cache(e)))
-                        }
-                        Err(_) => {}
+        fn cancel_request(&mut self) -> Result<(), CampaignError> {
+            if let Some(request) = self.requested.take() {
+                match self.lifecycle.borrow_mut().cancel_fetch(&request) {
+                    Ok(()) | Err(CacheError::StaleFetch) => {}
+                    Err(error) => {
+                        return Err(CampaignError::SceneImage(SceneImageError::Cache(error)));
                     }
                 }
             }
-            // The exact current concept image may have finished with an error while
-            // detached behind the generated PNG. Reconcile its actual readiness now;
-            // no old concept event or generated event can supply this state.
-            let failed = self
-                .fallback
-                .dyn_ref::<HtmlImageElement>()
-                .is_some_and(|image| {
-                    image.has_attribute("src") && image.complete() && image.natural_width() == 0
-                });
-            Self::failed_class(&self.root, failed);
-            self.root
-                .set_attribute("data-scene-image", "fallback")
-                .map_err(CampaignError::from)
-                .unwrap_or_else(|e| {
-                    if failure.is_none() {
-                        failure = Some(e);
-                    }
-                });
-            match failure {
-                Some(error) => Err(error),
-                None => Ok(()),
-            }
-        }
-        fn clear_slot(&mut self) -> Result<(), CampaignError> {
-            let result = self.retire_slot();
-            self.slot = None;
-            result
+            Ok(())
         }
         pub(crate) fn replace_fallback(&mut self, fallback: &Element) {
             self.fallback = fallback.clone();
         }
         pub(crate) fn set_description(&self, description: &str) {
-            if let Some(slot) = &self.slot {
-                slot.image.set_alt(description);
+            if let Err(error) = self
+                .lifecycle
+                .borrow_mut()
+                .set_illustration_description(description)
+            {
+                *self.failure.borrow_mut() = Some(resource(error));
             }
         }
         pub(crate) fn legacy(&mut self) -> Result<(), CampaignError> {
-            let cleanup = self.clear_slot();
-            self.cache = AssetCache::new(self.scope, self.limits.cache)
-                .map_err(|e| CampaignError::SceneImage(SceneImageError::Cache(e)))?;
+            if self.closed {
+                return Ok(());
+            }
+            self.cancel_request()?;
+            for key in &self.references {
+                self.lifecycle.borrow_mut().release(key).map_err(resource)?;
+            }
+            self.layouts.clear();
+            self.selection = Rc::new(());
             self.selected = None;
-            self.requested = None;
-            cleanup
+            self.show_fallback()
         }
         pub(crate) fn dispose(&mut self) -> Result<(), CampaignError> {
+            if self.closed {
+                return Ok(());
+            }
             self.closed = true;
-            let result = self.clear_slot();
-            self.cache.dispose();
+            if let Some(watch) = &self.watch {
+                watch.observer.disconnect();
+            }
+            let fallback = self.show_fallback();
+            let result = self.lifecycle.borrow_mut().dispose().map_err(|error| {
+                resource(ResourceLifecycleError::Scene(
+                    df_render::ResourceSceneError::Scene(error),
+                ))
+            });
+            self.layouts.clear();
+            self.references = Box::default();
             self.selected = None;
             self.requested = None;
-            result
+            // active identity remains until its genuine terminal callback. The runner
+            // retains the closed lifecycle and work budget; replacement checks drainage.
+            fallback?;
+            result.map(|_| ())
         }
     }
     impl Drop for SceneImageOwner {
