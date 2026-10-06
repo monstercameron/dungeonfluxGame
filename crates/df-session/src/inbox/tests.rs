@@ -322,3 +322,194 @@ fn default_byte_bound_admits_exact_input_capacity_then_refuses_another_input() {
         .unwrap();
     assert_eq!(outcome.reduced_inputs, 1);
 }
+
+struct ReplenishingReducer {
+    handle: InboxHandle<GameInput>,
+    entered: SyncSender<usize>,
+    resume: Receiver<()>,
+    deadline: Option<Instant>,
+    observed: Vec<(AdmissionSequence, GameInput)>,
+    wakes: usize,
+}
+
+impl Reducer<GameInput> for ReplenishingReducer {
+    fn reduce(&mut self, sequence: AdmissionSequence, input: GameInput) {
+        self.observed.push((sequence, input));
+        self.entered.send(self.observed.len()).unwrap();
+        self.resume
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap();
+    }
+}
+
+#[test]
+fn due_owner_wake_progresses_while_a_producer_keeps_admitted_input_queued() {
+    const INPUTS: usize = 32;
+    let (handle, actor) = bounded_inbox();
+    submit(&handle, input(1, 0));
+    let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+    let (resume_tx, resume_rx) = mpsc::sync_channel(1);
+    let owner_handle = handle.clone();
+    let worker = thread::spawn(move || {
+        let mut reducer = ReplenishingReducer {
+            handle: owner_handle,
+            entered: entered_tx,
+            resume: resume_rx,
+            deadline: Some(Instant::now()),
+            observed: Vec::new(),
+            wakes: 0,
+        };
+        let outcome = actor
+            .run_with_owner_wake(
+                &mut reducer,
+                |reducer| reducer.deadline,
+                |reducer| {
+                    assert!(reducer.handle.usage().is_ok());
+                    reducer.wakes += 1;
+                    reducer.deadline = None;
+                },
+            )
+            .unwrap();
+        (reducer, outcome)
+    });
+
+    // The successor is queued before each reduction returns. Neither a sleep nor
+    // a timing-sensitive flood is needed to keep every owner turn nonempty.
+    for processed in 1..=INPUTS {
+        assert_eq!(
+            entered_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap(),
+            processed
+        );
+        if processed < INPUTS {
+            assert_eq!(
+                submit(&handle, input((processed + 1) as u8, 0)),
+                AdmissionSequence((processed + 1) as u64)
+            );
+            assert_eq!(handle.usage().unwrap().retained_items, 2);
+        } else {
+            handle.stop().unwrap();
+        }
+        resume_tx.send(()).unwrap();
+    }
+
+    let (reducer, outcome) = worker.join().unwrap();
+    assert_eq!(reducer.wakes, 1);
+    assert_eq!(
+        reducer.observed,
+        (1..=INPUTS)
+            .map(|value| (AdmissionSequence(value as u64), input(value as u8, 0)))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(outcome.reduced_inputs, INPUTS as u64);
+    assert_eq!(
+        outcome.last_sequence,
+        Some(AdmissionSequence(INPUTS as u64))
+    );
+    assert_eq!(
+        handle.usage().unwrap(),
+        InboxUsage {
+            accepting: false,
+            retained_items: 0,
+            retained_bytes: 0,
+        }
+    );
+}
+
+struct DueRecordingReducer {
+    handle: InboxHandle<GameInput>,
+    observed: Vec<(AdmissionSequence, GameInput)>,
+    stop_after: usize,
+    wakes_before_inputs: Vec<usize>,
+}
+
+impl Reducer<GameInput> for DueRecordingReducer {
+    fn reduce(&mut self, sequence: AdmissionSequence, input: GameInput) {
+        self.observed.push((sequence, input));
+        if self.observed.len() == self.stop_after {
+            self.handle.stop().unwrap();
+        }
+    }
+}
+
+#[test]
+fn persistently_due_owner_work_alternates_with_fifo_inputs_until_stop() {
+    let (handle, actor) = bounded_inbox();
+    submit(&handle, input(1, 0));
+    submit(&handle, input(2, 0));
+    let due = Instant::now();
+    let mut reducer = DueRecordingReducer {
+        handle: handle.clone(),
+        observed: Vec::new(),
+        stop_after: 2,
+        wakes_before_inputs: Vec::new(),
+    };
+    let outcome = actor
+        .run_with_owner_wake(
+            &mut reducer,
+            |_| Some(due),
+            |reducer| {
+                assert!(reducer.handle.usage().is_ok());
+                reducer.wakes_before_inputs.push(reducer.observed.len());
+                // Keep a broken wake-priority implementation finite: its third
+                // callback closes ingress instead of spinning forever.
+                if reducer.wakes_before_inputs.len() == 3 {
+                    reducer.handle.stop().unwrap();
+                }
+            },
+        )
+        .unwrap();
+    assert_eq!(reducer.wakes_before_inputs, vec![0, 1]);
+    assert_eq!(
+        reducer.observed,
+        vec![
+            (AdmissionSequence(1), input(1, 0)),
+            (AdmissionSequence(2), input(2, 0)),
+        ]
+    );
+    assert_eq!(outcome.reduced_inputs, 2);
+    assert_eq!(handle.usage().unwrap().retained_items, 0);
+    assert_eq!(handle.usage().unwrap().retained_bytes, 0);
+}
+
+#[test]
+fn stop_from_due_owner_wake_cancels_later_wakes_and_drains_admitted_inputs() {
+    let (handle, actor) = bounded_inbox();
+    submit(&handle, input(1, 0));
+    submit(&handle, input(2, 0));
+    let due = Instant::now();
+    let mut reducer = DueRecordingReducer {
+        handle: handle.clone(),
+        observed: Vec::new(),
+        stop_after: usize::MAX,
+        wakes_before_inputs: Vec::new(),
+    };
+    let outcome = actor
+        .run_with_owner_wake(
+            &mut reducer,
+            |_| Some(due),
+            |reducer| {
+                reducer.wakes_before_inputs.push(reducer.observed.len());
+                reducer.handle.stop().unwrap();
+            },
+        )
+        .unwrap();
+    assert_eq!(reducer.wakes_before_inputs, vec![0]);
+    assert_eq!(
+        reducer.observed,
+        vec![
+            (AdmissionSequence(1), input(1, 0)),
+            (AdmissionSequence(2), input(2, 0)),
+        ]
+    );
+    assert_eq!(outcome.reduced_inputs, 2);
+    assert_eq!(
+        handle.usage().unwrap(),
+        InboxUsage {
+            accepting: false,
+            retained_items: 0,
+            retained_bytes: 0,
+        }
+    );
+}

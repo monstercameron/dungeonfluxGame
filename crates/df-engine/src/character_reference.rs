@@ -779,7 +779,6 @@ fn reference_binding(
         || demand.basis.revision > current.basis().revision
         || demand.key.schema != current.schema()
         || demand.key.source != current.pins().content.content_digest
-        || demand.mode != current.state().mode
         || demand.priority != DemandPriority::Optional
         || !current.state().decisions.iter().any(|decision| {
             decision.operation == intent.operation
