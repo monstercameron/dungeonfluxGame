@@ -444,6 +444,221 @@ fn keeps_attributed_false_claim_separate_from_canonical_facts() {
         "synthetic contradictory claim"
     );
 }
+
+fn observer_truth_state() -> GameState {
+    let mut supplied = state();
+    let mut cause = fact(70, 0);
+    cause.revision = revision(1, 3);
+    let mut outcome = fact(71, 1);
+    outcome.revision = cause.revision;
+    outcome.cause = Some(cause.id);
+    outcome.value = FactValue::ResourceChanged {
+        entity: entity(4),
+        resource: label("fixture-resource-1"),
+        before: 5,
+        after: 4,
+        source: rule(),
+    };
+    supplied.decisions.push(AcceptedDecision {
+        operation: cause.operation,
+        revision: cause.revision,
+        facts: vec![cause.id, outcome.id],
+        draws: vec![],
+        effects: vec![],
+        source_policy: label("fixture-policy-1"),
+        semantic_output: None,
+    });
+    supplied.knowledge.push(KnowledgeGrant {
+        observer: member(3),
+        fact: outcome.id,
+        source: cause.id,
+    });
+    supplied.beliefs.push(AttributedClaim {
+        id: RecordId::from_bytes(&[72; 16]).unwrap(),
+        holder: entity(4),
+        subject: entity(4),
+        claim: "I gained a resource; none was spent".to_owned(),
+        evidence: vec![outcome.id],
+        audience: AudienceScope::Members(vec![member(3)]),
+        source: content(),
+    });
+    supplied.memories.push(MemoryEpisode {
+        id: RecordId::from_bytes(&[73; 16]).unwrap(),
+        holder: entity(4),
+        source_facts: vec![outcome.id],
+        retained_text: "I remember having six resources afterward".to_owned(),
+        audience: AudienceScope::Members(vec![member(3)]),
+        source_revision: outcome.revision,
+    });
+    supplied.continuity.rumors.push(RumorTransmission {
+        id: RecordId::from_bytes(&[74; 16]).unwrap(),
+        claim: supplied.beliefs[0].id,
+        sender: entity(4),
+        recipient: entity(4),
+        evidence: vec![outcome.id],
+        policy: content(),
+        remaining_hops: 1,
+        audience: AudienceScope::Members(vec![member(3)]),
+    });
+    supplied.continuity.journal.push(JournalEntry {
+        id: RecordId::from_bytes(&[75; 16]).unwrap(),
+        source_facts: vec![outcome.id],
+        attributed_claims: vec![supplied.beliefs[0].id],
+        audience: AudienceScope::Members(vec![member(3)]),
+        text: "Attributed recollection: six resources".to_owned(),
+    });
+    supplied.continuity.summaries.push(MemorySummary {
+        id: RecordId::from_bytes(&[76; 16]).unwrap(),
+        episodes: vec![supplied.memories[0].id],
+        derived_claims: vec![supplied.beliefs[0].id],
+        source_digest: pins().content.content_digest,
+        source_revision: outcome.revision,
+        summarizer: label("fixture-summarizer"),
+        model: label("fixture-model"),
+        policy: content(),
+        audience: AudienceScope::Members(vec![member(3)]),
+        text: "The observer recalls gaining resources".to_owned(),
+        incomplete: false,
+    });
+    supplied.facts = vec![cause, outcome];
+    supplied
+}
+
+#[test]
+fn observer_edits_and_compaction_preserve_exact_canonical_history() {
+    let original = checkpoint(observer_truth_state()).unwrap();
+    let mut edited = original.state().clone();
+    edited.beliefs[0].claim = "I now believe the cost was three".to_owned();
+    edited.memories[0].retained_text = "I no longer recall the exact quantity".to_owned();
+    edited.continuity.rumors[0].remaining_hops = 0;
+    edited.continuity.journal[0].text = "The observer revised their recollection".to_owned();
+    edited.continuity.summaries[0].text = "Uncertain resource recollection".to_owned();
+    edited.continuity.summaries[0].incomplete = true;
+    let revised = checkpoint(edited).unwrap();
+    assert_ne!(revised.state().beliefs, original.state().beliefs);
+    assert_ne!(revised.state().memories, original.state().memories);
+    assert_ne!(
+        revised.state().continuity.summaries,
+        original.state().continuity.summaries
+    );
+
+    let mut compacted = revised.state().clone();
+    compacted.knowledge.clear();
+    compacted.beliefs.clear();
+    compacted.memories.clear();
+    compacted.continuity.rumors.clear();
+    compacted.continuity.journal.clear();
+    compacted.continuity.summaries.clear();
+    let compacted = checkpoint(compacted).unwrap();
+    for candidate in [&revised, &compacted] {
+        assert_eq!(candidate.state().facts, original.state().facts);
+        assert_eq!(candidate.state().decisions, original.state().decisions);
+        assert_eq!(candidate.state().resources, original.state().resources);
+        assert_eq!(candidate.state().draws, original.state().draws);
+        assert_eq!(
+            candidate.state().logical_time,
+            original.state().logical_time
+        );
+        assert_eq!(candidate.basis(), original.basis());
+        assert_eq!(candidate.pins(), original.pins());
+        assert_eq!(candidate.validate_resume(basis(), &pins()), Ok(candidate));
+    }
+    assert_eq!(original.state().facts[1].revision, revision(1, 3));
+    assert_eq!(
+        original.state().facts[1].cause,
+        Some(original.state().facts[0].id)
+    );
+    assert_eq!(
+        original.state().beliefs[0].claim,
+        "I gained a resource; none was spent"
+    );
+}
+
+#[test]
+fn forged_observer_provenance_refuses_without_changing_the_original_checkpoint() {
+    let original = checkpoint(observer_truth_state()).unwrap();
+    let retained = original.clone();
+    for case in [
+        "claim-holder",
+        "claim-subject",
+        "claim-evidence",
+        "claim-source",
+        "knowledge-observer",
+        "knowledge-fact",
+        "knowledge-source",
+        "memory-fact",
+        "rumor-evidence",
+        "summary-episode",
+        "summary-digest",
+    ] {
+        let mut candidate = original.state().clone();
+        match case {
+            "claim-holder" => candidate.beliefs[0].holder = entity(99),
+            "claim-subject" => candidate.beliefs[0].subject = entity(99),
+            "claim-evidence" => candidate.beliefs[0].evidence[0] = fact(99, 0).id,
+            "claim-source" => candidate.beliefs[0].source.entry = label("unadmitted-source"),
+            "knowledge-observer" => candidate.knowledge[0].observer = member(99),
+            "knowledge-fact" => candidate.knowledge[0].fact = fact(99, 0).id,
+            "knowledge-source" => candidate.knowledge[0].source = fact(99, 0).id,
+            "memory-fact" => candidate.memories[0].source_facts[0] = fact(99, 0).id,
+            "rumor-evidence" => candidate.continuity.rumors[0].evidence[0] = fact(99, 0).id,
+            "summary-episode" => {
+                candidate.continuity.summaries[0].episodes[0] =
+                    RecordId::from_bytes(&[99; 16]).unwrap();
+            }
+            "summary-digest" => {
+                candidate.continuity.summaries[0].source_digest = ContentDigest([99; 32]);
+            }
+            _ => unreachable!(),
+        }
+        let expected = if case == "summary-digest" {
+            CheckpointError::ContentMismatch
+        } else {
+            CheckpointError::InvalidReference
+        };
+        assert_eq!(checkpoint(candidate), Err(expected), "{case}");
+        assert_eq!(original, retained, "{case}");
+    }
+}
+
+#[test]
+fn observer_records_cannot_stand_in_for_missing_canonical_sources() {
+    let original = checkpoint(observer_truth_state()).unwrap();
+    for case in ["knowledge", "belief", "memory", "summary"] {
+        let mut candidate = original.state().clone();
+        candidate.facts.clear();
+        candidate.decisions.clear();
+        candidate.knowledge.clear();
+        candidate.beliefs.clear();
+        candidate.memories.clear();
+        candidate.continuity.rumors.clear();
+        candidate.continuity.journal.clear();
+        candidate.continuity.summaries.clear();
+        match case {
+            "knowledge" => candidate.knowledge = original.state().knowledge.clone(),
+            "belief" => candidate.beliefs = original.state().beliefs.clone(),
+            "memory" => candidate.memories = original.state().memories.clone(),
+            "summary" => {
+                let mut summary = original.state().continuity.summaries[0].clone();
+                summary.derived_claims.clear();
+                candidate.continuity.summaries.push(summary);
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            checkpoint(candidate),
+            Err(CheckpointError::InvalidReference),
+            "{case}"
+        );
+        assert_eq!(original.state().facts[1].revision, revision(1, 3));
+        assert_eq!(
+            original.state().facts[1].cause,
+            Some(original.state().facts[0].id)
+        );
+        assert_eq!(original.state().resources[0].value, 4);
+    }
+}
+
 #[test]
 fn rejects_zero_time_scale_unknown_private_audience_and_capacity_overflow() {
     let mut supplied = state();

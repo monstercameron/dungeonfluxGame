@@ -1,0 +1,204 @@
+{
+  "schema": 1,
+  "task": "B-C-df-model-D04",
+  "decision": "Canonical facts and attributed observer state remain separate. Observer text, confidence, summaries, rumor propagation and knowledge references cannot replace fact records or grant authority to rewrite their history.",
+  "source_revision": "884f361b20aac49661c1ca560ef330d812d5feba",
+  "qualification": "Bounded existing production model and registered witness contract. Executable evidence belongs to the attempt's exact build/command receipts; this fixture does not claim those commands ran.",
+  "original_acceptance": [
+    "observer state cannot overwrite facts",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "original_verification": [
+    "Freeze the cited source decision and a bounded contract example; compare observer state cannot overwrite facts. Retain decision, alternatives and unresolved facts.",
+    "Exact executable commands: TBD at G01 and scoped prerequisite resolution; this planned procedure is not a claim that Rust/browser/provider checks ran."
+  ],
+  "ownership": {
+    "model": "Checkpoint privately owns GameState and exposes an immutable reference. GameFact retains exact identity, operation, revision, ordinal, causal fact and audience. KnowledgeGrant points to existing canonical evidence; AttributedClaim and MemoryEpisode retain their own attribution/text.",
+    "knowledge": "Pure bounded perception/ranking proposals over supplied current permitted evidence; no independent fact commitment.",
+    "engine": "WitnessGrantHandler revalidates the native producer and stages knowledge grants plus a decision with no newly declared facts. Original fact/cause records remain unchanged.",
+    "session": "Only the durable session owner admits and commits the staged candidate under operation/revision/fence, before publication.",
+    "persistence": "Versioned checkpoint mapping and durable canonical records, not summary-derived reconstruction.",
+    "projection": "Current audience authorization before serialization; a fact reference alone confers neither disclosure nor mutation rights."
+  },
+  "bounded_example": {
+    "source_policy": "Synthetic admitted fixture references; not a qualified 2024 rules catalogue, real actor authentication or real perception producer.",
+    "canonical": {
+      "facts": [
+        {
+          "id_byte": 70,
+          "operation_byte": 6,
+          "revision": {
+            "epoch": 1,
+            "sequence": 3
+          },
+          "ordinal": 0,
+          "cause": null
+        },
+        {
+          "id_byte": 71,
+          "operation_byte": 6,
+          "revision": {
+            "epoch": 1,
+            "sequence": 3
+          },
+          "ordinal": 1,
+          "cause_id_byte": 70,
+          "value": {
+            "kind": "ResourceChanged",
+            "before": 5,
+            "after": 4
+          }
+        }
+      ],
+      "decision": {
+        "operation_byte": 6,
+        "revision": {
+          "epoch": 1,
+          "sequence": 3
+        },
+        "facts_id_bytes": [
+          70,
+          71
+        ]
+      },
+      "checkpoint_basis": {
+        "epoch": 2,
+        "sequence": 8
+      },
+      "current_resource": 4
+    },
+    "observer": {
+      "knowledge": "Member 3 references fact 71 and source fact 70.",
+      "belief": "Actor 4 falsely believes no resource was spent.",
+      "memory": "Actor 4 remembers having six resources afterward.",
+      "rumor": "A bounded transmission retains the attributed claim and fact evidence.",
+      "journal": "An attributed recollection is stored separately.",
+      "summary": "Derived recollection binds episode, claim, historical revision and source digest; uncertain text stays derived."
+    },
+    "procedures": [
+      {
+        "selector": "observer_edits_and_compaction_preserve_exact_canonical_history",
+        "input": "Edit claim/memory/journal/summary text and bounded rumor progress, then remove only these synthetic derived records.",
+        "expected": "Exact fact values, identities, cause, operation, historical revision, accepted decision, resources, draws, game time, checkpoint basis and pins survive. Original detached checkpoint remains unchanged."
+      },
+      {
+        "selector": "forged_observer_provenance_refuses_without_changing_the_original_checkpoint",
+        "input": "Eleven isolated bad holder/subject/evidence/source/member/fact/episode/digest references.",
+        "expected": "Typed InvalidReference or ContentMismatch; no usable rejected checkpoint and no mutation of original."
+      },
+      {
+        "selector": "observer_records_cannot_stand_in_for_missing_canonical_sources",
+        "input": "Remove canonical facts and decisions; retain each of knowledge, belief, memory or a summary independently so no unrelated decision check masks the reference gate.",
+        "expected": "Typed InvalidReference for absent fact or episode. Observer text cannot fabricate a canonical source."
+      }
+    ],
+    "existing_registered_boundary": [
+      "registered_witness_batch_preserves_private_causes_and_every_sibling_record",
+      "global_fact_belief_memory_and_summary_do_not_replace_a_native_witness_producer",
+      "current_basis_pins_and_unavailable_source_refuse_before_source_work"
+    ]
+  },
+  "alternatives": [
+    {
+      "choice": "One mutable fact/belief map",
+      "rejected_because": "Observer edits erase attribution and can retcon canonical history."
+    },
+    {
+      "choice": "Highest-confidence summary as truth",
+      "rejected_because": "A derived aid becomes an authority and loses exact committed evidence."
+    },
+    {
+      "choice": "Deliver full canonical truth and let clients hide it",
+      "rejected_because": "Thin client hiding cannot enforce current audience authorization."
+    },
+    {
+      "choice": "Reuse the old private marker harness as current production proof",
+      "rejected_because": "Historical std-only fixture invented bounded claim markers; current production KnowledgeGrant references actual facts rather than supplying replacement values. Historical PASS remains separately attributed."
+    }
+  ],
+  "unresolved_and_unperformed": [
+    {
+      "boundary": "Arbitrary complete checkpoint construction",
+      "fact": "Checkpoint::new accepts a trusted complete GameState; structural validation alone is not a public client capability fence. Canonical mutation authority is owned by engine/session admission."
+    },
+    {
+      "boundary": "Semantic summary contradiction",
+      "fact": "Checkpoint validation checks references, source digest, revision and bounds. It does not interpret natural-language truth or quarantine inconsistent summaries. Current text acceptance proves absence of canonical mutation, not source-consistent summary generation."
+    },
+    {
+      "boundary": "Compaction",
+      "fact": "The example removes synthetic derived records only; it does not qualify production obligation preservation, active-fact retention or full memory decay policy."
+    },
+    {
+      "boundary": "Canonical supersession",
+      "fact": "Historical fact/cause preservation is exercised; a complete explicit world-fact supersession protocol is not admitted by this example."
+    },
+    {
+      "boundary": "Future integration",
+      "fact": "Authentication/noninterference, native perception policy, retrieval/consolidation, PostgreSQL restart, redaction/restore, browser/gameplay, provider/audio/device and full rules catalogue acceptance are not proven by this bounded model decision."
+    }
+  ],
+  "verification_plan": {
+    "commands": [
+      "cargo fmt --all -- --check",
+      "cargo test --locked -p df-model --test checkpoint",
+      "cargo test --locked -p df-engine --test witness_staging",
+      "cargo clippy --locked -p df-model -p df-engine --all-targets -- -D warnings",
+      "cargo check --locked -p df-model -p df-engine --target wasm32-unknown-unknown",
+      "cargo clippy --locked -p df-model -p df-engine --target wasm32-unknown-unknown --all-targets -- -D warnings"
+    ],
+    "completion": "Independent frontier actual internal-boundary execution from frozen source/build, followed by resulting-source integration checks. No new user-facing browser/audio behavior is introduced here."
+  },
+  "source_pins": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 20121,
+      "sha256": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182"
+    },
+    {
+      "path": "planning/coding-style.md",
+      "bytes": 9448,
+      "sha256": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb"
+    },
+    {
+      "path": "ADR/0001-sqlite-agent-workflow.md",
+      "bytes": 13664,
+      "sha256": "acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8"
+    },
+    {
+      "path": "ADR/0004-development-reliability.md",
+      "bytes": 8670,
+      "sha256": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae"
+    },
+    {
+      "path": "ADR/0005-frontier-output-evaluation.md",
+      "bytes": 6534,
+      "sha256": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c"
+    },
+    {
+      "path": "planning/subsystem-interfaces.md",
+      "bytes": 35522,
+      "sha256": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a"
+    },
+    {
+      "path": "planning/long-horizon-state.md",
+      "bytes": 7690,
+      "sha256": "977b5a346190a55c119242fdb7009a645e6d76aa2946d0684c46571d846e96ff"
+    },
+    {
+      "path": "planning/runtime-reliability.md",
+      "bytes": 12250,
+      "sha256": "176e5a8fb04e1d9cb2402225c9eb1bb4ffd110abf353f226a302e10e780acf05"
+    },
+    {
+      "path": "crates/df-model/src/checkpoint.rs",
+      "bytes": 100686,
+      "sha256": "41b269359cfdf54357ae295bd9fc878ac85d25c37e45e395fa1081582f778676"
+    },
+    {
+      "path": "crates/df-engine/src/witness_staging.rs",
+      "bytes": 11254,
+      "sha256": "0a244d8d2f5a93bc84080bbcb47d747612d4f93b98e5ccf0bc206842bcb57014"
+    }
+  ]
+}
