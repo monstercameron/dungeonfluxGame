@@ -1,0 +1,78 @@
+{
+  "task_id": "B-C-df-combat-D01",
+  "attempt_id": "B-C-df-combat-D01-a2",
+  "input_revision": "2d2cbae3b11383e726e46187e504638196403a57",
+  "decision": {
+    "statement": "Tactical ranking may order only exact current offers admitted by the rules owner. Ranking is a staged policy decision; it does not establish source qualification, actor authority, mechanics, execution, or durable acceptance.",
+    "criterion": "rules offers constrain every action",
+    "selected_boundary": "Use existing df-combat candidate enumeration and tactical ranking, the registered pending-response preview, and df-engine's exact registered-response staging entry. Do not add or imply CombatDirector, TacticalObservation, TacticalProposal, LegalActionSet, or general combat mechanics that do not exist in this source revision.",
+    "alternatives_considered": [
+      {
+        "alternative": "Add the planned CombatDirector::choose API and persistent tactical types now.",
+        "decision": "Deferred: these types are planned but absent from the supplied source revision; their shape and authoring/replay dependencies are not frozen for this bounded test-only ownership.",
+        "evidence": "planning/runtime-directors.md: df-combat is planned as choose(TacticalObservation, LegalActionSet, CombatPolicy); planning/subsystem-architecture.md: CombatDirector::choose; frozen brief limits edits to this contract fixture and test."
+      },
+      {
+        "alternative": "Implement combat legality, D&D action mechanics, NPC control, or policy weights inside df-combat.",
+        "decision": "Rejected: df-rules owns mechanics and legal options; this test uses opaque synthetic offer IDs and caller-authored utility values only.",
+        "evidence": "planning/rules-support.md and planning/rules-coverage.md assign mechanics and source-linked legality to df-rules/df-content; current APIs document the external LegalOfferOwner boundary."
+      },
+      {
+        "alternative": "Treat registered Choice/Reaction responses as the complete NPC tactical action set.",
+        "decision": "Rejected: this is a narrow existing rules-admission and engine-staging example, not a general combat LegalActionSet.",
+        "evidence": "crates/df-combat/src/registered_candidates.rs explicitly limits this adapter to current pending Choice/Reaction responses and leaves source qualification, actor control, perception, and approved NPC tactics to their owners."
+      }
+    ]
+  },
+  "contract_cases": [
+    {
+      "case": "Only exact offers approved for the current basis survive candidate enumeration; an attractive invented offer cannot enter the ranking.",
+      "api": "df_combat::candidates::{LegalOfferOwner, enumerate_candidates} then df_combat::ranking::rank_tactics",
+      "assertions": ["input order and offer identity are retained", "ranking selects an admitted reference", "invented offer is absent", "negative utility remains eligible"]
+    },
+    {
+      "case": "Stale basis rejects before owner callbacks; duplicate canonical identities reject the whole inventory even when payload sizes differ.",
+      "api": "df_combat::candidates::enumerate_candidates",
+      "assertions": ["typed stale-basis rejection", "no observation or legality callbacks on stale basis", "duplicate identity returns no partial receipt", "no legality callback after duplicate detection"]
+    },
+    {
+      "case": "A member cannot rank an NPC-held belief merely because the attributed claim is present or its audience field is shared.",
+      "api": "df_combat::ranking::rank_tactics",
+      "assertions": ["whole ranking rejects with UndisclosedEvidence before inspecting the supplied extreme score"]
+    },
+    {
+      "case": "Current registered pending responses are prepared by the published rules handler for the requesting member, then native staging rejects an invented option.",
+      "api": "df_combat::registered_candidates::enumerate_registered_responses and df_engine::combat_staging::stage_tactical_response",
+      "assertions": ["only the exact current member response is admitted", "preview does not change decisions or draws", "unoffered option returns UnadmittedResponse", "registered handler receives no second invocation"]
+    }
+  ],
+  "test_authority_boundaries": {
+    "legal_offer_owner": "The local OfferAuthority is a test double for the already supplied rules/perception owner. It makes the permitted boundary observable and supplies no D&D legality claim, rule source, tactical mechanic, or production behavior.",
+    "registered_fixture": "The registered Choice/Reaction scenario uses existing support/registered_fixture.rs identities and a synthetic published clause with a structural handler. The handler only stages a typed checkpoint transition for admission; it does not implement a source rule or combat outcome.",
+    "policy": "Criterion values are explicit test inputs. This crate does not evaluate authored policy content or facts, and no test score is a calibrated tactical weight.",
+    "engine": "The engine call demonstrates current response identity and offered-option enforcement at the bounded registered pending-response entry. It does not prove durable session commit, authenticated NPC control, or general combat action submission."
+  },
+  "minimal_next_consumer": {
+    "owner": "df-combat, coordinated with df-rules, df-content, df-knowledge, df-model, df-engine, and df-session owners",
+    "work": "When G10 freezes the tactical policy/model/source contracts, implement the planned CombatDirector::choose over a source-qualified current LegalActionSet. Compose bounded exact candidate admission, observer-scoped perception evidence, authored policy ranking, a typed NoAction/selected-action proposal, and current-basis revalidation before engine staging. Keep initiative, action economy, resources, source handlers, actor control, and commit authority in their owning boundaries.",
+    "entry_conditions": ["exact 2024 source/catalog and rights manifest is pinned", "CombatPolicyState/TacticalObservation/TacticalProposal and policy/content schemas are frozen", "df-knowledge observation and NPC actor-control inputs are available", "engine/session owners define proposal validation, commit, replay, and failure receipts"]
+  },
+  "unresolved": [
+    "The planned general LegalActionSet, CombatDirector::choose, TacticalObservation, TacticalProposal, ReinforcementTrigger, authored combat policies, and their production callers are absent from the tested public surface.",
+    "The exact required standard 2024 books/catalog/errata source revisions and non-SRD rights evidence are open gates; this fixture is not full-2024 coverage or source-backed combat legality.",
+    "Actual perception completeness, hidden-information noninterference across all action types, source revocation, NPC authority, and legal-offer/submission consistency for general combat actions remain unproven.",
+    "Current registered response preview covers only pending Choice/Reaction flows; this does not show attacks, movement, action economy, resources, or reinforcement mechanics.",
+    "Durable session operation lookup, fenced commit/replay, runtime telemetry, integrated native/WASM checks, and independent frontier execution remain separate gates."
+  ],
+  "verification_evidence": {
+    "source_revision": "2d2cbae3b11383e726e46187e504638196403a57",
+    "owned_paths": [
+      "crates/df-combat/tests/legal_tactical_contract.rs",
+      "crates/df-combat/tests/fixtures/legal_tactical_contract.json"
+    ],
+    "test_target": "cargo test --locked -p df-combat --test legal_tactical_contract",
+    "execution_status": "UNPERFORMED on this a2 repair source by worker per frozen release boundary. Root focused checks on prior source freeze 01 failed E0308; after the borrow repair, source freeze 02 compiled and ran four tests with three passing and registered-choice preview failing Precondition(Capacity). Root must run focused and pinned native/WASM/fmt/Clippy gates and independently review this exact resulting source.",
+    "source_build_identity": "No build identity or executable output is claimed by this fixture.",
+    "original_acceptance_status": "The source-level contract and behavioral tests are submitted for review. The requirement for actual source/build-bound evidence and any integrated behavior remains pending until Root's gated checks and independent frontier evaluation complete."
+  }
+}
