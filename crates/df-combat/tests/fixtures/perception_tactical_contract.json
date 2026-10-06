@@ -1,0 +1,65 @@
+{
+  "decision_id": "B-C-df-combat-D02-a1",
+  "criterion": "tactics cannot read undisclosed enemy facts",
+  "selected_boundary": {
+    "consumer": "df_combat::ranking::rank_tactics",
+    "snapshot": "TacticalKnowledge binds the current Basis, CheckpointPins, and exact observer scope",
+    "member_fact": "UtilityEvidence::Fact is usable only with an exact KnowledgeGrant for the observed MemberId",
+    "npc_fact": "UtilityEvidence::Fact is usable only when the acting EntityId has that fact in NpcState.known_facts",
+    "npc_belief": "UtilityEvidence::Belief is usable only when the acting EntityId holds the record and the matching AttributedClaim names that holder",
+    "rejection": "UndisclosedEvidence rejects the whole ranking batch before criteria or values are inspected",
+    "result": "ranking is a staged proposal over exact admitted legal offers; it grants no commit authority"
+  },
+  "alternatives": [
+    {
+      "name": "pass canonical world truth to tactics",
+      "decision": "reject",
+      "reason": "combat would gain access to facts that were never disclosed to its actor"
+    },
+    {
+      "name": "treat audience labels as actor knowledge grants",
+      "decision": "reject",
+      "reason": "presentation audience and NPC belief holder are distinct model fields"
+    },
+    {
+      "name": "rank only evidence authorized by the supplied current actor snapshot",
+      "decision": "select current bounded consumer contract",
+      "reason": "uses the existing TacticalKnowledge, UtilityEvidence, and rank_tactics APIs without changing public contracts"
+    }
+  ],
+  "bounds": {
+    "candidates": "UtilityLimits.candidates",
+    "contributions": "UtilityLimits.contributions",
+    "knowledge_records": "UtilityLimits.knowledge_records",
+    "criteria": "UtilityLimits.criteria",
+    "ordering_comparisons": "at most candidates*(candidates-1)/2",
+    "partial_ranking_on_undisclosed_evidence": false
+  },
+  "paired_state_case": {
+    "same": ["basis", "pins", "observer", "admitted offers", "acting actor's permitted grants and attributed claims", "policy", "contributions"],
+    "vary": ["undisclosed enemy known facts", "enemy-held claims", "unreferenced hidden records"],
+    "expected": "identical rank order, utilities, and safe rejection outcomes"
+  },
+  "minimal_next_source_consumer": {
+    "owner": "df-combat CombatDirector::choose adapter",
+    "steps": [
+      "obtain current legal offers from df-rules and exact actor-scoped evidence from the trusted knowledge/session owner",
+      "construct TacticalKnowledge and UtilityPolicy over the same basis and pins",
+      "rank only contributions whose evidence is authorized for the actor",
+      "revalidate the selected staged proposal at the df-session commit boundary"
+    ]
+  },
+  "unresolved": [
+    "df-combat has no direct df-knowledge dependency or producer integration in the current Cargo/source graph; this contract consumes owner-supplied df-model records",
+    "no approved production evidence taxonomy, grant-minting rule, disclosure generation, or full actor-observation assembly contract is defined here",
+    "standard 2024 source/catalog coverage and the concrete CombatDirector::choose adapter remain separate gates",
+    "bounds are explicit caller-selected caps, not calibrated production workload limits",
+    "the paired test proves behavior only at this supplied consumer boundary and is not complete production privacy evidence"
+  ],
+  "production_privacy_qualified": false,
+  "verification": {
+    "source_bound": true,
+    "rust_tests": "unperformed by this worker",
+    "build_identity": "source/config pins in the fixture are test values; root must record actual integrated source/build evidence"
+  }
+}
