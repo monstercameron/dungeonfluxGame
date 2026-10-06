@@ -1461,6 +1461,219 @@ fn session_accepts_one_operation_with_mutable_state_and_retries_without_reductio
     }
 }
 
+fn alternate_intent_content() -> ContentReference {
+    ContentReference {
+        entry: label("fixture-alternate-intent"),
+        ..content()
+    }
+}
+fn intent_checkpoint_at(basis: Basis, state: GameState) -> Checkpoint {
+    Checkpoint::new(
+        CHECKPOINT_SCHEMA,
+        basis,
+        pins(),
+        state,
+        ReferenceInventory {
+            rules: &[rule()],
+            content: &[content(), alternate_intent_content()],
+            resources: &resource_constraints(),
+            assets: &[],
+        },
+        limits(),
+    )
+    .unwrap()
+}
+fn retained_intent_checkpoint() -> Checkpoint {
+    let current = history_checkpoint();
+    let mut state = current.state().clone();
+    // Canonical history can retain effects outside a receipt's projected effect list.
+    state.intents.push(DurableIntent {
+        id: EffectId::from_bytes(&[80; 16]).unwrap(),
+        basis: current.basis(),
+        operation: operation(80),
+        slot: 0,
+        kind: EffectKind::RunAi,
+        job: Some(JobId::from_bytes(&[81; 16]).unwrap()),
+        timer: None,
+        generation: 3,
+        status: DurableStatus::SentUnknown,
+        definition: content(),
+    });
+    for value in [84, 85] {
+        state.timers.push(OwnedTimer {
+            id: TimerId::from_bytes(&[value; 16]).unwrap(),
+            basis: current.basis(),
+            generation: 2,
+            due: state.logical_time,
+            source: rule(),
+            status: DurableStatus::Pending,
+        });
+    }
+    state.intents.push(DurableIntent {
+        id: EffectId::from_bytes(&[82; 16]).unwrap(),
+        basis: current.basis(),
+        operation: operation(82),
+        slot: 0,
+        kind: EffectKind::ArmTimer,
+        job: None,
+        timer: Some(TimerId::from_bytes(&[84; 16]).unwrap()),
+        generation: 2,
+        status: DurableStatus::Pending,
+        definition: content(),
+    });
+    intent_checkpoint_at(current.basis(), state)
+}
+
+fn retained_job_completion(request: &Scope, job: &DurableIntent) -> GameInput {
+    GameInput::Job(JobCompletion {
+        basis: request.basis,
+        operation: request.operation,
+        job: job.job.unwrap(),
+        generation: job.generation,
+        outcome: JobOutcome::Ai {
+            semantic_output: "fixture completed job".to_owned(),
+            policy: content(),
+            model: label("fixture-model-1"),
+        },
+    })
+}
+
+#[test]
+fn session_refuses_each_retained_intent_binding_change_without_commit_or_delivery() {
+    let current = retained_intent_checkpoint();
+    let mut request = scope(74);
+    request.basis = current.basis();
+    let candidate = proposed(&current, &request);
+    let completion = retained_job_completion(&request, &current.state().intents[1]);
+    for changed in 0..11 {
+        let mut state = candidate.state().clone();
+        match changed {
+            0 => state.intents[1].basis.revision = basis().revision,
+            1 => state.intents[1].operation = operation(86),
+            2 => state.intents[1].slot = 1,
+            3 => state.intents[1].kind = EffectKind::RunMedia,
+            4 => state.intents[1].job = Some(JobId::from_bytes(&[83; 16]).unwrap()),
+            5 => state.intents[2].timer = Some(TimerId::from_bytes(&[85; 16]).unwrap()),
+            6 => state.intents[1].generation = 4,
+            7 => state.intents[1].definition = alternate_intent_content(),
+            8 => state.intents[1].id = EffectId::from_bytes(&[87; 16]).unwrap(),
+            9 => {
+                state.intents.remove(1);
+            }
+            10 => {
+                state.intents.remove(2);
+                state.intents.remove(1);
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(state.decisions, candidate.state().decisions);
+        assert_eq!(state.facts, candidate.state().facts);
+        assert_eq!(state.draws, candidate.state().draws);
+        // Every malformed transition remains a valid canonical checkpoint; only
+        // the retained-intent transition policy can reject it at this boundary.
+        let malformed = intent_checkpoint_at(candidate.basis(), state);
+        let db = database();
+        db.lock().unwrap().checkpoint = current.clone();
+        let mut owner = candidate_owner(&db, current.clone(), malformed);
+        let (item, wait) = OwnedInput::new(context(), request.clone(), completion.clone());
+        owner.reduce(AdmissionSequence(1), item);
+        assert_eq!(
+            wait.recv_timeout(WAIT).unwrap(),
+            SubmissionOutcome::Refused(RepositoryError::InvalidCandidate)
+        );
+        assert!(owner.is_current());
+        assert_eq!(owner.checkpoint(), &current);
+        let db = db.lock().unwrap();
+        assert_eq!(db.engine_calls, 1);
+        assert_eq!(db.commit_calls, 0);
+        assert_eq!(db.checkpoint, current);
+        assert!(db.receipts.is_empty());
+        assert!(db.scoped_receipts.is_empty());
+        assert_eq!(db.events, vec!["lookup"]);
+    }
+}
+
+#[test]
+fn session_accepts_status_only_job_completion_with_reordered_retained_intents() {
+    for failure in [Failure::None, Failure::LostCommittedAck] {
+        let current = retained_intent_checkpoint();
+        let job = current.state().intents[1].clone();
+        let mut request = scope(74);
+        request.basis = current.basis();
+        let completion = retained_job_completion(&request, &job);
+        let candidate = proposed(&current, &request);
+        let mut state = candidate.state().clone();
+        state.intents[1].status = DurableStatus::Completed;
+        state.intents.reverse();
+        let candidate = intent_checkpoint_at(candidate.basis(), state);
+        let expected = receipt(&candidate, request.operation);
+        let db = database();
+        {
+            let mut db = db.lock().unwrap();
+            db.checkpoint = current.clone();
+            db.failure = failure;
+        }
+        let mut owner = candidate_owner(&db, current, candidate.clone());
+        // This is the actual Session Job input boundary with a controlled engine
+        // candidate. The native courier owns completion staging and its own proof.
+        let (item, wait) = OwnedInput::new(context(), request.clone(), completion.clone());
+        owner.reduce(AdmissionSequence(1), item);
+        let first = wait.recv_timeout(WAIT).unwrap();
+        if failure == Failure::LostCommittedAck {
+            assert_eq!(first, SubmissionOutcome::LookupRequired);
+            assert!(!owner.is_current());
+        } else {
+            assert_eq!(assert_confirmed(first), expected);
+            assert!(owner.is_current());
+            assert_eq!(owner.checkpoint(), &candidate);
+        }
+        let before_retry = db.lock().unwrap().events.clone();
+        let (item, wait) = OwnedInput::new(context(), request, completion);
+        owner.reduce(AdmissionSequence(2), item);
+        assert_eq!(assert_confirmed(wait.recv_timeout(WAIT).unwrap()), expected);
+        assert!(owner.is_current());
+        assert_eq!(owner.checkpoint(), &candidate);
+        let mut retained = owner
+            .checkpoint()
+            .state()
+            .intents
+            .iter()
+            .find(|intent| intent.id == job.id)
+            .unwrap()
+            .clone();
+        assert_eq!(retained.status, DurableStatus::Completed);
+        retained.status = job.status;
+        assert_eq!(retained, job);
+        let db = db.lock().unwrap();
+        assert_eq!(db.checkpoint, candidate);
+        assert_eq!(db.engine_calls, 1);
+        assert_eq!(db.commit_calls, 1);
+        assert_eq!(db.receipts.len(), 1);
+        let expected_retry = if failure == Failure::LostCommittedAck {
+            vec!["lookup", "load"]
+        } else {
+            vec!["lookup"]
+        };
+        assert_eq!(&db.events[before_retry.len()..], expected_retry.as_slice());
+        let deliveries = if failure == Failure::LostCommittedAck {
+            0
+        } else {
+            1
+        };
+        assert_eq!(
+            db.events
+                .iter()
+                .filter(|event| **event == "publish")
+                .count(),
+            deliveries
+        );
+        assert_eq!(
+            db.events.iter().filter(|event| **event == "wake").count(),
+            deliveries
+        );
+    }
+}
+
 #[test]
 fn candidate_receipt_capacity_refuses_before_any_commit() {
     let db = database();

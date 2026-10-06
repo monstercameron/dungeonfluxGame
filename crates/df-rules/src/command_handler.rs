@@ -68,6 +68,7 @@ pub enum InvocationError<Rejection> {
     CandidateDrawAccountingMismatch,
     CandidateDecisionHistoryMismatch,
     CandidateIntentBindingMismatch,
+    CandidateFactAccountingMismatch,
     Capacity,
 }
 
@@ -76,6 +77,7 @@ pub enum InvocationError<Rejection> {
 /// respective callers. Reuse this same boundary after registry selection for offer and submit.
 /// One command appends exactly its requested decision after the unchanged accepted history.
 /// Retained intents preserve their work bindings; only their status may change.
+/// Appended facts exactly match that decision in order, operation and revision.
 pub fn stage_handler<Handler: RulesCommandHandler>(
     handler: &Handler,
     expected_pins: &CheckpointPins,
@@ -175,7 +177,36 @@ pub fn stage_handler<Handler: RulesCommandHandler>(
         return Err(InvocationError::CandidateDecisionHistoryMismatch);
     }
     validate_retained_intents(current, &candidate)?;
+    validate_appended_facts(current, &candidate)?;
     Ok(candidate)
+}
+
+fn validate_appended_facts<Rejection>(
+    current: &Checkpoint,
+    candidate: &Checkpoint,
+) -> Result<(), InvocationError<Rejection>> {
+    let decision = candidate
+        .state()
+        .decisions
+        .last()
+        .ok_or(InvocationError::MissingAcceptedDecision)?;
+    // Prior guards preserve the historical prefix and bind the sole appended decision.
+    // Compare its complete ordered fact projection, regardless of the canonical value type.
+    let appended = candidate
+        .state()
+        .facts
+        .get(current.state().facts.len()..)
+        .ok_or(InvocationError::CandidateFactAccountingMismatch)?;
+    if appended.len() != decision.facts.len()
+        || !appended.iter().zip(&decision.facts).all(|(fact, id)| {
+            fact.id == *id
+                && fact.operation == decision.operation
+                && fact.revision == decision.revision
+        })
+    {
+        return Err(InvocationError::CandidateFactAccountingMismatch);
+    }
+    Ok(())
 }
 
 fn validate_retained_intents<Rejection>(

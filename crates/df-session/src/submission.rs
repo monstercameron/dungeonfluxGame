@@ -1,5 +1,6 @@
 //! Native session submission: only the durable repository acknowledgement releases a receipt.
 //! The inbox is admission, the checkpoint is a cache, and neither confers database authority.
+use std::collections::BTreeMap;
 use std::mem::size_of;
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 
@@ -654,6 +655,41 @@ fn validate_candidate(
     };
     if decision.operation != operation || decision.revision != next {
         return Err(RepositoryError::InvalidCandidate);
+    }
+    validate_retained_intents(current, candidate)?;
+    Ok(())
+}
+
+fn validate_retained_intents(
+    current: &Checkpoint,
+    candidate: &Checkpoint,
+) -> Result<(), RepositoryError> {
+    let prior = &current.state().intents;
+    let staged = &candidate.state().intents;
+    if prior.is_empty() {
+        return Ok(());
+    }
+    if prior.len() > staged.len() {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    // Checkpoint admission bounds this borrowed index. Retained intent identity
+    // carries its binding; status and inventory order may change independently.
+    let by_id: BTreeMap<_, _> = staged.iter().map(|intent| (intent.id, intent)).collect();
+    for intent in prior {
+        let Some(retained) = by_id.get(&intent.id) else {
+            return Err(RepositoryError::InvalidCandidate);
+        };
+        if retained.basis != intent.basis
+            || retained.operation != intent.operation
+            || retained.slot != intent.slot
+            || retained.kind != intent.kind
+            || retained.job != intent.job
+            || retained.timer != intent.timer
+            || retained.generation != intent.generation
+            || retained.definition != intent.definition
+        {
+            return Err(RepositoryError::InvalidCandidate);
+        }
     }
     Ok(())
 }

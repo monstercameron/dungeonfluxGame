@@ -430,3 +430,208 @@ fn canonical_handler_output_passes_to_directors_without_another_revision_or_mech
 
 #[path = "character_reference.rs"]
 mod character_reference;
+
+fn fact_projection_checkpoint(candidate: &Checkpoint, state: GameState) -> Checkpoint {
+    Checkpoint::new(
+        CHECKPOINT_SCHEMA,
+        candidate.basis(),
+        candidate.pins().clone(),
+        state,
+        ReferenceInventory {
+            rules: &[rule()],
+            content: &[content()],
+            resources: &resource_constraints(),
+            assets: &[],
+        },
+        limits(),
+    )
+    .unwrap()
+}
+
+fn projection_fact(candidate: &Checkpoint, id: u8, ordinal: u32) -> GameFact {
+    GameFact {
+        id: FactId::from_bytes(&[id; 16]).unwrap(),
+        revision: candidate.basis().revision,
+        operation: operation(),
+        ordinal,
+        cause: candidate.state().facts.last().map(|fact| fact.id),
+        audience: AudienceScope::Shared,
+        value: FactValue::ContentEvent {
+            definition: content(),
+            subjects: vec![entity(4)],
+        },
+    }
+}
+
+#[test]
+fn actual_direct_and_registered_entries_refuse_unowned_backdated_and_unordered_facts() {
+    for with_history in [false, true] {
+        let mut state = state();
+        if with_history {
+            let id = FactId::from_bytes(&[40; 16]).unwrap();
+            let prior = df_types::OperationId::from_bytes(&[99; 16]).unwrap();
+            state.facts.push(GameFact {
+                id,
+                revision: basis().revision,
+                operation: prior,
+                ordinal: 0,
+                cause: None,
+                audience: AudienceScope::Shared,
+                value: FactValue::ContentEvent {
+                    definition: content(),
+                    subjects: vec![],
+                },
+            });
+            state.decisions.push(AcceptedDecision {
+                operation: prior,
+                revision: basis().revision,
+                facts: vec![id],
+                draws: vec![],
+                effects: vec![],
+                source_policy: label("fixture-prior-fact-policy"),
+                semantic_output: None,
+            });
+        }
+        let current = checkpoint(state).unwrap();
+        let original = current.clone();
+        let input = action();
+        let saved_input = input.clone();
+        for case in 0..6 {
+            let mut handler = handler();
+            let candidate = accepted_from(current.state().clone());
+            let mut state = candidate.state().clone();
+            let mut first = projection_fact(&candidate, 80, 0);
+            if case == 1 || case == 3 {
+                first.operation = df_types::OperationId::from_bytes(&[98; 16]).unwrap();
+            }
+            if case == 2 || case == 3 {
+                first.revision = current.basis().revision;
+            }
+            state.facts.push(first);
+            if case >= 4 {
+                let mut second = projection_fact(&candidate, 81, 1);
+                second.cause = Some(state.facts.last().unwrap().id);
+                state.facts.push(second);
+                let first = state.facts[state.facts.len() - 2].id;
+                let second = state.facts.last().unwrap().id;
+                state.decisions.last_mut().unwrap().facts = if case == 4 {
+                    vec![second, first]
+                } else {
+                    vec![first]
+                };
+            }
+            // Canonical construction accepts every fixture before either public engine entry.
+            handler.candidate = fact_projection_checkpoint(&candidate, state);
+            let saved_candidate = handler.candidate.clone();
+            let expected = Err(CommandRejection::Invocation(
+                InvocationError::CandidateFactAccountingMismatch,
+            ));
+            assert_eq!(
+                direct(&input, &current, &handler),
+                expected,
+                "direct {with_history} {case}"
+            );
+            let pins = pins();
+            let source = rule();
+            let selector = label("compiled-source-selector");
+            let entries = [CatalogEntry::new(&source, b"source")];
+            let registrations = [HandlerRegistration::new(&selector, &source, &handler)];
+            let registry =
+                DispatchRegistry::from_catalog(catalog(&pins, &entries), &registrations, 1)
+                    .unwrap();
+            assert_eq!(
+                registered(&input, &current, &registry, &selector, &source),
+                expected,
+                "registered {with_history} {case}"
+            );
+            assert_eq!(handler.calls.get(), 2);
+            assert_eq!(handler.candidate, saved_candidate);
+            assert_eq!(current, original);
+            assert_eq!(input, saved_input);
+        }
+    }
+}
+
+#[test]
+fn registered_ordered_content_and_resource_facts_pass_to_actual_director_composition() {
+    use df_engine::director_staging::{
+        DirectorCandidates, DirectorLimits, DirectorStaging, compose_director_candidates,
+    };
+    use df_world::{DueSelectionLimits, DueSelectionRequest};
+    use std::time::Duration;
+    let current = checkpoint(state()).unwrap();
+    let original = current.clone();
+    let input = action();
+    let saved_input = input.clone();
+    let mut handler = handler();
+    let candidate = handler.candidate.clone();
+    let mut state = candidate.state().clone();
+    let first = projection_fact(&candidate, 80, 0);
+    let mut second = projection_fact(&candidate, 81, 1);
+    second.cause = Some(first.id);
+    second.value = FactValue::ResourceChanged {
+        entity: entity(4),
+        resource: label("fixture-resource-1"),
+        before: 4,
+        after: 3,
+        source: rule(),
+    };
+    state.resources[0].value = 3;
+    state.decisions.last_mut().unwrap().facts = vec![first.id, second.id];
+    state.facts.extend([first, second]);
+    handler.candidate = fact_projection_checkpoint(&candidate, state);
+    let pins = pins();
+    let source = rule();
+    let selector = label("compiled-source-selector");
+    let entries = [CatalogEntry::new(&source, b"source")];
+    let registrations = [HandlerRegistration::new(&selector, &source, &handler)];
+    let registry =
+        DispatchRegistry::from_catalog(catalog(&pins, &entries), &registrations, 1).unwrap();
+    let staged = registered(&input, &current, &registry, &selector, &source).unwrap();
+    let retry = registered(&input, &current, &registry, &selector, &source).unwrap();
+    assert_eq!(staged, retry);
+    assert_eq!(staged, handler.candidate);
+    let policy = content();
+    let directors = compose_director_candidates(
+        &staged,
+        staged.pins(),
+        DueSelectionRequest {
+            expected_basis: staged.basis(),
+            target_time: staged.state().logical_time,
+            paused: false,
+            deadline_remaining: Duration::from_secs(1),
+            policy: &policy,
+        },
+        DirectorCandidates {
+            interaction: None,
+            narrative: None,
+        },
+        DirectorLimits {
+            maximum_checkpoint_bytes: 1024 * 1024,
+            maximum_pass_bytes: 8 * 1024 * 1024,
+            maximum_relationships: 8,
+            world: DueSelectionLimits {
+                queue_events: 8,
+                selected_events: 4,
+                output_bytes: 64 * 1024,
+            },
+        },
+    )
+    .unwrap();
+    let DirectorStaging::Staged(directors) = directors else {
+        panic!("fixture has no pending work")
+    };
+    assert_eq!(directors.candidate(), &staged);
+    assert_eq!(
+        staged
+            .state()
+            .facts
+            .iter()
+            .map(|fact| fact.id)
+            .collect::<Vec<_>>(),
+        staged.state().decisions.last().unwrap().facts
+    );
+    assert_eq!(handler.calls.get(), 2);
+    assert_eq!(current, original);
+    assert_eq!(input, saved_input);
+}

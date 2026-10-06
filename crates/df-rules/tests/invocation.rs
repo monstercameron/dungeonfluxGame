@@ -1454,3 +1454,230 @@ fn retained_intent_guard_preserves_capacity_draw_history_and_atomic_refusal_prio
         assert_eq!(current, before);
     }
 }
+
+fn appended_content_fact(candidate: &Checkpoint, id: u8, ordinal: u32) -> GameFact {
+    GameFact {
+        id: FactId::from_bytes(&[id; 16]).unwrap(),
+        revision: candidate.basis().revision,
+        operation: OperationId::from_bytes(&[6; 16]).unwrap(),
+        ordinal,
+        cause: candidate.state().facts.last().map(|fact| fact.id),
+        audience: AudienceScope::Shared,
+        value: FactValue::ContentEvent {
+            definition: content(),
+            subjects: vec![entity(4)],
+        },
+    }
+}
+
+fn invalid_fact_projection(current: &Checkpoint, candidate: &Checkpoint, case: u8) -> Checkpoint {
+    let mut state = candidate.state().clone();
+    let mut first = appended_content_fact(candidate, 80, 0);
+    if case == 1 || case == 3 {
+        first.operation = OperationId::from_bytes(&[99; 16]).unwrap();
+    }
+    if case == 2 || case == 3 {
+        first.revision = current.basis().revision;
+    }
+    state.facts.push(first);
+    if case >= 4 {
+        let mut second = appended_content_fact(candidate, 81, 1);
+        second.cause = Some(state.facts.last().unwrap().id);
+        state.facts.push(second);
+        let ids: Vec<_> = state
+            .facts
+            .iter()
+            .rev()
+            .take(2)
+            .map(|fact| fact.id)
+            .collect();
+        state.decisions.last_mut().unwrap().facts = if case == 4 { ids } else { vec![ids[1]] };
+    }
+    // All cases are canonically valid; the complete operation projection is the new guard.
+    rebuilt(current, candidate.basis(), state)
+}
+
+#[test]
+fn registered_staging_refuses_orphan_foreign_backdated_and_unordered_appended_facts() {
+    for with_history in [false, true] {
+        let current = if with_history {
+            current_with_accepted_history()
+        } else {
+            checkpoint(state()).unwrap()
+        };
+        let before = current.clone();
+        let request = input();
+        let saved_input = request.clone();
+        for case in 0..6 {
+            let mut handler = fixture(&current);
+            handler.candidate = invalid_fact_projection(&current, &handler.candidate, case);
+            assert!(
+                handler
+                    .candidate
+                    .state()
+                    .facts
+                    .starts_with(&current.state().facts)
+            );
+            assert!(
+                handler
+                    .candidate
+                    .state()
+                    .decisions
+                    .starts_with(&current.state().decisions)
+            );
+
+            assert_eq!(
+                invoke_roll(&handler, &current, &request, &[], 1024 * 1024),
+                Err(InvocationError::CandidateFactAccountingMismatch),
+                "history {with_history}, case {case}"
+            );
+            assert_eq!(handler.calls.get(), 1);
+            assert!(handler.observed_draws.borrow().is_empty());
+            assert_eq!(current, before);
+            assert_eq!(request, saved_input);
+        }
+    }
+}
+
+#[test]
+fn exact_ordered_fact_projection_allows_every_canonical_value_and_repeatable_staging() {
+    let current = current_with_accepted_history();
+    let before = current.clone();
+    let draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+    let request = roll_input();
+    let saved_input = request.clone();
+    let mut later = current.state().logical_time;
+    later.ticks += 1;
+    let values = vec![
+        FactValue::EntityCreated {
+            entity: entity(4),
+            definition: content(),
+        },
+        FactValue::EntityMoved {
+            entity: entity(4),
+            destination: entity(4),
+            position: Position { x: 1, y: 0, z: 0 },
+        },
+        FactValue::ResourceChanged {
+            entity: entity(4),
+            resource: label("fixture-resource-1"),
+            before: 4,
+            after: 3,
+            source: rule(),
+        },
+        FactValue::ChoiceAccepted {
+            resolution: draws[0].resolution,
+            window: draws[0].window,
+            choice: AcceptedChoice {
+                participant: member(3),
+                offer: label("fixture-offer"),
+                selected: label("fixture-selected"),
+                source: rule(),
+            },
+        },
+        FactValue::RulingAccepted {
+            resolution: draws[0].resolution,
+            window: draws[0].window,
+            ruling: ScopedRuling {
+                adjudicator: member(3),
+                selected: label("fixture-ruling"),
+                source: rule(),
+                audience: AudienceScope::Shared,
+            },
+        },
+        FactValue::TimeAdvanced {
+            before: current.state().logical_time,
+            after: later,
+        },
+        FactValue::ContentEvent {
+            definition: content(),
+            subjects: vec![entity(4)],
+        },
+    ];
+    for value in values {
+        let mut handler = fixture(&current);
+        let candidate = draw_candidate(&current, &draws);
+        let mut state = candidate.state().clone();
+        let mut fact = appended_content_fact(&candidate, 80, 2);
+        fact.value = value.clone();
+        state.decisions.last_mut().unwrap().facts.push(fact.id);
+        state.facts.push(fact);
+        handler.candidate = rebuilt(&current, candidate.basis(), state);
+
+        let first = invoke_roll(&handler, &current, &request, &draws, 1024 * 1024).unwrap();
+        let retry = invoke_roll(&handler, &current, &request, &draws, 1024 * 1024).unwrap();
+        assert_eq!(first, retry);
+        assert_eq!(first.state().facts.last().unwrap().value, value);
+        assert!(first.state().facts.starts_with(&current.state().facts));
+        assert_eq!(
+            first.state().facts[current.state().facts.len()..]
+                .iter()
+                .map(|fact| fact.id)
+                .collect::<Vec<_>>(),
+            first.state().decisions.last().unwrap().facts
+        );
+        assert_eq!(first.state().draws[current.state().draws.len()..], draws);
+        assert_eq!(handler.calls.get(), 2);
+        assert_eq!(current, before);
+        assert_eq!(request, saved_input);
+    }
+}
+
+#[test]
+fn appended_fact_guard_preserves_capacity_draw_history_atomic_and_intent_refusal_priority() {
+    for case in 0..5 {
+        let base = if case == 0 {
+            checkpoint(state()).unwrap()
+        } else {
+            current_with_accepted_history()
+        };
+        let current = if case == 3 {
+            current_with_retained_intents(&base, true, false)
+        } else {
+            base
+        };
+        let before = current.clone();
+        let request = input();
+        let saved_input = request.clone();
+        let mut handler = fixture(&current);
+        let candidate = invalid_fact_projection(&current, &handler.candidate, 0);
+        let mut state = candidate.state().clone();
+        let expected = match case {
+            0 => InvocationError::Capacity,
+            1 => {
+                state.draws[0].value = 1;
+                InvocationError::CandidateDrawMismatch
+            }
+            2 => {
+                state.decisions[0].source_policy = label("changed-fact-history");
+                InvocationError::CandidateDecisionHistoryMismatch
+            }
+            3 => {
+                state.intents[0].generation += 1;
+                InvocationError::CandidateIntentBindingMismatch
+            }
+            _ => {
+                state.decisions.push(AcceptedDecision {
+                    operation: OperationId::from_bytes(&[99; 16]).unwrap(),
+                    revision: candidate.basis().revision,
+                    facts: vec![],
+                    draws: vec![],
+                    effects: vec![],
+                    source_policy: label("fixture-foreign-policy"),
+                    semantic_output: None,
+                });
+                InvocationError::CandidateDecisionHistoryMismatch
+            }
+        };
+        handler.candidate = rebuilt(&current, candidate.basis(), state);
+        let maximum = if case == 0 { 1 } else { 1024 * 1024 };
+        assert_eq!(
+            invoke_roll(&handler, &current, &request, &[], maximum),
+            Err(expected),
+            "case {case}"
+        );
+        assert_eq!(handler.calls.get(), 1);
+        assert_eq!(current, before);
+        assert_eq!(request, saved_input);
+    }
+}
