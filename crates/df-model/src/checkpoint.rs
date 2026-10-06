@@ -2741,7 +2741,6 @@ fn validate_continuity(
                 && x.spec.maximum_duration_ticks > 0
                 && x.spec.maximum_text_bytes > 0
                 && x.spec.maximum_asset_bytes > 0
-                && x.spec.mode == state.mode
                 && x.spec.audience == x.selection.audience,
             CheckpointError::InvalidReference,
         )?;

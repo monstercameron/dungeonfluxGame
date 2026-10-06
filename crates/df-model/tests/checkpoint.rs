@@ -1431,3 +1431,289 @@ fn retained_mode_difference_does_not_relax_demand_byte_bound() {
         assert_eq!(checkpoint(supplied), Err(CheckpointError::Capacity));
     }
 }
+
+fn retained_bookend_fallback() -> AssetReference {
+    AssetReference {
+        key: label("retained-bookend-still-1"),
+        digest: ContentDigest([93; 32]),
+        byte_length: 128,
+        kind: AssetKind::Image,
+    }
+}
+
+// Canonical stored-plan fixtures only; this does not authorize cinematic jobs or media access.
+fn retained_bookend_state(kind: BookendKind, admitted: ExecutionMode) -> GameState {
+    let mut supplied = state();
+    supplied.mode = admitted;
+    supplied.facts.push(fact(7, 0));
+    let claim = RecordId::from_bytes(&[94; 16]).unwrap();
+    supplied.beliefs.push(AttributedClaim {
+        id: claim,
+        holder: entity(4),
+        subject: entity(4),
+        claim: "Synthetic attributed belief".into(),
+        evidence: vec![FactId::from_bytes(&[7; 16]).unwrap()],
+        audience: AudienceScope::Members(vec![member(3)]),
+        source: content(),
+    });
+    let moment = RecordId::from_bytes(&[95; 16]).unwrap();
+    let audience = AudienceScope::Members(vec![member(3)]);
+    supplied.continuity.moments.push(NarrativeMoment {
+        id: moment,
+        location: entity(4),
+        characters: vec![entity(4)],
+        facts: vec![FactId::from_bytes(&[7; 16]).unwrap()],
+        attributed_claims: vec![claim],
+        audience: audience.clone(),
+        semantic_focus: content(),
+        identity_revision: label("fixture-entity-1"),
+    });
+    supplied.continuity.bookends.push(BookendPlan {
+        spec: BookendSpec {
+            id: RecordId::from_bytes(&[96; 16]).unwrap(),
+            basis: basis(),
+            kind,
+            from: basis().revision,
+            through: basis().revision,
+            audience: audience.clone(),
+            locale: df_types::LocaleTag::parse("en").unwrap(),
+            policy: content(),
+            maximum_shots: 1,
+            maximum_duration_ticks: 40,
+            maximum_text_bytes: 128,
+            maximum_asset_bytes: 256,
+            expires: LogicalTime {
+                ticks: 240,
+                ticks_per_second: 10,
+            },
+            mode: admitted,
+            budget_reservation: label("synthetic-retained-budget-1"),
+        },
+        selection: FactSelection {
+            facts: vec![FactId::from_bytes(&[7; 16]).unwrap()],
+            attributed_claims: vec![claim],
+            audience: audience.clone(),
+        },
+        shots: vec![ShotPlan {
+            id: RecordId::from_bytes(&[97; 16]).unwrap(),
+            moment,
+            subjects: vec![entity(4)],
+            audience,
+            duration_ticks: 20,
+            definition: content(),
+            references: vec![retained_bookend_fallback()],
+            performance: PerformanceHint {
+                definition: content(),
+                voice: None,
+                emphasis_facts: vec![FactId::from_bytes(&[7; 16]).unwrap()],
+            },
+        }],
+        captions: vec!["Synthetic established event and attributed belief".into()],
+        fallback: retained_bookend_fallback(),
+    });
+    supplied
+}
+
+fn restore_retained_bookend(
+    supplied: GameState,
+    admitted_limits: CheckpointLimits,
+) -> Result<Checkpoint, CheckpointError> {
+    let rules = [rule()];
+    let contents = [content()];
+    let constraints = resource_constraints();
+    let assets = [retained_bookend_fallback()];
+    Checkpoint::new(
+        CHECKPOINT_SCHEMA,
+        basis(),
+        pins(),
+        supplied,
+        ReferenceInventory {
+            rules: &rules,
+            content: &contents,
+            resources: &constraints,
+            assets: &assets,
+        },
+        admitted_limits,
+    )
+}
+
+#[test]
+fn retained_bookend_modes_restore_exact_recap_and_trailer_across_all_defaults() {
+    let modes = [
+        ExecutionMode::Live,
+        ExecutionMode::PreparedOnly,
+        ExecutionMode::Replay,
+    ];
+    for kind in [BookendKind::Recap, BookendKind::SpeculativeTrailer] {
+        for admitted in modes {
+            let original =
+                restore_retained_bookend(retained_bookend_state(kind, admitted), limits()).unwrap();
+            for configured in modes {
+                let mut supplied = original.state().clone();
+                supplied.mode = configured;
+                let expected = supplied.clone();
+                let restored = restore_retained_bookend(supplied, limits()).unwrap();
+                assert_eq!(restored.state(), &expected);
+                assert_eq!(
+                    restored.state().continuity.bookends,
+                    original.state().continuity.bookends
+                );
+                assert_eq!(restored.state().continuity.bookends[0].spec.mode, admitted);
+                assert_eq!(restored.state().mode, configured);
+                restored.validate_resume(basis(), &pins()).unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn retained_bookend_mode_difference_preserves_session_run_basis_and_range_checks() {
+    for kind in [BookendKind::Recap, BookendKind::SpeculativeTrailer] {
+        let mut original = retained_bookend_state(kind, ExecutionMode::Replay);
+        original.mode = ExecutionMode::Live;
+        let retained = restore_retained_bookend(original.clone(), limits()).unwrap();
+        for mutation in 0..6 {
+            let mut supplied = original.clone();
+            let spec = &mut supplied.continuity.bookends[0].spec;
+            match mutation {
+                0 => spec.basis.session = SessionId::from_bytes(&[98; 16]).unwrap(),
+                1 => spec.basis.run = RunId::from_bytes(&[98; 16]).unwrap(),
+                2 => spec.basis.revision = revision(3, 0),
+                3 => spec.basis.revision = revision(2, 9),
+                4 => spec.from = revision(2, 9),
+                _ => spec.through = revision(2, 9),
+            }
+            assert_eq!(
+                restore_retained_bookend(supplied, limits()),
+                Err(if mutation < 4 {
+                    CheckpointError::StaleBasis
+                } else {
+                    CheckpointError::InvalidReference
+                })
+            );
+            assert_eq!(retained.state(), &original);
+        }
+    }
+}
+
+#[test]
+fn retained_bookend_mode_difference_preserves_audience_and_exact_reference_checks() {
+    for kind in [BookendKind::Recap, BookendKind::SpeculativeTrailer] {
+        let mut original = retained_bookend_state(kind, ExecutionMode::Replay);
+        original.mode = ExecutionMode::PreparedOnly;
+        let retained = restore_retained_bookend(original.clone(), limits()).unwrap();
+        for mutation in 0..10 {
+            let mut supplied = original.clone();
+            let plan = &mut supplied.continuity.bookends[0];
+            match mutation {
+                0 => plan.selection.audience = AudienceScope::Host,
+                1 => plan.shots[0].audience = AudienceScope::Host,
+                2 => plan.spec.policy.entry = label("missing-cinematic-policy"),
+                3 => plan.fallback.key = label("unpublished-fallback"),
+                4 => plan.selection.facts[0] = FactId::from_bytes(&[98; 16]).unwrap(),
+                5 => plan.selection.attributed_claims[0] = RecordId::from_bytes(&[98; 16]).unwrap(),
+                6 => plan.shots[0].subjects[0] = entity(98),
+                7 => plan.shots[0].moment = RecordId::from_bytes(&[98; 16]).unwrap(),
+                8 => plan.shots[0].references[0].digest = ContentDigest([98; 32]),
+                _ => {
+                    plan.shots[0].performance.definition.entry = label("missing-performance-policy")
+                }
+            }
+            assert_eq!(
+                restore_retained_bookend(supplied, limits()),
+                Err(CheckpointError::InvalidReference)
+            );
+            assert_eq!(retained.state(), &original);
+        }
+    }
+}
+
+#[test]
+fn retained_bookend_mode_difference_preserves_declared_bounds_and_expiry_validation() {
+    for kind in [BookendKind::Recap, BookendKind::SpeculativeTrailer] {
+        let mut original = retained_bookend_state(kind, ExecutionMode::Replay);
+        original.mode = ExecutionMode::Live;
+        for mutation in 0..6 {
+            let mut supplied = original.clone();
+            let plan = &mut supplied.continuity.bookends[0];
+            match mutation {
+                0 => plan.spec.maximum_shots = 0,
+                1 => plan.spec.maximum_duration_ticks = 0,
+                2 => plan.spec.maximum_text_bytes = 0,
+                3 => plan.spec.maximum_asset_bytes = 0,
+                4 => plan.shots[0].duration_ticks = 0,
+                _ => plan.spec.expires.ticks_per_second = 0,
+            }
+            assert_eq!(
+                restore_retained_bookend(supplied, limits()),
+                Err(if mutation == 5 {
+                    CheckpointError::InvalidTime
+                } else {
+                    CheckpointError::InvalidReference
+                })
+            );
+        }
+    }
+}
+
+#[test]
+fn retained_bookend_mode_difference_preserves_shot_text_record_and_owned_byte_caps() {
+    for kind in [BookendKind::Recap, BookendKind::SpeculativeTrailer] {
+        let mut original = retained_bookend_state(kind, ExecutionMode::Replay);
+        original.mode = ExecutionMode::PreparedOnly;
+        let retained = restore_retained_bookend(original.clone(), limits()).unwrap();
+        for mutation in 0..5 {
+            let mut supplied = original.clone();
+            let mut admitted = limits();
+            match mutation {
+                0 => {
+                    let shot = supplied.continuity.bookends[0].shots[0].clone();
+                    supplied.continuity.bookends[0].shots.push(shot);
+                }
+                1 => {
+                    supplied.continuity.bookends[0].captions[0] =
+                        "x".repeat(admitted.maximum_text_bytes + 1)
+                }
+                2 => admitted.maximum_records = 1,
+                3 => admitted.maximum_total_text_bytes = 1,
+                _ => admitted.maximum_retained_bytes = retained.retained_bytes().unwrap() - 1,
+            }
+            assert_eq!(
+                restore_retained_bookend(supplied, admitted),
+                Err(CheckpointError::Capacity)
+            );
+            assert_eq!(retained.state(), &original);
+        }
+    }
+}
+
+#[test]
+fn retained_bookend_mode_difference_does_not_bypass_resume_basis_or_source_pins() {
+    let mut supplied = retained_bookend_state(BookendKind::Recap, ExecutionMode::Replay);
+    supplied.mode = ExecutionMode::Live;
+    let retained = restore_retained_bookend(supplied, limits()).unwrap();
+    let mut expected = basis();
+    expected.session = SessionId::from_bytes(&[98; 16]).unwrap();
+    assert_eq!(
+        retained.validate_resume(expected, &pins()),
+        Err(CheckpointError::WrongSession)
+    );
+    let mut expected = basis();
+    expected.run = RunId::from_bytes(&[98; 16]).unwrap();
+    assert_eq!(
+        retained.validate_resume(expected, &pins()),
+        Err(CheckpointError::WrongRun)
+    );
+    let mut expected = basis();
+    expected.revision = revision(3, 0);
+    assert_eq!(
+        retained.validate_resume(expected, &pins()),
+        Err(CheckpointError::StaleBasis)
+    );
+    let mut source = pins();
+    source.content.content_digest = ContentDigest([98; 32]);
+    assert_eq!(
+        retained.validate_resume(basis(), &source),
+        Err(CheckpointError::ContentMismatch)
+    );
+}
