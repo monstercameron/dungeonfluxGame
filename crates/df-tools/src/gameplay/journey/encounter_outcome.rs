@@ -3,7 +3,9 @@ use df_model::checkpoint::{AudienceScope, Checkpoint, EntityId, FactValue, GameS
 use df_protocol::common as rpc;
 use df_session::submission::RepositoryError;
 
-use super::{BANDIT, THREAD_POLICY, accepted, combat_round, entity, model, rule, value};
+use super::{
+    BANDIT, THREAD_POLICY, accepted, combat_round, entity, model, objective_outcome, rule, value,
+};
 
 fn invalid<T>() -> Result<T, RepositoryError> {
     Err(RepositoryError::InvalidCandidate)
@@ -122,14 +124,7 @@ pub(super) fn validate(
         }
         return Ok(());
     }
-    let outcome = if encounter.objectives == [objective.clone(), model::content("combat-victory")?]
-    {
-        true
-    } else if encounter.objectives == [objective, model::content("combat-defeat")?] {
-        false
-    } else {
-        return invalid();
-    };
+    let outcome = objective_outcome::outcome(state)?;
     if encounter.active_turn.is_some() {
         return invalid();
     }

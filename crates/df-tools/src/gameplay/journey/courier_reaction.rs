@@ -102,7 +102,7 @@ pub(super) fn enter_opening(state: &mut GameState) -> Result<(), RepositoryError
     Ok(())
 }
 
-fn witness_id(fact: FactId) -> Result<RecordId, RepositoryError> {
+pub(in crate::gameplay) fn witness_id(fact: FactId) -> Result<RecordId, RepositoryError> {
     let digest = Sha256::digest(
         [
             b"lantern-wharf-courier-witness-1".as_slice(),

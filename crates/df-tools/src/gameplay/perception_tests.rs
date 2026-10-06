@@ -281,6 +281,92 @@ fn witnessed_courier_reaction_requires_current_shared_cause_and_npc_evidence() {
 }
 
 #[test]
+fn altered_only_retained_witness_identity_refuses_all_roles_and_valid_replay_is_unchanged() {
+    let (opening, first, second) = before_answer();
+    let escorted = journey::stage(
+        &opening,
+        &command(&opening, first, 6, "escort-courier", vec![]),
+    )
+    .unwrap();
+    let defended = journey::stage(
+        &escorted,
+        &command(&escorted, first, 7, "defend-courier", vec![]),
+    )
+    .unwrap();
+    let original = defended.clone();
+    let restored = model::checkpoint(defended.basis(), defended.state().clone()).unwrap();
+    assert_eq!(restored, defended);
+    let contact = defended
+        .state()
+        .facts
+        .iter()
+        .find(|fact| {
+            matches!(&fact.value, FactValue::ContentEvent { definition, .. }
+                if definition.entry.as_str() == "courier-escort-contact")
+        })
+        .unwrap();
+    let mut changed_state = defended.state().clone();
+    let witness_index = changed_state
+        .continuity
+        .witnesses
+        .iter()
+        .position(|witness| witness.fact == contact.id)
+        .unwrap();
+    let original_witness = changed_state.continuity.witnesses[witness_index].id;
+    let mut wrong_id = *original_witness.as_bytes();
+    wrong_id[0] ^= 0x80;
+    let altered_witness = RecordId::from_bytes(&wrong_id).unwrap();
+    assert_ne!(altered_witness, original_witness);
+    changed_state.continuity.witnesses[witness_index].id = altered_witness;
+    let changed = model::checkpoint(defended.basis(), changed_state).unwrap();
+    changed
+        .validate_resume(changed.basis(), &model::pins().unwrap())
+        .unwrap();
+    let mut undo_identity_only = changed.state().clone();
+    undo_identity_only.continuity.witnesses[witness_index].id = original_witness;
+    assert_eq!(undo_identity_only, defended.state().clone());
+    let before_projection = changed.clone();
+    for (role, principal) in [
+        (LocalDemoRole::Player, first),
+        (LocalDemoRole::Player, second),
+        (
+            LocalDemoRole::Display,
+            MemberId::from_bytes(&DISPLAY).unwrap(),
+        ),
+    ] {
+        let expected = journey_view(&defended, role, principal).unwrap();
+        let narration = match expected.audience.as_ref().unwrap() {
+            rpc::view_message::Audience::Player(player) => &player.narration,
+            rpc::view_message::Audience::Display(display) => &display.narration,
+        };
+        assert!(narration.contains("The courier now looks to Brynn for support on the escort."));
+        assert_eq!(journey_view(&restored, role, principal).unwrap(), expected);
+        assert_eq!(journey_view(&restored, role, principal).unwrap(), expected);
+        let expected_bytes = expected.encode_to_vec();
+        assert_eq!(
+            journey_view(&restored, role, principal)
+                .unwrap()
+                .encode_to_vec(),
+            expected_bytes
+        );
+        assert_eq!(
+            journey_view(&restored, role, principal)
+                .unwrap()
+                .encode_to_vec(),
+            expected_bytes
+        );
+        assert_eq!(
+            journey_view(&changed, role, principal),
+            Err(RepositoryError::InvalidCandidate)
+        );
+    }
+    assert_eq!(changed.state().draws, defended.state().draws);
+    assert_eq!(changed, before_projection);
+    assert_eq!(restored, original);
+    assert_eq!(defended, original);
+}
+
+#[test]
 fn real_prepared_completion_projects_exact_source_to_only_its_current_recipient() {
     let (pending, first, second) = pending();
     let before = pending.clone();

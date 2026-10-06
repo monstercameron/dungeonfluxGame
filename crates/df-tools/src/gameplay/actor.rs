@@ -296,6 +296,25 @@ fn after_grant_reconnect<T>(
     reconnected.map_err(unavailable)?;
     dispatch()
 }
+// The same fence transition is used by native handlers and controlled owner tests.
+pub(super) fn fence_checkpoint(
+    fenced: &mut bool,
+    recovery_wakeup: &watch::Sender<Checkpoint>,
+    checkpoint: &Checkpoint,
+) {
+    *fenced = true;
+    recovery_wakeup.send_replace(checkpoint.clone());
+}
+
+pub(super) fn require_readable(fenced: bool) -> Result<(), tonic::Status> {
+    if fenced {
+        return Err(tonic::Status::unavailable(
+            "gameplay owner requires recovery",
+        ));
+    }
+    Ok(())
+}
+
 impl Actor {
     pub(super) fn next_completion_wake(&self) -> Option<Instant> {
         self.completion_retry.as_ref().and_then(|retry| retry.next)
@@ -474,9 +493,11 @@ impl Actor {
         }
     }
     pub(super) fn fence(&mut self) {
-        self.fenced = true;
-        self.recovery_wakeup
-            .send_replace(self.owner.checkpoint().clone());
+        fence_checkpoint(
+            &mut self.fenced,
+            &self.recovery_wakeup,
+            self.owner.checkpoint(),
+        );
     }
     fn submit(
         &mut self,
@@ -700,11 +721,7 @@ impl Actor {
         credential: [u8; 32],
         request: rpc::WatchViewRequest,
     ) -> Result<(LocalDemoRole, rpc::ViewMessage), tonic::Status> {
-        if self.fenced {
-            return Err(tonic::Status::unavailable(
-                "gameplay owner requires recovery",
-            ));
-        }
+        require_readable(self.fenced)?;
         let role = self.issuer.authenticate(&credential).map_err(unavailable)?;
         let session = df_api::session_id(request.session_id.as_ref())
             .map_err(|_| tonic::Status::invalid_argument("required watch scope invalid"))?;

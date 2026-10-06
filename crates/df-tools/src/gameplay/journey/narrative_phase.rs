@@ -5,7 +5,7 @@ use df_session::submission::RepositoryError;
 
 use super::{
     BANDIT, ENCOUNTER, PACKET_THREAD, THREAD_POLICY, THREAT_THREAD, accepted, combat_victory,
-    entity, model, participants, rule,
+    entity, model, objective_outcome, participants, rule,
 };
 
 fn invalid<T>() -> Result<T, RepositoryError> {
@@ -31,7 +31,7 @@ pub(super) fn classify(state: &GameState) -> Result<rpc::JourneyPhase, Repositor
 
 // A named beat and an arbitrary content fact are insufficient. The source must be the
 // terminal event of its accepted native decision and actually consumed by narrative.
-fn source<'a>(
+pub(super) fn source<'a>(
     state: &'a GameState,
     entry: &str,
     phase: rpc::JourneyPhase,
@@ -397,9 +397,7 @@ fn validate_phase(current: &Checkpoint) -> Result<rpc::JourneyPhase, RepositoryE
         || encounter.definition != model::content("combat")?
         || encounter.combat_policy != model::content("normal-nonlethal-melee")?
         || encounter.participants != expected
-        || !encounter
-            .objectives
-            .contains(&model::content("defend-courier")?)
+        || !objective_outcome::defend_history(state)?
     {
         return invalid();
     }
@@ -426,7 +424,7 @@ fn validate_phase(current: &Checkpoint) -> Result<rpc::JourneyPhase, RepositoryE
     {
         return invalid();
     }
-    let end = completion_source(state, start, &actors, victory)?;
+    let end = completion_source(state, start, &actors, victory, true)?;
     if state.narrative.active_beats == [model::content("harbor-inn")?] {
         completed.push(model::content("complete")?);
         let inn = source(state, "harbor-inn", rpc::JourneyPhase::Complete)?;
@@ -527,11 +525,12 @@ fn accepted_rest(
     Ok(false)
 }
 
-fn completion_source<'a>(
+pub(super) fn completion_source<'a>(
     state: &'a GameState,
     start: &GameFact,
     actors: &[EntityId],
     victory: bool,
+    require_narrative: bool,
 ) -> Result<&'a GameFact, RepositoryError> {
     let monster = entity(BANDIT)?;
     let source_rule = rule()?;
@@ -551,7 +550,7 @@ fn completion_source<'a>(
             continue;
         };
         if !shared_empty(event)
-            || !state.narrative.accepted_facts.contains(&event.id)
+            || (require_narrative && !state.narrative.accepted_facts.contains(&event.id))
             || !matches!(&event.value, FactValue::ContentEvent { definition, .. }
                 if *definition == model::content("greatsword-attack")? || *definition == model::content("end-turn")?)
         {

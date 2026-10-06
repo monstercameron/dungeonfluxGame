@@ -92,6 +92,7 @@ fn source_digests() -> &'static SourceDigests {
             include_bytes!("journey/enemy_tactics.rs").as_slice(),
             include_bytes!("journey/courier_reaction.rs").as_slice(),
             include_bytes!("journey/encounter_outcome.rs").as_slice(),
+            include_bytes!("journey/objective_outcome.rs").as_slice(),
         ] {
             handler.update(source);
         }
@@ -104,6 +105,7 @@ fn source_digests() -> &'static SourceDigests {
             include_bytes!("journey/enemy_tactics.rs").as_slice(),
             include_bytes!("journey/courier_reaction.rs").as_slice(),
             include_bytes!("journey/encounter_outcome.rs").as_slice(),
+            include_bytes!("journey/objective_outcome.rs").as_slice(),
         ] {
             content.update(source);
         }

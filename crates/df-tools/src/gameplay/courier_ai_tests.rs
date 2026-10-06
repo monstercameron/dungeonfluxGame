@@ -185,6 +185,251 @@ fn actual_prepared_record_completion_and_safe_view_preserve_sibling_state() {
     assert!(stage_completion(&staged, &completion, completion_operation(effect).unwrap()).is_err());
 }
 
+fn completed_answer() -> (Checkpoint, MemberId, MemberId) {
+    let (current, first, second) = pending();
+    let effect = intent(&current);
+    let completion = execute(&current, effect).unwrap();
+    (
+        stage_completion(&current, &completion, completion_operation(effect).unwrap()).unwrap(),
+        first,
+        second,
+    )
+}
+
+#[test]
+fn restored_response_requires_completion_strictly_after_request_revision() {
+    let (completed, first, _) = completed_answer();
+    let original = completed.clone();
+    let effect = intent(&completed);
+    let operation = completion_operation(effect).unwrap();
+    let origin = effect.basis.revision;
+    let earlier =
+        df_types::SessionRevision::new(origin.epoch(), origin.sequence().checked_sub(1).unwrap());
+    for revision in [earlier, origin] {
+        let mut state = completed.state().clone();
+        state
+            .decisions
+            .iter_mut()
+            .find(|decision| decision.operation == operation)
+            .unwrap()
+            .revision = revision;
+        // Structural restore succeeds: it cannot establish this owner's causal contract.
+        let restored = model::checkpoint(completed.basis(), state).unwrap();
+        assert_eq!(
+            saved_response(&restored, first),
+            Err(RepositoryError::InvalidCandidate)
+        );
+        assert!(matches!(
+            wire::journey_view(&restored, LocalDemoRole::Player, first),
+            Err(RepositoryError::InvalidCandidate)
+        ));
+        assert_eq!(completed, original);
+    }
+}
+
+#[test]
+fn restored_response_refuses_nonempty_terminal_receipt_vectors_with_valid_references() {
+    let (completed, first, _) = completed_answer();
+    let original = completed.clone();
+    let operation = completion_operation(intent(&completed)).unwrap();
+    let revision = completed.basis().revision;
+    for case in 0..3 {
+        let mut state = completed.state().clone();
+        match case {
+            0 => {
+                let id = FactId::from_bytes(&[0xa1; 16]).unwrap();
+                state.facts.push(GameFact {
+                    id,
+                    revision,
+                    operation,
+                    ordinal: 0,
+                    cause: None,
+                    audience: AudienceScope::Members(vec![first]),
+                    value: FactValue::ContentEvent {
+                        definition: model::content("harbor").unwrap(),
+                        subjects: vec![],
+                    },
+                });
+                state
+                    .decisions
+                    .iter_mut()
+                    .find(|decision| decision.operation == operation)
+                    .unwrap()
+                    .facts
+                    .push(id);
+            }
+            1 => {
+                state.draws.push(ActualDraw {
+                    operation,
+                    ordinal: 0,
+                    resolution: ResolutionId::from_bytes(&[0xa2; 16]).unwrap(),
+                    window: WindowId::from_bytes(&[0xa3; 16]).unwrap(),
+                    sides: 20,
+                    value: 1,
+                    source: model::rule().unwrap(),
+                });
+                state
+                    .decisions
+                    .iter_mut()
+                    .find(|decision| decision.operation == operation)
+                    .unwrap()
+                    .draws
+                    .push(0);
+            }
+            2 => {
+                let id = EffectId::from_bytes(&[0xa4; 16]).unwrap();
+                state.intents.push(DurableIntent {
+                    id,
+                    basis: completed.basis(),
+                    operation,
+                    slot: 0,
+                    kind: EffectKind::PublishPresentation,
+                    job: None,
+                    timer: None,
+                    generation: 1,
+                    status: DurableStatus::Pending,
+                    definition: model::content("harbor").unwrap(),
+                });
+                state
+                    .decisions
+                    .iter_mut()
+                    .find(|decision| decision.operation == operation)
+                    .unwrap()
+                    .effects
+                    .push(id);
+            }
+            _ => unreachable!(),
+        }
+        // Each forged vector has matching canonical records, rather than dangling fixture IDs.
+        let restored = model::checkpoint(completed.basis(), state).unwrap();
+        assert_eq!(
+            saved_response(&restored, first),
+            Err(RepositoryError::InvalidCandidate),
+            "case {case}"
+        );
+        assert!(matches!(
+            wire::journey_view(&restored, LocalDemoRole::Player, first),
+            Err(RepositoryError::InvalidCandidate)
+        ));
+        assert_eq!(completed, original);
+    }
+}
+
+#[test]
+fn restored_response_preserves_existing_terminal_identity_policy_and_text_refusals() {
+    let (completed, first, _) = completed_answer();
+    let operation = completion_operation(intent(&completed)).unwrap();
+    for case in 0..5 {
+        let mut state = completed.state().clone();
+        if case == 0 {
+            state
+                .decisions
+                .retain(|decision| decision.operation != operation);
+        } else {
+            let terminal = state
+                .decisions
+                .iter_mut()
+                .find(|decision| decision.operation == operation)
+                .unwrap();
+            match case {
+                1 => terminal.operation = OperationId::from_bytes(&[0xb1; 16]).unwrap(),
+                2 => terminal.source_policy = model::label("unadmitted-response-policy").unwrap(),
+                3 => terminal.semantic_output = None,
+                4 => terminal.semantic_output = Some("The courier guarantees victory.".to_owned()),
+                _ => unreachable!(),
+            }
+        }
+        let restored = model::checkpoint(completed.basis(), state).unwrap();
+        assert_eq!(
+            saved_response(&restored, first),
+            Err(RepositoryError::InvalidCandidate),
+            "case {case}"
+        );
+        assert!(matches!(
+            wire::journey_view(&restored, LocalDemoRole::Player, first),
+            Err(RepositoryError::InvalidCandidate)
+        ));
+    }
+}
+
+fn defend_with_retained_initiative(current: &Checkpoint, member: MemberId) -> Checkpoint {
+    assert!(
+        journey::offered(current, member)
+            .unwrap()
+            .iter()
+            .any(|(kind, _)| *kind == crate::gameplay::rpc::GameplayActionKind::DefendCourier)
+    );
+    let input = command(current, member, 7, "defend-courier", vec![]);
+    let mut faces = [20, 19, 1].into_iter();
+    let staged = journey::stage_with_supplier(current, &input, &mut |sides| {
+        assert_eq!(sides, 20);
+        faces.next().ok_or(RepositoryError::InvalidCandidate)
+    })
+    .unwrap();
+    assert!(faces.next().is_none());
+    let GameInput::Game(command) = input else {
+        unreachable!()
+    };
+    assert_eq!(
+        staged
+            .state()
+            .draws
+            .iter()
+            .filter(|draw| draw.operation == command.operation)
+            .map(|draw| (draw.sides, draw.value))
+            .collect::<Vec<_>>(),
+        [(20, 20), (20, 19), (20, 1)]
+    );
+    staged
+}
+
+#[test]
+fn genuine_completion_survives_intervening_actions_and_later_restored_current_revision() {
+    // Asking selects private Dialogue; its advertised next action is Defend, not Escort.
+    // Explicit source-legal initiative faces are retained by the actual registered transition.
+    for defend_before_completion in [true, false] {
+        let (mut current, first, second) = pending();
+        let origin = intent(&current).basis.revision;
+        if defend_before_completion {
+            current = defend_with_retained_initiative(&current, first);
+        }
+        let effect = intent(&current).clone();
+        let completion = execute(&current, &effect).unwrap();
+        let operation = completion_operation(&effect).unwrap();
+        current = stage_completion(&current, &completion, operation).unwrap();
+        let terminal_revision = current.basis().revision;
+        if defend_before_completion {
+            assert!(terminal_revision > origin.next_sequence().unwrap());
+        } else {
+            current = defend_with_retained_initiative(&current, first);
+            assert!(current.basis().revision > terminal_revision);
+        }
+        let restored = model::checkpoint(current.basis(), current.state().clone()).unwrap();
+        assert_eq!(saved_response(&restored, first).unwrap(), Some(RESPONSE));
+        assert_eq!(player_clue(&restored, first), RESPONSE);
+        assert!(player_clue(&restored, second).is_empty());
+        assert_eq!(
+            stage_completion(&restored, &completion, operation),
+            Err(CourierError::Stale)
+        );
+        assert_eq!(
+            execute(&restored, intent(&restored)),
+            Err(CourierError::Stale)
+        );
+        assert_eq!(restored, current);
+        let terminal = restored
+            .state()
+            .decisions
+            .iter()
+            .find(|decision| decision.operation == operation)
+            .unwrap();
+        assert_eq!(terminal.revision, terminal_revision);
+        assert!(terminal.facts.is_empty());
+        assert!(terminal.draws.is_empty());
+        assert!(terminal.effects.is_empty());
+    }
+}
+
 #[test]
 fn every_completion_binding_and_final_response_refusal_preserves_original_checkpoint() {
     let (current, _, _) = pending();

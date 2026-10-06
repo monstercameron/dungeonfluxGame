@@ -20,6 +20,9 @@ mod enemy_tactics;
 mod narrative_phase;
 #[cfg(test)]
 mod narrative_runtime_tests;
+mod objective_outcome;
+#[cfg(test)]
+mod objective_outcome_tests;
 
 pub(super) const ROOM_CODE: &str = "LANTERN";
 pub(super) const ROOM_ENTITY: [u8; 16] = [0x45; 16];
@@ -596,7 +599,7 @@ pub(super) fn combat_round(current: &Checkpoint) -> Result<u32, CombatRoundError
         || encounter.definition != content("combat")?
         || encounter.combat_policy != content("normal-nonlethal-melee")?
         || encounter.participants != expected
-        || !encounter.objectives.contains(&content("defend-courier")?)
+        || !objective_outcome::defend_history(state).map_err(|_| Error::Encounter)?
     {
         return Err(Error::Encounter);
     }
@@ -902,6 +905,7 @@ pub(super) fn stage_join(
             audience: AudienceScope::Shared,
             reaction: None,
             escort_target: None,
+            objective_command: None,
         },
     )
 }
@@ -912,6 +916,7 @@ struct DecisionContent<'a> {
     audience: AudienceScope,
     reaction: Option<Box<df_interaction::reactions::ReactionProposal>>,
     escort_target: Option<EntityId>,
+    objective_command: Option<&'a CommandInput>,
 }
 fn finish(
     current: &Checkpoint,
@@ -928,7 +933,12 @@ fn finish(
         audience,
         reaction,
         escort_target,
+        objective_command,
     } = content;
+    let objective = objective_command
+        .map(|command| objective_outcome::pending(current, &state, command))
+        .transpose()?
+        .flatten();
     if (entry == "escort-courier") != escort_target.is_some()
         || (reaction.is_some() && entry != "defend-courier")
     {
@@ -1163,6 +1173,30 @@ fn finish(
     } else {
         None
     };
+    if let Some((definition, actor)) = &objective {
+        let ordinal = u32::try_from(facts.len()).map_err(bad)?;
+        let id = objective_outcome::cause_id(
+            objective_command.ok_or(RepositoryError::InvalidCandidate)?,
+            ordinal,
+            definition,
+        )?;
+        state.facts.push(GameFact {
+            id,
+            revision: basis.revision,
+            operation,
+            ordinal,
+            cause: facts
+                .last()
+                .copied()
+                .or_else(|| current.state().facts.last().map(|fact| fact.id)),
+            audience: AudienceScope::Shared,
+            value: FactValue::ContentEvent {
+                definition: definition.clone(),
+                subjects: vec![*actor],
+            },
+        });
+        facts.push(id);
+    }
     let fact_id = make_id(facts.len() as u32)?;
     state.facts.push(GameFact {
         id: fact_id,
@@ -1211,6 +1245,15 @@ fn finish(
     });
     state.draws.extend(draws);
     let candidate = model::checkpoint(basis, state)?;
+    let candidate = if objective.is_some() {
+        objective_outcome::stage(
+            current,
+            candidate,
+            objective_command.ok_or(RepositoryError::InvalidCandidate)?,
+        )?
+    } else {
+        candidate
+    };
     let candidate = stage_authored_threads(candidate, fact_id)?;
     phase(&candidate)?;
     Ok(candidate)
@@ -1471,14 +1514,7 @@ pub(super) fn combat_victory(state: &GameState) -> Result<bool, RepositoryError>
     if encounter.active_turn.is_some() {
         return Err(RepositoryError::InvalidCandidate);
     }
-    let objective = model::content("defend-courier")?;
-    if encounter.objectives == [objective.clone(), model::content("combat-victory")?] {
-        Ok(true)
-    } else if encounter.objectives == [objective, model::content("combat-defeat")?] {
-        Ok(false)
-    } else {
-        Err(RepositoryError::InvalidCandidate)
-    }
+    objective_outcome::outcome(state)
 }
 fn knockout_rest_started(
     current: &Checkpoint,
@@ -1772,19 +1808,11 @@ fn finish_combat(state: &mut GameState) -> Result<bool, RepositoryError> {
         return Err(RepositoryError::InvalidCandidate);
     }
     if enemy_down || all_players_down {
-        let outcome = model::content(if enemy_down {
-            "combat-victory"
-        } else {
-            "combat-defeat"
-        })?;
         let encounter = state
             .encounters
             .first_mut()
             .ok_or(RepositoryError::InvalidCandidate)?;
         encounter.active_turn = None;
-        if !encounter.objectives.contains(&outcome) {
-            encounter.objectives.push(outcome);
-        }
         beat(state, "complete")?;
         return Ok(true);
     }
@@ -2304,6 +2332,7 @@ fn stage_using(
             },
             reaction,
             escort_target: (kind == rpc::GameplayActionKind::EscortCourier).then_some(*who),
+            objective_command: Some(command),
         },
     )?;
     if private {
@@ -2363,7 +2392,7 @@ pub(super) fn stage(
     stage_with_supplier(current, input, &mut sample_face)
 }
 
-fn stage_with_supplier(
+pub(super) fn stage_with_supplier(
     current: &Checkpoint,
     input: &GameInput,
     supplier: DiceSource<'_>,

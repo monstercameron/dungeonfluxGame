@@ -447,6 +447,15 @@ pub(super) fn saved_response(
                 decision.operation == operation && decision.source_policy.as_str() == POLICY
             })
             .ok_or(RepositoryError::InvalidCandidate)?;
+        // Restored receipts must retain the causal terminal shape written by stage_completion.
+        if decision.revision <= intent.basis.revision
+            || decision.revision > current.basis().revision
+            || !decision.facts.is_empty()
+            || !decision.draws.is_empty()
+            || !decision.effects.is_empty()
+        {
+            return Err(RepositoryError::InvalidCandidate);
+        }
         let text = decision
             .semantic_output
             .as_deref()

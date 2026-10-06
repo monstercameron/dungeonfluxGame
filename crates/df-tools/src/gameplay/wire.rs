@@ -370,6 +370,7 @@ fn witnessed_courier_support(
         rpc::JourneyPhase::Combat,
     )?;
     let witness_source = model::content("courier-escort-perception")?;
+    let expected_witness = super::journey::courier_reaction::witness_id(contact.id)?;
     let relationship_policy = model::content("courier-escort-relationship")?;
     let courier_definition = model::content("lantern-wharf-courier")?;
     let courier_revision = model::label("lantern-wharf-courier-1")?;
@@ -387,7 +388,8 @@ fn witnessed_courier_support(
             && npc.motivations.as_slice() == std::slice::from_ref(&motivation)
             && npc.known_facts.contains(&contact.id)
     }) || !state.continuity.witnesses.iter().any(|witness| {
-        witness.observer == courier
+        witness.id == expected_witness
+            && witness.observer == courier
             && witness.fact == contact.id
             && witness.source == witness_source
     }) || !state.relationships.iter().any(|relationship| {

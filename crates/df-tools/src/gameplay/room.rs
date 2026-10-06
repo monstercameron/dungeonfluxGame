@@ -16,6 +16,46 @@ fn refused(code: rpc::RejectionCode) -> rpc::JoinRoomResponse {
         )),
     }
 }
+// A receipt proves the durable decision, but cannot authorize a grant from a stale cache.
+fn admit_join_outcome(
+    owner_current: bool,
+    outcome: Result<SubmissionOutcome, std::sync::mpsc::TryRecvError>,
+    checkpoint: &df_model::checkpoint::Checkpoint,
+    fenced: &mut bool,
+    recovery_wakeup: &tokio::sync::watch::Sender<df_model::checkpoint::Checkpoint>,
+) -> Result<SubmissionOutcome, Status> {
+    // Fence and wake watches before interpreting even a missing/confirmed reply.
+    if !owner_current {
+        actor::fence_checkpoint(fenced, recovery_wakeup, checkpoint);
+    }
+    let outcome = outcome.map_err(|_| Status::internal("room owner reply missing"))?;
+    if matches!(
+        &outcome,
+        SubmissionOutcome::Refused(df_session::submission::RepositoryError::UnresolvedCommit)
+    ) {
+        actor::fence_checkpoint(fenced, recovery_wakeup, checkpoint);
+    }
+    if !owner_current && matches!(&outcome, SubmissionOutcome::Confirmed(_)) {
+        return Ok(SubmissionOutcome::LookupRequired);
+    }
+    Ok(outcome)
+}
+
+fn join_lookup_error(
+    error: df_session::submission::RepositoryError,
+    checkpoint: &df_model::checkpoint::Checkpoint,
+    fenced: &mut bool,
+    recovery_wakeup: &tokio::sync::watch::Sender<df_model::checkpoint::Checkpoint>,
+) -> Status {
+    if error == df_session::submission::RepositoryError::UnresolvedCommit {
+        actor::fence_checkpoint(fenced, recovery_wakeup, checkpoint);
+    }
+    actor::unavailable(error)
+}
+
+#[cfg(test)]
+mod admission_tests;
+
 impl actor::Actor {
     pub(super) fn join(
         &mut self,
@@ -60,8 +100,14 @@ impl actor::Actor {
         match self
             .issuer
             .rejected_operation(&scope, self.owner.checkpoint().basis(), None, self.codec)
-            .map_err(actor::unavailable)?
-        {
+            .map_err(|error| {
+                join_lookup_error(
+                    error,
+                    self.owner.checkpoint(),
+                    &mut self.fenced,
+                    &self.recovery_wakeup,
+                )
+            })? {
             LocalRejectedLookup::Accepted => {}
             LocalRejectedLookup::NotRecorded => {
                 if request.room_code != journey::ROOM_CODE {
@@ -93,10 +139,13 @@ impl actor::Actor {
         };
         let (item, receiver) = OwnedInput::new(context, scope, input.clone());
         self.owner.reduce(AdmissionSequence(0), item);
-        let receipt = match receiver
-            .try_recv()
-            .map_err(|_| Status::internal("room owner reply missing"))?
-        {
+        let receipt = match admit_join_outcome(
+            self.owner.is_current(),
+            receiver.try_recv(),
+            self.owner.checkpoint(),
+            &mut self.fenced,
+            &self.recovery_wakeup,
+        )? {
             SubmissionOutcome::Confirmed(receipt) => receipt,
             SubmissionOutcome::OperationConflict => {
                 return Ok(refused(rpc::RejectionCode::OperationConflict));
