@@ -189,6 +189,37 @@ impl<ParticipantId: Copy + Eq, EventId: Copy + Eq> ActivityWindow<ParticipantId,
         Ok(before - self.events.len())
     }
 
+    /// Checks that a recommendation borrows this exact current owner snapshot.
+    /// A window without observations still retains its constructor's session/run.
+    /// Its absent revision is accepted only while empty; no revision is invented.
+    /// A later caller clock requires explicit `advance` before recommendation.
+    pub fn validate_current(
+        &self,
+        session: SessionId,
+        run: RunId,
+        basis: SessionRevision,
+        now: Duration,
+    ) -> Result<(), WindowError> {
+        if session != self.session {
+            return Err(WindowError::WrongSession);
+        }
+        if run != self.run {
+            return Err(WindowError::WrongRun);
+        }
+        if now < self.now {
+            return Err(WindowError::TimeRegression);
+        }
+        if now != self.now {
+            return Err(WindowError::StaleBasis);
+        }
+        match self.basis {
+            Some(current) if current.epoch() != basis.epoch() => Err(WindowError::WrongEpoch),
+            Some(current) if current != basis => Err(WindowError::StaleBasis),
+            None if !self.events.is_empty() => Err(WindowError::StaleBasis),
+            _ => Ok(()),
+        }
+    }
+
     /// Returns retained accepted-event count without ranking or interpreting activity.
     pub fn activity_count(&self, participant: &ParticipantId) -> usize {
         self.events

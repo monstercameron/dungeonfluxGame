@@ -288,6 +288,7 @@ name = "df-combat"
 version = "0.1.0"
 dependencies = [
  "df-content",
+ "df-engine",
  "df-model",
  "df-rules",
  "df-types",
@@ -340,6 +341,7 @@ dependencies = [
 name = "df-experience"
 version = "0.1.0"
 dependencies = [
+ "df-model",
  "df-types",
 ]
 
@@ -578,6 +580,7 @@ name = "df-ui"
 version = "0.1.0"
 dependencies = [
  "df-client",
+ "df-locale",
  "df-types",
  "js-sys",
  "wasm-bindgen",

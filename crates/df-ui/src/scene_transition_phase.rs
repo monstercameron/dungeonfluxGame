@@ -1,5 +1,7 @@
 use std::fmt;
 
+use df_locale::VersionedFormattedMessage;
+
 use crate::ConceptScene;
 
 const MAX_TEXT_BYTES: usize = 4096;
@@ -22,6 +24,7 @@ pub enum SceneTransitionValidationError {
     EmptyText,
     TextLimit,
     Disposed,
+    CatalogVersionMismatch,
 }
 
 impl fmt::Display for SceneTransitionValidationError {
@@ -30,6 +33,7 @@ impl fmt::Display for SceneTransitionValidationError {
             Self::EmptyText => "scene transition text is empty",
             Self::TextLimit => "scene transition text exceeds its bound",
             Self::Disposed => "scene transition was disposed",
+            Self::CatalogVersionMismatch => "scene transition catalog revision does not match",
         })
     }
 }
@@ -37,6 +41,36 @@ impl fmt::Display for SceneTransitionValidationError {
 impl std::error::Error for SceneTransitionValidationError {}
 
 impl SceneTransitionView<'_> {
+    /// Consumes location, title, narration, and Continue messages in that order.
+    /// The presentation owner selects stable keys and negotiates the locale before
+    /// formatting. Every message must belong to the owner's admitted revision;
+    /// rejection returns no partial text and includes neither values nor revisions.
+    pub fn catalog_text<V: PartialEq>(
+        expected_version: &V,
+        messages: [&VersionedFormattedMessage<'_, V>; 4],
+    ) -> Result<[String; 4], SceneTransitionValidationError> {
+        if messages
+            .iter()
+            .any(|message| message.version != expected_version)
+        {
+            return Err(SceneTransitionValidationError::CatalogVersionMismatch);
+        }
+        Ok(messages.map(|message| message.message.plain_text()))
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn with_catalog_text<'a>(&self, text: &'a [String; 4]) -> SceneTransitionView<'a> {
+        SceneTransitionView {
+            scene: self.scene,
+            location: &text[0],
+            title: &text[1],
+            narration: &text[2],
+            continue_label: &text[3],
+            continue_enabled: self.continue_enabled,
+            pending: self.pending,
+        }
+    }
+
     pub fn validate(&self) -> Result<(), SceneTransitionValidationError> {
         for text in [
             self.location,
@@ -59,6 +93,7 @@ impl SceneTransitionView<'_> {
 mod browser {
     use std::{cell::Cell, fmt, rc::Rc};
 
+    use df_locale::VersionedFormattedMessage;
     use web_sys::{Document, Element, Node};
 
     use super::{SceneTransitionValidationError, SceneTransitionView};
@@ -161,6 +196,30 @@ mod browser {
     }
 
     impl SceneTransitionPhase {
+        /// Mounts caller-formatted catalog output through the same literal text sink.
+        pub fn create_localized<V: PartialEq>(
+            document: &Document,
+            view: &SceneTransitionView<'_>,
+            expected_version: &V,
+            messages: [&VersionedFormattedMessage<'_, V>; 4],
+        ) -> Result<Self, SceneTransitionError> {
+            let text = SceneTransitionView::catalog_text(expected_version, messages)?;
+            Self::create(document, &view.with_catalog_text(&text))
+        }
+
+        /// Validates every catalog revision and all text before changing mounted nodes.
+        /// Invalid catalog output preserves the previous complete view and focus.
+        pub fn update_localized<V: PartialEq>(
+            &self,
+            view: &SceneTransitionView<'_>,
+            expected_version: &V,
+            messages: [&VersionedFormattedMessage<'_, V>; 4],
+        ) -> Result<(), SceneTransitionError> {
+            self.require_active()?;
+            let text = SceneTransitionView::catalog_text(expected_version, messages)?;
+            self.update(&view.with_catalog_text(&text))
+        }
+
         pub fn create(
             document: &Document,
             view: &SceneTransitionView<'_>,

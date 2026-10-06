@@ -44,6 +44,44 @@ pub struct FormattedMessage {
     pub parts: Vec<FormattedPart>,
 }
 
+impl FormattedMessage {
+    /// Renders semantic parts as plain data for native labels or a text-only DOM sink.
+    ///
+    /// Literals and inserted text are copied verbatim, without interpreting templates
+    /// or markup. Quantities use integer decimal and an explicit canonical unit tag;
+    /// money uses its currency tag and exactly six fractional digits. These canonical
+    /// forms preserve all values and do not claim locale-specific number typography.
+    /// The caller must encode the returned string for its output sink.
+    pub fn plain_text(&self) -> String {
+        let mut text = String::new();
+        for part in &self.parts {
+            match part {
+                FormattedPart::Literal(value) | FormattedPart::Text(value) => text.push_str(value),
+                FormattedPart::Quantity(value) => {
+                    let unit = match value.unit() {
+                        UsageUnit::Token => "token",
+                        UsageUnit::Character => "character",
+                        UsageUnit::Byte => "byte",
+                        UsageUnit::AudioMillisecond => "audio_ms",
+                        UsageUnit::VideoMillisecond => "video_ms",
+                        UsageUnit::Image => "image",
+                    };
+                    text.push_str(&format!("{} {unit}", value.quantity()));
+                }
+                FormattedPart::Money(value) => {
+                    text.push_str(&format!(
+                        "{} {}.{:06}",
+                        value.currency().as_str(),
+                        value.micros() / 1_000_000,
+                        value.micros() % 1_000_000,
+                    ));
+                }
+            }
+        }
+        text
+    }
+}
+
 /// Input-free rejection facts from source declaration or message admission.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MessageError {

@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+df-locale = { path = "../df-locale" }
 df-client = { path = "../df-client" }
 df-types = { path = "../df-types" }
 
@@ -66,4 +67,9 @@ crate-type = ["cdylib"]
 [[example]]
 name = "session_overlay_phase_fixture"
 path = "tests/fixtures/session_overlay_phase_fixture.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "locale_transition_fixture"
+path = "tests/fixtures/locale_transition_fixture.rs"
 crate-type = ["cdylib"]

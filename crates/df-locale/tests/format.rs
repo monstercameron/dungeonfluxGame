@@ -441,3 +441,44 @@ fn canonical_usage_units_and_money_micro_units_survive_extreme_values_exactly() 
         }
     }
 }
+
+#[test]
+fn plain_text_preserves_literal_payloads_and_exact_numeric_boundaries() {
+    let locale = df_types::LocaleTag::parse("en").unwrap();
+    let currency = df_types::Currency::parse("USD").unwrap();
+    let units = [
+        (df_types::UsageUnit::Token, "token"),
+        (df_types::UsageUnit::Character, "character"),
+        (df_types::UsageUnit::Byte, "byte"),
+        (df_types::UsageUnit::AudioMillisecond, "audio_ms"),
+        (df_types::UsageUnit::VideoMillisecond, "video_ms"),
+        (df_types::UsageUnit::Image, "image"),
+    ];
+    for (unit, tag) in units {
+        for (micros, expected_money) in [
+            (0, "USD 0.000000"),
+            (1, "USD 0.000001"),
+            (1_000_001, "USD 1.000001"),
+            (u128::MAX, "USD 340282366920938463463374607431768.211455"),
+        ] {
+            let message = df_locale::FormattedMessage {
+                key: TextKey::parse("display.exact").unwrap(),
+                source_locale: locale.clone(),
+                searched_locales: vec![locale.clone()],
+                parts: vec![
+                    FormattedPart::Literal("<b>{literal}</b>".to_owned()),
+                    FormattedPart::Text("<script>{argument}</script>".to_owned()),
+                    FormattedPart::Quantity(df_types::Usage::new(u128::MAX, unit)),
+                    FormattedPart::Literal(" / ".to_owned()),
+                    FormattedPart::Money(df_types::Money::new(currency, micros)),
+                ],
+            };
+            assert_eq!(
+                message.plain_text(),
+                format!(
+                    "<b>{{literal}}</b><script>{{argument}}</script>340282366920938463463374607431768211455 {tag} / {expected_money}"
+                )
+            );
+        }
+    }
+}
