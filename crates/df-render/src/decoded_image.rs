@@ -1,4 +1,5 @@
 use crate::{RendererResource, ResourceError};
+use df_client::cache::CacheLease;
 
 /// Owned RGBA8 decoded surface, distinct from compressed/encoded client-cache bytes.
 /// `key` is the canonical cache key unchanged. Lease guards bind it to current ownership.
@@ -10,6 +11,7 @@ pub struct DecodedImage<K: Clone + Eq> {
     pixels: Box<[u8]>,
     current: Box<dyn Fn(&K) -> bool>,
     release: Option<Box<dyn FnOnce()>>,
+    cache_lease: Option<CacheLease>,
 }
 
 impl<K: Clone + Eq> DecodedImage<K> {
@@ -35,7 +37,17 @@ impl<K: Clone + Eq> DecodedImage<K> {
             pixels,
             current: Box::new(current),
             release: Some(Box::new(release)),
+            cache_lease: None,
         })
+    }
+
+    pub(crate) fn bind_cache_lease(mut self, lease: CacheLease) -> Self {
+        self.cache_lease = Some(lease);
+        self
+    }
+
+    pub(crate) fn cache_lease(&self) -> Option<&CacheLease> {
+        self.cache_lease.as_ref()
     }
 
     pub fn dimensions(&self) -> (u32, u32) {

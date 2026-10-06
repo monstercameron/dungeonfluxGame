@@ -7,3 +7,11 @@ pub mod obligation_fulfillment;
 pub mod pending_resumption;
 pub mod semantic_candidate;
 pub mod world_staging;
+
+pub mod objective_staging;
+
+pub mod plan_staging;
+
+pub mod relationship_staging;
+
+pub mod witness_staging;

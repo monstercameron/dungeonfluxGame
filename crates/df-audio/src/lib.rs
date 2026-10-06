@@ -16,3 +16,5 @@ pub use queue::{
     MissingPlaybackPrerequisite, PcmView, QueueError, QueueLimits, QueueSnapshot, QueueState,
     REQUIRED_PLAYBACK_PREREQUISITES, Replacement,
 };
+
+pub mod browser_playback;

@@ -23,3 +23,13 @@ pub use resource_cache::{
     ResourceReadiness, WorkOutcome,
 };
 pub use resource_scene::{ResourceSceneError, ResourceSceneRenderer};
+
+mod browser_image_decode;
+#[cfg(target_arch = "wasm32")]
+pub use browser_image_decode::{BrowserDecodeStatus, BrowserImageDecode};
+pub use browser_image_decode::{
+    ImageDecodeError, ImageDecodeLimits, PngDecodePlan, VerifiedPng, inspect_png,
+};
+
+mod resource_lifecycle;
+pub use resource_lifecycle::{ResourceLifecycle, ResourceLifecycleError};

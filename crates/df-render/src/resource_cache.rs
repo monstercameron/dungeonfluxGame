@@ -31,6 +31,10 @@ pub struct DecodeToken<K> {
 }
 
 impl<K> DecodeToken<K> {
+    pub(crate) fn same_operation(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.identity, &other.identity)
+    }
+
     pub fn key(&self) -> &K {
         &self.key
     }

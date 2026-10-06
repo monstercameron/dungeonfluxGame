@@ -72,6 +72,11 @@ pub struct CacheLease {
 }
 
 impl CacheLease {
+    /// Compares existing lease identity without granting access.
+    pub fn same_identity(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.identity, &other.identity)
+    }
+
     pub fn key(&self) -> &CacheKey {
         &self.key
     }
@@ -356,6 +361,11 @@ impl AssetCache {
         self.current = None;
         self.resident_bytes = 0;
         self.closed = true;
+    }
+
+    /// Returns the canonical owner scope; this grants no source authorization.
+    pub fn scope(&self) -> CacheScope {
+        self.scope
     }
 
     pub fn resident_bytes(&self) -> usize {

@@ -8,6 +8,8 @@ publish = false
 autotests = false
 
 [dependencies]
+df-knowledge = { path = "../df-knowledge" }
+df-encounter = { path = "../df-encounter" }
 df-model = { path = "../df-model" }
 df-types = { path = "../df-types" }
 df-rules = { path = "../df-rules" }
@@ -52,3 +54,19 @@ path = "tests/world_staging.rs"
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 df-session = { path = "../df-session" }
 df-observe = { path = "../df-observe" }
+
+[[test]]
+name = "objective_staging"
+path = "tests/objective_staging.rs"
+
+[[test]]
+name = "plan_staging"
+path = "tests/plan_staging.rs"
+
+[[test]]
+name = "relationship_staging"
+path = "tests/relationship_staging.rs"
+
+[[test]]
+name = "witness_staging"
+path = "tests/witness_staging.rs"

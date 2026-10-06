@@ -177,10 +177,25 @@ impl<K: Clone + Eq> BrowserResourceScene<K> {
         self.renderer.finish_failed(token)
     }
     pub fn release(&mut self, key: &K) -> Result<(), ResourceError> {
-        self.clear();
-        self.selected = None;
+        if self.selected.as_ref() == Some(key) {
+            self.clear();
+            self.selected = None;
+        }
         self.renderer.release(key)
     }
+    /// Returns the canonical owner scope; this grants no source authorization.
+    pub fn owner(&self) -> SceneOwner {
+        self.renderer.owner()
+    }
+
+    pub(crate) fn get(&mut self, key: &K) -> Result<Option<&DecodedImage<K>>, ResourceError> {
+        self.renderer.get(key)
+    }
+
+    pub(crate) fn readiness(&self, key: &K) -> Result<crate::ResourceReadiness, ResourceError> {
+        self.renderer.readiness(key)
+    }
+
     pub fn decoded_bytes(&self) -> usize {
         self.renderer.decoded_bytes()
     }

@@ -285,6 +285,11 @@ impl SceneRenderer {
         Ok(None)
     }
 
+    /// Returns the canonical owner scope; this grants no source authorization.
+    pub fn owner(&self) -> SceneOwner {
+        self.owner
+    }
+
     pub fn current(&self) -> Option<&FlatScene> {
         self.current.as_ref()
     }

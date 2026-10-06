@@ -99,6 +99,11 @@ impl<R: RendererResource> ResourceSceneRenderer<R> {
         Ok(outcome)
     }
 
+    /// Returns the canonical owner scope; this grants no source authorization.
+    pub fn owner(&self) -> SceneOwner {
+        self.scene.owner()
+    }
+
     pub fn scene(&self) -> &SceneRenderer {
         &self.scene
     }

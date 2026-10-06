@@ -12,3 +12,16 @@ df-types = { path = "../df-types" }
 
 [dev-dependencies]
 df-client = { path = "../df-client" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+web-sys = { workspace = true, features = ["AudioContext", "AudioContextState", "BaseAudioContext", "AudioBuffer", "AudioBufferSourceNode", "AudioScheduledSourceNode", "AudioNode", "AudioDestinationNode", "Event"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+web-sys = { workspace = true, features = ["Window", "Document", "Element", "HtmlElement", "EventTarget", "Node", "Event"] }
+
+[[example]]
+name = "browser_playback_fixture"
+path = "tests/fixtures/browser_playback_fixture.rs"
+crate-type = ["cdylib"]

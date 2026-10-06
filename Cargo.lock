@@ -265,6 +265,9 @@ dependencies = [
  "df-media",
  "df-model",
  "df-types",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -306,6 +309,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-commerce"
+version = "0.1.0"
+dependencies = [
+ "df-types",
+]
+
+[[package]]
 name = "df-content"
 version = "0.1.0"
 dependencies = [
@@ -337,8 +347,10 @@ version = "0.1.0"
 dependencies = [
  "df-combat",
  "df-content",
+ "df-encounter",
  "df-intent",
  "df-interaction",
+ "df-knowledge",
  "df-model",
  "df-narrative",
  "df-observe",
@@ -408,9 +420,15 @@ dependencies = [
 name = "df-narrative"
 version = "0.1.0"
 dependencies = [
+ "df-content",
+ "df-engine",
  "df-knowledge",
  "df-model",
+ "df-observe",
+ "df-rules",
+ "df-session",
  "df-types",
+ "df-world",
 ]
 
 [[package]]
@@ -473,6 +491,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-provider-api"
+version = "0.1.0"
+dependencies = [
+ "df-ai",
+ "df-model",
+ "df-types",
+]
+
+[[package]]
 name = "df-render"
 version = "0.1.0"
 dependencies = [
@@ -482,8 +509,10 @@ dependencies = [
  "df-observe",
  "df-types",
  "df-ui",
+ "js-sys",
  "sha2 0.10.9",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

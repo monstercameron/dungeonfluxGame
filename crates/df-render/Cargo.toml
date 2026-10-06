@@ -5,11 +5,14 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+df-client = { path = "../df-client" }
 df-types = { path = "../df-types" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures.workspace = true
+js-sys = "=0.3.106"
 wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = ["Document", "Element", "Node", "CanvasRenderingContext2d", "HtmlCanvasElement", "ImageData"] }
+web-sys = { workspace = true, features = ["Document", "Element", "Node", "CanvasRenderingContext2d", "HtmlCanvasElement", "ImageData", "Window", "Blob", "ImageBitmap", "ImageBitmapOptions", "ColorSpaceConversion", "PremultiplyAlpha"] }
 
 [dev-dependencies]
 df-assets = { path = "../df-assets" }
@@ -33,4 +36,18 @@ sha2 = { version = "=0.10.9", default-features = false, features = ["std"] }
 [[example]]
 name = "resource_scene_fixture"
 path = "tests/fixtures/resource_scene_fixture.rs"
+crate-type = ["cdylib"]
+
+[features]
+image-decode-fixture = []
+
+[[example]]
+name = "browser_image_decode_fixture"
+path = "tests/fixtures/browser_image_decode_fixture.rs"
+crate-type = ["cdylib"]
+required-features = ["image-decode-fixture"]
+
+[[example]]
+name = "resource_lifecycle_fixture"
+path = "tests/fixtures/resource_lifecycle_fixture.rs"
 crate-type = ["cdylib"]
