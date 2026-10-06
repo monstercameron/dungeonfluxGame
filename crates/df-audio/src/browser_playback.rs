@@ -6,7 +6,7 @@
 //! Explicit dispose plus wait_closed is required before unmounting.
 //! AudioContext scheduling/end facts are not evidence of audible speakers.
 
-use crate::{PcmFormat, QueueError};
+use crate::{AudioReceipt, PcmFormat, QueueError};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PlaybackError {
@@ -26,6 +26,31 @@ pub enum PlaybackError {
 impl From<QueueError> for PlaybackError {
     fn from(error: QueueError) -> Self {
         Self::Queue(error)
+    }
+}
+
+/// Accepted cue ownership and the separate old stop/disconnect request outcome.
+/// An error in stop_result does not undo admission or release the old source.
+/// Retain the new receipt before handling that error; actual end/close still owns
+/// retirement. Only errors returned before this outcome mean replacement was refused.
+#[derive(Debug)]
+#[must_use]
+pub struct PlaybackReplacement {
+    receipt: AudioReceipt,
+    stop_result: Result<(), PlaybackError>,
+}
+
+impl PlaybackReplacement {
+    pub fn receipt(&self) -> &AudioReceipt {
+        &self.receipt
+    }
+
+    pub fn stop_result(&self) -> Result<(), PlaybackError> {
+        self.stop_result
+    }
+
+    pub fn into_parts(self) -> (AudioReceipt, Result<(), PlaybackError>) {
+        (self.receipt, self.stop_result)
     }
 }
 
@@ -121,7 +146,9 @@ mod browser {
         AudioScheduledSourceNode, Event,
     };
 
-    use super::{PlaybackError, PlaybackLimits, PlaybackStart, PlaybackTimeline};
+    use super::{
+        PlaybackError, PlaybackLimits, PlaybackReplacement, PlaybackStart, PlaybackTimeline,
+    };
     use crate::{
         AudioQueue, AudioReceipt, BufferCompletion, BufferTicket, EnqueueRefusal, PcmBuffer,
         PcmFormat, QueueError, QueueSnapshot, QueueState,
@@ -288,7 +315,7 @@ mod browser {
             asset: AssetReference,
             format: PcmFormat,
             start: PlaybackStart,
-        ) -> Result<AudioReceipt, PlaybackError> {
+        ) -> Result<PlaybackReplacement, PlaybackError> {
             self.check_ready(lease)?;
             if !start.lead_seconds.is_finite() || !(0.0..=2.0).contains(&start.lead_seconds) {
                 return Err(PlaybackError::InvalidTimeline);
@@ -303,10 +330,15 @@ mod browser {
                     .replace(lease, basis, identity, asset, format, start.first_frame)?;
             self.receipt = Some(replacement.receipt.clone());
             self.timeline = Some(timeline);
-            if replacement.retired.stop_required.is_some() {
-                self.stop_source()?;
-            }
-            Ok(replacement.receipt)
+            let stop_result = if replacement.retired.stop_required.is_some() {
+                self.stop_source()
+            } else {
+                Ok(())
+            };
+            Ok(PlaybackReplacement {
+                receipt: replacement.receipt,
+                stop_result,
+            })
         }
 
         /// Caller revalidates its source/cache/decode authorization immediately before

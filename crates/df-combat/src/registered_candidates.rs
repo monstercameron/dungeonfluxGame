@@ -16,7 +16,8 @@ use df_rules::{DispatchRegistry, RulesCommandHandler, RulesCommandInput};
 use df_types::{MemberId, OperationId, RevisionLabel};
 
 /// Trusted native identities and current pins supplied independently of template labels.
-/// The template selects Choice/Reaction kind and pending resolution/window only.
+/// The template selects Choice/Reaction kind and pending resolution/window. Its original
+/// basis and observed revision pass through canonical command admission before staging.
 pub struct RegisteredCandidateRequest<'a> {
     pub template: &'a CommandInput,
     pub current: CandidateContext<'a>,
@@ -227,9 +228,11 @@ impl<H: RulesCommandHandler> LegalOfferOwner for RegistryOwner<'_, '_, '_, '_, H
                     ));
                 }
             };
+            // Current response labels cannot rebase a request from a foreign scope or epoch.
+            // Canonical admission still permits older observations in the current epoch.
             let candidate = GameInput::Game(CommandInput {
-                basis: self.context.basis,
-                observed_revision: self.context.basis.revision,
+                basis: template.basis,
+                observed_revision: template.observed_revision,
                 operation: self.request.operation,
                 member: self.request.member,
                 command,

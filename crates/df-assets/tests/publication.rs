@@ -436,3 +436,188 @@ fn occupied_promotion_slot_bound_refuses_without_visibility_or_overwrite() {
         assert_eq!(fs::read(marker).unwrap().as_slice(), marker_bytes);
     }
 }
+
+fn sole_object_path(root: &std::path::Path) -> PathBuf {
+    let mut objects = fs::read_dir(root.join("objects")).unwrap();
+    let path = objects.next().unwrap().unwrap().path();
+    assert!(objects.next().is_none());
+    path
+}
+
+#[test]
+fn confirm_rejects_oversized_truncated_and_wrong_digest_backing_without_metadata_changes() {
+    for damaged in [
+        b"asset-v1-extra".as_slice(),
+        b"asset".as_slice(),
+        b"asset-v0".as_slice(),
+    ] {
+        let path = root();
+        let bytes = Arc::new(NativeFileStore::new(&path, 1024).unwrap());
+        let metadata = Metadata::new(bytes.clone());
+        let content = b"asset-v1";
+        let staged = bytes.stage(operation(20), &mut &content[..]).unwrap();
+        let candidate = publication(operation(20), 1, "image", expected(content));
+        let receipt = publish(&context(), &candidate, &staged, bytes.as_ref(), &metadata).unwrap();
+        assert_eq!(receipt.status, PublicationStatus::Published);
+        let published = metadata.lookup(&1).unwrap().unwrap();
+        bytes.confirm(published.object).unwrap();
+        let object = sole_object_path(&path);
+        fs::remove_file(&object).unwrap();
+        fs::write(&object, damaged).unwrap();
+
+        assert!(matches!(
+            bytes.confirm(published.object),
+            Err(StoreError::BackingIntegrity)
+        ));
+        assert_eq!(fs::read(&object).unwrap(), damaged);
+        let retained = metadata.lookup(&1).unwrap().unwrap();
+        assert_eq!(retained.metadata, "image");
+        assert_eq!(retained.bytes, expected(content));
+        assert_eq!(retained.object, published.object);
+        assert_eq!(metadata.publish_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(metadata.count(), 1);
+    }
+}
+
+#[test]
+fn unknown_ack_retry_refuses_oversized_truncated_and_wrong_digest_backing_atomically() {
+    for damaged in [
+        b"asset-v1-extra".as_slice(),
+        b"asset".as_slice(),
+        b"asset-v0".as_slice(),
+    ] {
+        let path = root();
+        let bytes = Arc::new(NativeFileStore::new(&path, 1024).unwrap());
+        let metadata = Metadata::new(bytes.clone());
+        let content = b"asset-v1";
+        let staged = bytes.stage(operation(21), &mut &content[..]).unwrap();
+        let candidate = publication(operation(21), 1, "image", expected(content));
+        *metadata.fail_next.lock().unwrap() = Some(MetadataFailure::Unknown);
+        assert!(matches!(
+            publish(&context(), &candidate, &staged, bytes.as_ref(), &metadata),
+            Err(PublicationError::Metadata(MetadataFailure::Unknown))
+        ));
+        let retained = metadata.lookup(&1).unwrap().unwrap();
+        let object = sole_object_path(&path);
+        fs::remove_file(&object).unwrap();
+        fs::write(&object, damaged).unwrap();
+        let restarted = NativeFileStore::new(&path, 1024).unwrap();
+        let resumed = restarted.resume_staged(operation(21)).unwrap();
+
+        assert!(matches!(
+            publish(&context(), &candidate, &resumed, &restarted, &metadata),
+            Err(PublicationError::Store(StoreError::BackingIntegrity))
+        ));
+        assert_eq!(fs::read(&object).unwrap(), damaged);
+        let after = metadata.lookup(&1).unwrap().unwrap();
+        assert_eq!(after.metadata, retained.metadata);
+        assert_eq!(after.bytes, retained.bytes);
+        assert_eq!(after.object, retained.object);
+        assert_eq!(metadata.publish_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(metadata.count(), 1);
+
+        fs::remove_file(&object).unwrap();
+        fs::write(&object, content).unwrap();
+        let retry = publish(&context(), &candidate, &resumed, &restarted, &metadata).unwrap();
+        assert_eq!(retry.status, PublicationStatus::AlreadyPublished);
+        assert_eq!(
+            metadata.lookup(&1).unwrap().unwrap().object,
+            retained.object
+        );
+        assert_eq!(metadata.publish_calls.load(Ordering::Relaxed), 2);
+        assert_eq!(metadata.count(), 1);
+    }
+}
+
+#[test]
+fn occupied_digest_destination_refuses_bad_backing_without_new_visibility_or_overwrite() {
+    for damaged in [
+        b"asset-v1-extra".as_slice(),
+        b"asset".as_slice(),
+        b"asset-v0".as_slice(),
+    ] {
+        let path = root();
+        let bytes = Arc::new(NativeFileStore::new(&path, 1024).unwrap());
+        let metadata = Metadata::new(bytes.clone());
+        let content = b"asset-v1";
+        let first = bytes.stage(operation(22), &mut &content[..]).unwrap();
+        let initial = publication(operation(22), 1, "image", expected(content));
+        let receipt = publish(&context(), &initial, &first, bytes.as_ref(), &metadata).unwrap();
+        assert_eq!(receipt.status, PublicationStatus::Published);
+        let published = metadata.lookup(&1).unwrap().unwrap();
+        let object = sole_object_path(&path);
+        fs::remove_file(&object).unwrap();
+        fs::write(&object, damaged).unwrap();
+        let fresh = bytes.stage(operation(23), &mut &content[..]).unwrap();
+        let candidate = publication(operation(23), 2, "still", expected(content));
+
+        assert!(matches!(
+            publish(&context(), &candidate, &fresh, bytes.as_ref(), &metadata),
+            Err(PublicationError::Store(StoreError::BackingIntegrity))
+        ));
+        assert_eq!(fs::read(&object).unwrap(), damaged);
+        assert!(metadata.lookup(&2).unwrap().is_none());
+        let old = metadata.lookup(&1).unwrap().unwrap();
+        assert_eq!(old.metadata, "image");
+        assert_eq!(old.bytes, expected(content));
+        assert_eq!(old.object, published.object);
+        assert_eq!(metadata.publish_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(metadata.count(), 1);
+        assert_eq!(fs::read_dir(path.join("promotion")).unwrap().count(), 0);
+
+        fs::remove_file(&object).unwrap();
+        fs::write(&object, content).unwrap();
+        let retry = publish(&context(), &candidate, &fresh, bytes.as_ref(), &metadata).unwrap();
+        assert_eq!(retry.status, PublicationStatus::Published);
+        assert_eq!(
+            metadata.lookup(&2).unwrap().unwrap().object,
+            published.object
+        );
+        assert_eq!(
+            metadata.lookup(&1).unwrap().unwrap().bytes,
+            expected(content)
+        );
+        assert_eq!(metadata.count(), 2);
+        bytes.confirm(published.object).unwrap();
+    }
+}
+
+#[test]
+fn missing_backing_remains_typed_missing_for_confirm_and_unknown_ack_retry() {
+    let path = root();
+    let bytes = Arc::new(NativeFileStore::new(&path, 1024).unwrap());
+    let metadata = Metadata::new(bytes.clone());
+    let content = b"asset-v1";
+    let staged = bytes.stage(operation(24), &mut &content[..]).unwrap();
+    let candidate = publication(operation(24), 1, "image", expected(content));
+    *metadata.fail_next.lock().unwrap() = Some(MetadataFailure::Unknown);
+    assert!(matches!(
+        publish(&context(), &candidate, &staged, bytes.as_ref(), &metadata),
+        Err(PublicationError::Metadata(MetadataFailure::Unknown))
+    ));
+    let retained = metadata.lookup(&1).unwrap().unwrap();
+    let object = sole_object_path(&path);
+    fs::remove_file(&object).unwrap();
+    assert!(matches!(
+        bytes.confirm(retained.object),
+        Err(StoreError::BackingMissing)
+    ));
+    assert!(matches!(
+        publish(&context(), &candidate, &staged, bytes.as_ref(), &metadata),
+        Err(PublicationError::Store(StoreError::BackingMissing))
+    ));
+    assert_eq!(
+        metadata.lookup(&1).unwrap().unwrap().bytes,
+        expected(content)
+    );
+    assert_eq!(metadata.publish_calls.load(Ordering::Relaxed), 1);
+    assert_eq!(metadata.count(), 1);
+    fs::write(&object, content).unwrap();
+    bytes.confirm(retained.object).unwrap();
+    assert_eq!(
+        publish(&context(), &candidate, &staged, bytes.as_ref(), &metadata)
+            .unwrap()
+            .status,
+        PublicationStatus::AlreadyPublished
+    );
+}

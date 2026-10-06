@@ -4,10 +4,10 @@ use super::{
     stage_checkpoint_thread_progress, stage_thread_progress,
 };
 use df_model::checkpoint::{
-    AudienceScope, Basis, CHECKPOINT_SCHEMA, Checkpoint, CheckpointLimits, CheckpointPins,
-    ContentDigest, ContentPins, ContentReference, ContinuityState, ExecutionMode, FactId,
-    FactValue, GameFact, GameState, LogicalTime, NarrativeState, RecoveryState, ReferenceInventory,
-    RulesMode, RulesPins, TempoState,
+    AcceptedDecision, AudienceScope, Basis, CHECKPOINT_SCHEMA, Checkpoint, CheckpointLimits,
+    CheckpointPins, ContentDigest, ContentPins, ContentReference, ContinuityState, ExecutionMode,
+    FactId, FactValue, GameFact, GameState, LogicalTime, NarrativeState, RecoveryState,
+    ReferenceInventory, RulesMode, RulesPins, TempoState,
 };
 use df_types::{
     BuildIdentity, OperationId, RecoveryEpoch, RevisionLabel, RunId, SessionId, SessionRevision,
@@ -593,6 +593,24 @@ fn inventory(fixture: &Fixture) -> ReferenceInventory<'_> {
 }
 
 fn checkpoint(fixture: &Fixture) -> Checkpoint {
+    // Public checkpoint selection consumes accepted events, not unowned fixture facts.
+    let decisions = fixture
+        .facts
+        .iter()
+        .map(|fact| AcceptedDecision {
+            operation: fact.operation,
+            revision: fact.revision,
+            facts: vec![fact.id],
+            draws: vec![],
+            effects: vec![],
+            source_policy: label("fixture-accepted-event-policy"),
+            semantic_output: None,
+        })
+        .collect();
+    checkpoint_with_decisions(fixture, decisions)
+}
+
+fn checkpoint_with_decisions(fixture: &Fixture, decisions: Vec<AcceptedDecision>) -> Checkpoint {
     let pins = CheckpointPins {
         content: fixture.content.clone(),
         rules: RulesPins {
@@ -627,7 +645,7 @@ fn checkpoint(fixture: &Fixture) -> Checkpoint {
         inventory: vec![],
         facts: fixture.facts.clone(),
         draws: vec![],
-        decisions: vec![],
+        decisions,
         pending: vec![],
         intents: vec![],
         timers: vec![],
@@ -829,4 +847,222 @@ fn checkpoint_producer_rechecks_complete_source_pins_and_output_validation() {
             df_model::checkpoint::CheckpointError::Capacity
         ))
     );
+}
+
+#[test]
+fn checkpoint_selection_requires_exact_accepted_decision_owner() {
+    let fixture = Fixture::new();
+    let canonical = checkpoint(&fixture);
+    let event = reference("resolved-event");
+    for case in 0..5 {
+        let mut decisions = canonical.state().decisions.clone();
+        match case {
+            0 => decisions.clear(),
+            // The other accepted decisions and canonical source still exist.
+            1 => {
+                decisions.remove(1);
+            }
+            2 => {
+                decisions[1].operation = OperationId::from_bytes(&[9; 16]).unwrap();
+                decisions[1].facts.clear();
+            }
+            3 => {
+                decisions[1].revision = revision(4);
+                decisions[1].facts.clear();
+            }
+            4 => decisions[1].facts.clear(),
+            _ => unreachable!(),
+        }
+        let current = checkpoint_with_decisions(&fixture, decisions);
+        let unchanged = current.clone();
+        for disposition in [ThreadDisposition::Continue, ThreadDisposition::Resolve] {
+            let selections = [ThreadConsequenceSelection {
+                thread: &fixture.narrative.open_threads[0],
+                event_definition: &event,
+                source: fact_id(2),
+                disposition,
+            }];
+            assert_eq!(
+                stage_checkpoint_thread_progress(
+                    &current,
+                    checkpoint_request(&fixture, &current, &selections),
+                    limits(),
+                ),
+                Err(CheckpointProgressError::Progress(
+                    ProgressError::SourceFactMismatch
+                )),
+                "owner case {case}, disposition {disposition:?}",
+            );
+            assert_eq!(current, unchanged);
+        }
+        // This boundary qualifies selected events; it does not reconstruct historical causes.
+        let retained = stage_checkpoint_thread_progress(
+            &current,
+            checkpoint_request(&fixture, &current, &[]),
+            limits(),
+        )
+        .unwrap();
+        assert_eq!(retained.checkpoint, unchanged);
+        assert!(retained.evidence.is_empty());
+    }
+}
+
+#[test]
+fn checkpoint_selection_checks_ordinal_membership_and_accepts_nonterminal_historical_cause() {
+    let mut fixture = Fixture::new();
+    let canonical = checkpoint(&fixture);
+    let mut decisions = canonical.state().decisions.clone();
+    fixture.facts[1].revision = revision(3);
+    fixture.facts[2].operation = fixture.facts[1].operation;
+    fixture.facts[2].ordinal = 1;
+    decisions[1].revision = revision(3);
+    decisions[1].facts.push(fact_id(3));
+    decisions.pop();
+    // The selected event is ordinal zero, before its owner's terminal event, and
+    // cites a historical fact from another operation. Neither changes its eligibility.
+    let current = checkpoint_with_decisions(&fixture, decisions.clone());
+    let unchanged = current.clone();
+    let event = reference("resolved-event");
+    for (source, ordinal, cause) in [(fact_id(2), 0, fact_id(1)), (fact_id(3), 1, fact_id(2))] {
+        let selections = [ThreadConsequenceSelection {
+            thread: &fixture.narrative.open_threads[0],
+            event_definition: &event,
+            source,
+            disposition: ThreadDisposition::Continue,
+        }];
+        let proposed = stage_checkpoint_thread_progress(
+            &current,
+            checkpoint_request(&fixture, &current, &selections),
+            limits(),
+        )
+        .unwrap();
+        assert_eq!(proposed.evidence[0].ordinal, ordinal);
+        assert_eq!(proposed.evidence[0].cause, Some(cause));
+        assert_eq!(proposed.evidence[0].revision, revision(3));
+        assert_eq!(
+            proposed.checkpoint.state().narrative.accepted_facts,
+            [fact_id(1), source]
+        );
+        assert_eq!(
+            proposed.checkpoint.state().narrative.open_threads,
+            fixture.narrative.open_threads
+        );
+        let mut protected = proposed.checkpoint.state().clone();
+        protected.narrative = current.state().narrative.clone();
+        assert_eq!(protected, *current.state());
+        assert_eq!(current, unchanged);
+    }
+    // Model preserves set membership but does not require accepted ordinal order.
+    // A reversed owner list must not admit either selected event at the wrong slot.
+    decisions[1].facts.reverse();
+    let reversed = checkpoint_with_decisions(&fixture, decisions);
+    let unchanged = reversed.clone();
+    for source in [fact_id(2), fact_id(3)] {
+        let selections = [ThreadConsequenceSelection {
+            thread: &fixture.narrative.open_threads[0],
+            event_definition: &event,
+            source,
+            disposition: ThreadDisposition::Resolve,
+        }];
+        assert_eq!(
+            stage_checkpoint_thread_progress(
+                &reversed,
+                checkpoint_request(&fixture, &reversed, &selections),
+                limits(),
+            ),
+            Err(CheckpointProgressError::Progress(
+                ProgressError::SourceFactMismatch
+            )),
+        );
+        assert_eq!(reversed, unchanged);
+    }
+}
+
+#[test]
+fn checkpoint_selection_invalid_later_owner_discards_whole_candidate() {
+    let fixture = Fixture::new();
+    let canonical = checkpoint(&fixture);
+    let mut decisions = canonical.state().decisions.clone();
+    decisions.pop();
+    let current = checkpoint_with_decisions(&fixture, decisions);
+    let unchanged = current.clone();
+    let event = reference("resolved-event");
+    let selections = [
+        ThreadConsequenceSelection {
+            thread: &fixture.narrative.open_threads[0],
+            event_definition: &event,
+            source: fact_id(2),
+            disposition: ThreadDisposition::Resolve,
+        },
+        ThreadConsequenceSelection {
+            thread: &fixture.narrative.open_threads[1],
+            event_definition: &event,
+            source: fact_id(3),
+            disposition: ThreadDisposition::Continue,
+        },
+    ];
+    assert_eq!(
+        stage_checkpoint_thread_progress(
+            &current,
+            checkpoint_request(&fixture, &current, &selections),
+            limits(),
+        ),
+        Err(CheckpointProgressError::Progress(
+            ProgressError::SourceFactMismatch
+        )),
+    );
+    assert_eq!(current, unchanged);
+}
+
+#[test]
+fn checkpoint_selection_bounds_decision_records_and_ownership_work() {
+    let fixture = Fixture::new();
+    let current = checkpoint(&fixture);
+    let unchanged = current.clone();
+    let event = reference("resolved-event");
+    let selections = [ThreadConsequenceSelection {
+        thread: &fixture.narrative.open_threads[0],
+        event_definition: &event,
+        source: fact_id(2),
+        disposition: ThreadDisposition::Continue,
+    }];
+    // Twelve comparisons admit these references and find the source. The next
+    // decision comparison exceeds the admitted budget before any narrative clone.
+    let bounded = ProgressLimits {
+        work: 12,
+        ..limits()
+    };
+    assert_eq!(
+        stage_checkpoint_thread_progress(
+            &current,
+            checkpoint_request(&fixture, &current, &selections),
+            bounded,
+        ),
+        Err(CheckpointProgressError::Progress(ProgressError::Capacity)),
+    );
+    assert_eq!(current, unchanged);
+    let mut decisions = current.state().decisions.clone();
+    for value in 10..24 {
+        decisions.push(AcceptedDecision {
+            operation: OperationId::from_bytes(&[value; 16]).unwrap(),
+            revision: revision(7),
+            facts: vec![],
+            draws: vec![],
+            effects: vec![],
+            source_policy: label("fixture-unrelated-policy"),
+            semantic_output: None,
+        });
+    }
+    assert_eq!(decisions.len(), limits().records + 1);
+    let excessive = checkpoint_with_decisions(&fixture, decisions);
+    let unchanged = excessive.clone();
+    assert_eq!(
+        stage_checkpoint_thread_progress(
+            &excessive,
+            checkpoint_request(&fixture, &excessive, &selections),
+            limits(),
+        ),
+        Err(CheckpointProgressError::Progress(ProgressError::Capacity)),
+    );
+    assert_eq!(excessive, unchanged);
 }

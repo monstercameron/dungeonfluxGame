@@ -1201,6 +1201,266 @@ fn engine_cannot_issue_epoch_skip_sequence_change_run_or_omit_operation_result()
     }
 }
 
+struct CountedCandidateEngine {
+    database: Arc<Mutex<Database>>,
+    fixed: FixedEngine,
+}
+impl SessionEngine<Scope> for CountedCandidateEngine {
+    fn decide(
+        &mut self,
+        current: &Checkpoint,
+        scope: &Scope,
+        input: &GameInput,
+    ) -> Result<Checkpoint, RepositoryError> {
+        self.database.lock().unwrap().engine_calls += 1;
+        self.fixed.decide(current, scope, input)
+    }
+    fn validate_recovery(&mut self, checkpoint: &Checkpoint) -> Result<(), RepositoryError> {
+        self.fixed.validate_recovery(checkpoint)
+    }
+}
+fn candidate_owner(
+    db: &Arc<Mutex<Database>>,
+    current: Checkpoint,
+    candidate: Checkpoint,
+) -> DurableOwner<Repository, CountedCandidateEngine, Publication> {
+    DurableOwner::new(
+        Repository {
+            database: Arc::clone(db),
+            before_ack: None,
+            force_duplicate_race: false,
+        },
+        CountedCandidateEngine {
+            database: Arc::clone(db),
+            fixed: FixedEngine { candidate },
+        },
+        Publication {
+            database: Arc::clone(db),
+            fail: false,
+        },
+        current,
+        RECEIPT_BYTES,
+    )
+    .unwrap()
+}
+fn history_checkpoint() -> Checkpoint {
+    let accepted = proposed(&initial(), &scope(70));
+    let mut state = accepted.state().clone();
+    // Retained canonical records can include history outside a receipt's projection.
+    let mut fact = state.facts[0].clone();
+    fact.id = FactId::from_bytes(&[71; 16]).unwrap();
+    fact.ordinal = 1;
+    state.facts.push(fact);
+    let draw = ActualDraw {
+        operation: operation(70),
+        ordinal: 0,
+        resolution: ResolutionId::from_bytes(&[72; 16]).unwrap(),
+        window: WindowId::from_bytes(&[73; 16]).unwrap(),
+        sides: 20,
+        value: 7,
+        source: rule(),
+    };
+    state.draws.push(draw.clone());
+    state.draws.push(ActualDraw {
+        ordinal: 1,
+        value: 8,
+        ..draw
+    });
+    state.decisions[0].draws.push(0);
+    checkpoint_at(accepted.basis(), state)
+}
+fn assert_history_candidate_refused(current: &Checkpoint, candidate: Checkpoint, scope: Scope) {
+    // Both checkpoints have already passed Checkpoint::new's canonical validation.
+    let db = database();
+    db.lock().unwrap().checkpoint = current.clone();
+    let mut owner = candidate_owner(&db, current.clone(), candidate);
+    let (item, wait) = owned(scope);
+    owner.reduce(AdmissionSequence(1), item);
+    assert_eq!(
+        wait.recv_timeout(WAIT).unwrap(),
+        SubmissionOutcome::Refused(RepositoryError::InvalidCandidate)
+    );
+    assert!(owner.is_current());
+    let db = db.lock().unwrap();
+    assert_eq!(db.engine_calls, 1);
+    assert_eq!(db.commit_calls, 0);
+    assert_eq!(db.checkpoint, *current);
+    assert!(db.receipts.is_empty());
+    assert!(db.scoped_receipts.is_empty());
+    assert_eq!(db.events, vec!["lookup"]);
+}
+
+#[test]
+fn session_rejects_additional_decisions_at_current_or_historical_revision() {
+    let current = history_checkpoint();
+    let mut request = scope(74);
+    request.basis = current.basis();
+    let candidate = proposed(&current, &request);
+    for revision in [candidate.basis().revision, current.basis().revision] {
+        let mut state = candidate.state().clone();
+        state.decisions.push(AcceptedDecision {
+            operation: operation(75),
+            revision,
+            facts: vec![],
+            draws: vec![],
+            effects: vec![],
+            source_policy: label("fixture-extra-decision"),
+            semantic_output: None,
+        });
+        assert_history_candidate_refused(
+            &current,
+            checkpoint_at(candidate.basis(), state),
+            request.clone(),
+        );
+    }
+}
+
+#[test]
+fn session_rejects_rewritten_deleted_or_reordered_decision_history() {
+    let current = history_checkpoint();
+    let mut request = scope(74);
+    request.basis = current.basis();
+    let candidate = proposed(&current, &request);
+    for changed in 0..3 {
+        let mut state = candidate.state().clone();
+        match changed {
+            0 => state.decisions[0].semantic_output = Some("rewritten history".to_owned()),
+            1 => {
+                state.decisions.remove(0);
+            }
+            2 => state.decisions.swap(0, 1),
+            _ => unreachable!(),
+        }
+        assert_history_candidate_refused(
+            &current,
+            checkpoint_at(candidate.basis(), state),
+            request.clone(),
+        );
+    }
+}
+
+#[test]
+fn session_rejects_rewritten_or_deleted_fact_history_with_decisions_unchanged() {
+    let current = history_checkpoint();
+    let mut request = scope(74);
+    request.basis = current.basis();
+    let candidate = proposed(&current, &request);
+    for changed in 0..2 {
+        let mut state = candidate.state().clone();
+        match changed {
+            0 => state.facts[0].audience = AudienceScope::Host,
+            1 => {
+                state.facts.remove(1);
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(state.decisions, candidate.state().decisions);
+        assert_history_candidate_refused(
+            &current,
+            checkpoint_at(candidate.basis(), state),
+            request.clone(),
+        );
+    }
+}
+
+#[test]
+fn session_rejects_rewritten_or_deleted_draw_history_with_decisions_unchanged() {
+    let current = history_checkpoint();
+    let mut request = scope(74);
+    request.basis = current.basis();
+    let candidate = proposed(&current, &request);
+    for changed in 0..2 {
+        let mut state = candidate.state().clone();
+        match changed {
+            0 => state.draws[0].value = 9,
+            1 => {
+                state.draws.remove(1);
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(state.decisions, candidate.state().decisions);
+        assert_history_candidate_refused(
+            &current,
+            checkpoint_at(candidate.basis(), state),
+            request.clone(),
+        );
+    }
+}
+
+#[test]
+fn session_accepts_one_operation_with_mutable_state_and_retries_without_reduction() {
+    for failure in [Failure::None, Failure::LostCommittedAck] {
+        let current = history_checkpoint();
+        let mut request = scope(74);
+        request.basis = current.basis();
+        let candidate = proposed(&current, &request);
+        let mut state = candidate.state().clone();
+        state.resources[0].value = 3;
+        state.intents[0].status = DurableStatus::Completed;
+        state.draws.push(ActualDraw {
+            operation: request.operation,
+            ordinal: 0,
+            resolution: ResolutionId::from_bytes(&[76; 16]).unwrap(),
+            window: WindowId::from_bytes(&[77; 16]).unwrap(),
+            sides: 20,
+            value: 10,
+            source: rule(),
+        });
+        state.decisions.last_mut().unwrap().draws.push(0);
+        let candidate = checkpoint_at(candidate.basis(), state);
+        let expected = receipt(&candidate, request.operation);
+        let db = database();
+        {
+            let mut db = db.lock().unwrap();
+            db.checkpoint = current.clone();
+            db.failure = failure;
+        }
+        let mut owner = candidate_owner(&db, current, candidate.clone());
+        let (item, wait) = owned(request.clone());
+        owner.reduce(AdmissionSequence(1), item);
+        let first = wait.recv_timeout(WAIT).unwrap();
+        if failure == Failure::LostCommittedAck {
+            assert_eq!(first, SubmissionOutcome::LookupRequired);
+            assert!(!owner.is_current());
+        } else {
+            assert_eq!(assert_confirmed(first), expected);
+            assert!(owner.is_current());
+        }
+        let before_retry = db.lock().unwrap().events.clone();
+        let (item, wait) = owned(request);
+        owner.reduce(AdmissionSequence(2), item);
+        assert_eq!(assert_confirmed(wait.recv_timeout(WAIT).unwrap()), expected);
+        assert!(owner.is_current());
+        let db = db.lock().unwrap();
+        assert_eq!(db.checkpoint, candidate);
+        assert_eq!(db.engine_calls, 1);
+        assert_eq!(db.commit_calls, 1);
+        assert_eq!(db.receipts.len(), 1);
+        let expected_retry = if failure == Failure::LostCommittedAck {
+            vec!["lookup", "load"]
+        } else {
+            vec!["lookup"]
+        };
+        assert_eq!(&db.events[before_retry.len()..], expected_retry.as_slice());
+        let deliveries = if failure == Failure::LostCommittedAck {
+            0
+        } else {
+            1
+        };
+        assert_eq!(
+            db.events
+                .iter()
+                .filter(|event| **event == "publish")
+                .count(),
+            deliveries
+        );
+        assert_eq!(
+            db.events.iter().filter(|event| **event == "wake").count(),
+            deliveries
+        );
+    }
+}
+
 #[test]
 fn candidate_receipt_capacity_refuses_before_any_commit() {
     let db = database();

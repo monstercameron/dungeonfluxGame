@@ -8,7 +8,7 @@ use df_combat::registered_candidates::{
 use df_content::catalog::{CatalogEntry, CatalogLimits, CatalogSnapshot};
 use df_model::checkpoint::*;
 use df_model::commands::{CommandError, CommandLimits};
-use df_rules::current_responses::ResponsePreparationError;
+use df_rules::current_responses::{ResponseError, ResponsePreparationError};
 use df_rules::preconditions::{
     CurrentRuleContext, PreconditionError, PreconditionLimits, PreconditionedCommandHandler,
     PreconditionedRejection, RuleDependency, RulePreconditions,
@@ -17,7 +17,7 @@ use df_rules::{
     DispatchError, DispatchRegistry, HandlerRegistration, InvocationError, RulesCommandHandler,
     RulesCommandInput,
 };
-use df_types::{OperationId, RevisionLabel};
+use df_types::{OperationId, RevisionLabel, RunId, SessionId};
 
 #[path = "support/registered_fixture.rs"]
 mod fixture;
@@ -259,6 +259,158 @@ fn actual_registry_intent_preconditions_admit_only_exact_current_member_response
         assert_eq!(current, before);
         assert!(current.state().decisions.is_empty());
         assert!(current.state().draws.is_empty());
+    }
+}
+
+#[test]
+fn original_template_scope_is_admitted_before_any_registered_handler_runs() {
+    for reaction in [false, true] {
+        let current = waiting(reaction);
+        let before = current.clone();
+        for case in 0..8 {
+            let mut template = command(reaction);
+            let expected = match case {
+                0 => {
+                    template.basis.session = SessionId::from_bytes(&[21; 16]).unwrap();
+                    CommandError::WrongSession
+                }
+                1 => {
+                    template.basis.run = RunId::from_bytes(&[22; 16]).unwrap();
+                    CommandError::WrongRun
+                }
+                2 => {
+                    template.basis.revision = revision(1, 8);
+                    CommandError::StaleRevision
+                }
+                3 => {
+                    template.basis.revision = revision(3, 8);
+                    CommandError::StaleRevision
+                }
+                4 => {
+                    template.basis.revision = revision(2, 9);
+                    CommandError::StaleRevision
+                }
+                5 => {
+                    template.observed_revision = revision(1, 8);
+                    CommandError::StaleRevision
+                }
+                6 => {
+                    template.observed_revision = revision(3, 8);
+                    CommandError::StaleRevision
+                }
+                7 => {
+                    template.observed_revision = revision(2, 9);
+                    CommandError::StaleRevision
+                }
+                _ => unreachable!(),
+            };
+            let handler = Handler {
+                pins: current.pins(),
+                calls: Cell::new(0),
+                reject: false,
+            };
+            with_pipeline(
+                &current,
+                &current,
+                &handler,
+                &[RuleDependency::PendingResolution(pending().id)],
+                false,
+                |registry, context, selector| {
+                    let current_basis = current.basis();
+                    let result = enumerate_registered_responses(
+                        context,
+                        registry,
+                        RegisteredCandidateRequest {
+                            template: &template,
+                            current: CandidateContext {
+                                basis: &current_basis,
+                                pins: current.pins(),
+                            },
+                            member: member(3),
+                            operation: operation(),
+                            selector,
+                        },
+                        budgets(),
+                    );
+                    assert_eq!(
+                        result.err(),
+                        Some(RegisteredCandidateError::Enumeration(
+                            CandidateError::Owner(ResponsePreparationError::Response(
+                                ResponseError::Admission(expected)
+                            ),)
+                        )),
+                        "reaction={reaction}, case={case}",
+                    );
+                },
+            );
+            assert_eq!(handler.calls.get(), 0, "reaction={reaction}, case={case}");
+            assert_eq!(current, before);
+            assert!(current.state().decisions.is_empty());
+            assert!(current.state().draws.is_empty());
+        }
+    }
+}
+
+#[test]
+fn older_same_epoch_template_revisions_select_exact_current_responses() {
+    for reaction in [false, true] {
+        let current = waiting(reaction);
+        let before = current.clone();
+        // Basis and observation are admitted independently by the canonical model.
+        for (basis_revision, observed_revision) in [
+            (revision(2, 7), revision(2, 8)),
+            (revision(2, 8), revision(2, 7)),
+            (revision(2, 7), revision(2, 6)),
+        ] {
+            let mut template = command(reaction);
+            template.basis.revision = basis_revision;
+            template.observed_revision = observed_revision;
+            let handler = Handler {
+                pins: current.pins(),
+                calls: Cell::new(0),
+                reject: false,
+            };
+            with_pipeline(
+                &current,
+                &current,
+                &handler,
+                &[RuleDependency::PendingResolution(pending().id)],
+                false,
+                |registry, context, selector| {
+                    let current_basis = current.basis();
+                    let admitted = enumerate_registered_responses(
+                        context,
+                        registry,
+                        RegisteredCandidateRequest {
+                            template: &template,
+                            current: CandidateContext {
+                                basis: &current_basis,
+                                pins: current.pins(),
+                            },
+                            member: member(3),
+                            operation: operation(),
+                            selector,
+                        },
+                        budgets(),
+                    )
+                    .unwrap();
+                    let canonical = match &current.state().pending[0].next {
+                        PendingInput::Choice { remaining }
+                        | PendingInput::Reaction { remaining } => remaining,
+                        _ => unreachable!(),
+                    };
+                    assert_eq!(admitted.offers().len(), 2);
+                    assert!(std::ptr::eq(admitted.offers()[0], &canonical[0]));
+                    assert!(std::ptr::eq(admitted.offers()[1], &canonical[2]));
+                    assert_eq!(*admitted.basis(), current.basis());
+                    assert!(std::ptr::eq(admitted.pins(), current.pins()));
+                },
+            );
+            assert_eq!(handler.calls.get(), 3);
+            assert_eq!(current, before);
+            assert!(current.state().decisions.is_empty());
+            assert!(current.state().draws.is_empty());
+        }
     }
 }
 

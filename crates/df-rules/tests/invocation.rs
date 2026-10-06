@@ -1168,3 +1168,289 @@ fn atomic_decision_count_preserves_existing_capacity_history_and_draw_refusal_pr
         assert_eq!(current, before);
     }
 }
+
+fn alternate_intent_definition() -> ContentReference {
+    ContentReference {
+        package: content().package,
+        entry: label("fixture-alternate-intent"),
+    }
+}
+
+fn intent_checkpoint(current: &Checkpoint, basis: Basis, state: GameState) -> Checkpoint {
+    Checkpoint::new(
+        CHECKPOINT_SCHEMA,
+        basis,
+        current.pins().clone(),
+        state,
+        ReferenceInventory {
+            rules: &[rule()],
+            content: &[content(), alternate_intent_definition()],
+            resources: &resource_constraints(),
+            assets: &[],
+        },
+        limits(),
+    )
+    .unwrap()
+}
+
+fn current_with_retained_intents(base: &Checkpoint, referenced: bool, timer: bool) -> Checkpoint {
+    let mut state = base.state().clone();
+    for value in [40, 44] {
+        let operation = OperationId::from_bytes(&[value + 30; 16]).unwrap();
+        let id = EffectId::from_bytes(&[value; 16]).unwrap();
+        state.intents.push(DurableIntent {
+            id,
+            basis: base.basis(),
+            operation,
+            slot: 0,
+            kind: if timer && value == 40 {
+                EffectKind::ArmTimer
+            } else {
+                EffectKind::RunAi
+            },
+            job: if timer && value == 40 {
+                None
+            } else {
+                Some(JobId::from_bytes(&[value + 1; 16]).unwrap())
+            },
+            timer: if timer && value == 40 {
+                Some(TimerId::from_bytes(&[42; 16]).unwrap())
+            } else {
+                None
+            },
+            generation: 1,
+            status: DurableStatus::Pending,
+            definition: content(),
+        });
+        state.decisions.push(AcceptedDecision {
+            operation,
+            revision: base.basis().revision,
+            facts: vec![],
+            draws: vec![],
+            effects: if referenced || value != 40 {
+                vec![id]
+            } else {
+                vec![]
+            },
+            source_policy: label("fixture-intent-policy"),
+            semantic_output: None,
+        });
+    }
+    if timer {
+        for value in [42, 43] {
+            state.timers.push(OwnedTimer {
+                id: TimerId::from_bytes(&[value; 16]).unwrap(),
+                basis: base.basis(),
+                generation: 1,
+                due: state.logical_time,
+                source: rule(),
+                status: DurableStatus::Pending,
+            });
+        }
+    }
+    intent_checkpoint(base, base.basis(), state)
+}
+
+#[test]
+fn retained_intent_binding_changes_refuse_canonically_valid_candidates() {
+    for field in [
+        "id",
+        "basis",
+        "operation",
+        "slot",
+        "kind",
+        "job",
+        "timer",
+        "generation",
+        "definition",
+    ] {
+        // Unreferenced intents exercise identity/operation preservation independently of the
+        // canonical accepted-decision effect-reference validator.
+        let current = current_with_retained_intents(
+            &checkpoint(state()).unwrap(),
+            field != "id" && field != "operation",
+            field == "timer",
+        );
+        let before = current.clone();
+        let mut handler = fixture(&current);
+        let mut state = handler.candidate.state().clone();
+        let intent = &mut state.intents[0];
+        match field {
+            "id" => intent.id = EffectId::from_bytes(&[50; 16]).unwrap(),
+            "basis" => intent.basis.revision = revision(2, 7),
+            "operation" => intent.operation = OperationId::from_bytes(&[72; 16]).unwrap(),
+            "slot" => intent.slot = 1,
+            "kind" => intent.kind = EffectKind::RunMedia,
+            "job" => intent.job = Some(JobId::from_bytes(&[50; 16]).unwrap()),
+            "timer" => intent.timer = Some(TimerId::from_bytes(&[43; 16]).unwrap()),
+            "generation" => intent.generation = 2,
+            "definition" => intent.definition = alternate_intent_definition(),
+            _ => unreachable!(),
+        }
+        // Construction proves the candidate passes canonical shape/reference validation.
+        handler.candidate = intent_checkpoint(&current, handler.candidate.basis(), state);
+        assert!(
+            handler
+                .candidate
+                .state()
+                .decisions
+                .starts_with(&current.state().decisions)
+        );
+        assert_eq!(
+            invoke_roll(&handler, &current, &input(), &[], 1024 * 1024),
+            Err(InvocationError::CandidateIntentBindingMismatch),
+            "field {field}"
+        );
+        assert_eq!(handler.calls.get(), 1);
+        assert_eq!(current, before);
+    }
+}
+
+#[test]
+fn unreferenced_retained_intent_deletion_is_refused() {
+    let current = current_with_retained_intents(&checkpoint(state()).unwrap(), false, false);
+    let before = current.clone();
+    let mut handler = fixture(&current);
+    let mut state = handler.candidate.state().clone();
+    state.intents.remove(0);
+    handler.candidate = intent_checkpoint(&current, handler.candidate.basis(), state);
+
+    assert_eq!(
+        invoke_roll(&handler, &current, &input(), &[], 1024 * 1024),
+        Err(InvocationError::CandidateIntentBindingMismatch)
+    );
+    assert_eq!(handler.calls.get(), 1);
+    assert_eq!(current, before);
+}
+
+#[test]
+fn retained_intent_status_only_updates_including_completion_are_accepted() {
+    for status in [
+        DurableStatus::Pending,
+        DurableStatus::Claimed,
+        DurableStatus::SentUnknown,
+        DurableStatus::Completed,
+        DurableStatus::Failed,
+        DurableStatus::Cancelled,
+    ] {
+        let current = current_with_retained_intents(&checkpoint(state()).unwrap(), true, false);
+        let before = current.clone();
+        let mut handler = fixture(&current);
+        let mut state = handler.candidate.state().clone();
+        state.intents[0].status = status;
+        handler.candidate = intent_checkpoint(&current, handler.candidate.basis(), state);
+
+        let candidate = invoke_roll(&handler, &current, &input(), &[], 1024 * 1024).unwrap();
+        let mut expected = current.state().intents.clone();
+        expected[0].status = status;
+        assert_eq!(candidate.state().intents, expected);
+        assert!(
+            candidate
+                .state()
+                .decisions
+                .starts_with(&current.state().decisions)
+        );
+        assert_eq!(candidate.state().facts, current.state().facts);
+        assert_eq!(candidate.state().draws, current.state().draws);
+        assert_eq!(handler.calls.get(), 1);
+        assert_eq!(current, before);
+    }
+}
+
+#[test]
+fn reordered_retained_intents_and_new_requested_effect_are_accepted() {
+    let current = current_with_retained_intents(&checkpoint(state()).unwrap(), true, true);
+    let before = current.clone();
+    let mut handler = fixture(&current);
+    let mut state = handler.candidate.state().clone();
+    state.intents.reverse();
+    let id = EffectId::from_bytes(&[60; 16]).unwrap();
+    state.intents.insert(
+        1,
+        DurableIntent {
+            id,
+            basis: handler.candidate.basis(),
+            operation: OperationId::from_bytes(&[6; 16]).unwrap(),
+            slot: 0,
+            kind: EffectKind::PublishPresentation,
+            job: None,
+            timer: None,
+            generation: 1,
+            status: DurableStatus::Pending,
+            definition: content(),
+        },
+    );
+    state.decisions.last_mut().unwrap().effects.push(id);
+    handler.candidate = intent_checkpoint(&current, handler.candidate.basis(), state);
+
+    let candidate = invoke_roll(&handler, &current, &input(), &[], 1024 * 1024).unwrap();
+    for prior in &current.state().intents {
+        assert_eq!(
+            candidate
+                .state()
+                .intents
+                .iter()
+                .find(|intent| intent.id == prior.id),
+            Some(prior)
+        );
+    }
+    assert_eq!(
+        candidate.state().intents.len(),
+        current.state().intents.len() + 1
+    );
+    assert_eq!(
+        candidate.state().decisions.last().unwrap().effects,
+        vec![id]
+    );
+    assert_eq!(handler.calls.get(), 1);
+    assert_eq!(current, before);
+}
+
+#[test]
+fn retained_intent_guard_preserves_capacity_draw_history_and_atomic_refusal_priority() {
+    for case in 0..4 {
+        let base = if case == 0 {
+            checkpoint(state()).unwrap()
+        } else {
+            current_with_accepted_history()
+        };
+        let current = current_with_retained_intents(&base, true, false);
+        let before = current.clone();
+        let mut handler = fixture(&current);
+        let mut state = handler.candidate.state().clone();
+        state.intents[0].generation += 1;
+        let expected = match case {
+            0 => InvocationError::Capacity,
+            1 => {
+                state.draws[0].value = 1;
+                InvocationError::CandidateDrawMismatch
+            }
+            2 => {
+                state.decisions[0].source_policy = label("rewritten-intent-history");
+                InvocationError::CandidateDecisionHistoryMismatch
+            }
+            _ => {
+                state.decisions.push(AcceptedDecision {
+                    operation: OperationId::from_bytes(&[99; 16]).unwrap(),
+                    revision: handler.candidate.basis().revision,
+                    facts: vec![],
+                    draws: vec![],
+                    effects: vec![],
+                    source_policy: label("fixture-foreign-policy"),
+                    semantic_output: None,
+                });
+                InvocationError::CandidateDecisionHistoryMismatch
+            }
+        };
+        handler.candidate = intent_checkpoint(&current, handler.candidate.basis(), state);
+        let maximum = if case == 0 { 1 } else { 1024 * 1024 };
+
+        assert_eq!(
+            invoke_roll(&handler, &current, &input(), &[], maximum),
+            Err(expected),
+            "case {case}"
+        );
+        assert_eq!(handler.calls.get(), 1);
+        assert_eq!(current, before);
+    }
+}

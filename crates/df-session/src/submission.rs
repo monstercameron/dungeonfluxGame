@@ -641,12 +641,18 @@ fn validate_candidate(
     {
         return Err(RepositoryError::InvalidCandidate);
     }
-    if !candidate
-        .state()
-        .decisions
-        .iter()
-        .any(|d| d.operation == operation && d.revision == next)
+    let history = current.state();
+    let proposed = candidate.state();
+    if !proposed.decisions.starts_with(&history.decisions)
+        || !proposed.facts.starts_with(&history.facts)
+        || !proposed.draws.starts_with(&history.draws)
     {
+        return Err(RepositoryError::InvalidCandidate);
+    }
+    let Some([decision]) = proposed.decisions.get(history.decisions.len()..) else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
+    if decision.operation != operation || decision.revision != next {
         return Err(RepositoryError::InvalidCandidate);
     }
     Ok(())

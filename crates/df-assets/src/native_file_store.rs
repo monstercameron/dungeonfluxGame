@@ -270,6 +270,9 @@ fn verify_file(path: &Path, expected: AssetManifest) -> Result<(), StoreError> {
             StoreError::Io(error)
         }
     })?;
+    if file.metadata()?.len() != expected.byte_len {
+        return Err(StoreError::BackingIntegrity);
+    }
     let mut hasher = Sha256::new();
     let mut length = 0_u64;
     let mut buffer = [0_u8; 65536];
@@ -281,10 +284,16 @@ fn verify_file(path: &Path, expected: AssetManifest) -> Result<(), StoreError> {
         length = length
             .checked_add(u64::try_from(read).map_err(|_| StoreError::BackingIntegrity)?)
             .ok_or(StoreError::BackingIntegrity)?;
+        if length > expected.byte_len {
+            return Err(StoreError::BackingIntegrity);
+        }
         hasher.update(&buffer[..read]);
     }
+    if length != expected.byte_len {
+        return Err(StoreError::BackingIntegrity);
+    }
     let digest: [u8; 32] = hasher.finalize().into();
-    if length != expected.byte_len || digest != expected.sha256 {
+    if digest != expected.sha256 {
         return Err(StoreError::BackingIntegrity);
     }
     Ok(())

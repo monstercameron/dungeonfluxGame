@@ -5,7 +5,7 @@ use df_model::checkpoint::{
     PendingInput, RuleReference,
 };
 use df_types::{OperationId, RevisionError, RevisionLabel};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Canonical command and actual outcomes supplied by the trusted session owner.
 /// Clients request a roll; they cannot supply these outcomes. Borrowing this input neither
@@ -67,6 +67,7 @@ pub enum InvocationError<Rejection> {
     CandidateDrawMismatch,
     CandidateDrawAccountingMismatch,
     CandidateDecisionHistoryMismatch,
+    CandidateIntentBindingMismatch,
     Capacity,
 }
 
@@ -74,6 +75,7 @@ pub enum InvocationError<Rejection> {
 /// Structural command admission, source selection and dependency legality belong to their
 /// respective callers. Reuse this same boundary after registry selection for offer and submit.
 /// One command appends exactly its requested decision after the unchanged accepted history.
+/// Retained intents preserve their work bindings; only their status may change.
 pub fn stage_handler<Handler: RulesCommandHandler>(
     handler: &Handler,
     expected_pins: &CheckpointPins,
@@ -172,7 +174,42 @@ pub fn stage_handler<Handler: RulesCommandHandler>(
     {
         return Err(InvocationError::CandidateDecisionHistoryMismatch);
     }
+    validate_retained_intents(current, &candidate)?;
     Ok(candidate)
+}
+
+fn validate_retained_intents<Rejection>(
+    current: &Checkpoint,
+    candidate: &Checkpoint,
+) -> Result<(), InvocationError<Rejection>> {
+    let prior = &current.state().intents;
+    let staged = &candidate.state().intents;
+    if prior.is_empty() {
+        return Ok(());
+    }
+    if prior.len() > staged.len() {
+        return Err(InvocationError::CandidateIntentBindingMismatch);
+    }
+    // Candidate capacity has already bounded the index and the prior count. Borrow bindings
+    // rather than cloning definitions; retained intent order carries no identity semantics.
+    let by_id: BTreeMap<_, _> = staged.iter().map(|intent| (intent.id, intent)).collect();
+    for intent in prior {
+        let Some(retained) = by_id.get(&intent.id) else {
+            return Err(InvocationError::CandidateIntentBindingMismatch);
+        };
+        if retained.basis != intent.basis
+            || retained.operation != intent.operation
+            || retained.slot != intent.slot
+            || retained.kind != intent.kind
+            || retained.job != intent.job
+            || retained.timer != intent.timer
+            || retained.generation != intent.generation
+            || retained.definition != intent.definition
+        {
+            return Err(InvocationError::CandidateIntentBindingMismatch);
+        }
+    }
+    Ok(())
 }
 
 fn validate_draw_input<Rejection>(

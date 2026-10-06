@@ -144,6 +144,7 @@ pub fn stage_checkpoint_thread_progress(
     if bytes > request.checkpoint_limits.maximum_retained_bytes
         || request.selections.len() > limits.consequences
         || current.state().facts.len() > limits.records
+        || current.state().decisions.len() > limits.records
         || request.inventory.content.len() > limits.records
     {
         return Err(CheckpointProgressError::Progress(ProgressError::Capacity));
@@ -175,6 +176,22 @@ pub fn stage_checkpoint_thread_progress(
         work.charge().map_err(CheckpointProgressError::Progress)?;
         if definition != selection.event_definition {
             return Err(CheckpointProgressError::SourceDefinition);
+        }
+        // Checkpoint structure validates decision references, but permits orphan facts.
+        // Narrative may consume only an exact event retained by its accepted owner.
+        let mut accepted = false;
+        for decision in &current.state().decisions {
+            work.charge().map_err(CheckpointProgressError::Progress)?;
+            if decision.operation == source.operation && decision.revision == source.revision {
+                work.charge().map_err(CheckpointProgressError::Progress)?;
+                accepted = decision.facts.get(source.ordinal as usize) == Some(&source.id);
+                break;
+            }
+        }
+        if !accepted {
+            return Err(CheckpointProgressError::Progress(
+                ProgressError::SourceFactMismatch,
+            ));
         }
         consequences.push(AcceptedThreadConsequence {
             thread: selection.thread,

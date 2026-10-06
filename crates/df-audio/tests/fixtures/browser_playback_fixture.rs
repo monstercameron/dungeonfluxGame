@@ -4,7 +4,8 @@ mod browser_pcm;
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
 
     use df_audio::browser_playback::{
         BrowserPlayback, PlaybackError, PlaybackLimits, PlaybackSnapshot, PlaybackStart,
@@ -21,6 +22,148 @@ mod browser {
 
     use super::browser_pcm::{self, FRAMES, LocalPcm};
 
+    // Private fixture bindings only. Proxy supplies the genuine method receiver
+    // to Rust; no JavaScript application body or production fault hook is added.
+    #[wasm_bindgen]
+    extern "C" {
+        #[wasm_bindgen(js_namespace = Reflect, js_name = get, catch)]
+        fn property_get(target: &JsValue, name: &JsValue) -> Result<JsValue, JsValue>;
+        #[wasm_bindgen(js_namespace = Reflect, js_name = set, catch)]
+        fn property_set(target: &JsValue, name: &JsValue, value: &JsValue)
+        -> Result<bool, JsValue>;
+        #[wasm_bindgen(js_namespace = Reflect, js_name = apply, catch)]
+        fn native_apply(
+            target: &JsValue,
+            receiver: &JsValue,
+            args: &JsValue,
+        ) -> Result<JsValue, JsValue>;
+        #[wasm_bindgen(js_namespace = Object, js_name = create, catch)]
+        fn object_create(prototype: &JsValue) -> Result<JsValue, JsValue>;
+        #[wasm_bindgen(js_namespace = Object, js_name = getOwnPropertyDescriptor, catch)]
+        fn own_descriptor(target: &JsValue, name: &JsValue) -> Result<JsValue, JsValue>;
+        #[wasm_bindgen(js_namespace = Object, js_name = defineProperty, catch)]
+        fn property_define(
+            target: &JsValue,
+            name: &JsValue,
+            descriptor: &JsValue,
+        ) -> Result<JsValue, JsValue>;
+        #[wasm_bindgen(js_name = Proxy)]
+        type StopProxy;
+        #[wasm_bindgen(constructor, js_class = Proxy, catch)]
+        fn new(target: &JsValue, handler: &JsValue) -> Result<StopProxy, JsValue>;
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum StopFaultObservation {
+        Pending,
+        NativeFailed,
+        InvalidReturn,
+        StoppedThenThrew,
+    }
+
+    struct StopFault {
+        prototype: JsValue,
+        descriptor: JsValue,
+        _proxy: StopProxy,
+        _callback: Closure<dyn FnMut(JsValue, JsValue, JsValue)>,
+        observed: Rc<Cell<StopFaultObservation>>,
+    }
+
+    impl StopFault {
+        fn install() -> Result<Self, JsValue> {
+            let window = web_sys::window().ok_or_else(|| JsValue::from_str("window absent"))?;
+            let constructor = property_get(
+                window.as_ref(),
+                &JsValue::from_str("AudioScheduledSourceNode"),
+            )?;
+            let prototype = property_get(&constructor, &JsValue::from_str("prototype"))?;
+            let descriptor = own_descriptor(&prototype, &JsValue::from_str("stop"))?;
+            if !descriptor.is_object() {
+                return Err(JsValue::from_str(
+                    "own stop descriptor absent; fault not installed",
+                ));
+            }
+            let original = property_get(&descriptor, &JsValue::from_str("value"))?;
+            if !original.is_function() {
+                return Err(JsValue::from_str(
+                    "stop is not an own data function; fault not installed",
+                ));
+            }
+            let observed = Rc::new(Cell::new(StopFaultObservation::Pending));
+            let flag = Rc::clone(&observed);
+            let callback = Closure::<dyn FnMut(JsValue, JsValue, JsValue)>::wrap(Box::new(
+                move |target: JsValue, receiver: JsValue, args: JsValue| {
+                    let result = native_apply(&target, &receiver, &args);
+                    // throw_val/throw_str do not unwind Rust locals. Release every
+                    // callback argument before throwing; the outer fixture owns Closure.
+                    drop(args);
+                    drop(receiver);
+                    drop(target);
+                    match result {
+                        Ok(value) => {
+                            let valid = value.is_undefined();
+                            drop(value);
+                            flag.set(if valid {
+                                StopFaultObservation::StoppedThenThrew
+                            } else {
+                                StopFaultObservation::InvalidReturn
+                            });
+                            wasm_bindgen::throw_str(
+                                "fixture: native stop ran before controlled failure",
+                            );
+                        }
+                        Err(error) => {
+                            flag.set(StopFaultObservation::NativeFailed);
+                            wasm_bindgen::throw_val(error);
+                        }
+                    }
+                },
+            ));
+            let handler = object_create(&JsValue::NULL)?;
+            if !property_set(&handler, &JsValue::from_str("apply"), callback.as_ref())? {
+                return Err(JsValue::from_str("fault handler not installed"));
+            }
+            let proxy = StopProxy::new(&original, &handler)?;
+            let replacement = object_create(&JsValue::NULL)?;
+            let proxy_value: &JsValue = proxy.as_ref();
+            for name in ["value", "writable", "enumerable", "configurable"] {
+                let key = JsValue::from_str(name);
+                let value = if name == "value" {
+                    proxy_value.clone()
+                } else {
+                    property_get(&descriptor, &key)?
+                };
+                if !property_set(&replacement, &key, &value)? {
+                    return Err(JsValue::from_str("fault descriptor not prepared"));
+                }
+            }
+            property_define(&prototype, &JsValue::from_str("stop"), &replacement)?;
+            Ok(Self {
+                prototype,
+                descriptor,
+                _proxy: proxy,
+                _callback: callback,
+                observed,
+            })
+        }
+
+        fn restore(&self) -> Result<(), JsValue> {
+            property_define(
+                &self.prototype,
+                &JsValue::from_str("stop"),
+                &self.descriptor,
+            )?;
+            let restored = own_descriptor(&self.prototype, &JsValue::from_str("stop"))?;
+            for name in ["value", "writable", "enumerable", "configurable"] {
+                let key = JsValue::from_str(name);
+                if property_get(&restored, &key)? != property_get(&self.descriptor, &key)? {
+                    return Err(JsValue::from_str("stop descriptor restoration mismatch"));
+                }
+            }
+            Ok(())
+        }
+    }
+
     struct ButtonListener {
         element: Element,
         on_click: Closure<dyn FnMut(Event)>,
@@ -32,6 +175,8 @@ mod browser {
         receipt: Option<AudioReceipt>,
         old_receipt: Option<AudioReceipt>,
         media_stop_before: Option<PlaybackSnapshot>,
+        stop_fault: Option<StopFault>,
+        replacement_fault_before: Option<PlaybackSnapshot>,
         generation: u64,
         root: Element,
         status: Element,
@@ -101,6 +246,16 @@ mod browser {
     }
 
     impl Fixture {
+        fn restore_stop_fault(&mut self) -> Result<(), JsValue> {
+            if let Some(fault) = &self.stop_fault {
+                fault.restore()?;
+            }
+            // A restoration error leaves this bounded owner and callback alive.
+            // Never drop a Rust closure while the prototype might reference it.
+            self.stop_fault = None;
+            Ok(())
+        }
+
         fn render(&self, outcome: &str) {
             self.status.set_text_content(Some(&format!(
                 "{outcome}\n{:?}\nLocal PCM tone only. Audible observation is an independent gate.",
@@ -115,7 +270,7 @@ mod browser {
                 .lease_bytes(&source.source)
                 .map_err(|_| PlaybackError::Queue(QueueError::WrongAsset))?;
             self.generation += 1;
-            let receipt = self.playback.replace(
+            let replacement = self.playback.replace(
                 &browser_pcm::lease(),
                 browser_pcm::basis(),
                 browser_pcm::identity(self.generation),
@@ -130,10 +285,11 @@ mod browser {
                     lead_seconds: 0.05,
                 },
             )?;
+            let (receipt, stop_result) = replacement.into_parts();
             self.old_receipt = self.receipt.take();
             self.receipt = Some(receipt);
             self.source = Some(source);
-            Ok(())
+            stop_result
         }
 
         fn admit(&mut self) -> Result<(), PlaybackError> {
@@ -168,6 +324,8 @@ mod browser {
         }
 
         fn action(&mut self, action: &str) -> Result<(), PlaybackError> {
+            self.restore_stop_fault()
+                .map_err(|_| PlaybackError::BrowserOperation)?;
             match action {
                 "unlock" => self.playback.request_unlock(&browser_pcm::lease()),
                 "mono" => {
@@ -255,6 +413,8 @@ mod browser {
             receipt: None,
             old_receipt: None,
             media_stop_before: None,
+            stop_fault: None,
+            replacement_fault_before: None,
             generation: 0,
             root: root.clone(),
             status,
@@ -444,7 +604,7 @@ mod browser {
             middle.job = JobId::from_bytes(&[8; 16]).map_err(error)?;
             // A and B have no dispatched samples. This synchronous replacement
             // needs no timer or invented ended event; fresh A owns the real source.
-            let _middle_receipt = fixture
+            let middle_replacement = fixture
                 .playback
                 .replace(
                     &browser_pcm::lease(),
@@ -458,7 +618,10 @@ mod browser {
                     },
                 )
                 .map_err(error)?;
-            let current = fixture
+            let (middle_receipt, middle_stop_result) = middle_replacement.into_parts();
+            fixture.receipt = Some(middle_receipt);
+            middle_stop_result.map_err(error)?;
+            let replacement = fixture
                 .playback
                 .replace(
                     &browser_pcm::lease(),
@@ -472,8 +635,10 @@ mod browser {
                     },
                 )
                 .map_err(error)?;
+            let (current, stop_result) = replacement.into_parts();
             fixture.old_receipt = Some(original.clone());
             fixture.receipt = Some(current.clone());
+            stop_result.map_err(error)?;
             let source = fixture
                 .source
                 .as_mut()
@@ -658,6 +823,125 @@ mod browser {
     }
 
     #[wasm_bindgen]
+    pub fn fixture_restore_stop_fault() -> Result<(), JsValue> {
+        FIXTURE.with(|cell| {
+            let mut fixture = cell.borrow_mut();
+            fixture
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("fixture busy"))?
+                .restore_stop_fault()
+        })
+    }
+
+    #[wasm_bindgen]
+    pub fn fixture_assert_replacement_stop_failure_receipt_visible() -> Result<(), JsValue> {
+        FIXTURE.with(|cell| {
+            let mut fixture = cell.borrow_mut();
+            let fixture = fixture.as_mut().ok_or_else(|| JsValue::from_str("fixture busy"))?;
+            fixture.restore_stop_fault()?;
+            let initial = fixture.playback.snapshot();
+            if initial.state != PlaybackState::Ready || initial.sources != 0
+                || initial.queue.retained_buffers != 0 || initial.pending_promises != 0 {
+                return Err(JsValue::from_str("unlock and settle old sources before replacement fault probe"));
+            }
+            fixture.replacement_fault_before = None;
+            fixture.prepare(1).map_err(error)?;
+            fixture.admit().map_err(error)?;
+            let original = fixture.receipt.clone().ok_or_else(|| JsValue::from_str("old receipt absent"))?;
+            let before = fixture.playback.snapshot();
+            if before.sources != 1 || before.ended_callbacks != 1
+                || before.queue.state != QueueState::Draining || before.queue.retained_buffers != 1 {
+                return Err(error(before));
+            }
+            let next_generation = fixture.generation.checked_add(1)
+                .ok_or_else(|| JsValue::from_str("fixture generation exhausted"))?;
+            let reference = fixture.source.as_ref()
+                .ok_or_else(|| JsValue::from_str("local source absent"))?.reference.clone();
+            let invalid = fixture.playback.replace(
+                &browser_pcm::lease(), browser_pcm::basis(), browser_pcm::identity(next_generation),
+                reference, df_audio::PcmFormat::new(1, 48_000).map_err(error)?,
+                PlaybackStart { first_frame: 48_000, lead_seconds: -1.0 },
+            );
+            if !matches!(invalid, Err(PlaybackError::InvalidTimeline)) {
+                return Err(error(invalid));
+            }
+            let unchanged = fixture.playback.snapshot();
+            if !unchanged_resources(before, unchanged) { return Err(error((before, unchanged))); }
+
+            fixture.stop_fault = Some(StopFault::install()?);
+            // prepare stores accepted new receipt/source before reporting stop_result.
+            // Always restore the saved descriptor before inspecting any result.
+            let result = fixture.prepare(2);
+            let observed = fixture.stop_fault.as_ref()
+                .map(|fault| fault.observed.get());
+            fixture.restore_stop_fault()?;
+            let observed = observed.ok_or_else(|| JsValue::from_str("stop fault owner absent"))?;
+            if result != Err(PlaybackError::BrowserOperation)
+                || observed != StopFaultObservation::StoppedThenThrew {
+                return Err(error((result, observed)));
+            }
+            let current = fixture.receipt.clone().ok_or_else(|| JsValue::from_str("accepted receipt hidden"))?;
+            if current.identity() != browser_pcm::identity(next_generation)
+                || fixture.old_receipt.as_ref().map(AudioReceipt::identity) != Some(original.identity()) {
+                return Err(JsValue::from_str("accepted replacement ownership was not retained"));
+            }
+            let waiting = fixture.playback.snapshot();
+            if waiting.queue.state != QueueState::WaitingForStop
+                || waiting.sources != 1 || waiting.ended_callbacks != 1
+                || waiting.queue.sample_bytes != before.queue.sample_bytes
+                || waiting.retained_sample_bytes != before.retained_sample_bytes
+                || waiting.stopped_buffers != before.stopped_buffers
+                || waiting.completed_buffers != before.completed_buffers {
+                return Err(error((before, waiting)));
+            }
+            let admission = fixture.admit();
+            if admission != Err(PlaybackError::Queue(QueueError::WaitingForStop))
+                || !fixture.source.as_ref().is_some_and(|source| source.buffer.is_some()) {
+                return Err(error(admission));
+            }
+            let delayed = media_stopped(original.identity())?;
+            let refused = fixture.playback.cancel_media(&original, &browser_pcm::lease(), &delayed);
+            if refused != Err(PlaybackError::Queue(QueueError::StaleReceipt)) {
+                return Err(error(refused));
+            }
+            let after = fixture.playback.snapshot();
+            if !unchanged_resources(waiting, after) { return Err(error((waiting, after))); }
+            fixture.replacement_fault_before = Some(before);
+            fixture.render("Native stop ran then failed; descriptor restored, accepted receipt visible, exact old source retained");
+            Ok(())
+        })
+    }
+
+    #[wasm_bindgen]
+    pub fn fixture_assert_replacement_stop_failure_recovered() -> Result<(), JsValue> {
+        FIXTURE.with(|cell| {
+            let mut fixture = cell.borrow_mut();
+            let fixture = fixture.as_mut().ok_or_else(|| JsValue::from_str("fixture busy"))?;
+            let before = fixture.replacement_fault_before
+                .ok_or_else(|| JsValue::from_str("replacement fault not observed"))?;
+            fixture.restore_stop_fault()?;
+            // Owned actual old onended must retire its ticket before pending new
+            // PCM can be admitted. An early pump returns WaitingForStop and keeps it.
+            fixture.action("pump").map_err(error)?;
+            let after = fixture.playback.snapshot();
+            let expected_stopped = before.stopped_buffers.checked_add(1)
+                .ok_or_else(|| JsValue::from_str("fixture stop counter exhausted"))?;
+            if after.state != PlaybackState::Scheduled || after.queue.state != QueueState::Draining
+                || after.sources != 1 || after.ended_callbacks != 1 || after.queue.retained_buffers != 1
+                || after.queue.sample_bytes != FRAMES as usize * 2 * size_of::<f32>()
+                || after.retained_sample_bytes != after.queue.sample_bytes * 2
+                || after.stopped_buffers != expected_stopped || after.completed_buffers != before.completed_buffers
+                || fixture.source.as_ref().is_none_or(|source| source.buffer.is_some())
+                || fixture.stop_fault.is_some() {
+                return Err(error((before, after)));
+            }
+            fixture.replacement_fault_before = None;
+            fixture.render("Actual old ended released only old ownership; accepted new stereo source scheduled once");
+            Ok(())
+        })
+    }
+
+    #[wasm_bindgen]
     pub fn fixture_assert_drained_after_actual_end() -> Result<(), JsValue> {
         FIXTURE.with(|cell| {
             let mut fixture = cell.borrow_mut();
@@ -685,6 +969,10 @@ mod browser {
     #[wasm_bindgen]
     pub async fn fixture_wait_closed() -> Result<(), JsValue> {
         let mut fixture = take()?;
+        if let Err(error) = fixture.restore_stop_fault() {
+            restore(fixture);
+            return Err(error);
+        }
         let result = fixture.playback.wait_closed().await;
         fixture.render(&format!("Close settled: {result:?}"));
         let snapshot = fixture.playback.snapshot();
@@ -704,7 +992,11 @@ mod browser {
 
     #[wasm_bindgen]
     pub fn fixture_unmount_closed() -> Result<(), JsValue> {
-        let fixture = take()?;
+        let mut fixture = take()?;
+        if let Err(error) = fixture.restore_stop_fault() {
+            restore(fixture);
+            return Err(error);
+        }
         if fixture.playback.snapshot().state != PlaybackState::Closed {
             restore(fixture);
             return Err(JsValue::from_str("close and await before unmount"));
