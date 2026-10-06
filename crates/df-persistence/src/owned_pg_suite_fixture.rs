@@ -38,6 +38,9 @@ use tokio::task::JoinHandle;
 use tokio::time::{Instant, timeout_at};
 use tokio_postgres::{Config, NoTls, config::SslMode};
 
+#[path = "owned_pg_recovery_lease_fixture.rs"]
+mod recovery_lease;
+
 // These private fixture results carry a still-owned driver on exhausted cleanup.
 // Each close retains the original native join bound; there are at most three
 // close attempts, never an unbounded retry. Successful cleanup cannot erase the
@@ -1280,6 +1283,14 @@ fn run_registered_suite(stage: &std::cell::Cell<&'static str>) -> Result<(), Rep
             stage,
         )?;
         observe_registered_current_grant_refusals(
+            &handle,
+            &mut admin,
+            &configuration,
+            port,
+            bounds,
+            stage,
+        )?;
+        recovery_lease::observe_registered_recovery_lease(
             &handle,
             &mut admin,
             &configuration,
