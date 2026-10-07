@@ -1,0 +1,43 @@
+{
+  "decision": {
+    "standard_mode": "only source-compatible approved templates use reviewed compiled handlers",
+    "generated_source_authority": "opaque source bytes and claims never create registrations, selectors, or executable code",
+    "custom_mode": "custom definitions are a distinct ruleset and require explicit host or campaign opt-in plus participant disclosure",
+    "handler_authority": "only an independently reviewed deterministic handler allowlist can map exact source clauses to compiled handlers"
+  },
+  "alternatives": [
+    {
+      "id": "standard_compatible_template",
+      "status": "approved design direction; source and handler qualification remains owned elsewhere"
+    },
+    {
+      "id": "custom_requires_explicit_opt_in",
+      "status": "selected future capability; this implementation does not authorize it"
+    },
+    {
+      "id": "arbitrary_scripts_unselected",
+      "status": "rejected; no Rust, WASM, JavaScript, or arbitrary DSL execution from generated/imported source"
+    }
+  ],
+  "unresolved_gates": [
+    "approved_handler_allowlist",
+    "rights_provenance_unresolved",
+    "parameter_power_complexity_bounds_unresolved",
+    "version_and_migration_policy_unresolved",
+    "participant_disclosure_unresolved",
+    "standard_and_custom_template_catalog_coverage_unresolved",
+    "custom_approval_authority_unresolved",
+    "production_candidate_validation_admission_types_unresolved"
+  ],
+  "case_mapping": {
+    "positive_trusted_compiled_identity_and_opaque_bytes": "exact_source_and_complete_pins_select_the_supplied_compiled_handler",
+    "forged_selector_or_script_like_payload": "opaque_generated_claims_do_not_mint_or_execute_handlers",
+    "foreign_clause_catalog_version_or_pins": "known_handler_refuses_every_different_source_reference_component; catalog_lookup_rejects_a_foreign_published_version_with_a_typed_error; every_rules_content_and_build_pin_is_required_for_selection",
+    "cosmetic_bytes_do_not_change_compiled_mapping": "cosmetic_catalog_bytes_do_not_change_the_compiled_handler_mapping"
+  },
+  "limits": [
+    "No public ContentCandidate, Validation, or Admission API is introduced.",
+    "This structural consumer test is not F47 handler implementation, standard rules coverage, or production source-rights approval.",
+    "Root owns formatting, Cargo, native/WASM, runtime, Git, queue, and independent review gates."
+  ]
+}

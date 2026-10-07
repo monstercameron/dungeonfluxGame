@@ -393,3 +393,126 @@ fn two_selectors_for_one_source_select_their_own_handler() {
         Ok(&FixtureHandler::Second)
     );
 }
+
+#[test]
+fn opaque_generated_claims_do_not_mint_or_execute_handlers() {
+    let pins = pins();
+    let source = source();
+    let trusted_selector = label("fixture-selector");
+    let forged_selector = label("fixture-generated-handler");
+    let handler = FixtureHandler::First;
+    let generated_claim = b"{selector:generated,handler:script,code:eval}";
+    let entries = [CatalogEntry::new(&source, generated_claim)];
+    let registrations = [HandlerRegistration::new(
+        &trusted_selector,
+        &source,
+        &handler,
+    )];
+    let snapshot = catalog(&pins, &entries);
+    assert_eq!(
+        snapshot.get(&pins.rules.catalog, &source),
+        Ok(Some(generated_claim.as_slice())),
+    );
+    let registry = DispatchRegistry::from_catalog(snapshot, &registrations, 1).unwrap();
+
+    assert_eq!(
+        registry.select(&pins, &forged_selector, &source),
+        Err(DispatchError::UnknownHandler),
+    );
+    let mut foreign_clause = source.clone();
+    foreign_clause.clause = label("generated-clause");
+    assert_eq!(
+        registry.select(&pins, &trusted_selector, &foreign_clause),
+        Err(DispatchError::UnsupportedSource),
+    );
+    assert_eq!(
+        registry.select(&pins, &trusted_selector, &source),
+        Ok(&handler),
+    );
+}
+
+#[test]
+fn generated_catalog_policy_fixture_preserves_the_complete_open_decision() {
+    let policy = include_str!("generated_catalog_policy.json");
+
+    for required in [
+        "standard_compatible_template",
+        "custom_requires_explicit_opt_in",
+        "arbitrary_scripts_unselected",
+        "approved_handler_allowlist",
+        "rights_provenance_unresolved",
+        "parameter_power_complexity_bounds_unresolved",
+        "version_and_migration_policy_unresolved",
+        "participant_disclosure_unresolved",
+        "opaque_generated_claims_do_not_mint_or_execute_handlers",
+        "cosmetic_bytes_do_not_change_compiled_mapping",
+    ] {
+        assert!(policy.contains(required), "policy fixture lacks {required}");
+    }
+}
+
+#[test]
+fn cosmetic_catalog_bytes_do_not_change_the_compiled_handler_mapping() {
+    let pins = pins();
+    let source = source();
+    let selector = label("fixture-selector");
+    let handler = FixtureHandler::First;
+    let registration = HandlerRegistration::new(&selector, &source, &handler);
+    let registrations = [registration];
+
+    let plain_entries = [CatalogEntry::new(&source, b"Approved template: Stormward")];
+    let plain_snapshot = CatalogSnapshot::from_published(
+        &pins.rules.catalog,
+        &pins,
+        b"publication label: first",
+        &plain_entries,
+        CatalogLimits {
+            max_complete_bytes: 128,
+            max_entries: 4,
+            max_item_bytes: 128,
+            max_total_item_bytes: 256,
+        },
+    )
+    .unwrap();
+    let plain_registry = DispatchRegistry::from_catalog(plain_snapshot, &registrations, 1).unwrap();
+    let plain_handler = plain_registry.select(&pins, &selector, &source).unwrap();
+
+    let cosmetic_entries = [CatalogEntry::new(
+        &source,
+        b"Approved template: Stormward, in silver ink",
+    )];
+    let cosmetic_snapshot = CatalogSnapshot::from_published(
+        &pins.rules.catalog,
+        &pins,
+        b"publication label: second",
+        &cosmetic_entries,
+        CatalogLimits {
+            max_complete_bytes: 128,
+            max_entries: 4,
+            max_item_bytes: 128,
+            max_total_item_bytes: 256,
+        },
+    )
+    .unwrap();
+    let cosmetic_registry =
+        DispatchRegistry::from_catalog(cosmetic_snapshot, &registrations, 1).unwrap();
+    let cosmetic_handler = cosmetic_registry.select(&pins, &selector, &source).unwrap();
+
+    assert!(std::ptr::eq(plain_handler, &handler));
+    assert!(std::ptr::eq(cosmetic_handler, &handler));
+}
+
+#[test]
+fn catalog_lookup_rejects_a_foreign_published_version_with_a_typed_error() {
+    use df_content::catalog::CatalogError;
+
+    let pins = pins();
+    let source = source();
+    let entries = [CatalogEntry::new(&source, b"opaque source")];
+    let snapshot = catalog(&pins, &entries);
+
+    assert_eq!(
+        snapshot.get(&label("foreign-catalog-version"), &source),
+        Err(CatalogError::VersionMismatch),
+    );
+}
