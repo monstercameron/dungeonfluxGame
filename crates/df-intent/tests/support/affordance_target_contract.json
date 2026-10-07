@@ -1,0 +1,56 @@
+{
+  "task": "B-C-df-intent-D03",
+  "objective": "Define affordance lookup and target ambiguity contract",
+  "acceptance": [
+    "unsupported targets are explicit",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "decision": {
+    "canonical_entity": "Existing WorldEntity identities and complete canonical snapshots; entity definitions cover NPC, object, location, creature, faction and environmental system without inferred mechanics.",
+    "lookup": "World validates native source-admitted action/actor/current target records against complete basis/pins and exact content/rule inventory. Empty supported mechanics remains NeedsRuling.",
+    "ambiguity": "Intent resolves only one exact source-admitted binding or an explicit eligible typed identity. More than one eligible target yields sorted NeedsClarification candidates; no first-label/order/confidence choice.",
+    "unsupported": "Explicit identity outside current eligible bindings is UnsupportedTarget. Unsupported mechanics remain NeedsRuling. Mixed targeted/untargeted policies and conflicting same-target sources are refused.",
+    "native": "Current authored Journey offers produce canonical bindings; offered and stage consume World+Intent before existing registered compiled JourneyHandler. Courier/Bandit/self use existing canonical IDs; no new action, physics, authority or entity minted.",
+    "authority": "Native ownership admits eligible source records; catalog membership alone is insufficient. Existing Rules handler revalidates mechanics and Session owns durable commitment."
+  },
+  "alternatives": [
+    {
+      "decision": "Selected",
+      "outcome": "Canonical typed source-admitted lookup, exact target resolution, current native producer/consumer."
+    },
+    {
+      "decision": "Refused",
+      "outcome": "Model text, labels, catalog presence, confidence or first collection position authorizes generic mechanics or silently chooses ambiguity."
+    },
+    {
+      "decision": "Conditional",
+      "outcome": "Additional entity actions require actual source-approved native admission and compiled mechanics; unavailable combinations remain NeedsRuling."
+    }
+  ],
+  "bounds": {
+    "native_input_records": 4096,
+    "native_candidates": 32,
+    "native_output_bytes": 8192,
+    "inputs": "Explicit positive owner limits; typed capacity/allocation failure without partial output."
+  },
+  "source_owners": [
+    "df-model::affordance",
+    "df-world::affordance",
+    "df-intent::targets",
+    "df-tools::gameplay::journey::affordance",
+    "compiled JourneyHandler",
+    "df-session"
+  ],
+  "required_checks": {
+    "native": "UNPERFORMED at source authoring",
+    "native_wasm_style": "UNPERFORMED at source authoring",
+    "independent_output": "PENDING",
+    "main_integration": "PENDING"
+  },
+  "unsupported": [
+    "No general physics or unadmitted object mechanics",
+    "No raw dialogue inference; D02 owns finality/confirmation producer",
+    "No browser target-selection UI/RPC schema, live provider, physical-device or complete 2024 catalog claim"
+  ],
+  "base": "ffdd8b63f4c819a9311f2054386c6c133f089fc4"
+}

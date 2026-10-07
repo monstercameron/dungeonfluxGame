@@ -10,6 +10,9 @@ use std::time::Duration;
 
 use super::{model, wire};
 
+pub(super) mod affordance;
+#[cfg(test)]
+mod affordance_tests;
 mod combat_transition;
 #[cfg(test)]
 mod combat_transition_tests;
@@ -393,6 +396,13 @@ pub(super) fn offer_id(current: &Checkpoint, kind: rpc::GameplayActionKind) -> S
     format!("journey-{}-1", kind as i32)
 }
 pub(super) fn offered(
+    current: &Checkpoint,
+    member: MemberId,
+) -> Result<Vec<(rpc::GameplayActionKind, &'static str)>, RepositoryError> {
+    affordance::offered(current, member).map_err(bad)
+}
+
+fn authored_offered(
     current: &Checkpoint,
     member: MemberId,
 ) -> Result<Vec<(rpc::GameplayActionKind, &'static str)>, RepositoryError> {
@@ -2145,21 +2155,37 @@ fn stage_using(
         actor: who,
         action,
         targets,
-        choices,
+        ..
     } = &command.command
     else {
         return Err(RepositoryError::InvalidCandidate);
     };
-    if *who != player_entity(command.member, current)? || !targets.is_empty() {
+    if *who != player_entity(command.member, current)? {
         return Err(RepositoryError::Unauthorized);
     }
     let kind = wire::action_kind(action.entry.as_str()).ok_or(RepositoryError::InvalidCandidate)?;
-    if !offered(current, command.member)?
-        .iter()
-        .any(|(offered, _)| *offered == kind)
-    {
+    affordance::validate(current, command.member, action, targets).map_err(bad)?;
+    // Target identity is validated against the current source-admitted binding above.
+    // The registered handlers consume their existing authored, implicit target form;
+    // keep that source contract intact after exact typed target confirmation.
+    let mut source_input = input.clone();
+    let GameInput::Game(source_command) = &mut source_input else {
         return Err(RepositoryError::InvalidCandidate);
-    }
+    };
+    let GameCommand::ProposeAction { targets, .. } = &mut source_command.command else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
+    targets.clear();
+    let input = &source_input;
+    let command = self::command(input)?;
+    let GameCommand::ProposeAction {
+        actor: who,
+        choices,
+        ..
+    } = &command.command
+    else {
+        return Err(RepositoryError::InvalidCandidate);
+    };
     let mut basis = current.basis();
     basis.revision = basis.revision.next_sequence().map_err(bad)?;
     let mut state = current.state().clone();
