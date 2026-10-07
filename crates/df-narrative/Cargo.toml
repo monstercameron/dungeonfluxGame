@@ -7,6 +7,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+df-content = { path = "../df-content" }
 df-model = { path = "../df-model" }
 df-types = { path = "../df-types" }
 df-knowledge = { path = "../df-knowledge" }
@@ -16,5 +17,4 @@ df-engine = { path = "../df-engine" }
 df-rules = { path = "../df-rules" }
 df-session = { path = "../df-session" }
 df-world = { path = "../df-world" }
-df-content = { path = "../df-content" }
 df-observe = { path = "../df-observe" }

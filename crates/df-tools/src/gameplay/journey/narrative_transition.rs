@@ -2,7 +2,8 @@
 use df_model::checkpoint::*;
 use df_narrative::{
     AdmittedBeatAlternative, BeatCause, BeatSelectionLimits, CheckpointBeatRequest,
-    stage_checkpoint_beat_selection,
+    CheckpointConvergenceRequest, ConvergenceLimits, NarrativeBudgetLimits,
+    stage_checkpoint_convergence,
 };
 use df_protocol::common as rpc;
 use df_session::submission::RepositoryError;
@@ -107,6 +108,21 @@ pub(super) fn story_permitted(
     }
 }
 
+/// The active source profile authorizes earned routes only. Its preexisting eight-unit
+/// balance is capped explicitly; no strong-event tariff or free-play trigger was supplied.
+/// Source-selected events/rates must be published before either list can be populated.
+fn native_budget()
+-> Result<df_content::narrative::NarrativeBudgetPolicy<ContentReference>, RepositoryError> {
+    Ok(df_content::narrative::NarrativeBudgetPolicy {
+        definition: model::content("narrative-intervention-policy")?,
+        // The registered room journey initializes eight units; the older harbor profile
+        // initializes one. Retain the registered source balance without authoring tariffs.
+        maximum: 8,
+        strong_events: vec![],
+        free_play_events: vec![],
+    })
+}
+
 fn select_for(
     current: &Checkpoint,
     member: MemberId,
@@ -201,29 +217,44 @@ fn select_for(
         return invalid();
     };
     let policy = model::label(THREAD_POLICY)?;
-    stage_checkpoint_beat_selection(
+    let budget = native_budget()?;
+    let proposal = stage_checkpoint_convergence(
         current,
-        CheckpointBeatRequest {
-            expected_basis: current.basis(),
-            admitted_pins: current.pins(),
-            policy: &policy,
-            expected_policy: &policy,
-            recipient: member,
-            selection: action,
-            alternatives: &alternatives,
-            inventory: ReferenceInventory {
-                rules: &[model::rule()?, rule()?],
-                content: &model::contents()?,
-                resources: &super::resources()?,
-                assets: &[],
+        CheckpointConvergenceRequest {
+            beat: CheckpointBeatRequest {
+                expected_basis: current.basis(),
+                admitted_pins: current.pins(),
+                policy: &policy,
+                expected_policy: &policy,
+                recipient: member,
+                selection: action,
+                alternatives: &alternatives,
+                inventory: ReferenceInventory {
+                    rules: &[model::rule()?, rule()?],
+                    content: &model::contents()?,
+                    resources: &super::resources()?,
+                    assets: &[],
+                },
+                checkpoint_limits: model::limits(),
             },
-            checkpoint_limits: model::limits(),
+            budget: &budget,
+            expected_budget: &budget,
+            strong_receipt: None,
+            delivery: None,
         },
-        BeatSelectionLimits {
-            records: 512,
-            alternatives: 2,
-            work: 1024 * 1024,
+        ConvergenceLimits {
+            beats: BeatSelectionLimits {
+                records: 512,
+                alternatives: 2,
+                work: 1024 * 1024,
+            },
+            budget: NarrativeBudgetLimits {
+                records: 512,
+                work: 1024 * 1024,
+            },
+            maximum_evidence_bytes: 8192,
         },
     )
-    .map_err(|_| RepositoryError::InvalidCandidate)
+    .map_err(|_| RepositoryError::InvalidCandidate)?;
+    Ok(proposal.checkpoint)
 }

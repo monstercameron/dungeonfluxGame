@@ -3,11 +3,14 @@ use super::super::{
     tests::{input, opening_story, prepared_story},
 };
 use super::*;
-use df_narrative::BeatSelectionError;
+use df_narrative::{BeatSelectionError, stage_checkpoint_beat_selection};
 use df_types::MemberId;
 
 #[path = "narrative_transition_session_tests.rs"]
 mod session_tests;
+
+#[path = "narrative_budget_tests.rs"]
+mod budget_tests;
 
 fn first() -> MemberId {
     MemberId::from_bytes(&MEMBERS[0]).unwrap()
