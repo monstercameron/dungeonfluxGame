@@ -721,4 +721,159 @@ mod tests {
         );
         assert_eq!(combat, before);
     }
+
+    const ENCOUNTER_ADMISSION_DECISION: &str = include_str!("encounter_admission_contract.json");
+
+    #[test]
+    fn encounter_design_admission_is_not_a_mechanical_commit() {
+        let current = dialogue();
+        let canonical = current.clone();
+        let staged = candidate(&current);
+        let mechanical = staged.clone();
+        let actors = staged.state().encounters[0].participants.clone();
+        assert_eq!(
+            validate(&current, &proposal(&current), staged.state(), &actors),
+            Ok(())
+        );
+        assert_eq!(current, canonical);
+        assert_eq!(staged, mechanical);
+        assert!(current.state().encounters.is_empty());
+        assert_eq!(current.state().draws, canonical.state().draws);
+        assert_eq!(current.state().facts, canonical.state().facts);
+        assert_eq!(current.pins(), canonical.pins());
+        assert_eq!(current.basis(), canonical.basis());
+    }
+
+    #[test]
+    fn encounter_design_handler_requires_complete_source_qualified_initiative() {
+        let current = dialogue();
+        let canonical = current.clone();
+        let member = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let command = input(&current, member, 7, "defend-courier", vec![]);
+        let staged = candidate(&current);
+        let operation = super::super::command(&command).unwrap().operation;
+        let exact = staged
+            .state()
+            .draws
+            .iter()
+            .filter(|draw| draw.operation == operation)
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(exact.len(), 3);
+        assert!(
+            exact
+                .iter()
+                .all(|draw| draw.source == super::super::rule().unwrap())
+        );
+        let base = super::super::JourneyHandler {
+            pins: model::pins().unwrap(),
+        };
+        let handler = super::super::courier_reaction::CourierJourneyHandler {
+            command_handler: &base,
+        };
+        assert_eq!(
+            df_rules::RulesCommandHandler::stage(
+                &handler,
+                df_rules::RulesCommandInput {
+                    command: &command,
+                    supplied_draws: &exact
+                },
+                &current
+            )
+            .unwrap(),
+            staged
+        );
+        for case in 0..9 {
+            let mut malformed = exact.clone();
+            match case {
+                0 => {
+                    malformed.pop();
+                }
+                1 => malformed.push(exact[2].clone()),
+                2 => malformed[0].ordinal += 1,
+                3 => {
+                    malformed[0].operation =
+                        df_types::OperationId::from_bytes(&[0x88; 16]).unwrap();
+                }
+                4 => {
+                    assert_ne!(model::rule().unwrap(), super::super::rule().unwrap());
+                    malformed[0].source = model::rule().unwrap();
+                }
+                5 => malformed[0].sides = 6,
+                6 => malformed[0].value = 0,
+                7 => malformed[0].value = 21,
+                _ => malformed.swap(0, 1),
+            }
+            assert_eq!(
+                df_rules::RulesCommandHandler::stage(
+                    &handler,
+                    df_rules::RulesCommandInput {
+                        command: &command,
+                        supplied_draws: &malformed
+                    },
+                    &current
+                ),
+                Err(RepositoryError::InvalidCandidate),
+                "actual source-qualified replay rejects malformed case {case}"
+            );
+            assert_eq!(current, canonical);
+        }
+    }
+
+    #[test]
+    fn encounter_design_sampler_failure_has_no_accepted_failure_exit() {
+        let current = dialogue();
+        let canonical = current.clone();
+        let member = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        for fail_at in [2, 3] {
+            let command = input(&current, member, 7, "defend-courier", vec![]);
+            let mut calls = 0;
+            assert_eq!(
+                stage_with_supplier(&current, &command, &mut |sides| {
+                    assert_eq!(sides, 20);
+                    calls += 1;
+                    if calls == fail_at {
+                        Err(RepositoryError::InvalidCandidate)
+                    } else {
+                        Ok(10)
+                    }
+                }),
+                Err(RepositoryError::InvalidCandidate)
+            );
+            assert_eq!(
+                calls, fail_at,
+                "prior sampling is an actual performed side effect"
+            );
+            assert_eq!(current, canonical);
+            assert!(current.state().encounters.is_empty());
+            let retried = candidate(&current);
+            assert_eq!(retried.state().encounters.len(), 1);
+            assert_eq!(current, canonical);
+        }
+    }
+
+    #[test]
+    fn encounter_design_executed_contract_binds_current_source_pins() {
+        use sha2::Digest;
+        let current = dialogue();
+        let canonical = current.clone();
+        let staged = candidate(&current);
+        let pins = model::pins().unwrap();
+        assert_eq!(current.pins(), &pins);
+        assert_eq!(staged.pins(), &pins);
+        assert_eq!(staged.state().encounters[0].participants.len(), 3);
+        assert_eq!(staged.state().draws.len() - current.state().draws.len(), 3);
+        assert!(
+            staged.state().draws[current.state().draws.len()..]
+                .iter()
+                .all(|draw| draw.source == super::super::rule().unwrap())
+        );
+        assert_eq!(current, canonical);
+        assert!(!ENCOUNTER_ADMISSION_DECISION.is_empty());
+        println!(
+            "ENCOUNTER_D02_NATIVE_WITNESS fixture_sha256={:x} source_manifest_sha256={:x} pins={pins:?}",
+            sha2::Sha256::digest(ENCOUNTER_ADMISSION_DECISION.as_bytes()),
+            sha2::Sha256::digest(model::source_manifest())
+        );
+    }
 }
