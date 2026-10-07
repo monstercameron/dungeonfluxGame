@@ -70,6 +70,8 @@ struct Database {
     publications: usize,
     samples: usize,
     refuse_reload: bool,
+    design_budget: bool,
+    design_credit: bool,
 }
 struct Repository {
     database: Rc<RefCell<Database>>,
@@ -148,14 +150,18 @@ impl SessionEngine<Scope> for Engine {
     fn decide(
         &mut self,
         current: &Checkpoint,
-        _: &Scope,
+        scope: &Scope,
         input: &GameInput,
     ) -> Result<Checkpoint, RepositoryError> {
         self.database.borrow_mut().decisions += 1;
-        stage_with_supplier(current, input, &mut |_| {
-            self.database.borrow_mut().samples += 1;
-            panic!("story alternatives cannot request a draw")
-        })
+        let candidate = model::HarborEngine.decide_admitted(current, input, scope.operation())?;
+        let db = self.database.borrow();
+        if db.design_budget || db.design_credit {
+            super::budget_tests::design_pending_budget(current, &candidate, db.design_credit)
+                .map_err(|_| RepositoryError::InvalidCandidate)
+        } else {
+            Ok(candidate)
+        }
     }
     fn validate_recovery(&mut self, checkpoint: &Checkpoint) -> Result<(), RepositoryError> {
         super::super::super::phase(checkpoint)?;
@@ -200,6 +206,8 @@ fn setup(failure: Failure, entry: &str) -> (Owner, Rc<RefCell<Database>>, Scope)
         publications: 0,
         samples: 0,
         refuse_reload: false,
+        design_budget: false,
+        design_credit: false,
     }));
     let owner = DurableOwner::new(
         Repository {
@@ -465,4 +473,116 @@ fn native_story_session_missing_canonical_creation_cause_refuses_before_commit_o
         ),
         (1, 0, 0, 0, 0)
     );
+}
+
+// This source-backed Design admission classifies the fresh begin-story receipt as strong solely
+// to exercise atomic budget composition. It is not the active profile's event classification.
+#[test]
+fn design_budget_registered_session_commit_retry_cancel_and_rollback_keep_one_debit() {
+    for failure in [Failure::None, Failure::BeforeCommit, Failure::LostAck] {
+        for deliver in [false, true] {
+            let (mut owner, database, scope) = setup(failure, "begin-story");
+            database.borrow_mut().design_budget = true;
+            let before = owner.checkpoint().clone();
+            let first = submit(&mut owner, &scope, deliver);
+            if failure == Failure::BeforeCommit {
+                assert_eq!(owner.checkpoint(), &before);
+                assert_eq!(database.borrow().checkpoint, before);
+                assert_eq!(database.borrow().publications, 0);
+                database.borrow_mut().failure = Failure::None;
+                assert!(matches!(
+                    submit(&mut owner, &scope, true),
+                    Some(SubmissionOutcome::Confirmed(_))
+                ));
+            } else if deliver && failure == Failure::None {
+                assert!(matches!(first, Some(SubmissionOutcome::Confirmed(_))));
+            }
+            let retry = submit(&mut owner, &scope, true).unwrap();
+            assert!(matches!(retry, SubmissionOutcome::Confirmed(_)));
+            let after = owner.checkpoint();
+            assert_eq!(after, &database.borrow().checkpoint);
+            assert_eq!(after.state().narrative.remaining_budget, 0);
+            assert_eq!(after.state().draws, before.state().draws);
+            assert_eq!(
+                &after.state().facts[..before.state().facts.len()],
+                before.state().facts
+            );
+            assert_eq!(database.borrow().ledger.len(), 1);
+            assert_eq!(database.borrow().samples, 0);
+            let decisions = database.borrow().decisions;
+            let saved = after.clone();
+            assert!(matches!(
+                submit(&mut owner, &scope, true),
+                Some(SubmissionOutcome::Confirmed(_))
+            ));
+            assert_eq!(owner.checkpoint(), &saved);
+            assert_eq!(database.borrow().decisions, decisions);
+        }
+    }
+}
+
+// A distinct source-backed Design admission credits the fresh escort terminal receipt.
+// The actual native consumption ledger remains valid through credit, retry and rollback.
+#[test]
+fn design_credit_registered_session_commit_retry_cancel_and_rollback_keep_one_credit() {
+    for failure in [Failure::None, Failure::BeforeCommit, Failure::LostAck] {
+        for deliver in [false, true] {
+            let (owner, database, scope) = setup(failure, "escort-courier");
+            let prepared = prepared_story();
+            let depleted =
+                super::budget_tests::design_pending_budget(&prepared, owner.checkpoint(), false)
+                    .unwrap();
+            database.borrow_mut().checkpoint = depleted.clone();
+            database.borrow_mut().design_credit = true;
+            let mut owner = DurableOwner::new(
+                Repository {
+                    database: Rc::clone(&database),
+                },
+                Engine {
+                    database: Rc::clone(&database),
+                },
+                Publication {
+                    database: Rc::clone(&database),
+                },
+                depleted.clone(),
+                64 * 1024,
+            )
+            .unwrap();
+            let first = submit(&mut owner, &scope, deliver);
+            if failure == Failure::BeforeCommit {
+                assert_eq!(owner.checkpoint(), &depleted);
+                assert_eq!(database.borrow().checkpoint, depleted);
+                assert_eq!(database.borrow().publications, 0);
+                database.borrow_mut().failure = Failure::None;
+                assert!(matches!(
+                    submit(&mut owner, &scope, true),
+                    Some(SubmissionOutcome::Confirmed(_))
+                ));
+            } else if deliver && failure == Failure::None {
+                assert!(matches!(first, Some(SubmissionOutcome::Confirmed(_))));
+            }
+            assert!(matches!(
+                submit(&mut owner, &scope, true),
+                Some(SubmissionOutcome::Confirmed(_))
+            ));
+            let after = owner.checkpoint().clone();
+            assert_eq!(after, database.borrow().checkpoint);
+            assert_eq!(after.state().narrative.remaining_budget, 8);
+            assert_eq!(after.state().draws, depleted.state().draws);
+            assert_eq!(after.state().logical_time, depleted.state().logical_time);
+            assert_eq!(after.state().resources, depleted.state().resources);
+            assert_eq!(database.borrow().ledger.len(), 1);
+            assert_eq!(
+                phase(&after).unwrap(),
+                phase(&database.borrow().checkpoint).unwrap()
+            );
+            let decisions = database.borrow().decisions;
+            assert!(matches!(
+                submit(&mut owner, &scope, true),
+                Some(SubmissionOutcome::Confirmed(_))
+            ));
+            assert_eq!(owner.checkpoint(), &after);
+            assert_eq!(database.borrow().decisions, decisions);
+        }
+    }
 }

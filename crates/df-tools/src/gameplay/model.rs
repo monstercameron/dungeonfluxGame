@@ -41,6 +41,7 @@ pub(super) fn content(entry: &str) -> Result<ContentReference, RepositoryError> 
 }
 pub(super) fn contents() -> Result<Vec<ContentReference>, RepositoryError> {
     [
+        "narrative-intervention-policy",
         "harbor",
         "mara-preconfigured",
         "inspect-seal",
@@ -91,6 +92,8 @@ fn source_digests() -> &'static SourceDigests {
             include_bytes!("journey/narrative_phase.rs").as_slice(),
             include_bytes!("journey/narrative_transition.rs").as_slice(),
             include_bytes!("../../../df-narrative/src/beat_selection.rs").as_slice(),
+            include_bytes!("../../../df-narrative/src/convergence.rs").as_slice(),
+            include_bytes!("../../../df-content/src/narrative.rs").as_slice(),
             include_bytes!("journey/enemy_tactics.rs").as_slice(),
             include_bytes!("journey/combat_transition.rs").as_slice(),
             include_bytes!("journey/courier_reaction.rs").as_slice(),
@@ -107,6 +110,8 @@ fn source_digests() -> &'static SourceDigests {
             include_bytes!("journey/narrative_phase.rs").as_slice(),
             include_bytes!("journey/narrative_transition.rs").as_slice(),
             include_bytes!("../../../df-narrative/src/beat_selection.rs").as_slice(),
+            include_bytes!("../../../df-narrative/src/convergence.rs").as_slice(),
+            include_bytes!("../../../df-content/src/narrative.rs").as_slice(),
             include_bytes!("journey/enemy_tactics.rs").as_slice(),
             include_bytes!("journey/combat_transition.rs").as_slice(),
             include_bytes!("journey/courier_reaction.rs").as_slice(),
@@ -421,7 +426,6 @@ impl RulesCommandHandler for HarborHandler {
             source_policy: label("srd521-journey-subset-2")?,
             semantic_output: None,
         });
-        state.narrative.remaining_budget = 0;
         checkpoint(next, state)
     }
 }
@@ -583,17 +587,16 @@ fn stage_scene(current: &Checkpoint, input: &GameInput) -> Result<Checkpoint, Re
     checkpoint(next, state)
 }
 
-impl SessionEngine<NativeScope<LocalDemoAuthority>> for HarborEngine {
-    fn decide(
+impl HarborEngine {
+    /// The admitted native gameplay body. Session validates its scope before entering here.
+    pub(super) fn decide_admitted(
         &mut self,
         current: &Checkpoint,
-        scope: &NativeScope<LocalDemoAuthority>,
         input: &GameInput,
+        operation: df_types::OperationId,
     ) -> Result<Checkpoint, RepositoryError> {
-        use df_session::submission::OperationScope;
-        scope.validate_input(input)?;
         if let GameInput::Job(completion) = input {
-            return super::courier_ai::stage_completion(current, completion, scope.operation())
+            return super::courier_ai::stage_completion(current, completion, operation)
                 .map_err(invalid);
         }
         if let GameInput::Game(command) = input
@@ -680,6 +683,19 @@ impl SessionEngine<NativeScope<LocalDemoAuthority>> for HarborEngine {
             &source,
         )
         .map_err(invalid)
+    }
+}
+
+impl SessionEngine<NativeScope<LocalDemoAuthority>> for HarborEngine {
+    fn decide(
+        &mut self,
+        current: &Checkpoint,
+        scope: &NativeScope<LocalDemoAuthority>,
+        input: &GameInput,
+    ) -> Result<Checkpoint, RepositoryError> {
+        use df_session::submission::OperationScope;
+        scope.validate_input(input)?;
+        self.decide_admitted(current, input, scope.operation())
     }
     fn validate_recovery(&mut self, current: &Checkpoint) -> Result<(), RepositoryError> {
         current
