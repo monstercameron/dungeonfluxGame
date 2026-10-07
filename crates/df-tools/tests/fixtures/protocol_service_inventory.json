@@ -1,0 +1,306 @@
+{
+  "contract_revision": "planning/rpc-api.md@2026-09-29 planned v1 surface",
+  "planned_service_count": 12,
+  "planned_method_count": 41,
+  "provenance": {
+    "source_revision": "2d2cbae3b11383e726e46187e504638196403a57",
+    "active_attempt_id": "B-C-df-protocol-D04-a2",
+    "active_owner": "/root/protocol_inventory_d04_sol_repair",
+    "descriptor_producer": "crates/df-protocol/build.rs generates FILE_DESCRIPTOR_SET from the four listed proto inputs",
+    "descriptor_consumer": "crates/df-tools/tests/schema_ledger.rs decodes df_protocol::FILE_DESCRIPTOR_SET",
+    "worker_handoff_observation": {
+      "observed_at_utc": "2026-10-07T00:11:32Z",
+      "scope": "This source-controlled ledger records the Sol worker handoff only. Root's later checks and build identities belong in separate source-bound receipts."
+    },
+    "candidate_build_identity": "At Sol worker handoff, no build was initiated by this worker; Root binds later checks to the submitted a2 source postimage in separate receipts.",
+    "compile_incident": {
+      "command": "cargo +1.98.1 test --locked --offline -p df-tools --test protocol_service_inventory --test schema_ledger --jobs 1",
+      "first_attempt": "failed with E0382: descriptor_methods moved method.name/input_type/output_type before borrowing method for RpcMode::from_descriptor",
+      "repair": "Compute RpcMode::from_descriptor(&method) before consuming descriptor fields; use the saved mode in DescriptorMethod.",
+      "failure_receipt": "development/evidence/fanout-20261001/protocol-contract-d04-20261006/ROOT-focused-protocol-ledger-tests-01.json",
+      "historical_a1_repair_pass_receipt": "development/evidence/fanout-20261001/protocol-contract-d04-20261006/ROOT-focused-protocol-ledger-tests-02.json",
+      "a2_postimage_verification_at_worker_handoff": "unperformed_by_worker"
+    },
+    "lint_incident": {
+      "cause": "Clippy collapsible_if in the new MissingStreamOwner branch at protocol_service_inventory.rs:762",
+      "failure_receipt": "development/evidence/fanout-20261001/protocol-contract-d04-20261006/ROOT-native-all-target-lint-02.json",
+      "a2_repair": "Use an equivalent let-chain for Some(stream_owner) and its empty-string check; preserve MissingStreamOwner and all assertions.",
+      "a2_postimage_verification_at_worker_handoff": "unperformed_by_worker"
+    },
+    "historical_native_test": {
+      "a1_result": "254 passed, 7 ignored after E0382 repair",
+      "pass_receipt": "development/evidence/fanout-20261001/protocol-contract-d04-20261006/ROOT-native-protocol-tools-all-tests-03.json",
+      "root_environment_correction": "The prior native attempt failed because of an InvalidRoot TMPDIR preview namespace; this was a root environment error, not an implementation failure.",
+      "environment_failure_receipt": "development/evidence/fanout-20261001/protocol-contract-d04-20261006/ROOT-native-protocol-tools-all-tests-02.json",
+      "a2_postimage_verification_at_worker_handoff": "unperformed_by_worker"
+    },
+    "planned_production_handler_evidence": "not_asserted; this inventory does not claim any of the planned 41 handlers exist or execute",
+    "historical_a1_proposed_checks": [
+      "cargo +1.98.1 fmt --all -- --check",
+      "cargo +1.98.1 test --locked --offline -p df-tools --test protocol_service_inventory --test schema_ledger --jobs 1",
+      "cargo +1.98.1 clippy --locked --offline -p df-tools -p df-protocol --all-targets --jobs 1 -- -D warnings",
+      "cargo +1.98.1 clippy --locked --offline -p df-tools -p df-protocol --all-targets --target wasm32-unknown-unknown --jobs 1 -- -D warnings",
+      "cargo +1.98.1 build --locked --offline -p df-protocol --lib --target wasm32-unknown-unknown --jobs 1"
+    ],
+    "checks": [
+      {"command":"cargo fmt --all -- --check","status_at_worker_handoff":"unperformed_by_worker"},
+      {"command":"cargo test --locked --offline -p df-tools -p df-protocol --tests -- --test-threads=1","status_at_worker_handoff":"unperformed_by_worker"},
+      {"command":"cargo clippy --locked --offline -p df-tools -p df-protocol --all-targets -- -D warnings","status_at_worker_handoff":"unperformed_by_worker"},
+      {"command":"cargo check --locked --offline -p df-tools -p df-protocol --lib --target wasm32-unknown-unknown","status_at_worker_handoff":"unperformed_by_worker"},
+      {"command":"cargo clippy --locked --offline -p df-tools -p df-protocol --lib --target wasm32-unknown-unknown -- -D warnings","status_at_worker_handoff":"unperformed_by_worker"}
+    ]
+  },
+  "services": [
+    {
+      "name": "IdentityService", "namespace": "dungeonflux.public.v1", "access": "public_identity_bootstrap",
+      "request_owner": "df-auth / native df-api", "result_owner": "df-auth / native df-api", "stream_owner": null,
+      "source_refs": ["rpc-api.md:12-38", "rpc-api.md:40-118", "rpc-api.md:120-175"],
+      "methods": [
+        {"name":"BeginGuest","request":"BeginGuestRequest","response":"IdentityGrant","mode":"unary","result":"identity_grant"},
+        {"name":"Renew","request":"RenewIdentityRequest","response":"IdentityGrant","mode":"unary","result":"identity_grant"},
+        {"name":"Revoke","request":"RevokeIdentityRequest","response":"RevocationReceipt","mode":"unary","result":"revocation_receipt"}
+      ]
+    },
+    {
+      "name": "CustomerService", "namespace": "dungeonflux.public.v1", "access": "public_trusted_account_tenant",
+      "request_owner": "df-commerce / native df-api", "result_owner": "df-commerce / native df-api", "stream_owner": "native df-api streams only a current ExportGrant and DataLifecycle scope within chunk, byte and item bounds; the durable export adapter is not fixed here",
+      "source_refs": ["rpc-api.md:12-38", "rpc-api.md:40-118", "rpc-api.md:120-175", "rpc-api.md:652-666"],
+      "methods": [
+        {"name":"Command","request":"CustomerCommandRequest","response":"CustomerReceipt","mode":"unary","result":"external_receipt_pending_or_unknown"},
+        {"name":"Inspect","request":"CustomerInspectRequest","response":"CustomerView","mode":"unary","result":"authorized_customer_view"},
+        {"name":"GetOperation","request":"CustomerOperationRequest","response":"CustomerOperationLookup","mode":"unary","result":"operation_lookup"},
+        {"name":"Export","request":"CustomerExportRequest","response":"CustomerExportPart","mode":"server_streaming","result":"customer_export_stream"}
+      ]
+    },
+    {
+      "name": "SessionService", "namespace": "dungeonflux.public.v1", "access": "public_session_membership_binding",
+      "request_owner": "df-session / native df-api", "result_owner": "df-session / native df-api", "stream_owner": "native df-api owns the authorized Watch stream; df-session owns subscription lifetime and cancellation",
+      "source_refs": ["rpc-api.md:40-118", "rpc-api.md:120-175", "rpc-api.md:176-214", "rpc-api.md:397-428"],
+      "methods": [
+        {"name":"Create","request":"CreateSessionRequest","response":"SessionGrant","mode":"unary","result":"session_grant"},
+        {"name":"Join","request":"JoinSessionRequest","response":"SessionGrant","mode":"unary","result":"session_grant"},
+        {"name":"Resume","request":"ResumeSessionRequest","response":"SessionGrant","mode":"unary","result":"session_grant_or_typed_recovery_presence_gate"},
+        {"name":"BindClient","request":"BindClientRequest","response":"ClientBinding","mode":"unary","result":"client_binding"},
+        {"name":"Leave","request":"LeaveSessionRequest","response":"DecisionReceipt","mode":"unary","result":"committed_decision_receipt"},
+        {"name":"SetPreferences","request":"SetPreferencesRequest","response":"DecisionReceipt","mode":"unary","result":"committed_decision_receipt"},
+        {"name":"Watch","request":"WatchViewRequest","response":"ViewMessage","mode":"server_streaming","result":"authorized_view_stream"},
+        {"name":"GetOperation","request":"GetOperationRequest","response":"OperationLookup","mode":"unary","result":"operation_lookup"}
+      ]
+    },
+    {
+      "name": "ActionService", "namespace": "dungeonflux.public.v1", "access": "public_member_input",
+      "request_owner": "native df-api maps authenticated input to df-session / df-engine", "result_owner": "df-session owns decision commit; df-engine owns action validation and staged outcome", "stream_owner": null,
+      "source_refs": ["rpc-api.md:40-118", "rpc-api.md:120-175", "rpc-api.md:176-214", "rpc-api.md:397-428"],
+      "methods": [
+        {"name":"Submit","request":"SubmitActionRequest","response":"DecisionReceipt","mode":"unary","result":"committed_decision_receipt"},
+        {"name":"Preview","request":"PreviewActionRequest","response":"ActionPreview","mode":"unary","result":"non_committing_preview"},
+        {"name":"ListOptions","request":"ListOptionsRequest","response":"OptionPage","mode":"unary","result":"authorized_bounded_option_page"},
+        {"name":"SubmitText","request":"SubmitTextRequest","response":"DecisionReceipt","mode":"unary","result":"committed_decision_receipt"}
+      ]
+    },
+    {
+      "name": "VoiceService", "namespace": "dungeonflux.public.v1", "access": "public_authorized_live_media_route",
+      "request_owner": "native df-api admission; df-media owns live speech routing", "result_owner": "df-media owns transcript and terminal stream outcome; df-session owns any durably accepted action/job", "stream_owner": "native df-api owns bidi half-close and cancellation; df-media owns live capture/transcription; df-session owns accepted effects through durable session/run lifetime independent of RPC cancellation",
+      "source_refs": ["rpc-api.md:40-118", "rpc-api.md:120-175", "rpc-api.md:512-524"],
+      "methods": [
+        {"name":"Talk","request":"TalkInput","response":"TalkOutput","mode":"bidi_streaming","result":"live_voice_stream"}
+      ]
+    },
+    {
+      "name": "AudioService", "namespace": "dungeonflux.public.v1", "access": "public_audience_filtered_approved_audio",
+      "request_owner": "native df-api authorizes the current binding lease/audience; df-media owns routing", "result_owner": "df-media owns ordered messages with epoch, cue/track identity and timeline; df-audio owns playback buffers", "stream_owner": "df-media recovers lost/slow streams from a new epoch and current timeline; df-audio stops old-epoch buffers and ignores late frames",
+      "source_refs": ["rpc-api.md:40-118", "rpc-api.md:120-175", "rpc-api.md:455-460", "rpc-api.md:512-548", "subsystem-interfaces.md:389-403"],
+      "methods": [
+        {"name":"Listen","request":"ListenRequest","response":"AudioStreamMessage","mode":"server_streaming","result":"audience_filtered_audio_stream"}
+      ]
+    },
+    {
+      "name": "AssetService", "namespace": "dungeonflux.public.v1", "access": "public_authorized_immutable_asset_scope",
+      "request_owner": "df-assets / native df-api", "result_owner": "df-assets / native df-api", "stream_owner": "native df-api owns bounded Get delivery; df-assets owns immutable asset resolution and byte access",
+      "source_refs": ["rpc-api.md:40-118", "rpc-api.md:120-175", "rpc-api.md:512-550"],
+      "methods": [
+        {"name":"Manifest","request":"AssetManifestRequest","response":"AssetManifestPage","mode":"unary","result":"authorized_bounded_asset_page"},
+        {"name":"Get","request":"GetAssetRequest","response":"AssetTransferMessage","mode":"server_streaming","result":"bounded_asset_transfer_stream"}
+      ]
+    },
+    {
+      "name": "JournalService", "namespace": "dungeonflux.public.v1", "access": "public_authorized_page_projection",
+      "request_owner": "native df-api / df-session", "result_owner": "native df-api projects df-session read model", "stream_owner": null,
+      "source_refs": ["rpc-api.md:40-118", "rpc-api.md:120-175", "rpc-api.md:176-214"],
+      "methods": [
+        {"name":"ListEntries","request":"JournalRequest","response":"JournalPage","mode":"unary","result":"authorized_bounded_journal_page"}
+      ]
+    },
+    {
+      "name": "ClientService", "namespace": "dungeonflux.public.v1", "access": "public_trusted_binding_current_generation",
+      "request_owner": "native df-api / df-client binding contract", "result_owner": "native df-api with df-client / df-observe consumer ports", "stream_owner": "native df-api owns WatchControl and bounded upload streams; UploadDiagnostics additionally requires a scoped expiring CaptureTicket and returns a retained evidence reference",
+      "source_refs": ["rpc-api.md:40-118", "rpc-api.md:120-175", "rpc-api.md:552-571"],
+      "methods": [
+        {"name":"WatchControl","request":"WatchControlRequest","response":"ClientControl","mode":"server_streaming","result":"binding_scoped_control_stream"},
+        {"name":"Report","request":"ClientReport","response":"ReportReceipt","mode":"unary","result":"bounded_observation_receipt"},
+        {"name":"UploadTelemetry","request":"ClientTelemetryBatch","response":"IngestReceipt","mode":"client_streaming","result":"bounded_ingest_receipt"},
+        {"name":"UploadDiagnostics","request":"DiagnosticPart","response":"DiagnosticReceipt","mode":"client_streaming","result":"bounded_diagnostic_receipt"}
+      ]
+    },
+    {
+      "name": "HostService", "namespace": "dungeonflux.public.v1", "access": "public_attached_verified_host_capability",
+      "request_owner": "native df-api validates attached capability; df-session owns host command admission", "result_owner": "df-session / df-engine", "stream_owner": null,
+      "source_refs": ["rpc-api.md:12-38", "rpc-api.md:40-118", "rpc-api.md:120-175"],
+      "methods": [
+        {"name":"Command","request":"HostCommandRequest","response":"DecisionReceipt","mode":"unary","result":"committed_host_decision_receipt"}
+      ]
+    },
+    {
+      "name": "DebugService", "namespace": "dungeonflux.admin.v1", "access": "admin_restricted_independent_operator_authorization",
+      "request_owner": "native df-api / operator owner with independent df-auth authorization", "result_owner": "native df-api / operator owner", "stream_owner": "native df-api owns restricted WatchEvents delivery and cancellation",
+      "source_refs": ["rpc-api.md:12-38", "rpc-api.md:40-118", "rpc-api.md:120-175", "rpc-api.md:598-614"],
+      "methods": [
+        {"name":"Command","request":"DebugCommandRequest","response":"DecisionReceipt","mode":"unary","result":"restricted_committed_decision_receipt"},
+        {"name":"Inspect","request":"InspectRequest","response":"DebugSnapshot","mode":"unary","result":"restricted_operator_snapshot"},
+        {"name":"WatchEvents","request":"EventQuery","response":"DebugEvent","mode":"server_streaming","result":"restricted_operator_event_stream"},
+        {"name":"SaveCheckpoint","request":"SaveCheckpointRequest","response":"CheckpointInfo","mode":"unary","result":"restricted_checkpoint_result"},
+        {"name":"RestoreCheckpoint","request":"RestoreCheckpointRequest","response":"DecisionReceipt","mode":"unary","result":"restricted_committed_decision_receipt"},
+        {"name":"SetFault","request":"SetFaultRequest","response":"FaultReceipt","mode":"unary","result":"restricted_fault_receipt"},
+        {"name":"RequestCapture","request":"CaptureRequest","response":"CaptureTicket","mode":"unary","result":"restricted_capture_ticket"}
+      ]
+    },
+    {
+      "name": "TelemetryService", "namespace": "dungeonflux.telemetry.v1", "access": "telemetry_operator_only_query_pin_export",
+      "request_owner": "df-auth independently authorizes telemetry operators; trusted-source authorization applies to ingestion, not operator query/pin/export", "result_owner": "df-telemetry", "stream_owner": "df-telemetry owns bounded evidence export and stream lifecycle under operator authorization and retention policy",
+      "source_refs": ["rpc-api.md:12-38", "rpc-api.md:40-118", "rpc-api.md:598-619", "subsystem-interfaces.md:412-422"],
+      "methods": [
+        {"name":"Query","request":"TelemetryQuery","response":"TelemetryPage","mode":"unary","result":"read_only_bounded_telemetry_page"},
+        {"name":"Timeline","request":"TimelineQuery","response":"TimelinePage","mode":"unary","result":"read_only_bounded_timeline_page"},
+        {"name":"Health","request":"TelemetryHealthRequest","response":"TelemetryHealth","mode":"unary","result":"ingestion_health"},
+        {"name":"PinEvidence","request":"PinEvidenceRequest","response":"EvidenceReference","mode":"unary","result":"operator_evidence_reference"},
+        {"name":"ExportEvidence","request":"ExportEvidenceRequest","response":"EvidenceChunk","mode":"server_streaming","result":"bounded_evidence_export_stream"}
+      ]
+    }
+  ],
+  "method_owner_constraints": [
+    {
+      "service":"CustomerService", "method":"Export",
+      "access_requirement":"current explicit ExportGrant and DataLifecycle scope; bounded chunks/bytes/items; payer status alone never grants player-secret export",
+      "request_owner":"native df-api binds trusted account/tenant; df-commerce owns customer export authorization policy; this contract does not assign the DataLifecycle adapter",
+      "result_owner":"native df-api shapes CustomerExportPart; durable export data adapter ownership is not fixed by this contract",
+      "stream_owner":"native df-api owns the bounded server stream under the explicit grant and lifecycle scope",
+      "source_refs":["rpc-api.md:652-666","subsystem-interfaces.md:454-476"]
+    },
+    {
+      "service":"VoiceService", "method":"Talk",
+      "access_requirement":"current authorized capture lease and bounded admitted capture; stream half-close is independent of durable accepted work",
+      "request_owner":"native df-api admits the capture lease; df-media owns live capture/transcription routing",
+      "result_owner":"df-media owns stream transcript/terminal outcome; df-session owns any durably accepted action/job",
+      "stream_owner":"df-session owns accepted effect deadlines/cancellation by session and run after durable acceptance, independent of Talk disconnect; native df-api owns bidi half-close/cancel",
+      "source_refs":["rpc-api.md:169-174","rpc-api.md:512-524"]
+    },
+    {
+      "service":"AudioService", "method":"Listen",
+      "access_requirement":"binding's current audio lease and authorized audience; no per-frame audience wildcard",
+      "request_owner":"native df-api validates the current binding lease and audience",
+      "result_owner":"df-media owns ordered messages with epoch, cue/track identity and timeline; df-audio owns playback buffers",
+      "stream_owner":"df-media recovers lost/slow streams from a new epoch and current timeline; df-audio stops old-epoch buffers and ignores late frames",
+      "source_refs":["rpc-api.md:455-460","rpc-api.md:526-539","subsystem-interfaces.md:389-403"]
+    },
+    {
+      "service":"ClientService", "method":"UploadDiagnostics",
+      "access_requirement":"expiring CaptureTicket bound to purpose and target/binding, with approved MIME/size/hash and chunk sequence",
+      "request_owner":"native df-api verifies the scoped ticket and bounded upload; DebugService capture authorization remains independently restricted",
+      "result_owner":"native df-api returns a retained evidence reference; durable diagnostic evidence adapter owner is unresolved in this API contract",
+      "stream_owner":"native df-api owns bounded client-stream chunks and terminal receipt under ticket expiry; diagnostic bytes are not ordinary always-on logs",
+      "source_refs":["rpc-api.md:552-571","rpc-api.md:598-614"]
+    },
+    {
+      "service":"ClientService", "method":"UploadTelemetry",
+      "access_requirement":"current trusted client source identity for ingestion; this upload authorization is separate from telemetry operator query/pin/export authorization",
+      "request_owner":"native df-api validates/enriches trusted identity and calls the consumer-owned TelemetryIngress port in df-observe",
+      "result_owner":"df-telemetry implements TelemetryIngress and owns typed durability-stage and gap receipt facts",
+      "stream_owner":"native df-api owns bounded client-stream half-close and terminal receipt; accepted durable batches survive cancellation",
+      "source_refs":["rpc-api.md:557-567","subsystem-interfaces.md:357-360","subsystem-interfaces.md:412-422"]
+    },
+    {
+      "service":"TelemetryService", "method":"Query",
+      "access_requirement":"telemetry operator namespace with independent trusted operator authorization; trusted-source auth is ingestion-only",
+      "request_owner":"df-auth authorizes operator access; df-telemetry owns read-only filtering",
+      "result_owner":"df-telemetry owns bounded paginated telemetry results",
+      "stream_owner":null,
+      "source_refs":["rpc-api.md:105-118","rpc-api.md:598-619","subsystem-interfaces.md:412-422"]
+    },
+    {
+      "service":"TelemetryService", "method":"Timeline",
+      "access_requirement":"telemetry operator namespace with independent trusted operator authorization; trusted-source auth is ingestion-only",
+      "request_owner":"df-auth authorizes operator access; df-telemetry owns read-only timeline filtering",
+      "result_owner":"df-telemetry owns bounded paginated timeline results",
+      "stream_owner":null,
+      "source_refs":["rpc-api.md:105-118","rpc-api.md:598-619","subsystem-interfaces.md:412-422"]
+    },
+    {
+      "service":"TelemetryService", "method":"Health",
+      "access_requirement":"telemetry operator namespace with independent trusted operator authorization; trusted-source auth is ingestion-only",
+      "request_owner":"df-auth authorizes operator access; df-telemetry owns ingestion health",
+      "result_owner":"df-telemetry owns ingestion health facts",
+      "stream_owner":null,
+      "source_refs":["rpc-api.md:105-118","rpc-api.md:598-619","subsystem-interfaces.md:412-422"]
+    },
+    {
+      "service":"TelemetryService", "method":"PinEvidence",
+      "access_requirement":"telemetry operator namespace with independent trusted operator authorization and retention policy",
+      "request_owner":"df-auth authorizes operator access; df-telemetry enforces evidence retention policy",
+      "result_owner":"df-telemetry owns the pinned evidence reference",
+      "stream_owner":null,
+      "source_refs":["rpc-api.md:105-118","rpc-api.md:598-619","subsystem-interfaces.md:412-422"]
+    },
+    {
+      "service":"TelemetryService", "method":"ExportEvidence",
+      "access_requirement":"telemetry operator namespace with independent trusted operator authorization and retention policy",
+      "request_owner":"df-auth authorizes operator access; df-telemetry selects retained cited evidence",
+      "result_owner":"df-telemetry owns bounded evidence chunks",
+      "stream_owner":"df-telemetry owns bounded export lifecycle under operator authorization and retention policy",
+      "source_refs":["rpc-api.md:105-118","rpc-api.md:598-619","subsystem-interfaces.md:412-422"]
+    }
+  ],
+  "actual_descriptor": [
+    {
+      "namespace":"dungeonflux.experimental.transport.v1", "service":"TransportFixture", "classification":"experimental_fixture", "planned_key":null,
+      "methods":[
+        {"name":"Unary","request":"dungeonflux.experimental.transport.v1.Sample","response":"dungeonflux.experimental.transport.v1.Sample","mode":"unary"},
+        {"name":"ServerStream","request":"dungeonflux.experimental.transport.v1.Sample","response":"dungeonflux.experimental.transport.v1.Sample","mode":"server_streaming"},
+        {"name":"ClientStream","request":"dungeonflux.experimental.transport.v1.Sample","response":"dungeonflux.experimental.transport.v1.Sample","mode":"client_streaming"},
+        {"name":"Bidi","request":"dungeonflux.experimental.transport.v1.Sample","response":"dungeonflux.experimental.transport.v1.Sample","mode":"bidi_streaming"}
+      ]
+    },
+    {
+      "namespace":"dungeonflux.public.v1", "service":"ActionService", "classification":"known_shape_divergence", "planned_key":"ActionService.Submit",
+      "methods":[{"name":"Submit","request":"dungeonflux.public.v1.SubmitActionRequest","response":"dungeonflux.public.v1.SubmitActionResponse","mode":"unary"}]
+    },
+    {
+      "namespace":"dungeonflux.public.v1", "service":"SessionService", "classification":"tuple_agreement_partial_service", "planned_key":"SessionService.Watch",
+      "methods":[{"name":"Watch","request":"dungeonflux.public.v1.WatchViewRequest","response":"dungeonflux.public.v1.ViewMessage","mode":"server_streaming"}]
+    },
+    {
+      "namespace":"dungeonflux.public.v1", "service":"RoomService", "classification":"known_unplanned_current_service", "planned_key":null,
+      "methods":[{"name":"Join","request":"dungeonflux.public.v1.JoinRoomRequest","response":"dungeonflux.public.v1.JoinRoomResponse","mode":"unary"}]
+    }
+  ],
+  "current_divergences": [
+    {"key":"RoomService.Join","fact":"Current public descriptor contains RoomService.Join(JoinRoomRequest)->JoinRoomResponse unary.","status":"outside_original_12_41","owner":"df-api/native API according to subsystem-interfaces.md Projection, RPC and transport; gameplay.proto is the current declaration.","decision":"Keep it explicitly classified as unplanned current surface. It is not SessionService.Join and does not increase canonical service/method counts."},
+    {"key":"ActionService.Submit","fact":"Current public descriptor returns SubmitActionResponse; planned inventory names DecisionReceipt.","status":"response_wrapper_divergence","owner":"df-api/native API consumes df-session/df-engine decision; df-protocol owns generated DTO.","decision":"Record exact tuple drift. Do not treat method name/mode agreement as payload compatibility."},
+    {"key":"SessionService.Watch","fact":"Current descriptor tuple matches planned Watch request, response and server-stream mode.","status":"descriptor_tuple_only_partial_service","owner":"Native df-api owns projection and delivery; df-session owns subscription lifetime.","decision":"This one tuple does not establish the other seven planned SessionService methods or the full payload/access implementation."},
+    {"key":"experimental fixtures","fact":"The descriptor includes dungeonflux.experimental.transport.v1.TransportFixture with all four RPC modes and no service in dungeonflux.experimental.contract.v1.","status":"fixtures_not_canonical_service_fulfillment","owner":"df-protocol experiment/compatibility fixtures.","decision":"Account every emitted fixture method by namespace; never count a fixture as one of the planned twelve services."}
+  ],
+  "alternatives": [
+    "A design-only table would fail to verify the generated FileDescriptorSet actually emitted by df-protocol.",
+    "Counting RoomService.Join as SessionService.Join would silently rename a distinct current wire method and erase its request/response shape.",
+    "Equating ActionService.Submit by name and mode would hide its current SubmitActionResponse wrapper.",
+    "Calling SessionService.Watch agreement full service completion would overstate descriptor and handler coverage.",
+    "Counting experimental fixture services/methods toward the canonical 12/41 would mix experimental transport demonstrations with planned product RPCs."
+  ],
+  "unresolved": [
+    "Concrete future 12/41 generated schema, field numbering, production handlers and authorization implementations remain owned by later G03/API/transport work.",
+    "Resume's typed RecoveryRequired response presence is a future response-shape freeze gate in rpc-api.md; this inventory records the gate and does not invent wire fields.",
+    "Exact operator listener and admission/bootstrap mechanics remain deployment and transport gates; this inventory records namespace/authorization owner only.",
+    "Customer Export requires current ExportGrant and DataLifecycle scope, but its durable export/data adapter and lifecycle adapter owners are not frozen by this API contract.",
+    "UploadDiagnostics requires an expiring scoped CaptureTicket and returns a retained reference; its durable diagnostic evidence adapter owner is not assigned by this API contract.",
+    "The current descriptor is a generated schema fixture and does not prove any of the planned 41 production RPC handlers exist or run."
+  ]
+}
