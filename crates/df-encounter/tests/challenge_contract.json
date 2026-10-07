@@ -1,0 +1,8 @@
+{
+  "task": "B-C-df-encounter-D01",
+  "decision": "Challenge schemas retain only exact authored ContentReference and RuleReference pairs. Modes share one contract, including Survival. Objective, escape, and consequence values carry no local predicates, timers, mechanics, or rewards.",
+  "source_admission": "The owner checks each reference against the current checkpoint, mode, and purpose after explicit bounds, basis/pin checks, participant admission, and exact ReferenceInventory membership. Denied, unavailable, or unsupported sources return a typed ChallengeSourceGap refusal. A successful plan therefore always has an empty source_gaps list; no partial plan can contain an unadmitted reference.",
+  "participant_admission": "EncounterSourceOwner extends the existing ParticipantOwner for EntityId and Basis, and proposal and validation call validate_participants so actor identity/status checks are shared.",
+  "bounds": "Caller budgets bound participant/objective/escape/consequence counts, pairwise participant checks, inventory scans, source-admission calls, and input/output bytes before callbacks or owned plan copies. Output bytes include a conservative upper bound for the fixed checkpoint-pin labels.",
+  "lifecycle": "EncounterDirector only produces and revalidates an owned staged candidate. It has no commit, time, causal transition, rule execution, or mutation behavior. Existing objective transition APIs remain independent and unchanged."
+}
