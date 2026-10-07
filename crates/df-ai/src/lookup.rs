@@ -76,3 +76,74 @@ fn resolve<'a, Key: Eq, Basis: Eq, Artifact, Failure>(
     }
     Ok(artifact)
 }
+
+/// Current owner authorization around a complete cache/recording read.
+///
+/// The canonical key/basis must bind the exact payload, source/context, schema,
+/// policy/model, run/job/generations, locale/template, audience/projection and
+/// supported output parameters. Unknown rights or unsupported parameters refuse.
+/// Equality is identity, never a grant: reauthorize current source/access before
+/// storage and again before exposing any result, including a miss or failure.
+/// This port neither retains personal payloads nor grants publication authority.
+pub trait ReadAuthority: PreparedRead {
+    type AuthorizationFailure;
+
+    fn authorize_prepared(
+        &self,
+        key: &Self::Key,
+        basis: &Self::Basis,
+    ) -> Result<(), Self::AuthorizationFailure>;
+
+    fn authorize_replay(
+        &self,
+        key: &Self::Key,
+        basis: &Self::Basis,
+    ) -> Result<(), Self::AuthorizationFailure>;
+}
+
+/// A current authorization refusal does not disclose a stale/missing entry.
+#[derive(Debug, Eq, PartialEq)]
+pub enum AuthorizedLookupError<Failure, AuthorizationFailure> {
+    Authority(AuthorizationFailure),
+    Lookup(LookupError<Failure>),
+}
+
+pub type AuthorizedLookupResult<'a, Store> = Result<
+    &'a <Store as PreparedRead>::Artifact,
+    AuthorizedLookupError<
+        <Store as PreparedRead>::Failure,
+        <Store as ReadAuthority>::AuthorizationFailure,
+    >,
+>;
+
+/// Reauthorizes a prepared read before storage and before returning any outcome.
+pub fn lookup_authorized_prepared<'a, Store: ReadAuthority>(
+    store: &'a Store,
+    key: &Store::Key,
+    basis: &Store::Basis,
+) -> AuthorizedLookupResult<'a, Store> {
+    store
+        .authorize_prepared(key, basis)
+        .map_err(AuthorizedLookupError::Authority)?;
+    let result = lookup_prepared(store, key, basis);
+    store
+        .authorize_prepared(key, basis)
+        .map_err(AuthorizedLookupError::Authority)?;
+    result.map_err(AuthorizedLookupError::Lookup)
+}
+
+/// Reauthorizes a complete recording read; never queries prepared/live storage.
+pub fn lookup_authorized_replay<'a, Store: ReadAuthority>(
+    store: &'a Store,
+    key: &Store::Key,
+    basis: &Store::Basis,
+) -> AuthorizedLookupResult<'a, Store> {
+    store
+        .authorize_replay(key, basis)
+        .map_err(AuthorizedLookupError::Authority)?;
+    let result = lookup_replay(store, key, basis);
+    store
+        .authorize_replay(key, basis)
+        .map_err(AuthorizedLookupError::Authority)?;
+    result.map_err(AuthorizedLookupError::Lookup)
+}

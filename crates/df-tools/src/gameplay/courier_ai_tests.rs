@@ -961,3 +961,6 @@ fn capacity_one_wake_coalesces_and_disconnected_executor_is_explicit() {
     drop(notifications);
     assert_eq!(publication.wake(), Err(DeliveryError::Unavailable));
 }
+
+#[path = "cache_replay_locale_contract.rs"]
+mod cache_replay_locale_contract;

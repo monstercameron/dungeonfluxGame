@@ -169,3 +169,61 @@ pub fn rank_candidates<'a, O: RankingOwner>(
         candidates: selected,
     })
 }
+
+/// Current native query/read/return authority for an owned immutable batch.
+///
+/// The owner uses canonical request/basis/record types and bounded native storage.
+/// Query authorization precedes even the read: unauthorized queries must not learn
+/// candidate identities, counts or diagnostics. Storage is bounded by the request
+/// and caller limits and a native deadline. Returned rows are still untrusted.
+/// Incomplete/stale/revoked/unqualified summaries must be refused or quarantined;
+/// attributed text cannot become canonical facts, commands or Rules effects.
+pub trait RetrievalOwner: RankingOwner {
+    fn authorize_query(
+        &self,
+        request: &Self::Request,
+        basis: &Self::Basis,
+    ) -> Result<(), Self::Error>;
+
+    fn read_batch<'a>(
+        &'a self,
+        request: &Self::Request,
+        basis: &Self::Basis,
+        limits: RankingLimits,
+    ) -> Result<&'a Self::Batch, Self::Error>;
+
+    fn authorize_return(
+        &self,
+        request: &Self::Request,
+        basis: &Self::Basis,
+        selected: &[&Self::Candidate],
+    ) -> Result<(), Self::Error>;
+}
+
+/// Authorizes before querying, validates/ranks bounded rows, and reauthorizes
+/// before exposing selected material. A late refusal returns no partial result.
+/// A returned borrowed selection is not a later commit or disclosure grant.
+pub fn retrieve_ranked<'a, Owner: RetrievalOwner>(
+    owner: &'a Owner,
+    request: &Owner::Request,
+    basis: &'a Owner::Basis,
+    limits: RankingLimits,
+) -> RankingResult<'a, Owner> {
+    owner
+        .authorize_query(request, basis)
+        .map_err(RankingError::Owner)?;
+    let read = owner.read_batch(request, basis, limits);
+    owner
+        .authorize_query(request, basis)
+        .map_err(RankingError::Owner)?;
+    let batch = read.map_err(RankingError::Owner)?;
+    let result = rank_candidates(owner, request, basis, batch, limits);
+    let selected = match &result {
+        Ok(selected) => selected.candidates(),
+        Err(_) => &[],
+    };
+    owner
+        .authorize_return(request, basis, selected)
+        .map_err(RankingError::Owner)?;
+    result
+}
