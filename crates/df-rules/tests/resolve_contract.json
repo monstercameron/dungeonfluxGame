@@ -1,0 +1,229 @@
+{
+  "task": "B-C-df-rules-D01",
+  "attempt": "B-C-df-rules-D01-a2",
+  "source_revision": "8ab9d6aa66af8537edbce20ce31d22e42f31fa88",
+  "private_test_ledger": true,
+  "public_contract": false,
+  "decision": {
+    "title": "Freeze pure ResolveRequest and result envelope",
+    "original_acceptance": [
+      "source ruleset and timing context are explicit",
+      "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+    ],
+    "original_verification": [
+      "Freeze the cited source decision and a bounded contract example; compare source ruleset and timing context are explicit. Retain decision, alternatives and unresolved facts.",
+      "Exact executable commands: TBD at G01 and scoped prerequisite resolution; this planned procedure is not a claim that Rust/browser/provider checks ran."
+    ],
+    "chosen_basis": [
+      "The operation is the OperationId carried by the existing GameInput command.",
+      "Run and expected state revision come from the canonical current Checkpoint basis and the command's supplied Basis, checked by current admission/staging.",
+      "The selected source ruleset is the exact CheckpointPins.rules basis; the catalog and source reference are selected by the registry's pinned catalog, selector, and RuleReference.",
+      "Explicit logical time is current Checkpoint.state().logical_time. A source handler declares RuleDependency::LogicalTime against its prepared checkpoint, which returns the existing typed StaleTime refusal when stale.",
+      "A causal timing window, when the action is pending, is the canonical PendingResolution and ResolutionWindow already stored in the Checkpoint; the fixture uses its pinned RuleReference and ordered actual draw identity."
+    ],
+    "boundary_outcome": [
+      "The admitted stage returns a detached candidate Checkpoint or Result<Checkpoint, InvocationError<Handler::Rejection>>; the current checkpoint is not mutated or committed by df-rules.",
+      "Declared dependency validation is a separate Result<(), PreconditionError> performed before selected handler staging. Its exact typed refusal is preserved rather than flattened into a new public outcome.",
+      "NeedsChoice, NeedsRoll, NeedsReaction, NeedsRuling, unsupported source gaps, and source-specific exceptional precedence remain future admitted source outcomes, not variants added here."
+    ],
+    "source_target": "Standard 2024 fifth-edition D&D. The fixture's Standard2024 mode and synthetic labels establish equality only; they do not qualify source material.",
+    "unresolved_source_and_rights_gates": [
+      "G03 must admit coordinated production request/result, pending, and shared types.",
+      "G07 must identify the exact required 2024 mechanics baseline, books/catalogs, errata, immutable source digests/locators, and permitted use. SRD 5.2.1 is only a candidate subset.",
+      "RightsGrant and the commercial launch gate remain open.",
+      "No source mechanic or book text is imported or proven by this fixture."
+    ],
+    "ownership": {
+      "df_rules": "Pure mechanics and exact compiled source selection.",
+      "df_engine": "Stages pending composition and owns legal next inputs and continuation.",
+      "df_session": "Authenticates/authorizes, resolves prior operation receipts, supplies committed ordered dice, and owns durable commit.",
+      "df_content": "Supplies validated immutable catalog and provenance.",
+      "clients": "Receive permitted projections only."
+    },
+    "rejection_semantics": [
+      "Refusals do not mutate current state or consume supplied draws unless an explicitly source-backed exception is later admitted.",
+      "A source exception that consumes a resource on rejection requires explicit source evidence and independent review.",
+      "No clock, random source, timer, database, socket, SDK, provider, or imported executable DSL is introduced."
+    ],
+    "rejected_alternatives": [
+      "Hidden clocks or dice.",
+      "A generic executable imported rules DSL.",
+      "AI-selected fallback mechanics.",
+      "Accepting mismatched source basis.",
+      "Defining production shared types during this design task.",
+      "A universal effect/phase order or invented bonus."
+    ],
+    "next_consumer": {
+      "task": "B-C-df-rules-I01",
+      "owner": "df-rules",
+      "minimum_intended_source_paths": [
+        "crates/df-rules/src/lib.rs",
+        "crates/df-rules/src/resolve.rs"
+      ],
+      "prerequisites": [
+        "G03",
+        "G07"
+      ],
+      "independent_hooks": [
+        "df-engine",
+        "df-session",
+        "df-content"
+      ],
+      "status": "not delivered by this task"
+    }
+  },
+  "existing_api_mapping": {
+    "planned_names_are_aliases_only": {
+      "ResolveRequest": "No current production Rust type; map privately to the existing GameInput command plus borrowed ActualDraw slice, current Checkpoint, expected CheckpointPins, registry selector, RuleReference, and source-declared RulePreconditions.",
+      "Outcome": "No current production Rust type; map privately to the staging Result<Checkpoint, InvocationError<Handler::Rejection>>, while precondition validation separately returns Result<(), PreconditionError>."
+    },
+    "request_components": {
+      "operation": "GameInput::Game(CommandInput).operation or the existing host command operation",
+      "action_and_context": "Borrowed GameInput inside RulesCommandInput.command",
+      "actual_draws": "Borrowed trusted session-supplied ActualDraw slice in RulesCommandInput.supplied_draws; source and order are checked by the existing staging guard.",
+      "authoritative_state": "Current canonical Checkpoint and its Basis, pins, and state; caller owns commit.",
+      "ruleset_and_source": "CheckpointPins.rules plus exact DispatchRegistry selection by expected pins, RevisionLabel selector, and RuleReference",
+      "time": "Checkpoint.state().logical_time checked through RuleDependency::LogicalTime",
+      "causal_window": "Canonical PendingResolution/ResolutionWindow identity where applicable, bound by the pending roll fixture and ActualDraw resolution/window/ordinal/source."
+    },
+    "composition": [
+      "Run validate_rule_preconditions with CurrentRuleContext(current checkpoint, current basis/pins, reference inventory, and command limits) plus RulePreconditions(prepared checkpoint, exact source list, and explicit dependencies).",
+      "On Ok(()), call DispatchRegistry::stage(expected pins, exact selector, exact RuleReference, RulesCommandInput borrowing the GameInput and ActualDraw slice, current Checkpoint, and candidate byte bound).",
+      "The typed result is the current stage Result; no combined envelope, public schema, or public type is added."
+    ],
+    "result_and_mutation": {
+      "accepted": "Detached candidate Checkpoint with one requested AcceptedDecision and exactly the supplied ordered draws; caller/session controls durable acceptance.",
+      "precondition_refusal": "Existing PreconditionError, including StaleTime.",
+      "staging_refusal": "Existing InvocationError or DispatchError wrapped by InvocationError; no handler call for selector/pin/source gate failures.",
+      "current_checkpoint": "Must remain byte/structurally equal to its saved value for the pure staging examples."
+    }
+  },
+  "executable_case_map": [
+    {
+      "status": "authored_pending_execution",
+      "case": "resolve_contract_composes_pinned_source_time_and_borrowed_actual_draws",
+      "expected": "A stale prepared LogicalTime returns PreconditionError::StaleTime before handler invocation; the same current prepared basis passes, exact source selector/pins select the registered handler, and supplied ordered draws produce one detached candidate without changing current state."
+    },
+    {
+      "status": "existing_test_preserved",
+      "case": "canonical_admission_then_exact_source_selection_invokes_one_compiled_handler",
+      "expected": "Canonical client admission then exact pinned registry stage invokes one handler and leaves current checkpoint unchanged."
+    },
+    {
+      "status": "existing_test_preserved",
+      "case": "unknown_or_unsupported_source_never_invokes_the_known_handler",
+      "expected": "Unknown selector and unsupported RuleReference return DispatchError::UnknownHandler or UnsupportedSource before handler invocation."
+    },
+    {
+      "status": "existing_test_preserved",
+      "case": "registry_or_handler_pin_mismatch_refuses_before_invocation",
+      "expected": "Exact pin mismatch returns DispatchError::PinsMismatch; handler rule pin mismatch returns InvocationError::HandlerRulesMismatch."
+    },
+    {
+      "status": "existing_test_preserved",
+      "case": "typed_mechanical_rejection_returns_no_candidate_or_mutation",
+      "expected": "Typed handler rejection returns InvocationError::Handler(FixtureRejection::UnsupportedMechanic); current checkpoint remains unchanged."
+    },
+    {
+      "status": "existing_test_preserved",
+      "cases": [
+        "pending_roll_participant_window_kind_count_and_sides_are_authoritative",
+        "supplied_roll_reaches_handler_and_is_accounted_once_without_mutating_current",
+        "accepted_roll_retry_never_invokes_or_consumes_again",
+        "malformed_supplied_draws_refuse_before_invocation_and_preserve_current",
+        "candidate_must_link_each_new_draw_once_to_its_decision_and_facts",
+        "previously_accepted_operation_is_never_staged_again"
+      ],
+      "expected": "Existing pending resolution/window, ordered draw identity, typed refusal, replay/AlreadyAccepted, candidate accounting, and no-mutation assertions remain intact."
+    }
+  ],
+  "actual_source_evidence": {
+    "initial_source_commit": "8ab9d6aa66af8537edbce20ce31d22e42f31fa88",
+    "original_invocation_test_sha256_before_append": "3cf24054f989632f6268da5f57c54db76c275e9fb0c324fe006dcc32ee1b04d5",
+    "current_native_boundary": [
+      "crates/df-rules/src/dispatch.rs: DispatchRegistry::select",
+      "crates/df-rules/src/command_handler.rs: RulesCommandInput, stage_handler, DispatchRegistry::stage",
+      "crates/df-rules/src/preconditions.rs: RulePreconditions, CurrentRuleContext, RuleDependency::LogicalTime, validate_rule_preconditions"
+    ],
+    "build_and_runtime_status": "No Rust formatting, compilation, test, Clippy, native/WASM, runtime, browser, PostgreSQL, telemetry, provider, or independent frontier review executed by this worker. Awaiting coordinator's explicit finite-check release where applicable.",
+    "invocation_post_repair_bytes": 60569,
+    "invocation_post_repair_sha256": "faf66bd38b3f7eee98ff9751b773dfddf4f7912e86175d60ea4dfe98922a4ba8"
+  },
+  "retained_a1_evidence": {
+    "status": "COMPILED_EXECUTION_HOLD_PENDING",
+    "original_handoff_sha256": "c6fef711c4cebc74894ee49eb5db37246e08751c49febb0f07eaf61c00b8d0e3",
+    "limitation": "a1 compiled its standalone synthetic basis example, but actual execute was HOLD_NO_COMMAND_LAUNCHED at 39% resource proxy; never treat as runtime pass or discard its evidence.",
+    "declared_commit_not_DB_submission": "3e941b14c0c2763da9f6511d891b6f459748ff26"
+  },
+  "implementation_status": "source-repair-authored-awaiting-coordinator-gates",
+  "ownership_incident": {
+    "defect": "The worker wrote the two known postimages into Main instead of the authorized isolated worktree.",
+    "recovery_receipt": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/rules-resolve-d01-a2/ownership-incident-01/ROOT-recovery-receipt-01.json",
+    "coordinator_report": "Root reports the postimages were preserved into this worktree and Main restored from reviewed snapshot authority; all 550 Main source pins match and guarded git diff HEAD is clean.",
+    "verified_worktree_postimages": [
+      {
+        "path": "crates/df-rules/tests/invocation.rs",
+        "bytes": 60483,
+        "sha256": "8bc97e5fa53c56abacf8c635002e6cacd4a0c4b20c90111efc843f15c4d5f004"
+      },
+      {
+        "path": "crates/df-rules/tests/resolve_contract.json",
+        "bytes": 10988,
+        "sha256": "d13d65d74c71c957e582256b7bc051c4c77db1e6069f7fe8f375d8456d1f2341"
+      }
+    ],
+    "devlog_ids": [
+      "e-B-C-df-rules-D01-a2-main-checkout-source-ownership-defect",
+      "e-B-C-df-rules-D01-a2-main-checkout-source-ownership-resolution"
+    ]
+  },
+  "source_review_repair": {
+    "review_defect": "Root's independent source review found the appended test assigned handler.candidate through an immutable let handler binding, a compile blocker.",
+    "repair": "Changed only that appended test binding to let mut handler; no pre-existing invocation assertion or production source was changed.",
+    "comparison_budget": {
+      "value": 12582942,
+      "maximum_checkpoint_bytes": 1048576,
+      "derivation": "validate_bounds computes comparisons = (count + 1) * records * (content_count + 1). Here count is one declared source plus one LogicalTime dependency (2); retained bytes are bounded by prepared plus current checkpoints (2 * 1,048,576 = 2,097,152); records = count 2 + one rule + one content + one resource + retained bytes 2,097,152 = 2,097,157; content_count + 1 is 2. Thus 3 * 2,097,157 * 2 = 12,582,942.",
+      "reason": "Finite upper bound derived from the existing 1 MiB per-checkpoint limit and the exact fixture inventory sizes; no cap increase or assertion weakening."
+    },
+    "verification_status": "Repair has not been formatted, compiled, or executed; Root owns those gates.",
+    "devlog_ids": [
+      "e-B-C-df-rules-D01-a2-source-review-immutable-handler-binding-defect",
+      "e-B-C-df-rules-D01-a2-source-review-binding-and-budget-repair",
+      "e-B-C-df-rules-D01-a2-ledger-commit-provenance-label-defect",
+      "e-B-C-df-rules-D01-a2-ledger-commit-provenance-label-repair"
+    ],
+    "source_ledger_correction": {
+      "defect": "The initial private ledger's a1 handoff SHA-256 omitted the character 4.",
+      "previous_recorded_sha256": "c6fef711c4cebc74894ee49eb5db37246e08751c9febb0f07eaf61c00b8d0e3",
+      "corrected_sha256": "c6fef711c4cebc74894ee49eb5db37246e08751c49febb0f07eaf61c00b8d0e3",
+      "preserved_file_bytes": 14679,
+      "observed_preserved_file_sha256": "c6fef711c4cebc74894ee49eb5db37246e08751c49febb0f07eaf61c00b8d0e3",
+      "observed_path": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/wave-03/B-C-df-rules-D01/a1/handoff.json",
+      "evidence_receipt": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/rules-resolve-d01-a2/hash-preserved-a1-handoff-01.receipt",
+      "meaning": "This corrects a source-ledger provenance pin only; it is not compiler, runtime, or acceptance evidence.",
+      "devlog_ids": [
+        "e-B-C-df-rules-D01-a2-source-ledger-a1-handoff-hash-defect",
+        "e-B-C-df-rules-D01-a2-source-ledger-a1-handoff-hash-repair"
+      ],
+      "historical_revision_field_correction": {
+        "defect": "The ledger reused the a1 handoff's submitted_revision label, which conflicts with the frozen brief's declared_commit_not_DB_submission field name.",
+        "prior_field_name": "submitted_revision",
+        "prior_field_value": "3e941b14c0c2763da9f6511d891b6f459748ff26",
+        "corrected_field_name": "declared_commit_not_DB_submission",
+        "corrected_value": "3e941b14c0c2763da9f6511d891b6f459748ff26",
+        "basis": "ROOT-frozen-worker-brief-01.json historical_retention.declared_commit_not_DB_submission",
+        "actual_handoff_pin": {
+          "path": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/wave-03/B-C-df-rules-D01/a1/handoff.json",
+          "bytes": 14679,
+          "sha256": "c6fef711c4cebc74894ee49eb5db37246e08751c49febb0f07eaf61c00b8d0e3"
+        },
+        "meaning": "This is a declared candidate commit identifier, not a claim that the commit was submitted to workflow.sqlite3. Preserve the former wording and value here for correction history.",
+        "devlog_ids": [
+          "e-B-C-df-rules-D01-a2-ledger-commit-provenance-label-defect",
+          "e-B-C-df-rules-D01-a2-ledger-commit-provenance-label-repair"
+        ]
+      }
+    }
+  }
+}

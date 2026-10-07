@@ -1681,3 +1681,102 @@ fn appended_fact_guard_preserves_capacity_draw_history_atomic_and_intent_refusal
         assert_eq!(request, saved_input);
     }
 }
+
+#[test]
+fn resolve_contract_composes_pinned_source_time_and_borrowed_actual_draws() {
+    use df_rules::preconditions::{
+        CurrentRuleContext, PreconditionError, PreconditionLimits, RuleDependency,
+        RulePreconditions, validate_rule_preconditions,
+    };
+
+    let current = roll_current(vec![]);
+    let before = current.clone();
+    let request = roll_input();
+    let saved_request = request.clone();
+    let supplied_draws = vec![draw(0, 20, 17), draw(1, 6, 4)];
+    let source = rule();
+    let selector = label("fixture-selector");
+    let sources = [source.clone()];
+    let dependencies = [RuleDependency::LogicalTime];
+    let contents = [content()];
+    let resources = resource_constraints();
+    let command_limits = CommandLimits {
+        maximum_records: 8,
+        maximum_text_bytes: 32,
+        maximum_retained_bytes: 8192,
+    };
+    let precondition_limits = PreconditionLimits {
+        maximum_dependencies: 2,
+        // (2 + 1) * (2 + 1 + 1 + 1 + 2 * 1 MiB) * (1 + 1), from validate_bounds.
+        maximum_comparisons: 12_582_942,
+        maximum_checkpoint_bytes: 1024 * 1024,
+    };
+    let check_preconditions = |prepared: &Checkpoint| {
+        let preconditions = RulePreconditions {
+            prepared,
+            sources: &sources,
+            dependencies: &dependencies,
+        };
+        let context = CurrentRuleContext {
+            checkpoint: &current,
+            basis: current.basis(),
+            pins: current.pins(),
+            inventory: ReferenceInventory {
+                rules: &sources,
+                content: &contents,
+                resources: &resources,
+                assets: &[],
+            },
+            command_limits,
+        };
+        validate_rule_preconditions(&request, context, &preconditions, precondition_limits)
+    };
+
+    let mut stale_state = current.state().clone();
+    stale_state.logical_time.ticks += 1;
+    let stale_prepared = rebuilt(&current, current.basis(), stale_state);
+    let refusal = check_preconditions(&stale_prepared);
+    assert_eq!(refusal, Err(PreconditionError::StaleTime));
+    assert_eq!(current, before);
+    assert_eq!(request, saved_request);
+
+    let mut handler = fixture(&current);
+    handler.candidate = draw_candidate(&current, &supplied_draws);
+    let entries = [CatalogEntry::new(&source, b"opaque-source-parameters")];
+    let registrations = [HandlerRegistration::new(&selector, &source, &handler)];
+    let registry = registry(current.pins(), &entries, &registrations);
+
+    assert_eq!(check_preconditions(&current), Ok(()));
+    let candidate = registry
+        .stage(
+            current.pins(),
+            &selector,
+            &source,
+            RulesCommandInput {
+                command: &request,
+                supplied_draws: &supplied_draws,
+            },
+            &current,
+            1024 * 1024,
+        )
+        .unwrap();
+
+    let operation = match &request {
+        GameInput::Game(command) => command.operation,
+        _ => unreachable!(),
+    };
+    assert_eq!(
+        candidate.state().decisions.len(),
+        before.state().decisions.len() + 1
+    );
+    assert_eq!(
+        candidate.state().decisions.last().unwrap().operation,
+        operation
+    );
+    assert_eq!(candidate.state().draws, supplied_draws);
+    assert!(candidate.state().pending.is_empty());
+    assert_eq!(handler.observed_draws.borrow().as_slice(), supplied_draws);
+    assert_eq!(handler.calls.get(), 1);
+    assert_eq!(current, before);
+    assert_eq!(request, saved_request);
+}
