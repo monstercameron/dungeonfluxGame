@@ -1,0 +1,239 @@
+{
+  "task_id": "B-C-df-testkit-D01",
+  "attempt_id": "B-C-df-testkit-D01-a1",
+  "owner": "/root/source_testkit_control_authority_d01",
+  "record_kind": "private_design_decision_and_evidence_ledger",
+  "input_revision": "8d18fb25575cd305c3ba4f32e0e20ec858013e75",
+  "original_acceptance": [
+    "test control cannot leak into production authority",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "decision": "Add one registered df-engine integration test that composes the current VirtualClocks, SuppliedDice and SemanticReplay with df_engine::command_entry::decide_registered_command and its exact DispatchRegistry consumer. Keep the test handler and builders private to this integration test and reuse crates/df-engine/tests/support/fixture_model.rs. The testkit records and elapsed controls are fixtures; only the existing Engine and Rules staging contracts decide whether a supplied candidate can be staged.",
+  "permitted_changed_paths": [
+    "crates/df-engine/tests/test_control_authority_contract.rs",
+    "crates/df-engine/tests/test_control_authority_contract.json"
+  ],
+  "hook_owner_and_status": {
+    "owner": "root",
+    "paths": [
+      "crates/df-engine/Cargo.toml",
+      "Cargo.lock"
+    ],
+    "hook": "df-testkit dev-dependency plus the sole explicit [[test]] registration because autotests=false",
+    "status": "Root applied the exact proposed hook in the candidate worktree; worker did not edit these files."
+  },
+  "contract_cases": [
+    {
+      "case": "Positive current registered path",
+      "asserted": "A source-exact registered handler stages a canonical next-revision candidate; caller clock domains advance independently; SuppliedDice returns the same borrowed ActualDraw record; Engine forwards the original draw slice to the registered handler; input and current checkpoint remain unchanged.",
+      "test": "fixture_controls_feed_registered_staging_without_granting_authority"
+    },
+    {
+      "case": "Identity, actor reference and command basis refusal",
+      "asserted": "Unknown member, unknown actor entity, and a future command basis receive exact existing structural error classes before handler invocation; fixture dice remains at ordinal zero with its record unconsumed.",
+      "test": "invalid_identity_basis_pins_and_source_refuse_before_handler_or_draw_use"
+    },
+    {
+      "case": "Current pins and source selection",
+      "asserted": "Changed admitted rules pins return CheckpointError::RulesMismatch; an unregistered source returns DispatchError::UnsupportedSource; neither invokes the handler.",
+      "test": "invalid_identity_basis_pins_and_source_refuse_before_handler_or_draw_use"
+    },
+    {
+      "case": "Clock safety",
+      "asserted": "Independent logical/presentation advances work; logical regression and presentation overflow return typed errors and preserve both clock fields.",
+      "test": "clock_regression_overflow_and_semantic_replay_are_bounded_read_only_controls"
+    },
+    {
+      "case": "Read-only decision/provider replay",
+      "asserted": "Exact accepted decision and AI job records are borrowed; wrong job generation, operation, policy, basis/run or pins refuse as ReplayError::Stale. SemanticReplay exposes no provider callback or authority-producing call.",
+      "test": "clock_regression_overflow_and_semantic_replay_are_bounded_read_only_controls"
+    }
+  ],
+  "unresolved_authority_and_source_gaps": [
+    "Engine structural validation does not authenticate a sender or authorize control of an existing member/actor. This test checks only the existing unknown-member and unknown-actor-reference typed refusals. Existing-member/actor authorization remains Session/rules-owned and is not claimed here.",
+    "The fixture catalog and registered handler demonstrate the existing source-selector and pin plumbing; they do not qualify source provenance, prove standard mechanics, or establish production source-use rights.",
+    "The staged candidate is fixture-built through the canonical checkpoint types; it is not a reviewed rules golden or a state-hash/reducer/restart proof. Full RuleFixture source checksum, catalog/handler qualification and property/generative interaction coverage remain outside this bounded Design outcome.",
+    "No provider callable, storage, PostgreSQL, browser, paid-provider or production authority fixture is introduced."
+  ],
+  "alternatives_considered": [
+    "A standalone df-testkit unit test would prove fixture-local behavior only and would miss the named production-authority boundary; rejected in favor of the registered Engine consumer.",
+    "A new Engine authorization method or guessed existing-actor denial would invent a contract contrary to the current source boundary; rejected.",
+    "A public fixture API, production dependency, provider substitute, or provider-call spy would expand authority and scope; rejected."
+  ],
+  "bounded_limits_derived_from_source": {
+    "command_records": 8,
+    "command_text_bytes": 32,
+    "command_retained_bytes": 8192,
+    "staged_checkpoint_bytes": 1048576,
+    "catalog_complete_bytes": 64,
+    "catalog_entries": 4,
+    "catalog_item_bytes": 64,
+    "catalog_total_item_bytes": 128,
+    "replay_maximum_records": 4,
+    "replay_maximum_semantic_bytes": "UTF-8 byte length of the exact decision semantic output plus exact AI-job semantic output used in the fixture"
+  },
+  "source_build_identity": {
+    "base_main_revision": "8d18fb25575cd305c3ba4f32e0e20ec858013e75",
+    "test_source_path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/testkit-controls-d01-a1/crates/df-engine/tests/test_control_authority_contract.rs",
+    "relevant_unowned_source_pins": [
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/testkit-controls-d01-a1/crates/df-engine/src/command_entry.rs",
+        "bytes": 4243,
+        "sha256": "2c53975727ef6d16495646d4d11b08a8898d151692d7f837c46aae657af13520"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/testkit-controls-d01-a1/crates/df-engine/tests/command_entry.rs",
+        "bytes": 21754,
+        "sha256": "17103ed7fc06494c405070b432f573cc3b73aad8219fbcf89449682fec9f74c0"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/testkit-controls-d01-a1/crates/df-engine/tests/support/fixture_model.rs",
+        "bytes": 7732,
+        "sha256": "cb90b48b9e3a011767a150d88bbd8ec6dc26bdd6041b38c5d5c041edf8281131"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/testkit-controls-d01-a1/crates/df-testkit/src/lib.rs",
+        "bytes": 400,
+        "sha256": "372d607131465e05fa369a02f316f53aafe3d47ef0bb0414a6b4512c2db3b216"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/testkit-controls-d01-a1/crates/df-testkit/src/clocks.rs",
+        "bytes": 3523,
+        "sha256": "67245c7cfb1f94161610355722a6ca56ecaf43d304013358ec4dbaae70c0ddee"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/testkit-controls-d01-a1/crates/df-testkit/src/replay.rs",
+        "bytes": 11036,
+        "sha256": "a8324675b34383d0f35c34b67c7278d5173aa9087c1a7ee173820de770cc1838"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/planning/subsystem-architecture.md",
+        "bytes": 14004,
+        "sha256": "cf549f4f046f76713c881228d82c6a7111d8ccc84db208cb9d9db67bb192d9f6"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/planning/subsystem-interfaces.md",
+        "bytes": 35522,
+        "sha256": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/planning/coding-style.md",
+        "bytes": 9448,
+        "sha256": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/planning/rules-effect-model.md",
+        "bytes": 4931,
+        "sha256": "6075c2e05dbc8fe895f7fc49f421f377e22d0b1791aa0988d90d6c5ab5e44d6a"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/AGENTS.md",
+        "bytes": 20121,
+        "sha256": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0001-sqlite-agent-workflow.md",
+        "bytes": 13664,
+        "sha256": "acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0002-resource-scheduling-and-cleanup.md",
+        "bytes": 5249,
+        "sha256": "a6476cfef449e089639109cc6d3cf5f0800b792b57a32696258d5ac0b9511966"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0003-agent-devlog.md",
+        "bytes": 7575,
+        "sha256": "ee293673b01391c3a39577bd116a60abb3edfa662a7a8d1315556d6fe537d912"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0004-development-reliability.md",
+        "bytes": 8670,
+        "sha256": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae"
+      },
+      {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0005-frontier-output-evaluation.md",
+        "bytes": 6534,
+        "sha256": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c"
+      }
+    ],
+    "pre_edit_digest_capture": "No worker pre-edit digest was captured. The initial bounded source map showed the assigned test path absent. Relevant current unowned sources are hashed above; equivalence to the base revision is not asserted by this worker.",
+    "build_or_runtime_identity": "Worker did not run Cargo, rustfmt, Git, runtime, browser or provider checks. Registered test execution/build evidence remains pending the root-owned candidate gates and independent evaluator.",
+    "worker_pre_format_source_pin": {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/testkit-controls-d01-a1/crates/df-engine/tests/test_control_authority_contract.rs",
+      "bytes": 17166,
+      "sha256": "3811121dc4d0e70cc5ebd5321439c8f924454475e63c5254a31fc05f0ba45eb4",
+      "stage": "worker submission before target-local dead_code allowance and before root formatting"
+    },
+    "worker_repair_source_pin": {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/testkit-controls-d01-a1/crates/df-engine/tests/test_control_authority_contract.rs",
+      "bytes": 17186,
+      "sha256": "bdcbb37af2f8502a939d1a1c2d210cae170faf72f8b87a1ab02d6dc1ccb1b629",
+      "stage": "after target-local dead_code allowance; still pre-root-format and uncompiled"
+    }
+  },
+  "verification_state": {
+    "worker_checks": "unperformed",
+    "root_shared_source_hook": "applied",
+    "root_registered_test_gate": "pending source-quality repair handoff",
+    "independent_runtime_evaluation": "pending",
+    "build_readiness_claim": false,
+    "root_current_compiled_input": "not asserted; root owns formatting and candidate gates"
+  },
+  "verification_commands_from_frozen_brief": [
+    "cargo fmt --all",
+    "cargo test --locked --offline -p df-engine --test test_control_authority_contract --message-format=json",
+    "cargo test --locked --offline -p df-engine --tests --message-format=json",
+    "cargo clippy --locked --offline -p df-engine --all-targets --message-format=json -- -D warnings",
+    "cargo check --locked --offline -p df-engine --lib --target wasm32-unknown-unknown --message-format=json",
+    "cargo clippy --locked --offline -p df-engine --lib --target wasm32-unknown-unknown --message-format=json -- -D warnings",
+    "cargo fmt --all -- --check"
+  ],
+  "process_deviation": "Initial bounded document/source reads and initial test-file creation/edit used metadata-guard-32mib.py but did not acquire compiler.lock. After the coordinator identified the omission, a nonblocking SH|NB attempt received BlockingIOError and no source access occurred in that attempt. After the coordinator reported release, source reads and later edits were performed under SH|NB via M; one exact assertion edit was also made with apply_patch outside M/lock and is retained as a second deviation. Final hashes were collected under SH|NB using 16 KiB streaming. Worker ran no compiler or formatter. This deviation is included for the coordinator and reviewer; no claim of fully guarded source provenance is made. The initial private-ledger scratch serialization also stopped on a Python NameError before any target file write; the corrected M-wrapped SH|NB write succeeded.",
+  "devlog_entry_ids": [
+    "54e71b8f-ddc9-4e28-9fc5-1f5482fc883f",
+    "de23b24d-44d9-4018-a7df-bc22a87082a2",
+    "beeb8370-7e89-42a4-85b5-4afeacac8639",
+    "3543eedb-149b-4894-9b72-15d0fba6e626"
+  ],
+  "root_owned_hook_current_candidate_pins": [
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/testkit-controls-d01-a1/crates/df-engine/Cargo.toml",
+      "bytes": 1713,
+      "sha256": "60a82c2920cabcd98bee669f2d2e67048664d9f3d2fa4fcef2a9abd54ead1f8c"
+    },
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/worktrees/testkit-controls-d01-a1/Cargo.lock",
+      "bytes": 55557,
+      "sha256": "9c2f360097bd05e260a1e8b3e0fb3582c90662681ce436399b3de5a44a0b1a2e"
+    }
+  ],
+  "coordinator_reported_main_revision_after_separate_root_integration": "b1ebc9e71e1897fd7fda14fdbfbecb527e3345c9",
+  "unowned_source_pin_comparison": {
+    "changed": [],
+    "status": "unchanged"
+  },
+  "root_main_hook_observed_pins": [
+    {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/Cargo.lock",
+      "bytes": 55542,
+      "sha256": "54ff2b434b8160218da0f2234196cef7056a182f3e62efeaa4fb46bfc4b1d533"
+    }
+  ],
+  "source_quality_repair": {
+    "finding": "The private fixture_model module exposes shared canonical builders unused in this test target, causing dead_code warnings under strict target lint.",
+    "repair": "Add only #[allow(dead_code)] to this integration-test-local module declaration, matching the existing Engine/Astra fixture convention. No cases, assertions, production contracts, or source mechanisms changed.",
+    "root_current_compiled_input": "not claimed; root formatting/compiler gates remain pending",
+    "devlog_entry_ids": [
+      "beeb8370-7e89-42a4-85b5-4afeacac8639",
+      "3543eedb-149b-4894-9b72-15d0fba6e626"
+    ],
+    "before_snapshot_and_diff_paths": [
+      "artifacts/tmp/testkit-controls-d01-a1/d01-a1-dead-code-repair-01.source.before.rs",
+      "artifacts/tmp/testkit-controls-d01-a1/d01-a1-dead-code-repair-01.ledger.before.json",
+      "artifacts/tmp/testkit-controls-d01-a1/d01-a1-dead-code-repair-01.source.diff",
+      "artifacts/tmp/testkit-controls-d01-a1/d01-a1-dead-code-repair-01.ledger.diff",
+      "artifacts/tmp/testkit-controls-d01-a1/d01-a1-dead-code-repair-01.receipt.json"
+    ]
+  }
+}

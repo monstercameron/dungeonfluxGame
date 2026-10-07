@@ -21,6 +21,7 @@ df-combat = { path = "../df-combat" }
 
 [dev-dependencies]
 df-content = { path = "../df-content" }
+df-testkit = { path = "../df-testkit" }
 
 [[test]]
 name = "command_entry"
@@ -70,3 +71,7 @@ path = "tests/relationship_staging.rs"
 [[test]]
 name = "witness_staging"
 path = "tests/witness_staging.rs"
+
+[[test]]
+name = "test_control_authority_contract"
+path = "tests/test_control_authority_contract.rs"
