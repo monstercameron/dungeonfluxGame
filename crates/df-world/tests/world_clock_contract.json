@@ -1,0 +1,115 @@
+{
+  "task_id": "B-C-df-world-D01",
+  "attempt_id": "B-C-df-world-D01-a2",
+  "input_revision": "8ab9d6aa66af8537edbce20ce31d22e42f31fa88",
+  "decision": {
+    "rule": "World time advances only from an accepted logical-time input. Supplied wall elapsed time, presentation time, and native deadline budget are not game-time deltas.",
+    "pause": "When paused, DueSelectionRequest.target_time must equal the checkpoint LogicalTime. The pure selector returns no processed due events and reports bounded backlog. A future target is InvalidTime.",
+    "admission": "stage_schedule_advancement requires Some(already-admitted DueSelectionRequest); None returns TimeNotAccepted. The pure functions stage proposals and never mutate or publish the checkpoint.",
+    "accepted_unpaused_time": "For an admitted unpaused target, due events are ordered by logical tick then canonical RecordId bytes. In this fixture, selected_events=4 admits IDs [1, 2, 3]; the event-1 destination is staged. The checkpoint remains unchanged until the owning session path commits."
+  },
+  "original_acceptance": [
+    {
+      "criterion": "wall time cannot advance paused campaign",
+      "evidence": "world_clock_contract.rs::paused_campaign_does_not_advance_for_positive_caller_time_budgets and ::pause_and_missing_time_admission_refuse_without_mutating_the_checkpoint",
+      "status": "authored; execution pending root release"
+    },
+    {
+      "criterion": "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit.",
+      "evidence": "Input source revision and actual public API paths are pinned below. A build, test execution, whole-source independent review, and integrated byte proof have not been performed by this worker.",
+      "status": "pending root-owned gates"
+    }
+  ],
+  "alternatives": [
+    {
+      "proposal": "Advance WorldTime by elapsed wall-clock time while paused or disconnected.",
+      "decision": "Rejected",
+      "reason": "Contradicts planning/runtime-directors.md and planning/long-horizon-state.md: paused/stopped campaigns do not advance from wall time; real elapsed time must not damage paused characters."
+    },
+    {
+      "proposal": "Derive target logical ticks from deadline_remaining.",
+      "decision": "Rejected",
+      "reason": "deadline_remaining is a supplied operational budget checked for zero; it is not a clock read or a world-time conversion."
+    },
+    {
+      "proposal": "Add a public WorldDelta, TimeAdvance or new pause owner in df-world.",
+      "decision": "Not selected for this task",
+      "reason": "The frozen task authorizes a contract over current public APIs only. df-world already exports select_due_events, stage_schedule_advancement and stage_environmental_delta; no new public type is required."
+    },
+    {
+      "proposal": "Treat a staged schedule/environment proposal as a committed world mutation.",
+      "decision": "Rejected",
+      "reason": "The current APIs return immutable candidates. The df-session owner must recheck basis and admission and commit time, consequences and catch-up atomically before publication."
+    }
+  ],
+  "actual_current_api": [
+    {
+      "path": "crates/df-world/src/due_events.rs",
+      "items": [
+        "DueSelectionRequest { expected_basis, target_time, paused, deadline_remaining, policy }",
+        "select_due_events validates basis/pins, matching tick units, non-regression and paused equality; paused selection stops event processing and retains backlog."
+      ]
+    },
+    {
+      "path": "crates/df-world/src/schedule_advancement.rs",
+      "items": [
+        "stage_schedule_advancement requires Some(accepted_time), maps ordered due events to already-admitted destinations and returns an immutable ScheduleAdvancement candidate."
+      ]
+    },
+    {
+      "path": "crates/df-world/src/environmental_delta.rs",
+      "items": [
+        "stage_environmental_delta accepts supplied basis/pins and admitted replacements; it is bounded and immutable and does not advance time."
+      ]
+    },
+    {
+      "path": "crates/df-world/src/lib.rs",
+      "items": [
+        "The above functions and their current request/result/error types are public exports; this contract adds no public WorldDelta type."
+      ]
+    }
+  ],
+  "actual_next_consumer": {
+    "path": "crates/df-engine/src/director_staging.rs",
+    "callsite": "The director staging path calls select_due_events and stage_schedule_advancement using the supplied DueSelectionRequest / accepted_time, then returns a staged candidate or WorldPending result.",
+    "ownership": "df-session is the designed durable commit/publication owner after PostgreSQL commit; this worker found no live pause-policy owner or committed publication path in scope."
+  },
+  "executable_cases": [
+    "Paused equal logical time with due backlog and two positive caller-supplied deadline budgets: no event processes, proposal is equal, checkpoint logical time and location remain unchanged.",
+    "Paused future target returns InvalidTime; missing accepted_time returns TimeNotAccepted; checkpoint remains unchanged.",
+    "Stale basis, stale pins, stale cursor, regressing target and mismatched tick units refuse without checkpoint mutation.",
+    "Accepted unpaused target stages ordered due IDs [1, 2, 3] under the admitted selected_events=4 bound and the event-1 destination; replaying the same input yields an equal proposal and leaves the checkpoint unchanged."
+  ],
+  "unresolved_facts": [
+    "The live pause-policy owner and committed world publication are not implemented or qualified by this bounded contract task.",
+    "No production wall-clock admission, reconnect/offline duration policy, or rule for converting accepted external events into logical time is established here.",
+    "The df-engine callsite stages a proposal; the atomic durable commit, continuation ID deduplication and publication must be confirmed in df-session integration."
+  ],
+  "verification": {
+    "authored_tests": 4,
+    "build_or_test_execution": "not run; frozen brief reserves compilation and proof execution for root release",
+    "formatting_and_clippy": "not run by this worker; root-owned gates",
+    "independent_whole_original_review": "pending",
+    "source_build_binding": "not yet established by a compiler/test run",
+    "root_release_required": true
+  },
+  "review_follow_up": {
+    "source_review_findings": [
+      {
+        "finding": "The stale-input test bound a local named checkpoint and then later tried to call checkpoint(stale_cursor_state), shadowing the constructor.",
+        "repair": "Renamed the local checkpoint value to current_checkpoint and updated all references in that test.",
+        "status": "repaired; compilation pending root"
+      },
+      {
+        "finding": "The accepted unpaused fixture admits selected_events=4 and has due IDs 1, 2, and 3 at tick 10, but the assertion expected only IDs 1 and 2.",
+        "repair": "Kept the selected_events=4 bound and changed the expected ordered IDs to [1, 2, 3]. Updated the case narrative to match.",
+        "status": "repaired; execution pending root"
+      }
+    ],
+    "checks": "Repair assertions and JSON parse only; Rust compile, format and tests not run by worker.",
+    "review_evidence": [
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/world-clock-d01-a2/reviewer-prep-01/reviewer-005-worker-source.json.stdout",
+      "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/wave51-session-submission-20261006/ROOT-source-review-defects-world-rules-01.guard.json.stdout"
+    ]
+  }
+}
