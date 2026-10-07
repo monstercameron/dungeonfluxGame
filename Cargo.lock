@@ -450,8 +450,10 @@ dependencies = [
  "df-auth",
  "df-model",
  "df-observe",
+ "df-rules",
  "df-session",
  "df-types",
+ "sha2 0.10.9",
  "tokio",
  "tokio-postgres",
 ]

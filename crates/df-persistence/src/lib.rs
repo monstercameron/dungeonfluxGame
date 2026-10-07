@@ -57,3 +57,6 @@ mod owned_pg_commit_proxy_fixture;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod owned_pg_suite_fixture;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod replay_input_hash_contract;
