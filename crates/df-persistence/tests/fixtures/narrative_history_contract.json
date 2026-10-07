@@ -1,0 +1,465 @@
+{
+  "task": "B-C-df-narrative-D01",
+  "attempt": "B-C-df-narrative-D01-a1",
+  "title": "Define beat thread hook and threat-clock ownership",
+  "objective": "Define beat thread hook and threat-clock ownership; expected: structural history is persistent and source-pinned.",
+  "status": "Source-backed contract installed; build, actual physical PostgreSQL qualification, independent evaluation and integration gates remain unperformed.",
+  "current_authority": {
+    "source_revision": "9b08bc073b65feb85a4c696653d3c8e13161d6a5",
+    "source_fingerprint": "3676e59e6316d9e4d77eab1f9dd812776041c2c9eb70f5dc2e396a13e50bf6b0",
+    "frozen_brief_sha256": "9a379286bc689ee4834de2f1291ee6985691774637435f9deb80e300936b1083",
+    "frozen_brief_body_revision": "4e1a00388bb3ab9b14d7cb5fc66a24d63ddfdfc46c540a60148c77d30f8c03bc",
+    "source_freeze": {
+      "bytes": 161332,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/wave51-session-submission-20261006/ROOT-Main-knowledge-full-source-freeze-274.json",
+      "sha256": "5295d81cebc0ad6798fe8c1f2e124f15a76f8d141b5c21bd027add805e0850e3"
+    },
+    "governing_document_pins": [
+      {
+        "bytes": 14004,
+        "path": "/Users/earlcameron/Desktop/dungeonflux/planning/subsystem-architecture.md",
+        "sections": [
+          "Design",
+          "Shared and transport crates",
+          "Server crates",
+          "Browser crates",
+          "Tooling crates",
+          "Integration and refinement",
+          "Commercial service composition"
+        ],
+        "sha256": "cf549f4f046f76713c881228d82c6a7111d8ccc84db208cb9d9db67bb192d9f6"
+      },
+      {
+        "bytes": 35522,
+        "path": "/Users/earlcameron/Desktop/dungeonflux/planning/subsystem-interfaces.md",
+        "sections": [
+          "Common contract rules",
+          "Pure domain and content",
+          "Separate runtime subsystem boundaries",
+          "Identity and session ownership",
+          "PostgreSQL persistence and durable media",
+          "AI/provider/media ports",
+          "Projection, RPC and transport",
+          "Feature-specific candidates within existing boundaries",
+          "Browser interfaces",
+          "Observability and development tooling",
+          "Commerce and lifecycle ports"
+        ],
+        "sha256": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a"
+      },
+      {
+        "bytes": 11747,
+        "path": "/Users/earlcameron/Desktop/dungeonflux/planning/runtime-directors.md",
+        "sections": [
+          "Authority and composition",
+          "Pure public boundaries",
+          "Time, recovery and bounded work",
+          "Added feature projections",
+          "Acceptance and unresolved gates"
+        ],
+        "sha256": "ed8944f316d912498107ee550431e560795ba8114cb63a181b6aadeca70b48ca"
+      },
+      {
+        "bytes": 6682,
+        "path": "/Users/earlcameron/Desktop/dungeonflux/planning/campaign-cinematics.md",
+        "sections": [
+          "Recaps and trailers",
+          "Critical-event cinematic escalation",
+          "Location and item continuity",
+          "Acceptance"
+        ],
+        "sha256": "3ccdaa9a920a7ee588525ef33d009c79fe73ff519a6c8382c3fdfcb6aa72d5f4"
+      },
+      {
+        "bytes": 1963891,
+        "path": "/Users/earlcameron/Desktop/dungeonflux/development/backlog-catalog.json",
+        "sections": [
+          "C-df-narrative",
+          "B-C-df-narrative-D01"
+        ],
+        "sha256": "039b0a03b4085b43ad32c4063e2cb8fc789fc55fff7552aec6e951ec3b4704c3"
+      },
+      {
+        "bytes": 20121,
+        "path": "/Users/earlcameron/Desktop/dungeonflux/AGENTS.md",
+        "sections": [
+          "1. Think Before Coding",
+          "2. Simplicity First",
+          "3. Surgical Changes",
+          "4. Goal-Driven Execution",
+          "Planning and project documentation",
+          "Mandatory coding style",
+          "Application architecture",
+          "Development strategies",
+          "Implementation and evaluation",
+          "Agent devlog",
+          "Generated files and artifacts",
+          "Changelog",
+          "Hosted-service authority",
+          "Visual development journey"
+        ],
+        "sha256": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182"
+      },
+      {
+        "bytes": 9448,
+        "path": "/Users/earlcameron/Desktop/dungeonflux/planning/coding-style.md",
+        "sections": [
+          "Scope and enforcement",
+          "Names, modules, and public contracts",
+          "Functions, ownership, and errors",
+          "Async code and deterministic gameplay",
+          "Persistence, RPC, and instrumentation",
+          "Documentation, tests, and changes"
+        ],
+        "sha256": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb"
+      },
+      {
+        "bytes": 13664,
+        "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0001-sqlite-agent-workflow.md",
+        "sections": [
+          "Context",
+          "Decision",
+          "Consequences"
+        ],
+        "sha256": "acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8"
+      },
+      {
+        "bytes": 8670,
+        "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0004-development-reliability.md",
+        "sections": [
+          "Context",
+          "Decision",
+          "Evidence from the archive"
+        ],
+        "sha256": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae"
+      },
+      {
+        "bytes": 6534,
+        "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0005-frontier-output-evaluation.md",
+        "sections": [
+          "Context",
+          "Decision",
+          "Consequences"
+        ],
+        "sha256": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c"
+      }
+    ],
+    "actual_source_preimage_pins_sha256": {
+      "crates/df-model/src/checkpoint.rs": "5d490868133662a88f78fabe519f07189b020304205a7f88b21b55ed208d7fbd",
+      "crates/df-persistence/src/checkpoint_codec.rs": "b13a7d08b8758fc00cef8138af6f4e0a77ad4331be570951e3c3948ad208b256",
+      "crates/df-persistence/src/owned_pg_suite_fixture.rs": "dc765fcb7fe3ac9e0b9c37b1ce199c1c45fc831234d497721cbcc640927ab720",
+      "crates/df-tools/src/gameplay/actor.rs": "48a6b317400699b55d59b1587d0067c5c1bf6d31232e3b422bd895f1f9382227",
+      "crates/df-tools/src/gameplay/journey.rs": "bea2e4d14ac41f52a6f2339a7722d2fb782499548603efb7c271bb24209f8690",
+      "crates/df-tools/src/gameplay/journey/narrative_phase.rs": "0208f5be3ce126dd7edf42c5be43d95bb476b1cfdc76ae62afee67ed866f3fd9",
+      "crates/df-tools/src/gameplay/journey/narrative_transition.rs": "a93b9bd9d585d62f1bcc4c92891c15520388e716c1194f0defe5af95c61902b9",
+      "crates/df-tools/src/gameplay/journey/narrative_transition_session_tests.rs": "05524339d73c110b3e98249624af1d308fa57c06cd9586475255d3ade0a3a7d4",
+      "crates/df-tools/src/gameplay/model.rs": "5346c4b47d865df6398531b9ddbb317e06ec64e6db3aa25bff5d60904e1ce656",
+      "crates/df-tools/src/gameplay/recovery_qualification.rs": "aea4d6c4313cc8deef592b6062f2d26e9b31ffcdcf051204d8c5f37e902a9a48"
+    },
+    "note": "These current source preimage pins supersede archived source-only findings. The unchanged native source/model/schema defines the contract; fixture and test edits require a new source-bound build and executable admission."
+  },
+  "decision": {
+    "selected": "Retain structural history in the existing canonical complete GameState checkpoint and its accepted ordered fact/decision references, with immutable source/content/rules/handler/build pins and the existing fenced session/PostgreSQL writer.",
+    "reason": "This implements the original persistent and source-pinned structural outcome without introducing another model, storage writer, transition schema or public action.",
+    "alternatives": [
+      {
+        "choice": "A second narrative store or independently committing director",
+        "status": "rejected",
+        "reason": "It would split canonical state and bypass engine/session fenced durability."
+      },
+      {
+        "choice": "A new complete typed transition history or threat causal ledger",
+        "status": "deferred",
+        "reason": "The original D01 boundary preserves current structural state and accepted causes. Full reconstruction needs complete versioned reducers, source decisions and matching state-hash evidence."
+      },
+      {
+        "choice": "Treat codec-only or selected-but-ignored tests as physical durability evidence",
+        "status": "rejected",
+        "reason": "Actual native story PG recovery and all-record physical postmaster restart/readback must execute against the current admitted source/build."
+      },
+      {
+        "choice": "Create live consent or advance threat clocks through the persistence fixture",
+        "status": "rejected",
+        "reason": "The hook consent generation and static clock are explicit fixture inputs, not authored gameplay or World time decisions."
+      }
+    ]
+  },
+  "ownership": {
+    "df_model": "Owns GameState/NarrativeState, CharacterHook, StoryArc and ThreatClock once. Checkpoint validation binds references, order, resources, consent-generation presence, audience members and limits.",
+    "df_content": "Owns immutable campaign/source definitions and trusted admission inventory. Persisted bytes cannot admit foreign content or alter source versions.",
+    "df_narrative": "Pure beat selection and accepted-fact/thread consequence policy stages detached NarrativeState, causal references and bounded proposals; no database or clock writer.",
+    "df_world": "Owns source-grounded logical-time and threat-clock progression. Narrative relevance consumes admitted clock evidence; it cannot advance the clock.",
+    "hooks_and_arcs": "Canonical continuity records retain definition/phase, member, accepted source IDs, positive consent generation, audience and active hook references. Live hook authoring and authorized consent admission remain unresolved.",
+    "df_engine": "Composes typed staged proposals with rules authority and validates their permitted mutation surface.",
+    "df_session": "Owns one serialized durable decision, exact operation lookup/retry, fenced revision, and publication/effect dispatch after durable acknowledgement.",
+    "df_persistence": "Owns the native complete checkpoint codec, trusted re-decode, one PostgreSQL transaction and exact source-pinned recovery.",
+    "df_tools_native_owner": "Registered generated-service actions use local member authority, actor::Engine, HarborEngine and the existing journey selectors; the operator test exercises the actual BeginStory/EscortCourier path.",
+    "projection_and_media": "Only authorized committed facts may support narrative realization/recaps. This change does not implement audience UI, cinematic jobs, summary truth, or a public history API."
+  },
+  "persistent_structural_fields": [
+    "GameState.narrative.definition, active_beats, completed_beats, open_threads, accepted_facts, remaining_budget",
+    "GameState.continuity.hooks with member, source_facts, consent_generation and audience",
+    "GameState.continuity.arcs with phase, source_facts and active_hooks",
+    "GameState.threats with id, admitted definition, progress and capacity",
+    "GameState.facts and decisions with ordered operation/revision/fact linkage"
+  ],
+  "structural_record_contract": {
+    "beats_threads": "NarrativeState retains active/completed beats, open threads and accepted fact IDs. Native journey validates accepted terminal ContentEvent, decision policy, prerequisites, phase and thread consequences. The owned-PG test checks the actual BeginStory and EscortCourier path.",
+    "hooks_arcs": "ContinuityState retains CharacterHook consent_generation, scoped audience, definition/source facts and StoryArc phase/active hook references. The owned-PG fixture explicitly supplies these already-admitted records; it does not issue consent or create playable hook content.",
+    "threat_clock": "GameState.threats retains ThreatClock ID, content definition, progress and capacity. The owned-PG fixture tests storage of an already-admitted value only. df-world remains the clock progression owner; no native journey clock producer is present.",
+    "source_pins": "CheckpointPins retains exact content/package/rules/handler digests and BuildIdentity; model checks references against trusted inventory; native repository re-decodes every candidate and fenced startup restore refuses mismatched pins. The test fixture uses fixed synthetic pins and is identified as such."
+  },
+  "actual_authority_path": [
+    "df-tools::gameplay::actor::Engine implements SessionEngine<NativeScope<LocalDemoAuthority>>",
+    "df-tools::gameplay::model::HarborEngine dispatches registered journey actions",
+    "df-tools::gameplay::journey::narrative_transition selects admitted beat alternatives",
+    "df-tools::gameplay::journey::finish composes admitted thread consequences",
+    "df-session::DurableOwner calls SessionRepository::commit_decision before publication",
+    "df-persistence::PostgresRepository verifies one decision, complete encoded candidate and native source inventory in one fenced PostgreSQL transaction",
+    "df-persistence::local_demo_scope::admit_startup restores a complete checkpoint under a new owner fence and exact pins"
+  ],
+  "bounded_examples": {
+    "synthetic_complete_persistence_fixture": {
+      "session_byte": 49,
+      "revision": {
+        "epoch": 2,
+        "sequence": 8
+      },
+      "inventory": {
+        "content": {
+          "package": "fixture-package-1",
+          "entry": "fixture-entry-1"
+        },
+        "pins": "existing fixed fixture CheckpointPins; Standard2024 and exact BuildIdentity"
+      },
+      "accepted_decision": {
+        "operation_byte": 6,
+        "source_policy": "fixture-policy",
+        "fact_bytes": [
+          7,
+          63
+        ],
+        "draw_ordinals": [
+          0
+        ],
+        "durable_intent_count": 1
+      },
+      "source": {
+        "fact_byte": 7,
+        "ordinal": 0,
+        "value": "admitted ContentEvent",
+        "subjects_entity_bytes": [
+          4
+        ]
+      },
+      "narrative": {
+        "completed_beats": [
+          "fixture-entry-1"
+        ],
+        "open_threads": [
+          "fixture-entry-1"
+        ],
+        "accepted_fact_bytes": [
+          7
+        ]
+      },
+      "hook": {
+        "record_byte": 64,
+        "member_byte": 3,
+        "source_fact_bytes": [
+          7
+        ],
+        "consent_generation": 1,
+        "audience_member_bytes": [
+          3
+        ],
+        "consent_origin": "supplied fixture input"
+      },
+      "arc": {
+        "record_byte": 65,
+        "phase": "fixture-entry-1",
+        "source_fact_bytes": [
+          7
+        ],
+        "active_hook_bytes": [
+          64
+        ]
+      },
+      "threat_clock": {
+        "record_byte": 66,
+        "progress": 0,
+        "capacity": 3,
+        "origin": "static admitted fixture input; no clock advance"
+      },
+      "retained_existing_records": "ActualDraw 18/20; accepted DrawAccepted fact; durable PublishPresentation intent; canonical character features/outfit/outfit revision.",
+      "limits": {
+        "records": 100,
+        "text_bytes": 256,
+        "total_text_bytes": 1024,
+        "retained_bytes": 1048576,
+        "codec_document_bytes": 1048576,
+        "codec_allocated_bytes": 8388608,
+        "codec_collection_items": 4096
+      }
+    },
+    "native_story": {
+      "actions": [
+        "two actual room joins",
+        "two actual character creations",
+        "BeginStory",
+        "EscortCourier"
+      ],
+      "completed_beats": [
+        "room",
+        "opening"
+      ],
+      "active_beats": [
+        "courier-answer-escort"
+      ],
+      "open_threads": [
+        "sealed-packet-delivery-thread"
+      ],
+      "accepted_fact_count": 2,
+      "causes": "Each accepted narrative fact is linked to its operation/revision/ordinal in an accepted native decision carrying journey::THREAD_POLICY.",
+      "pins": "Current model::pins() includes immutable manifest and compiled journey/narrative selector bytes, source policy and BuildIdentity.",
+      "recovery": "Physical encoded envelope equality, first actor/grant driver/owner release, fenced startup restore, exact prior receipt retry with no additional reduction or physical row mutation, final actor/grant/inspector driver/owner release."
+    }
+  },
+  "refusal": [
+    "stale session/run/revision or changed pins",
+    "foreign or missing content references",
+    "missing causal fact or active hook reference",
+    "invalid threat progress/capacity",
+    "unbounded encoded or retained candidate"
+  ],
+  "acceptance": [
+    "structural history is persistent and source-pinned",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "failure_cases": [
+    "foreign/missing source, stale basis/pins, invalid threat/capacity, bounded codec refusal, actual source-pinned complete structural checkpoint roundtrip",
+    "owned native BeginStory/EscortCourier physical envelope equality, fenced startup restore and idempotent receipt retry with no new reduction or rows",
+    "all-record physical commit/restart restores beat/thread/accepted causes/consented-fixture hook/arc/static-clock exactly",
+    "No unperformed physical PG or ignored test may be called PASS; no live hook consent/World clock progression/full transition-ledger or broader runtime completion claim"
+  ],
+  "checks": {
+    "codec": {
+      "selector": "checkpoint_codec::tests::narrative_history_d01_source_contract",
+      "cases": 4,
+      "status": "authored; not executed",
+      "coverage": "Complete native structural roundtrip; foreign/missing cause/hook references; stale basis/content pins; invalid progress and zero capacity; oversized codec; unchanged original candidate."
+    },
+    "actual_fixture": {
+      "selector": "owned_pg_suite_fixture::fixture_structural_history_candidate_is_source_admitted_and_codec_retained",
+      "ignored": false,
+      "status": "authored; not executed",
+      "coverage": "Constructs the actual new session-49 candidate, validates model/reference inventory and fixed pins, calls exact structural assertion and native complete codec roundtrip; refuses foreign digest and missing content inventory."
+    },
+    "native_story_pg": {
+      "selector": "gameplay::recovery_qualification::owned_pg_story_structure_survives_fenced_startup_restore_and_exact_retry",
+      "ignored": true,
+      "status": "unperformed; selection without --ignored is not PASS"
+    },
+    "physical_all_record_restart": {
+      "selectors": [
+        "owned_pg_suite_fixture::actual_registered_pg_all_four_families_retained_and_each_insert_fault_rollback",
+        "owned_pg_suite_fixture::actual_registered_pg_restart_retains_complete_state_draws_intents_and_receipt"
+      ],
+      "ignored": true,
+      "status": "unperformed; actual postmaster restart and separate retained readback required"
+    },
+    "root_commands": [
+      "cargo test --offline --locked -p df-persistence --lib narrative_history_d01_source_contract -- --nocapture",
+      "cargo test --offline --locked -p df-persistence --lib checkpoint_codec::tests -- --nocapture",
+      "cargo test --offline --locked -p df-persistence --lib fixture_structural -- --nocapture (only if added; must execute nonzero actual case)",
+      "cargo test --offline --locked -p df-tools --lib native_story_session_ -- --nocapture",
+      "cargo clippy --offline --locked -p df-tools -p df-persistence --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "cargo check --offline --locked -p df-persistence --target wasm32-unknown-unknown --lib",
+      "cargo clippy --offline --locked -p df-persistence --target wasm32-unknown-unknown --lib -- -D warnings"
+    ],
+    "root_runtime_admission": {
+      "all_record_physical_restart_case": {
+        "commit_argv_template": [
+          "<fresh source-bound df_persistence libtest executable>",
+          "owned_pg_suite_fixture::actual_registered_pg_all_four_families_retained_and_each_insert_fault_rollback",
+          "--exact",
+          "--ignored",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "commit_selector": "owned_pg_suite_fixture::actual_registered_pg_all_four_families_retained_and_each_insert_fault_rollback",
+        "database_precondition": "On Root's fresh isolated cluster, create an empty named database, apply the exact current crates/df-persistence/migrations/0001_game_decisions.sql, then exact current fixtures/owned_pg_authority.sql and fixtures/owned_pg_faults.sql under the registered admin role. These are test fixture schemas/roles only; the suite seeds and commits session 49. Validate actual database, role, data directory, port, isolation and durability settings. Existing suite requires the two distinct env ports and rejects 55439.",
+        "expected_checks": "The source postimage makes fixture_recovery_candidate include completed beat/open thread/accepted fact, scoped hook/arc/static threat clock. Commit suite validates full stored families; readback checks exact receipt, load_current == candidate, explicit assert_fixture_structural_recovery, physical envelope equality and no extra decision. A static fixture does not prove live hook consent or clock advancement.",
+        "readback_argv_template": [
+          "<same source-bound df_persistence libtest executable>",
+          "owned_pg_suite_fixture::actual_registered_pg_restart_retains_complete_state_draws_intents_and_receipt",
+          "--exact",
+          "--ignored",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "readback_selector": "owned_pg_suite_fixture::actual_registered_pg_restart_retains_complete_state_draws_intents_and_receipt",
+        "required_environment": [
+          "DUNGEONFLUX_I01_OWNED_PG_PORT=<Root-reserved actual loopback port other than 55439>",
+          "DUNGEONFLUX_I01_OWNED_PROXY_PORT=<distinct Root-reserved actual loopback port other than 55439 for commit suite>",
+          "DUNGEONFLUX_I01_OWNED_PG_DATABASE=<fresh name beginning df_persistence_i01_>",
+          "DUNGEONFLUX_I01_OWNED_PG_ADMIN_ROLE=<fresh owned admin role>"
+        ],
+        "restart_order": "Run commit suite once to terminal success and observe the physical session-49 stored checkpoint/receipt. Close and account for all native/admin connection drivers. Stop only the birth/executable-verified owned postmaster within its registered bound; verify clean stop, then restart that exact postmaster binary over the same retained data directory and system identifier on the same registered port. Run the readback selector separately with the same source-bound executable and database/role env. Readback performs no seeding or decision write."
+      },
+      "finite_release": "Use a fresh task-specific bounded owned-process controller derived from existing Root-admitted I01/recovery tooling, with current measured memory/time/pressure caps; do not import stale limits as a grant. Admit executable/source/SQL/PG binary identities before start and recheck them after terminal, track only birth-matched descendants, stop only owned postmaster, verify all test/PG child processes and backend sessions absent, retain exact terminal stdout/stderr/process/physical receipts. Any timeout, cleanup failure, source mismatch, or ignored/unrun case remains FAIL/PENDING.",
+      "native_journey_case": {
+        "argv_template": [
+          "<fresh source-bound df_tools libtest executable>",
+          "gameplay::recovery_qualification::owned_pg_story_structure_survives_fenced_startup_restore_and_exact_retry",
+          "--exact",
+          "--ignored",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "compiled_endpoint": "The test constructs one TLS-disabled TCP 127.0.0.1:55517 Config, database df_gameplay_demo_20261007_narrative_history01, user df_gameplay_demo_admin_20261004. Root must reserve this exact port and provision this exact fresh role/database on its independently owned postmaster; the test does not accept a URL or infer another endpoint.",
+        "database_precondition": "A freshly created, empty database with no df_game or df_local_demo schema. local_demo_scope::admit_startup invokes initialize, whose source includes current crates/df-persistence/migrations/0001_game_decisions.sql and creates the private demo grant schema; do not preseed either schema or facts. Confirm actual current_database/current_user/inet_server_port/data_directory and fsync, full_page_writes, synchronous_commit on, ssl off, listen_addresses 127.0.0.1 before launch.",
+        "expected_checks": "The ignored case itself asserts source-pinned BeginStory and EscortCourier accepted beat/thread facts, full physical encoded envelope equality, explicit first owner/driver release, fenced startup restore, exact committed receipt replay without engine reduction or any physical row change, bounded actor calls and explicit final driver/owner release. A selected-but-ignored test is not PASS; require zero exit and observed assertions.",
+        "required_environment": {
+          "DF_NARRATIVE_HISTORY_QUALIFICATION": "owned-loopback-narrative-history01"
+        },
+        "selector": "gameplay::recovery_qualification::owned_pg_story_structure_survives_fenced_startup_restore_and_exact_retry"
+      },
+      "shared_custody": "Use existing owned_pg_suite_fixture / recovery_qualification operator tooling and current Root source/build artifact admission. Freeze the integrated source closure, current native libtest executables and depfiles, current migration/fixture SQL, PostgreSQL tool binaries, database names, roles, exact ports, private data/socket/home/log roots, cluster system identifier, process birth/executable identity, and resource bounds. Do not reuse historical wave48 or 2025-10-05 binary/source pins as current evidence. No default URL, service discovery, hosted connection, or unregistered port. Hold exclusive runtime ownership through test terminal and cleanup; exclude foreign PID 80873 and port 55439 from connection, signaling, or ownership claims.",
+      "status": "unperformed; Root must supply a fresh isolated cluster/data directory, actual current binary and source custody, launch and finite release"
+    },
+    "independent_evaluation": "Actual Astra independent original literal criteria/full governing scope/current source/build/runtime, with Root execution explicitly delegable; code review or ignored tests alone cannot complete.",
+    "worker_limit": "No compiler, formatting, Rust test, PG connection/process, provider, Git or queue action was performed by this implementation worker."
+  },
+  "unresolved_facts": [
+    "No runtime source authoring/consent action currently creates CharacterHook or StoryArc in the native journey. The synthetic fixture's consent_generation value is test input only and is never projected as real user consent.",
+    "No df-world producer currently advances a ThreatClock in the native journey; a static fixture clock tests persistence only. The journey's Short Rest still refuses nonempty threats, so do not seed the playable flow with a fixture clock.",
+    "The source packet does not claim a complete typed per-transition history ledger, event reconstruction, gameplay clock mechanics or authorized audience UI projection. Existing canonical checkpoint state and accepted ordered facts are the bounded original D01 history contract.",
+    "The new ignored PG test uses a fresh named owned loopback database and exact environment admission. It must not be counted as passing until Root actually runs and observes it."
+  ],
+  "historical_inputs": [
+    {
+      "label": "Historical private source-only draft 2026-10-07-01; not current build authority",
+      "basis": "currentMain e4d5a66 as supplied by coordinator; exact local source hashes below",
+      "source_pins_sha256": {
+        "crates/df-model/src/checkpoint.rs": "5d490868133662a88f78fabe519f07189b020304205a7f88b21b55ed208d7fbd",
+        "crates/df-persistence/src/checkpoint_codec.rs": "0598ebcb82ff7d7f977a6232ca7a4f116b9abf77dfa83cfa5fa2487724f02431",
+        "crates/df-persistence/src/decision_adapter.rs": "b2ed6766ae31d176f0ca88547eecc724f49c53ac4bbf681f6a89ec789c3da48a",
+        "crates/df-narrative/src/beat_selection.rs": "57f383ee268ae78c23975075cf5bcafb65ae7e6efb08be96c004c5a5ba1a0a67",
+        "crates/df-narrative/src/thread_progress.rs": "d70488b09b3c7622a423d092398fe9cdc9a4262ffd47a980edd348f6a94c1593",
+        "crates/df-narrative/src/threat_relevance.rs": "a528a5a156ff39778aede97faa23f8ca0044987cd5c62f45b43f5d50ac32c0fd",
+        "crates/df-engine/src/director_staging.rs": "79377db7b41426a0f5fea3e78187e222ab0345ba10de945d348698f490a254cf",
+        "crates/df-session/src/submission.rs": "83fb0a5654e1d264a6f997b7c8770057a3651f095f9331f8af246c23c80a9244"
+      },
+      "former_route_finding": "The first packet's absence of a production SessionEngine route is historical and superseded by the current native actor/HarborEngine/journey source audit.",
+      "remaining_history_limit": "These fields retain structural state and accepted causal fact IDs, but do not encode every past beat/thread/hook/clock transition as a typed transition ledger. The D01 source contract should claim current checkpoint persistence and source pinning only; it must not claim full event reconstruction or an implemented world clock progression policy.",
+      "source_contract_sha256": "ccfdca3b35adb1d0a5bc84d04058f0654af01e94cdaf875372755610bbbe8535"
+    }
+  ],
+  "source_packet_provenance": {
+    "current_private_source_contract_sha256": "2e0a4ea4902cc99937846c55119128918dd56254c52f9e95479257c4f696a242",
+    "current_private_handoff_sha256": "113dbcff3a931e08c7c806a84ee09cbb526b4ea244a6841a6086cd1aaf83cb35",
+    "predecessor_model_identity": "Inherited parent runner model ID/effort was not exposed; no retrospective Sol claim."
+  }
+}

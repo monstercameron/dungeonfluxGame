@@ -1869,3 +1869,228 @@ fn ordinary_submit_reconnect_keeps_the_exact_uncertain_operation() {
         .unwrap();
     runtime.block_on(exercise_grant_recovery(true)).unwrap();
 }
+
+// Postimage for insertion in df-tools/src/gameplay/recovery_qualification.rs.
+// This uses the registered native journey and physical Postgres owner. It is an
+// ignored, operator-owned qualification, not an ordinary cargo test or a launch.
+
+#[test]
+#[ignore = "Root must register a fresh narrative_history01 PG database and release its owner"]
+fn owned_pg_story_structure_survives_fenced_startup_restore_and_exact_retry() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(owned_pg_story_structure()).unwrap();
+}
+
+async fn owned_pg_story_structure() -> Result<(), Error> {
+    required(
+        std::env::var("DF_NARRATIVE_HISTORY_QUALIFICATION").as_deref()
+            == Ok("owned-loopback-narrative-history01"),
+    )?;
+    let started = Instant::now();
+    let mut configuration = trusted_configuration(55517, "df-narrative-history-inspector-01");
+    configuration.dbname("df_gameplay_demo_20261007_narrative_history01");
+    let (mut inspector, connection) =
+        timeout(Duration::from_secs(2), configuration.connect(NoTls)).await??;
+    let inspector_driver = tokio::spawn(connection);
+    let codec = NativeCodecLimits {
+        maximum_document_bytes: 1024 * 1024,
+        maximum_allocated_bytes: 2 * 1024 * 1024,
+        maximum_collection_items: 1024,
+        maximum_text_bytes: 4096,
+    };
+    let cold = journey::initial().map_err(repository_error)?;
+    let session = cold.basis().session;
+    let first_fence = [0x83; 16];
+    let second_fence = [0x84; 16];
+    let admitted = local_demo_scope::admit_startup(
+        &mut inspector,
+        &cold,
+        local_demo_scope::DemoStartupIdentity {
+            fence: first_fence,
+            player_credential: [0x81; 32],
+            display_credential: [0x82; 32],
+        },
+        codec,
+        &model::recovery().map_err(repository_error)?,
+        |checkpoint| journey::phase(checkpoint).map(|_| ()),
+    )
+    .await
+    .map_err(|_| io::Error::other("fresh source-qualified narrative database required"))?;
+    required(!admitted.restored && admitted.checkpoint == cold)?;
+    let (grant_client, grant_connection) =
+        timeout(Duration::from_secs(2), configuration.connect(NoTls)).await??;
+    let grant_driver = tokio::spawn(grant_connection);
+    let issuer = LocalDemoScopeIssuer::new(
+        tokio::runtime::Handle::current(),
+        grant_client,
+        session,
+        first_fence,
+    )
+    .map_err(repository_error)?;
+    let reductions = Arc::new(AtomicUsize::new(0));
+    let mut running = RunningActor::start(
+        repository(&configuration, &configuration, codec).await?,
+        issuer,
+        admitted.checkpoint,
+        codec,
+        reductions.clone(),
+    )
+    .await?;
+    let mut calls = Calls {
+        count: 0,
+        deadline: started + Duration::from_secs(45),
+    };
+    let first_flow = async {
+        let first = join(&running.service, 0x91, &mut calls).await?;
+        let second = join(&running.service, 0x92, &mut calls).await?;
+        let current = running.service.updates.borrow().clone();
+        committed(submit(&running.service, &create(&current, 0x93), first, &mut calls).await?)?;
+        let current = running.service.updates.borrow().clone();
+        committed(
+            submit(
+                &running.service,
+                &create(&current, 0x94),
+                second,
+                &mut calls,
+            )
+            .await?,
+        )?;
+        let current = running.service.updates.borrow().clone();
+        let begin = action(&current, 0x95, rpc::GameplayActionKind::BeginStory);
+        required(!committed(submit(&running.service, &begin, first, &mut calls).await?)?.replayed)?;
+        let current = running.service.updates.borrow().clone();
+        let escort = action(&current, 0x96, rpc::GameplayActionKind::EscortCourier);
+        let receipt = committed(submit(&running.service, &escort, first, &mut calls).await?)?;
+        required(!receipt.replayed)?;
+        let current = running.service.updates.borrow().clone();
+        required(
+            journey::phase(&current).map_err(repository_error)? == rpc::JourneyPhase::Dialogue,
+        )?;
+        required(current.pins() == &model::pins().map_err(repository_error)?)?;
+        required(
+            current.state().narrative.completed_beats
+                == [
+                    model::content("room").map_err(repository_error)?,
+                    model::content("opening").map_err(repository_error)?,
+                ]
+                && current.state().narrative.active_beats
+                    == [model::content("courier-answer-escort").map_err(repository_error)?]
+                && current.state().narrative.open_threads
+                    == [model::content("sealed-packet-delivery-thread")
+                        .map_err(repository_error)?]
+                && current.state().narrative.accepted_facts.len() == 2,
+        )?;
+        for id in &current.state().narrative.accepted_facts {
+            let fact = current
+                .state()
+                .facts
+                .iter()
+                .find(|fact| &fact.id == id)
+                .ok_or_else(|| io::Error::other("narrative cause absent"))?;
+            required(current.state().decisions.iter().any(|decision| {
+                decision.operation == fact.operation
+                    && decision.revision == fact.revision
+                    && decision.facts.get(fact.ordinal as usize) == Some(id)
+                    && decision.source_policy.as_str() == journey::THREAD_POLICY
+            }))?;
+        }
+        let physical = durable(&inspector, 0x96).await?;
+        required(
+            physical.envelope
+                == local_demo_scope::encode_owned_demo_checkpoint(&current, codec)
+                    .map_err(repository_error)?,
+        )?;
+        Ok::<_, Error>((first, escort, receipt, current, physical))
+    }
+    .await;
+    let first_closed = match running.close().await {
+        Ok(mut exited) => {
+            let closed = exited.issuer.close_owned().await.map_err(repository_error);
+            closed.map(|()| exited)
+        }
+        Err(error) => Err(error),
+    };
+    let first_release = local_demo_scope::release_owner(&inspector, session, first_fence).await;
+    let first_grant_join = join_driver(grant_driver).await;
+    let exited = first_closed?;
+    first_release.map_err(repository_error)?;
+    first_grant_join?;
+    let (first, escort, receipt, committed_checkpoint, physical) = first_flow?;
+    required(exited.checkpoint == committed_checkpoint)?;
+
+    let restored = local_demo_scope::admit_startup(
+        &mut inspector,
+        &cold,
+        local_demo_scope::DemoStartupIdentity {
+            fence: second_fence,
+            player_credential: [0x81; 32],
+            display_credential: [0x82; 32],
+        },
+        codec,
+        &model::recovery().map_err(repository_error)?,
+        |checkpoint| journey::phase(checkpoint).map(|_| ()),
+    )
+    .await
+    .map_err(|_| io::Error::other("fenced narrative startup restore refused"))?;
+    required(restored.restored && restored.checkpoint == committed_checkpoint)?;
+    required(
+        physical.envelope
+            == local_demo_scope::encode_owned_demo_checkpoint(&restored.checkpoint, codec)
+                .map_err(repository_error)?,
+    )?;
+    let (grant_client, grant_connection) =
+        timeout(Duration::from_secs(2), configuration.connect(NoTls)).await??;
+    let grant_driver = tokio::spawn(grant_connection);
+    let issuer = LocalDemoScopeIssuer::new(
+        tokio::runtime::Handle::current(),
+        grant_client,
+        session,
+        second_fence,
+    )
+    .map_err(repository_error)?;
+    let mut resumed = RunningActor::start(
+        repository(&configuration, &configuration, codec).await?,
+        issuer,
+        restored.checkpoint,
+        codec,
+        reductions.clone(),
+    )
+    .await?;
+    let before_retry = reductions.load(Ordering::SeqCst);
+    let retry = async {
+        let replay = committed(submit(&resumed.service, &escort, first, &mut calls).await?)?;
+        required(
+            replay.replayed
+                && replay.outcome == receipt.outcome
+                && replay.revision == receipt.revision
+                && reductions.load(Ordering::SeqCst) == before_retry,
+        )?;
+        let current = snapshot(&resumed.service, &mut calls).await?;
+        required(current.checkpoint == committed_checkpoint)?;
+        required(durable(&inspector, 0x96).await? == physical)?;
+        Ok::<_, Error>(())
+    }
+    .await;
+    let second_closed = match resumed.close().await {
+        Ok(mut exited) => {
+            let closed = exited.issuer.close_owned().await.map_err(repository_error);
+            closed.map(|()| exited)
+        }
+        Err(error) => Err(error),
+    };
+    let release = local_demo_scope::release_owner(&inspector, session, second_fence).await;
+    let grant_join = join_driver(grant_driver).await;
+    drop(inspector);
+    let inspector_join = join_driver(inspector_driver).await;
+    release.map_err(repository_error)?;
+    grant_join?;
+    inspector_join?;
+    let exited = second_closed?;
+    retry?;
+    required(exited.checkpoint == committed_checkpoint && calls.count <= 20)?;
+    Ok(())
+}
