@@ -1026,3 +1026,294 @@ fn objective_source_pin_changes_and_injected_terminal_events_never_create_a_cand
     state.facts.push(extra);
     refuses_without_sampling(&model::checkpoint(after.basis(), state).unwrap());
 }
+
+const BATTLEFIELD_DECISION_FIXTURE: &str = include_str!("battlefield_objective_contract.json");
+
+fn battlefield_refuses_without_sampling(current: &Checkpoint, input: &GameInput) {
+    let original = current.clone();
+    let calls = std::cell::Cell::new(0usize);
+    assert_eq!(
+        stage_with_supplier(current, input, &mut |_| {
+            calls.set(calls.get() + 1);
+            Ok(20)
+        }),
+        Err(RepositoryError::InvalidCandidate)
+    );
+    assert_eq!(calls.get(), 0);
+    assert_eq!(current, &original);
+}
+
+#[test]
+fn battlefield_registered_defend_is_the_exact_authored_escalation() {
+    let opening = tests::opening_story();
+    let unoffered = tests::input(&opening, first(), 6, "defend-courier", vec![]);
+    battlefield_refuses_without_sampling(&opening, &unoffered);
+
+    let dialogue = stage_with_supplier(
+        &opening,
+        &tests::input(&opening, first(), 6, "escort-courier", vec![]),
+        &mut |_| panic!("escort has no rules draws"),
+    )
+    .unwrap();
+    assert!(dialogue.state().encounters.is_empty());
+    let input = tests::input(&dialogue, first(), 7, "defend-courier", vec![]);
+    let mut initiative = 0;
+    let combat = stage_with_supplier(&dialogue, &input, &mut |sides| {
+        assert_eq!(sides, 20);
+        initiative += 1;
+        Ok(if initiative == 1 { 20 } else { 1 })
+    })
+    .unwrap();
+
+    assert_eq!(initiative, 3);
+    let [encounter] = combat.state().encounters.as_slice() else {
+        panic!("the authored escalation creates one encounter")
+    };
+    assert_eq!(
+        encounter.participants,
+        [
+            entity(ENTITIES[0]).unwrap(),
+            entity(ENTITIES[1]).unwrap(),
+            entity(BANDIT).unwrap()
+        ]
+    );
+    assert_eq!(
+        encounter.objectives,
+        [model::content("defend-courier").unwrap()]
+    );
+    assert_eq!(
+        encounter.combat_policy,
+        model::content("normal-nonlethal-melee").unwrap()
+    );
+    assert_eq!(
+        encounter.active_turn,
+        Some(player_entity(first(), &combat).unwrap())
+    );
+    let bandits = combat
+        .state()
+        .entities
+        .iter()
+        .filter(|record| record.definition == model::content("bandit").unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(bandits.len(), 1);
+    assert_eq!(bandits[0].location, Some(room_entity().unwrap()));
+    assert_eq!(bandits[0].position, Some(Position { x: 0, y: 0, z: 0 }));
+    for previous in &dialogue.state().entities {
+        assert_eq!(
+            combat
+                .state()
+                .entities
+                .iter()
+                .find(|record| record.id == previous.id),
+            Some(previous)
+        );
+    }
+    let operation = command(&input).unwrap().operation;
+    let draws = combat
+        .state()
+        .draws
+        .iter()
+        .filter(|draw| draw.operation == operation)
+        .collect::<Vec<_>>();
+    assert_eq!(draws.len(), 3);
+    assert!(draws.iter().all(|draw| draw.source == rule().unwrap()));
+    let repeated = tests::input(&combat, first(), 8, "defend-courier", vec![]);
+    battlefield_refuses_without_sampling(&combat, &repeated);
+}
+
+#[test]
+fn battlefield_objective_waits_for_the_actual_rules_terminal_cause() {
+    let before = before_outcome(true);
+    let input = outcome_input(&before, true);
+    let after = stage_with_supplier(&before, &input, &mut |sides| {
+        Ok(if sides == 20 { 10 } else { 1 })
+    })
+    .unwrap();
+
+    assert_eq!(phase(&after), Ok(rpc::JourneyPhase::Combat));
+    assert_eq!(after.state().entities, before.state().entities);
+    assert_eq!(
+        after.state().encounters[0].participants,
+        before.state().encounters[0].participants
+    );
+    assert_eq!(
+        after.state().encounters[0].combat_policy,
+        before.state().encounters[0].combat_policy
+    );
+    assert_eq!(
+        after.state().encounters[0].objectives,
+        [model::content("defend-courier").unwrap()]
+    );
+    assert!(after.state().facts.iter().all(|fact| !matches!(
+        &fact.value,
+        FactValue::ContentEvent { definition, .. }
+            if ["combat-victory", "combat-defeat"].contains(&definition.entry.as_str())
+    )));
+    assert_eq!(
+        &after.state().facts[..before.state().facts.len()],
+        before.state().facts.as_slice()
+    );
+}
+
+#[test]
+fn battlefield_terminal_objective_changes_only_the_admitted_slot() {
+    for victory in [true, false] {
+        let (before, input, after) = completed(victory);
+        assert_terminal(&before, &input, &after, victory);
+        let proposal_input = before_proposal(&after, victory);
+        let original = proposal_input.clone();
+        let admitted =
+            objective_outcome::stage(&before, proposal_input.clone(), command(&input).unwrap())
+                .unwrap();
+        let mut expected = original.state().clone();
+        expected.encounters[0].objectives = vec![
+            model::content(if victory {
+                "combat-victory"
+            } else {
+                "combat-defeat"
+            })
+            .unwrap(),
+        ];
+
+        assert_eq!(admitted.state(), &expected);
+        assert_eq!(admitted.basis(), original.basis());
+        assert_eq!(admitted.pins(), original.pins());
+        assert_eq!(admitted.state().entities, original.state().entities);
+        assert_eq!(admitted.state().schedules, original.state().schedules);
+        assert_eq!(admitted.state().logical_time, original.state().logical_time);
+        assert_eq!(proposal_input, original);
+    }
+}
+
+#[test]
+fn battlefield_complete_pin_mismatches_refuse_before_sampling() {
+    use df_types::BuildIdentity;
+
+    let before = before_outcome(true);
+    for case in 0..6 {
+        let mut pins = before.pins().clone();
+        match case {
+            0 => pins.rules.catalog_digest = ContentDigest([91; 32]),
+            1 => pins.rules.source_manifest_digest = ContentDigest([92; 32]),
+            2 => pins.rules.handler_digest = ContentDigest([93; 32]),
+            3 => pins.content.content_digest = ContentDigest([94; 32]),
+            4 => pins.content.package_digest = ContentDigest([95; 32]),
+            _ => {
+                pins.build = BuildIdentity::new(
+                    Some("unadmitted-source"),
+                    Some("unadmitted-native"),
+                    Some("unadmitted-wasm"),
+                    Some("unadmitted-config"),
+                    Some("unadmitted-content"),
+                )
+                .unwrap();
+            }
+        }
+        let changed = Checkpoint::new(
+            before.schema(),
+            before.basis(),
+            pins,
+            before.state().clone(),
+            ReferenceInventory {
+                rules: &[model::rule().unwrap(), rule().unwrap()],
+                content: &model::contents().unwrap(),
+                resources: &resources().unwrap(),
+                assets: &[],
+            },
+            model::limits(),
+        )
+        .unwrap();
+        let input = outcome_input(&changed, true);
+        battlefield_refuses_without_sampling(&changed, &input);
+    }
+}
+
+#[test]
+fn battlefield_incompatible_canonical_geometry_removes_attack_admission() {
+    let before = before_outcome(true);
+    let actor = player_entity(first(), &before).unwrap();
+    for case in 0..4 {
+        let mut state = before.state().clone();
+        let id = if case % 2 == 0 {
+            actor
+        } else {
+            entity(BANDIT).unwrap()
+        };
+        let record = state
+            .entities
+            .iter_mut()
+            .find(|record| record.id == id)
+            .unwrap();
+        if case < 2 {
+            record.position = Some(Position { x: 0, y: 10, z: 0 });
+        } else {
+            record.location = None;
+        }
+        let changed = model::checkpoint(before.basis(), state).unwrap();
+        assert_eq!(combat_transition::available(&changed, actor), Ok(false));
+        let input = outcome_input(&changed, true);
+        battlefield_refuses_without_sampling(&changed, &input);
+    }
+}
+
+#[test]
+fn battlefield_unmapped_escalation_cannot_add_enemies_or_transform_terrain() {
+    let before = before_outcome(true);
+    for entry in [
+        "unsupported-reinforcement-request",
+        "unsupported-terrain-request",
+    ] {
+        let reference = model::content(entry).unwrap();
+        assert!(!model::contents().unwrap().contains(&reference));
+        let input = tests::input(&before, first(), 8, entry, vec![]);
+        battlefield_refuses_without_sampling(&before, &input);
+    }
+    assert_eq!(before.state().encounters.len(), 1);
+    assert_eq!(
+        before.state().encounters[0].participants,
+        [
+            entity(ENTITIES[0]).unwrap(),
+            entity(ENTITIES[1]).unwrap(),
+            entity(BANDIT).unwrap()
+        ]
+    );
+    assert_eq!(
+        before.state().encounters[0].objectives,
+        [model::content("defend-courier").unwrap()]
+    );
+}
+
+#[test]
+fn battlefield_catalog_presence_and_policy_labels_do_not_authorize_outcomes() {
+    let before = before_outcome(true);
+    for change_objective in [true, false] {
+        let mut state = before.state().clone();
+        let present_but_unmapped = model::content("short-rest").unwrap();
+        assert!(model::contents().unwrap().contains(&present_but_unmapped));
+        if change_objective {
+            state.encounters[0].objectives = vec![present_but_unmapped];
+        } else {
+            state.encounters[0].combat_policy = present_but_unmapped;
+        }
+        let changed = model::checkpoint(before.basis(), state).unwrap();
+        let input = outcome_input(&changed, true);
+        battlefield_refuses_without_sampling(&changed, &input);
+    }
+}
+
+#[test]
+fn battlefield_executed_native_witness_binds_the_decision_fixture() {
+    use sha2::{Digest, Sha256};
+
+    let (before, input, after) = completed(true);
+    assert_terminal(&before, &input, &after, true);
+    assert_eq!(before.pins(), &model::pins().unwrap());
+    assert_eq!(after.pins(), before.pins());
+    assert!(!BATTLEFIELD_DECISION_FIXTURE.is_empty());
+    println!(
+        "COMBAT_D03_NATIVE_WITNESS fixture_sha256={:x} source_manifest_sha256={:x} pins={:?}",
+        Sha256::digest(BATTLEFIELD_DECISION_FIXTURE.as_bytes()),
+        Sha256::digest(model::source_manifest()),
+        after.pins()
+    );
+}
