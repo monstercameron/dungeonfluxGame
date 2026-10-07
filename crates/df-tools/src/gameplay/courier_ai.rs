@@ -10,7 +10,7 @@ use df_engine::effect_emission::{
 };
 use df_model::checkpoint::*;
 use df_session::submission::RepositoryError;
-use df_types::{MemberId, OperationId, RevisionLabel};
+use df_types::{LocaleTag, MemberId, OperationId, RevisionLabel};
 use sha2::{Digest, Sha256};
 
 use super::{journey, model};
@@ -18,6 +18,8 @@ use super::{journey, model};
 pub(super) const DEFINITION: &str = "courier-private-answer-prepared-1";
 pub(super) const POLICY: &str = "courier-private-answer-policy-1";
 pub(super) const MODEL: &str = "authored-courier-recording-1";
+// Exact authored byte locale; this is not listener negotiation or translation.
+const SOURCE_LOCALE: &str = "en";
 pub(super) const RESPONSE: &str = "The courier quietly tells you: the sealed packet is addressed to Vell at the Harbor Inn. Keep its destination between you.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -248,6 +250,7 @@ struct RecordingBasis {
     pins: CheckpointPins,
     policy: ContentReference,
     model: RevisionLabel,
+    source_locale: LocaleTag,
 }
 struct AuthoredRecording {
     key: ContentReference,
@@ -317,6 +320,7 @@ pub(super) fn execute(
         pins: current.pins().clone(),
         policy: model::content(POLICY).map_err(|_| CourierError::Source)?,
         model: model::label(MODEL).map_err(|_| CourierError::Source)?,
+        source_locale: LocaleTag::parse(SOURCE_LOCALE).map_err(|_| CourierError::Source)?,
     };
     let recording = AuthoredRecording {
         key: model::content(DEFINITION).map_err(|_| CourierError::Source)?,

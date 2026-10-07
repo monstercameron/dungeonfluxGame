@@ -1,0 +1,62 @@
+{
+  "task_id": "B-C-df-ai-D04",
+  "title": "Define exact cache replay and locale identity",
+  "stage": "design",
+  "objective": "Define exact cache replay and locale identity; expected: summaries and prior output cannot bypass access.",
+  "acceptance_criteria": [
+    "summaries and prior output cannot bypass access",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "source_fingerprint": "3676e59e6316d9e4d77eab1f9dd812776041c2c9eb70f5dc2e396a13e50bf6b0",
+  "decision": "Use the existing registered native prepared-only courier recording and exact private source basis; every completion and saved response must pass current recipient and source checks.",
+  "source_identity": {
+    "key": "courier-private-answer-prepared-1",
+    "basis": [
+      "complete CheckpointPins",
+      "courier-private-answer-policy-1",
+      "authored-courier-recording-1",
+      "LocaleTag en"
+    ],
+    "locale": "Authored English bytes only. ASCII case normalization is supported by LocaleTag; dialects, aliases and reordered subtags do not become equivalent or trigger fallback."
+  },
+  "authority": "df-ai exact lookup and complete-record admission supply borrowed bytes and a complete candidate; the native courier, engine and DurableOwner retain current source/access validation and durable publication authority. Cache bytes and prior semantic_output grant no access.",
+  "replay": "AuthoredRecording read_replay returns None. Native Replay and Live refuse. Durable receipt retry may confirm the same committed operation without reexecuting; saved response access still revalidates current checkpoint evidence.",
+  "alternatives": [
+    {
+      "alternative": "Reuse by summary similarity, matching text, prefix or model/locale fallback",
+      "decision": "Rejected: derived prior output cannot establish current source/access/locale identity."
+    },
+    {
+      "alternative": "Generic test-only store/authority or new cache DTO as production proof",
+      "decision": "Rejected: reuse the actual registered native consumer and existing private identity."
+    },
+    {
+      "alternative": "Requalify source mechanics or authorize private output from a critic",
+      "decision": "Rejected: current canonical source/audience owner retains authority."
+    },
+    {
+      "alternative": "General translated-recording or live-provider/replay implementation",
+      "decision": "Unsupported here; selected source remains fixed English prepared-only. Preserve explicit source-owner gaps."
+    }
+  ],
+  "gaps": [
+    "No general canonical AI cache key/storage owner, MemorySummary retrieval adapter, AiJob/AiResult/ExpressionContext production freeze, or general source-qualified recording Replay is claimed.",
+    "This actual consumer is one authored English prepared source. It has no requested-locale API, translation corpus, dynamic model/provider output or public locale negotiation. Source locale en identifies the authored bytes only.",
+    "The actual local native binding/fixture authority is not production tenant/auth, provider-input secrecy, arbitrary natural-language semantic safety, physical browser/device/audio, PostgreSQL restart or paid-provider acceptance.",
+    "Summary retrieval remains unsupported on this consumer. The executable contract verifies prior canonical semantic text cannot replace current source/access; future summary producers must retain the governing source/access generations and independent native retrieval authority.",
+    "All compile/test/lint/WASM/style/independent/Main checks are currently UNPERFORMED. Prior component PASS and postbuild-only source snapshots do not prove this candidate."
+  ],
+  "executable_tests": [
+    "exact_prepared_entry_is_borrowed_and_complete_before_candidate_admission",
+    "complete_source_basis_and_key_mismatches_are_stale_without_fallback",
+    "locale_case_normalization_preserves_exact_authored_source_identity",
+    "recording_replay_missing_and_unapproved_modes_never_select_prepared_fallback",
+    "complete_prepared_bytes_cannot_publish_after_current_access_or_source_withdrawal",
+    "prior_semantic_output_cannot_restore_withdrawn_access_or_source",
+    "display_and_other_members_receive_no_private_cached_response",
+    "durable_receipt_retry_does_not_reexecute_or_grant_current_display_access",
+    "cancellation_after_prepared_read_cannot_admit_or_stage_old_complete_bytes"
+  ],
+  "verification": "Authored tests require fresh actual source/build-bound gates. This contract does not itself claim compilation, runtime acceptance, translation, provider execution, physical PostgreSQL restart, or production tenant authentication.",
+  "preserved_existing_coverage": "Existing courier tests remain intact, including lost acknowledgement, uncertain lookup, corrupt/truncated/cancelled/trailing complete records and causal completion binding."
+}
