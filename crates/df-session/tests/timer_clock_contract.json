@@ -1,0 +1,90 @@
+{
+  "task_id": "B-C-df-session-D03",
+  "attempt_id": "B-C-df-session-D03-a2",
+  "objective": "Define timer clock generation and recovery modes",
+  "original_acceptance": [
+    "paused logical time differs from process wall time",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "decision": {
+    "status": "bounded current-source contract; production timer policy unresolved",
+    "logical_time": "LogicalTime is canonical checkpoint data. Process monotonic deadlines may wake the native owner, but the wake does not advance logical time, prove a timer due, or admit gameplay. Only an authorized, source-valid canonical candidate acknowledged by the current durable owner can advance committed game time.",
+    "clock_separation": "std::time::Instant/Duration represent process scheduling elapsed time. LogicalTime uses ticks and ticks_per_second. Do not convert process elapsed time or downtime into game ticks. A paused owner retains its canonical LogicalTime; external process time can pass independently.",
+    "timer_instance": "OwnedTimer identity is (id, basis, generation, due, source, status). The timer ID names the instance; generation is a distinct callback fence. DurableIntent independently retains (id, basis, operation, slot, kind, job, timer, generation, status, definition). Neither counter reuse nor the timer ID alone replaces full current registration validation.",
+    "recovery_epoch": "SessionRevision contains a RecoveryEpoch and an in-epoch sequence. A clock or ExecutionMode does not allocate an epoch, owner fence, process generation, client generation, or timer generation. Disaster restore/epoch retirement remains the protected recovery owner's responsibility.",
+    "current_modes": "ExecutionMode is exactly Live, PreparedOnly, or Replay. It is preserved as checkpoint state and does not itself authorize a clock advance or determine pause/restart policy.",
+    "owner_wake": "The current ActorLoop::run_with_owner_wake accepts an owner-supplied Instant deadline. It calls the reducer-owned wake outside the inbox lock; wake work creates no admission sequence. Stop cancels future wakes and drains already accepted inputs in FIFO order. This primitive does not admit logical-time gameplay changes or timer completions.",
+    "client_boundary": "validate_client_command returns CommandError::InternalInput for GameInput::Job and GameInput::Timer. Client DTO admission cannot forge those native completion inputs.",
+    "invalid_canonical_state": "Checkpoint::new rejects zero ticks_per_second with InvalidTime and zero OwnedTimer or DurableIntent generation with InvalidIntent. validate_resume rejects an expected stale SessionRevision basis with StaleBasis.",
+    "no_fake_completion": "The wake probe never submits GameInput::Timer or GameInput::Job and never treats inbox admission as timer completion, decision, or commit."
+  },
+  "alternatives": [
+    {
+      "option": "Advance logical time from wall time, process uptime, reconnect, or downtime",
+      "decision": "rejected",
+      "reason": "This advances paused state without an authorized committed decision and makes replay depend on process timing."
+    },
+    {
+      "option": "Treat a monotonic wake as proof that a canonical timer expired",
+      "decision": "rejected",
+      "reason": "A wake is scheduling only. The owner must revalidate current basis, run, registration, generation, due value, status, pause policy, and durable fence before any candidate can be considered. The current public session APIs do not provide that completion-admission path."
+    },
+    {
+      "option": "Use one counter or timer name as both instance identity and generation",
+      "decision": "rejected",
+      "reason": "Replacement and stale callback validation require distinct timer instance identity plus generation and current basis."
+    },
+    {
+      "option": "Let a clock or ExecutionMode issue recovery/process generations or pause authority",
+      "decision": "rejected",
+      "reason": "Those authorities belong to session/recovery owners; the current API does not select their policy."
+    }
+  ],
+  "recovery_modes": {
+    "current_execution_modes": ["Live", "PreparedOnly", "Replay"],
+    "required_session_scenarios_not_current_modes": [
+      "active run: reload committed logical time and pending records; never derive game time from process elapsed time",
+      "paused run: retain logical time and pending records; a resume decision is required before policy can make due work eligible",
+      "restart or owner takeover: reload compatible durable state, obtain current owner fence, and reject displaced process callbacks",
+      "reset or stopped run: a new run/revision or explicit shutdown policy fences old work; shutdown does not invent completed expiry",
+      "deterministic replay: consume committed logical inputs/outcomes under compatible pinned source without provider calls",
+      "disaster restore: the protected recovery owner issues a verified newer RecoveryEpoch, retires old namespaces, and reports lost ranges before serving"
+    ],
+    "not_implemented_or_admitted_here": [
+      "pause/cause policy owner",
+      "registration allocator and current callback-generation admission",
+      "general Session timer/job completion entry point",
+      "restart, takeover, reset, or disaster-restore integration"
+    ]
+  },
+  "actual_source_cases": [
+    "Run the actual df-session ActorLoop::run_with_owner_wake with an expired native Instant deadline while its fixture owner marks the scenario paused; observe one owner wake and confirm the canonical checkpoint LogicalTime and not-yet-due timer remain equal. The callback submits no completion input.",
+    "Use the existing df-session support fixture and actual df-model Checkpoint, OwnedTimer, DurableIntent, LogicalTime, Basis, and ExecutionMode types. Retain complete timer and durable-intent fields; show two distinct timer IDs can share a generation.",
+    "Confirm Live, PreparedOnly, and Replay survive checkpoint construction without becoming clock authority.",
+    "Refuse zero timer generation, zero time unit, and a stale resume basis through the actual canonical Checkpoint constructor/validator.",
+    "Refuse actual TimerExpiry and JobCompletion values through validate_client_command as InternalInput.",
+    "Preserve admitted inbox sequence/FIFO reduction and stop-drains-accepted-input behavior around the owner wake."
+  ],
+  "unresolved": [
+    "No native selected pause/cause policy owner or general Session timer/job completion callable is established by current public APIs. This remains explicit and is not an I03 implementation claim.",
+    "ExecutionMode is Live/PreparedOnly/Replay; it is not authority to allocate a recovery epoch, client generation, process generation, timer generation, or pause policy. Actor-specific policy is outside the two permitted paths.",
+    "No current source admits/revalidates a timer callback against an active registration and durably commits timer expiry. The contract therefore does not claim a completed expiry path.",
+    "No Rust fixture execution, formatting run, compilation, runtime execution, source commit/push, or independent frontier acceptance has occurred. Root owns gates and integration; finite checks await explicit root release.",
+    "Compatibility rules, timer-instance allocation, callback delivery semantics, pause/resume transition authority, bounded catch-up order/limits, and recovery behavior require their named upstream owners and frozen contracts."
+  ],
+  "next_consumer": {
+    "owner": "df-session actor and its df-persistence repository adapter after separately frozen prerequisite contracts",
+    "minimum_source_paths": ["crates/df-session/src/actor.rs", "crates/df-session/src/clock.rs", "crates/df-persistence/src/"],
+    "required_behavior": "A native scheduler only produces an owned wake. The serialization owner rechecks the current fenced session/run registration and canonical basis/due/source/status/pause policy, produces a source-valid candidate with a stable operation identity, and relies on durable acknowledgement before state or publication changes. Recovery explicitly invalidates stale registrations. These are future requirements, not delivered behavior."
+  },
+  "checks": {
+    "source_contract_tests": "authored; execution UNPERFORMED pending explicit root finite-check release",
+    "rustfmt": "UNPERFORMED; root owns pinned formatting gate",
+    "rustc_rust_2024_d_warnings": "UNPERFORMED; root owns bounded compiler gate",
+    "cargo_or_production_qualification": "UNPERFORMED and not claimed",
+    "native_wasm_clippy_or_build": "UNPERFORMED",
+    "database_restart_or_durable_commit": "UNPERFORMED",
+    "browser_or_provider": "UNPERFORMED and not required for this native bounded example",
+    "independent_frontier_original_boundary_review": "PENDING"
+  }
+}
