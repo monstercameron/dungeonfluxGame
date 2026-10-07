@@ -1,0 +1,85 @@
+{
+  "task_id": "B-C-df-intent-D01",
+  "stage": "design",
+  "original_outcome": "bounded typed actions preserve actor and source basis",
+  "decision": "Canonical typed current-response candidate and ordered step admission are the executable bounded example; no new public or persisted plan schema is substituted.",
+  "candidate_schema": {
+    "proposal": "df_model::checkpoint::GameInput::Game(CommandInput)",
+    "accepted_variants": [
+      "SelectChoice",
+      "SelectReaction",
+      "SubmitRoll"
+    ],
+    "actor": "CommandInput.member, independently compared with CandidateOwner.member and current membership/offer",
+    "identity": "CommandInput.operation independently compared with CandidateOwner.operation",
+    "basis": "Basis(session, run, recovery epoch and sequence), observed revision, exact native current CheckpointPins",
+    "source": "Current pending window/selected offer RuleReference in the trusted inventory and compiled source registry"
+  },
+  "compound_step_schema": {
+    "ordered_inputs": "Borrowed [GameInput] with distinct OperationId request identities; OperationId is not a canonical PlanStepId.",
+    "bounds": [
+      "maximum_steps",
+      "maximum_total_input_bytes",
+      "maximum_comparisons",
+      "CommandLimits"
+    ],
+    "admission": "PlanAdmission.first is the only admitted current response; requires_revalidation is the exact unchanged tail.",
+    "resumption": "Validate against the newly committed current checkpoint and fresh native owner; lookup any retained operation first."
+  },
+  "approved_planned_fields": {
+    "source": "planning/interaction-engine.md:82-90; planning/runtime-directors.md:75-79",
+    "required": [
+      "stable PlanStep IDs",
+      "actor and targets",
+      "required choices/resources/time",
+      "dependency and cancellation/partial-outcome policy",
+      "bounded continuation lifetime",
+      "explicit accepted progress/outcomes"
+    ],
+    "status": "Persistent ActionPlan owner/types/executor remain a future production gate; this Design example does not claim these are implemented."
+  },
+  "actual_consumer": "df-engine::plan_staging::stage_plan_head uses Intent admission then the registered semantic pending path; stages head only, does not commit or authorize tail.",
+  "alternatives": [
+    {
+      "choice": "Use classifier text as authority",
+      "decision": "Rejected: native actor, operation, basis, sources and compiled mechanics are independent."
+    },
+    {
+      "choice": "Predict legality for all future steps or rollback a committed prefix",
+      "decision": "Rejected: revalidation and explicit durable outcomes belong to the current commit owner."
+    },
+    {
+      "choice": "Invent PlanStepId from OperationId or a public ActionPlan DTO",
+      "decision": "Rejected: canonical allocation, lifetime and persistence need their existing approved owner."
+    }
+  ],
+  "verification": {
+    "native": "Exact compiled contract binary must execute all 12 tests against source/build closure.",
+    "source_fixture": "Synthetic current checkpoint/catalog/handler inputs prove boundary semantics, not selected standard-2024 book coverage.",
+    "browser": "Unperformed; no browser behavior changed.",
+    "provider": "Unperformed; no calls authorized.",
+    "persistence": "Current borrowed admission is not a physical durable ActionPlan fixture."
+  },
+  "unresolved": [
+    "Raw InputEnvelope/disposition/confirmation producer is separately owned by D02.",
+    "Generic targets/affordances are separately owned by D03.",
+    "Persistent plan and continuation identity/lifetime/partial-outcome/cancellation contracts remain unimplemented here."
+  ],
+  "governing_sources": [
+    {
+      "path": "planning/interaction-engine.md",
+      "sha256": "1bad7c28609ac5e5a51a3ea0b3c1fae17ebeb6380dbdb8fce582085a8ede354f",
+      "sections": [
+        "Intent, affordances and compound plans"
+      ]
+    },
+    {
+      "path": "planning/runtime-directors.md",
+      "sha256": "ed8944f316d912498107ee550431e560795ba8114cb63a181b6aadeca70b48ca",
+      "sections": [
+        "Pure public boundaries",
+        "Time, recovery and bounded work"
+      ]
+    }
+  ]
+}
