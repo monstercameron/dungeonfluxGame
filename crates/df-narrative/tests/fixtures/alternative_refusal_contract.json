@@ -1,0 +1,74 @@
+{
+  "kind": "source-backed-alternative-refusal-decision-fixture",
+  "task_id": "B-C-df-narrative-D02",
+  "attempt_id": "B-C-df-narrative-D02-a1",
+  "input_revision": "e4d5a66c19ec3612596a7deb5348e9fe82996875",
+  "brief_revision": "28a82774d3c72d296bb831983f0eccb4ea7fd92258bbb063f5fcba95442a3c4b",
+  "title": "Define alternative route and refusal policies",
+  "stage_at_intake": "design",
+  "status_at_intake": "pending",
+  "claim": "none",
+  "objective": "Narrative pressure cannot force player choice.",
+  "decision": "A content owner may supply two already admitted routes. The pure narrative selector advances only the route explicitly selected against a current causal checkpoint. An unselected/refused route has no candidate state; an admitted Continue consequence retains an open thread. Session is the only durable commit owner.",
+  "alternatives_considered": [
+    {
+      "option": "Advance a preferred route when the player refuses",
+      "decision": "rejected",
+      "reason": "Would turn narrative salience into a player action and violate the choice boundary."
+    },
+    {
+      "option": "Invent a substitute delivery or fact during selection",
+      "decision": "rejected",
+      "reason": "The existing API accepts authored admitted alternatives and already accepted source facts only."
+    },
+    {
+      "option": "Leave the beat pending or select an authored route with an exact accepted source",
+      "decision": "selected",
+      "reason": "Matches the registered public df-narrative operations and governing narrative design."
+    }
+  ],
+  "contract_source": "crates/df-narrative/tests/alternative_refusal_contract.rs",
+  "integration_path": "crates/df-narrative/tests/alternative_refusal_contract.rs",
+  "assertion_inventory": [
+    "Unselected refusal returns Selection error; checkpoint, active/completed beat, character choices, resources, facts and decisions are unchanged.",
+    "Each of two selected authored routes stages only its own beat transition; accepted source fact, open thread, all sibling state, basis and pins stay equal.",
+    "Repeated route, duplicate ambiguous selection, unknown source, stale basis, stale policy and orphan unaccepted source all refuse without mutating the current checkpoint.",
+    "Missing accepted understanding, absent required thread, revoked audience and event-definition mismatch refuse without inventing access or applying a route.",
+    "Admitted Continue consequence keeps the thread open and carries exact source evidence; repeat and unknown source refuse."
+  ],
+  "source_pins_sha256": {
+    "crates/df-narrative/src/lib.rs": "4450d361b44545911e4f24bf83c5355b54c7e70d64cf1c57b1b5cade74076a22",
+    "crates/df-narrative/src/beat_selection.rs": "57f383ee268ae78c23975075cf5bcafb65ae7e6efb08be96c004c5a5ba1a0a67",
+    "crates/df-narrative/src/thread_progress.rs": "d70488b09b3c7622a423d092398fe9cdc9a4262ffd47a980edd348f6a94c1593",
+    "crates/df-engine/src/director_staging.rs": "79377db7b41426a0f5fea3e78187e222ab0345ba10de945d348698f490a254cf",
+    "crates/df-tools/src/gameplay/journey/narrative_transition.rs": "a93b9bd9d585d62f1bcc4c92891c15520388e716c1194f0defe5af95c61902b9",
+    "crates/df-tools/src/gameplay/journey/narrative_transition_session_tests.rs": "05524339d73c110b3e98249624af1d308fa57c06cd9586475255d3ade0a3a7d4",
+    "crates/df-session/src/submission.rs": "83fb0a5654e1d264a6f997b7c8770057a3651f095f9331f8af246c23c80a9244"
+  },
+  "governing_sections": [
+    "planning/narrative-engine.md: Authoring and state; Director pass; Realization and acceptance",
+    "planning/runtime-directors.md: Authority and composition; Pure public boundaries; Time, recovery and bounded work",
+    "planning/rules-effect-model.md: Source-grounded effects and interaction testing",
+    "planning/rules-support.md: source legality and session authority",
+    "planning/feature-refinement.md: private offers, explicit decline, voluntary spotlight and consent",
+    "planning/client-architecture.md: server filters private information for each player/display role",
+    "ADR/0004-development-reliability.md: source/build-specific verification",
+    "ADR/0005-frontier-output-evaluation.md: independent running-output evaluation",
+    "planning/coding-style.md"
+  ],
+  "evidence_status": {
+    "source_read": "performed",
+    "test_source_drafted": "performed",
+    "test_compilation": "unperformed by delegated scope",
+    "native_test_execution": "unperformed by delegated scope",
+    "wasm_check": "unperformed by delegated scope",
+    "session_end_to_end": "unperformed by delegated scope",
+    "PostgreSQL_commit": "unperformed by delegated scope",
+    "independent_review": "unperformed by delegated scope"
+  },
+  "unsupported_or_pending": [
+    "This contract does not prove a campaign authoring schema, complete campaign alternatives, calibrated agency, or refusal UI.",
+    "The existing native journey Session tests cover real DurableOwner with a controlled repository port; this utility does not claim physical PostgreSQL evidence.",
+    "Source code and fixture must be compiled and executed from a frozen admitted candidate before any acceptance claim."
+  ]
+}
