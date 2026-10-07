@@ -1,0 +1,215 @@
+{
+  "task_id": "B-C-df-knowledge-D03",
+  "title": "Define witness disclosure and secret ownership",
+  "status": "PRIVATE_SOURCE_PROPOSAL_FOR_ROOT_ADMISSION; no original claim or completion",
+  "original": {
+    "path": "artifacts/tmp/wave51-session-submission-20261006/ROOT-original-B-C-df-knowledge-D03-279.json",
+    "bytes": 10579,
+    "sha256": "9bc3c00b3eb953efcb3505beb6e0d916ef2eafb9bfea78b18638b4df736ec596",
+    "stage": "design",
+    "acceptance": [
+      "each audience grant is explicit",
+      "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+    ],
+    "dependencies": []
+  },
+  "reported_Main_commit": "9b08bc073b65feb85a4c696653d3c8e13161d6a5",
+  "source_identity": "Actual read file hashes in source-pins.json; Git not invoked by worker",
+  "proposed_api": {
+    "path": "crates/df-knowledge/src/perception.rs",
+    "function": "perceive_claims<'a>(current: &'a Checkpoint, expected: Basis, admitted: &CheckpointPins, observer: ObserverScope, limits: ClaimPerceptionLimits) -> Result<PerceivedClaims<'a>, PerceptionError>",
+    "limits_fields": [
+      "maximum_scan_records",
+      "maximum_record_comparisons",
+      "maximum_selected_claims"
+    ],
+    "selection_fields": [
+      "checkpoint: &'a Checkpoint",
+      "claims: Vec<&'a AttributedClaim>"
+    ],
+    "accessors": [
+      "basis() -> Basis",
+      "pins() -> &'a CheckpointPins",
+      "claims() -> &[&'a AttributedClaim]"
+    ],
+    "error_type": "Existing PerceptionError; no new model or global invariant"
+  },
+  "rules": [
+    {
+      "decision": "Existing fact perception and witness semantics remain byte-for-byte preserved. Shared, exact Members inclusion and Host omission determine fact visibility; native witness admission additionally binds actual canonical observer/source/time/accepted fact/member-character and route.",
+      "authority": "planning/interaction-engine.md Persistent social and epistemic model (CanonicalFact, KnowledgeGrant, WitnessRecord); planning/runtime-directors.md Authority and composition / Pure public boundaries; current witness.rs and perception.rs",
+      "interpretation": "Already implemented current fact boundary; proposal does not invent contact, disclosure mechanics or auth"
+    },
+    {
+      "decision": "A claim must pass its own current AttributedClaim.audience before selection. A named SecretPolicy may narrow, never widen, the exact claim's audience.",
+      "authority": "planning/interaction-engine.md Persistent social and epistemic model: Belief is an attributed claim; SecretPolicy specifies owner/permitted knowledge; planning/subsystem-interfaces.md Identity and session ownership requires current audience revalidation.",
+      "interpretation": "Proposed concrete intersection of two canonical explicit audience fields; Root admission required"
+    },
+    {
+      "decision": "SecretPolicy.claims links exact RecordIds; its holder must match claim.holder and containing NpcState.entity. Any mismatched ownership or more than one matching policy suppresses only that claim.",
+      "authority": "planning/interaction-engine.md Persistent social and epistemic model explicitly assigns a secret owner; current model SecretPolicy has holder+claims+policy+permitted_audience, NpcState owns secrets, AttributedClaim has holder.",
+      "interpretation": "Proposed conservative consistency rule, not an existing checkpoint invariant or a literal prescribed duplicate-policy rule. Root must freeze this choice. Suppression preserves canonical records and safe error shape."
+    },
+    {
+      "decision": "A selected full canonical claim may not return an evidence FactId whose current GameFact audience denies this observer. Fact audiences and canonical truth are unchanged.",
+      "authority": "planning/interaction-engine.md Grounded creative speech and listener-safe generation forbids unauthorized facts/text/raw secret IDs in listener contexts; planning/client-architecture.md server filtering precedes sending; existing perceive fact visibility.",
+      "interpretation": "One-way safety of a full AttributedClaim borrow carrying evidence IDs. This does not assert all domain claim knowledge requires knowing its evidence. A heard rumor with private origin needs a separate actual redacted public speech record."
+    },
+    {
+      "decision": "A private or false claim citing a public fact never narrows that fact's audience. No KnowledgeGrant, relationship, confidence, evidence link or text broadens fact or claim permission.",
+      "authority": "planning/interaction-engine.md: NPC may lie/misunderstand/conceal without mutating truth; claims and canonical facts separate. planning/long-horizon-state.md Retrieval and contradiction semantics: beliefs retain contradictory claims and false beliefs; canonical truth from committed facts.",
+      "interpretation": "Prevents unsupported old -01 claim-to-fact policy inference"
+    },
+    {
+      "decision": "Existing legitimate multi-source grants and duplicate witness no-op remain valid; this proposal changes no global KnowledgeGrant semantics.",
+      "authority": "Current KnowledgeGrant has observer+fact+source; checkpoint validates referenced facts but imposes neither source==fact nor global observer/fact uniqueness; witness.rs creates its own accepted witnessed fact as both fact/source.",
+      "interpretation": "No imposed legacy model restriction"
+    },
+    {
+      "decision": "Selection binds exact current basis, content/rules/build pins and trusted ObserverScope; finite shared scan/comparison/output bounds fail atomically with no returned partial selection. It preserves checkpoint ordering and borrowed record identity.",
+      "authority": "planning/runtime-directors.md Pure public boundaries; planning/long-horizon-state.md current observer/source/access revalidation; planning/coding-style.md bounded ownership and typed errors.",
+      "interpretation": "Pure native canonical selection only; owner must revalidate separately before later publication"
+    }
+  ],
+  "alternatives": [
+    {
+      "choice": "Treat secret claim evidence facts as owned secrets",
+      "outcome": "Rejected: a private false belief may cite public evidence. No explicit fact ownership relation exists."
+    },
+    {
+      "choice": "Require every legacy KnowledgeGrant source equal fact and unique observer/fact",
+      "outcome": "Rejected: unsupported by current canonical model/gov. Multiple provenance sources remain legitimate."
+    },
+    {
+      "choice": "Intersect all matching secret policies",
+      "outcome": "Not selected pending Root freeze: it silently reconciles competing ownership/policies without an admitted resolution rule. Candidate suppresses exact ambiguous claim."
+    },
+    {
+      "choice": "Expose canonical claim with filtered/removed evidence IDs",
+      "outcome": "Not selected: would need a separate audience-safe representation/owner rather than changing the borrowed canonical record."
+    },
+    {
+      "choice": "Invent reveal command, trust threshold or production source-rights owner",
+      "outcome": "Rejected: actual source/rates/consent/mechanical/social authority remain unresolved."
+    }
+  ],
+  "known_gaps": [
+    "No production WitnessSourceOwner implementation found; current concrete SourceOwner is finite synthetic engine test fixture, not actual visibility/contact/source qualification.",
+    "No authenticated reveal action/consent/reveal-condition implementation introduced. Policy permissions are admitted current canonical fields, not qualified production social mechanics.",
+    "PerceivedClaims is a server-only canonical borrow, not a listener-safe wire/provider speech projection, redacted rumor record or NPC query integration.",
+    "Native courier wire currently uses fact perceive only. Additive claim API has a concrete native consumer test; no production caller is asserted.",
+    "Capacity outcomes depend on canonical record counts/work. No timing, metadata-size or resource-error noninterference proof is asserted; paired hidden-text cases cover selected public content only.",
+    "Native/WASM compile, formatting, Clippy, PostgreSQL, real browser, runtime publication, independent frontier original-scope review and integrated revision evidence are unperformed by worker."
+  ],
+  "verification": {
+    "performed": [
+      "Read original immutable D03 and current Main intake with SHA identity",
+      "Read governing source and canonical types/native source owner boundary",
+      "Author private full perception postimage and ten native consumer tests",
+      "M guards PASS with shared nonblocking compiler lock for authorship, F_NOCACHE(48,1), 16KiB chunks",
+      "Normal own NULL-context devlog append"
+    ],
+    "unperformed": [
+      "All compiler/formatter/runtime/provider/queue/Git actions"
+    ]
+  },
+  "devlog_id": "knowledge-disclosure-d03-source-20261007-02-ownership",
+  "source_pins": [
+    {
+      "path": "crates/df-knowledge/src/witness.rs",
+      "bytes": 9111,
+      "sha256": "7e62061cf11f4b2f93b8e52b6b69aa19b62c8bd78f3d2aa203adf8e324a44cfc"
+    },
+    {
+      "path": "crates/df-knowledge/src/perception.rs",
+      "bytes": 4874,
+      "sha256": "c17742d547db1e54c0dc3695e1412eb1a3eb84609569f1c6b368c78ee9bc9467"
+    },
+    {
+      "path": "crates/df-model/src/checkpoint.rs",
+      "bytes": 110600,
+      "sha256": "5d490868133662a88f78fabe519f07189b020304205a7f88b21b55ed208d7fbd"
+    },
+    {
+      "path": "crates/df-engine/src/witness_staging.rs",
+      "bytes": 11254,
+      "sha256": "0a244d8d2f5a93bc84080bbcb47d747612d4f93b98e5ccf0bc206842bcb57014"
+    },
+    {
+      "path": "crates/df-engine/tests/support/witness_staging.rs",
+      "bytes": 26450,
+      "sha256": "45df519c6740b07e4157ef0f8093f48579da40e3ec182ca4ac3235fa94faa10a"
+    },
+    {
+      "path": "crates/df-engine/tests/support/fixture_model.rs",
+      "bytes": 7732,
+      "sha256": "cb90b48b9e3a011767a150d88bbd8ec6dc26bdd6041b38c5d5c041edf8281131"
+    },
+    {
+      "path": "crates/df-engine/Cargo.toml",
+      "bytes": 1713,
+      "sha256": "60a82c2920cabcd98bee669f2d2e67048664d9f3d2fa4fcef2a9abd54ead1f8c"
+    },
+    {
+      "path": "crates/df-tools/src/gameplay/wire.rs",
+      "bytes": 29602,
+      "sha256": "35112056fbea29f5237273d6a5922e9e90742db99a681e46340640605c7516a8"
+    }
+  ],
+  "governing_pins": [
+    {
+      "path": "planning/subsystem-architecture.md",
+      "bytes": 14004,
+      "sha256": "cf549f4f046f76713c881228d82c6a7111d8ccc84db208cb9d9db67bb192d9f6"
+    },
+    {
+      "path": "planning/subsystem-interfaces.md",
+      "bytes": 35522,
+      "sha256": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a"
+    },
+    {
+      "path": "planning/runtime-directors.md",
+      "bytes": 11747,
+      "sha256": "ed8944f316d912498107ee550431e560795ba8114cb63a181b6aadeca70b48ca"
+    },
+    {
+      "path": "planning/interaction-engine.md",
+      "bytes": 11517,
+      "sha256": "1bad7c28609ac5e5a51a3ea0b3c1fae17ebeb6380dbdb8fce582085a8ede354f"
+    },
+    {
+      "path": "planning/long-horizon-state.md",
+      "bytes": 7690,
+      "sha256": "977b5a346190a55c119242fdb7009a645e6d76aa2946d0684c46571d846e96ff"
+    },
+    {
+      "path": "planning/coding-style.md",
+      "bytes": 9448,
+      "sha256": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb"
+    },
+    {
+      "path": "planning/client-architecture.md",
+      "bytes": 5809,
+      "sha256": "d629add05e38bcdb4b224053ab40174dc96d219abc2f6e924119d1fa67be8f89"
+    },
+    {
+      "path": "planning/runtime-reliability.md",
+      "bytes": 12250,
+      "sha256": "176e5a8fb04e1d9cb2402225c9eb1bb4ffd110abf353f226a302e10e780acf05"
+    }
+  ],
+  "adopted_source_execution": {
+    "task_id": "B-C-df-knowledge-D03",
+    "attempt_id": "B-C-df-knowledge-D03-a1",
+    "input_Main_commit": "a1a721cc9a5305f03b7acdeebbac639b176a90f2",
+    "worker": "/root/source_knowledge_disclosure_d03_sol61",
+    "source_packet": "artifacts/tmp/knowledge-disclosure-d03-source-20261007-02",
+    "decision_and_earlier_verification": "Historical whole -02 private freeze retained; new actual commands/results belong to task-bound attempt evidence",
+    "compiler_release": "Root explicitly released C lane on 2026-10-07",
+    "additional_native_delivery_consumer": {
+      "test": "committed_witness_receipt_rechecks_current_claim_scope_and_projects_exact_member_facts",
+      "purpose": "Actual native DurableOwner/registered witness commit, current safe projection, stale basis refusal and same-operation receipt replay; uses existing finite synthetic repository/source, no physical PostgreSQL or production auth proof",
+      "authored_current_test_count": 11
+    }
+  }
+}

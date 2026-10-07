@@ -75,3 +75,7 @@ path = "tests/witness_staging.rs"
 [[test]]
 name = "test_control_authority_contract"
 path = "tests/test_control_authority_contract.rs"
+
+[[test]]
+name = "witness_disclosure_contract"
+path = "tests/witness_disclosure_contract.rs"
