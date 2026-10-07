@@ -1,5 +1,6 @@
 //! Borrowed dispatch selection over an owner-admitted, pinned source inventory.
 //! This structural boundary does not qualify sources, rights, or mechanics.
+use crate::explanation::RuleExplanation;
 use df_content::catalog::CatalogSnapshot;
 use df_model::checkpoint::{CheckpointPins, RuleReference};
 use df_types::RevisionLabel;
@@ -116,6 +117,40 @@ impl<'a, Handler> DispatchRegistry<'a, Handler> {
         selector: &RevisionLabel,
         source: &RuleReference,
     ) -> Result<&'a Handler, DispatchError> {
+        Ok(self.registration(expected_pins, selector, source)?.handler)
+    }
+
+    /// Selects the same compiled registration as select and explains its exact supplied basis.
+    /// No source bytes are executed or copied; missing/unsupported selections return no view.
+    pub fn select_with_provenance(
+        &self,
+        expected_pins: &CheckpointPins,
+        selector: &RevisionLabel,
+        source: &RuleReference,
+    ) -> Result<(&'a Handler, RuleExplanation<'a>), DispatchError> {
+        let registration = self.registration(expected_pins, selector, source)?;
+        let source_bytes = self
+            .catalog
+            .get(self.catalog.version(), registration.source)
+            .map_err(|_| DispatchError::PinsMismatch)?
+            .ok_or(DispatchError::UnsupportedSource)?;
+        Ok((
+            registration.handler,
+            RuleExplanation {
+                pins: self.catalog.pins(),
+                selector: registration.selector,
+                source: registration.source,
+                source_bytes,
+            },
+        ))
+    }
+
+    fn registration(
+        &self,
+        expected_pins: &CheckpointPins,
+        selector: &RevisionLabel,
+        source: &RuleReference,
+    ) -> Result<&'a HandlerRegistration<'a, Handler>, DispatchError> {
         if expected_pins != self.catalog.pins() {
             return Err(DispatchError::PinsMismatch);
         }
@@ -124,7 +159,7 @@ impl<'a, Handler> DispatchRegistry<'a, Handler> {
             if registration.selector == selector {
                 known_selector = true;
                 if registration.source == source {
-                    return Ok(registration.handler);
+                    return Ok(registration);
                 }
             }
         }

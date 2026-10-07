@@ -849,3 +849,6 @@ mod tests {
         assert_eq!(selected.state().draws, checked.state().draws);
     }
 }
+
+#[cfg(test)]
+mod diagnostic_tests;

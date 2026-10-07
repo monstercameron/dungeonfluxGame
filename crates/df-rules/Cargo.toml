@@ -17,3 +17,7 @@ path = "tests/dispatch.rs"
 [[test]]
 name = "invocation"
 path = "tests/invocation.rs"
+
+[[test]]
+name = "diagnostic_provenance"
+path = "tests/diagnostic_provenance.rs"

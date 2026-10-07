@@ -1,0 +1,257 @@
+{
+  "schema": 1,
+  "record_kind": "historical authored-source Design contract example",
+  "status": "Source authored; all listed execution gates unperformed at authoring; not an approval or runtime rules catalog",
+  "task": {
+    "id": "B-C-df-rules-D04",
+    "title": "Define rules diagnostic provenance",
+    "objective": "Define rules diagnostic provenance; expected: explanations identify selected source semantics.",
+    "stage": "design",
+    "acceptance": [
+      "explanations identify selected source semantics",
+      "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+    ],
+    "original_verification": [
+      "Freeze the cited source decision and a bounded contract example; compare explanations identify selected source semantics. Retain decision, alternatives and unresolved facts.",
+      "Exact executable commands: TBD at G01 and scoped prerequisite resolution; this planned procedure is not a claim that Rust/browser/provider checks ran."
+    ],
+    "source_fingerprint": "3676e59e6316d9e4d77eab1f9dd812776041c2c9eb70f5dc2e396a13e50bf6b0"
+  },
+  "authoring_context": {
+    "agent_id": "/root/source_rules_explanation_d04",
+    "role": "worker",
+    "task_id": "B-C-df-rules-D04",
+    "attempt_id": "B-C-df-rules-D04-a1"
+  },
+  "input_source_revision": "9b08bc073b65feb85a4c696653d3c8e13161d6a5",
+  "frozen_brief_sha256": "23b604ac72176f838b9d716a58d753e18a5b2529123f0e07df243b741a90ba90",
+  "canonical_types": [
+    "df_model::checkpoint::Checkpoint",
+    "df_model::checkpoint::AcceptedDecision",
+    "df_model::checkpoint::CheckpointPins",
+    "df_model::checkpoint::RulesPins",
+    "df_model::checkpoint::RuleReference",
+    "df_model::checkpoint::ContentDigest",
+    "df_types::BuildIdentity",
+    "df_types::RevisionLabel"
+  ],
+  "source_decision": {
+    "choice": "Canonical registry-selected borrowed provenance, with staging through the existing candidate guard",
+    "authority": "df-rules DispatchRegistry registration plus canonical df-model CheckpointPins/RulesPins/RuleReference/ContentDigest and df-types BuildIdentity",
+    "semantics": "Exact mechanics mode, ruleset, catalog, source manifest, compiled handler identity and selector/clause; separate cosmetic content/package basis and supplied build labels",
+    "bytes": "Exact immutable supplied indexed clause bytes are borrowed separately from cosmetic package bytes; they are not decoded, executed or admitted as new authority",
+    "explanations": "A successful selection view describes only selection. A successful staged tuple describes an uncommitted canonical candidate after the existing full invocation guard. Typed refusal returns no successful candidate explanation.",
+    "privacy": "No Debug, free-text or serialization implementation; raw source bytes cannot accidentally enter default derived logs or public projection. Explicit access requires its existing owner/audience policy.",
+    "evidence": "BuildIdentity remains supplied labels. RuleExplanation makes no assertion that rights, source completeness, tests, WASM, browser or providers passed."
+  },
+  "alternatives": [
+    {
+      "alternative": "Independently constructed explanation labels",
+      "rejected_because": "Can diverge from compiled registration and silently report source semantics not selected by the registry"
+    },
+    {
+      "alternative": "Interpret imported catalog/generated/cosmetic text as rules",
+      "rejected_because": "Creates a competing executable rules authority and violates closed source-qualified compiled handler ownership"
+    },
+    {
+      "alternative": "Duplicate model decisions or provenance records in a new engine",
+      "rejected_because": "Canonical Checkpoint/AcceptedDecision/RulesPins/BuildIdentity already supply these contracts"
+    },
+    {
+      "alternative": "Public runtime prose or DTO publication policy",
+      "deferred_because": "Original Design task requires a frozen source decision and bounded contract example; native/public projection and audience policy remain separately owned"
+    }
+  ],
+  "bounded_native_example": {
+    "owner": "Existing df-tools gameplay::model::HarborHandler",
+    "selected_source": "SRD5.2.1 page6 normal single-d20 ability check only; source srd521-page6; clause normal-proficient-total-versus-dc; selector harbor-normal-ability-check-1",
+    "actual_compiled_semantics": "Existing df_rules::ability_check::resolve with ability modifier +2, proficiency +2 and authored DC15; die10 produces seal-obscured, die11 produces clue-loading-pier; die1/die20 boundary outcomes also exercised",
+    "source_binding": "Native test reads source_manifest() from existing compiled SOURCE and local_journey::SOURCE literals, recomputes SHA256 of indexed bytes and compares canonical source_manifest_digest",
+    "cosmetic_binding": "Native test requires selected indexed source bytes differ from existing CONTENT; structural test uses separate cosmetics CatalogSnapshots with different complete bytes/content package digests",
+    "limitations": "The indexed bytes are the already supplied local source manifest/citation representation, not a newly acquired full rulebook/PDF. No new rights approval, full-mechanics coverage or commercial launch clearance is asserted."
+  },
+  "expected_native_cases": [
+    {
+      "die": 10,
+      "sides": 20,
+      "ability_modifier": 2,
+      "proficiency_bonus": 2,
+      "difficulty_class": 15,
+      "total": 14,
+      "succeeded": false,
+      "content_entry": "seal-obscured"
+    },
+    {
+      "die": 11,
+      "sides": 20,
+      "ability_modifier": 2,
+      "proficiency_bonus": 2,
+      "difficulty_class": 15,
+      "total": 15,
+      "succeeded": true,
+      "content_entry": "clue-loading-pier"
+    },
+    {
+      "die": 1,
+      "sides": 20,
+      "ability_modifier": 2,
+      "proficiency_bonus": 2,
+      "difficulty_class": 15,
+      "total": 5,
+      "succeeded": false,
+      "content_entry": "seal-obscured"
+    },
+    {
+      "die": 20,
+      "sides": 20,
+      "ability_modifier": 2,
+      "proficiency_bonus": 2,
+      "difficulty_class": 15,
+      "total": 24,
+      "succeeded": true,
+      "content_entry": "clue-loading-pier"
+    }
+  ],
+  "case_status": "Expected behavior derived from the supplied compiled source; these new native registered cases have not been executed at authoring",
+  "authored_tests": {
+    "registered_df_rules_target": "diagnostic_provenance",
+    "expected_structural_cases": 5,
+    "native_filter": "gameplay::model::diagnostic_tests::native_registered_ability_check_explanation_identifies_actual_selected_semantics",
+    "expected_native_cases": 1,
+    "total_expected_new_tests": 6,
+    "execution_status": "unperformed"
+  },
+  "verification_gates_at_authoring": [
+    {
+      "command": "cargo test --offline --locked -p df-rules --test diagnostic_provenance -- --nocapture (exact5cases)",
+      "status": "unperformed",
+      "owner": "Root"
+    },
+    {
+      "command": "cargo test --offline --locked -p df-rules --test dispatch --test invocation -- --nocapture",
+      "status": "unperformed",
+      "owner": "Root"
+    },
+    {
+      "command": "cargo test --offline --locked -p df-tools --lib gameplay::model::diagnostic_tests::native_registered_ability_check_explanation_identifies_actual_selected_semantics -- --exact --nocapture (exact1case)",
+      "status": "unperformed",
+      "owner": "Root"
+    },
+    {
+      "command": "cargo clippy --offline --locked -p df-rules -p df-tools --all-targets -- -D warnings",
+      "status": "unperformed",
+      "owner": "Root"
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "status": "unperformed",
+      "owner": "Root"
+    },
+    {
+      "command": "cargo check --offline --locked -p df-rules --target wasm32-unknown-unknown --lib",
+      "status": "unperformed",
+      "owner": "Root"
+    },
+    {
+      "command": "cargo check --offline --locked -p df-tools --lib --target wasm32-unknown-unknown",
+      "status": "unperformed",
+      "owner": "Root"
+    },
+    {
+      "command": "cargo clippy --offline --locked -p df-rules -p df-tools --lib --target wasm32-unknown-unknown -- -D warnings",
+      "status": "unperformed",
+      "owner": "Root"
+    }
+  ],
+  "unresolved_facts_at_authoring": [
+    "Formatter/native/WASM/Clippy/compiler tests are Root-owned and unperformed",
+    "Independent frontier running-boundary review and integrated Git revision remain pending",
+    "Production audience-safe diagnostic publication consumer is not supplied by this Design example",
+    "Full standard-2024 mechanics/catalog/interaction denominator and non-SRD rights remain separately required",
+    "BuildIdentity fields and indexed catalog bytes are supplied provenance only; actual evidence must identify the tested source and build"
+  ],
+  "non_authority": [
+    "This JSON is a retained source decision/example, not another rules engine or runtime registration",
+    "It grants no rights, source qualification, check approval, custom-rules admission or publication permission",
+    "Current execution results belong to retained source/build-bound evidence and cannot be inferred from this historical authored record"
+  ],
+  "governing_source_pins": [
+    {
+      "path": "planning/subsystem-architecture.md",
+      "sections": [
+        "Design",
+        "Shared and transport crates",
+        "Server crates",
+        "Browser crates",
+        "Tooling crates",
+        "Integration and refinement",
+        "Commercial service composition"
+      ],
+      "sha256": "cf549f4f046f76713c881228d82c6a7111d8ccc84db208cb9d9db67bb192d9f6"
+    },
+    {
+      "path": "planning/subsystem-interfaces.md",
+      "sections": [
+        "Common contract rules",
+        "Pure domain and content",
+        "Separate runtime subsystem boundaries",
+        "Identity and session ownership",
+        "PostgreSQL persistence and durable media",
+        "AI/provider/media ports",
+        "Projection, RPC and transport",
+        "Feature-specific candidates within existing boundaries",
+        "Browser interfaces",
+        "Observability and development tooling",
+        "Commerce and lifecycle ports"
+      ],
+      "sha256": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a"
+    },
+    {
+      "path": "planning/rules-effect-model.md",
+      "sections": [
+        "Effects, conditions and timing",
+        "Source-linked testing architecture"
+      ],
+      "sha256": "6075c2e05dbc8fe895f7fc49f421f377e22d0b1791aa0988d90d6c5ab5e44d6a"
+    },
+    {
+      "path": "planning/generated-content.md",
+      "sections": [
+        "Candidate, validation and admission",
+        "Optional custom definitions are a distinct ruleset",
+        "Failure, privacy and acceptance"
+      ],
+      "sha256": "0b252a24a8911108660f3276d8359d9df825a3398c7c7a4033c62e2279007ac0"
+    },
+    {
+      "path": "planning/commercial-validation.md",
+      "sections": [
+        "Offer, activation and launch evidence",
+        "Rights-complete launch gate",
+        "Reproducible economics and cash",
+        "Joint offer-cost qualification"
+      ],
+      "sha256": "98c08b66ba87e67a1c190de4f0f0d1a603d9c0c64db8b4da21f7ccd092a0ec6a"
+    },
+    {
+      "path": "planning/interaction-engine.md",
+      "sections": [
+        "Persistent social and epistemic model",
+        "Reaction and schedules",
+        "Intent, affordances and compound plans",
+        "Acceptance",
+        "Grounded creative speech and listener-safe generation",
+        "Source-guided rulings for an inexperienced host"
+      ],
+      "sha256": "1bad7c28609ac5e5a51a3ea0b3c1fae17ebeb6380dbdb8fce582085a8ede354f"
+    },
+    {
+      "path": "development/backlog-catalog.json",
+      "sections": [
+        "C-df-rules",
+        "B-C-df-rules-D04"
+      ],
+      "sha256": "039b0a03b4085b43ad32c4063e2cb8fc789fc55fff7552aec6e951ec3b4704c3"
+    }
+  ]
+}

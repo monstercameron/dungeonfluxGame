@@ -1,5 +1,6 @@
 //! One compiled handler contract and source-pinned invocation boundary.
 use crate::dispatch::{DispatchError, DispatchRegistry};
+use crate::explanation::RuleExplanation;
 use df_model::checkpoint::{
     ActualDraw, Checkpoint, CheckpointError, CheckpointPins, FactValue, GameCommand, GameInput,
     PendingInput, RuleReference,
@@ -425,7 +426,7 @@ fn validate_draw_accounting<Rejection>(
     Ok(())
 }
 
-impl<Handler: RulesCommandHandler> DispatchRegistry<'_, Handler> {
+impl<'a, Handler: RulesCommandHandler> DispatchRegistry<'a, Handler> {
     /// Selects the exact pinned compiled handler, then runs the shared staging guard.
     /// Selection failure never invokes any registered handler. The source owner supplies the
     /// command-to-selector/clause mapping; imported catalog bytes cannot supply executable code.
@@ -438,18 +439,43 @@ impl<Handler: RulesCommandHandler> DispatchRegistry<'_, Handler> {
         current: &Checkpoint,
         maximum_candidate_bytes: usize,
     ) -> Result<Checkpoint, InvocationError<Handler::Rejection>> {
-        let handler = self
-            .select(expected_pins, selector, source)
+        self.stage_with_provenance(
+            expected_pins,
+            selector,
+            source,
+            input,
+            current,
+            maximum_candidate_bytes,
+        )
+        .map(|(candidate, _)| candidate)
+    }
+
+    /// Stages through the canonical guard and returns the actual selected source explanation.
+    /// The checkpoint remains an uncommitted candidate. Refused mechanics or invalid candidate
+    /// bindings return the existing typed error without a successful decision explanation.
+    /// Build labels/source bytes remain supplied facts, not executed-check or rights evidence.
+    pub fn stage_with_provenance(
+        &self,
+        expected_pins: &CheckpointPins,
+        selector: &RevisionLabel,
+        source: &RuleReference,
+        input: RulesCommandInput<'_>,
+        current: &Checkpoint,
+        maximum_candidate_bytes: usize,
+    ) -> Result<(Checkpoint, RuleExplanation<'a>), InvocationError<Handler::Rejection>> {
+        let (handler, explanation) = self
+            .select_with_provenance(expected_pins, selector, source)
             .map_err(InvocationError::Dispatch)?;
         if handler.bound_source().is_some_and(|bound| bound != source) {
             return Err(InvocationError::HandlerSourceMismatch);
         }
-        stage_handler(
+        let candidate = stage_handler(
             handler,
             expected_pins,
             input,
             current,
             maximum_candidate_bytes,
-        )
+        )?;
+        Ok((candidate, explanation))
     }
 }
