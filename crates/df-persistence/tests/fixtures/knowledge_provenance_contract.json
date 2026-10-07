@@ -1,0 +1,110 @@
+{
+  "task_id": "B-C-df-knowledge-D01",
+  "title": "Define fact belief memory rumor provenance",
+  "stage": "design",
+  "objective": "Summaries never replace canonical truth.",
+  "input": {
+    "admitted_source_revision": "c0c0425a6fd28c4bc411569d636bdcdaa5804c93",
+    "frozen_brief": {
+      "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/wave51-session-submission-20261006/ROOT-knowledge-D01-a1-frozen-brief-235.json",
+      "bytes": 19828,
+      "sha256": "d4bf0422b59ca69a933fc6fd3919cf41915112ed49c7d8241d94c50c8d9cab33"
+    },
+    "codec_preimage": {
+      "bytes": 91183,
+      "sha256": "0598ebcb82ff7d7f977a6232ca7a4f116b9abf77dfa83cfa5fa2487724f02431"
+    },
+    "model_preimage": {
+      "bytes": 110600,
+      "sha256": "5d490868133662a88f78fabe519f07189b020304205a7f88b21b55ed208d7fbd"
+    }
+  },
+  "prior_private_draft": {
+    "revision": "Main e4d5a66",
+    "successor_contract_sha256": "b37435b8912c3f08624ef02a68b1891465fb362e6f68ca30c329763ad4ca2b2e",
+    "first_validator_diff_disposition": "Withdrawn and not installed: its evidence-subset and inferred revision restrictions were unsupported by declared record semantics.",
+    "retained_successor_handoff": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/knowledge-provenance-d01-source-20261007-02/handoff.json"
+  },
+  "governing_sections": [
+    {
+      "path": "planning/interaction-engine.md",
+      "lines": "20-35",
+      "decision": "Facts are objective truth, beliefs may be false, rumor hops transmit attributed claims without rewriting the original fact."
+    },
+    {
+      "path": "planning/long-horizon-state.md",
+      "lines": "10-17, 46-57",
+      "decision": "Episodes identify committed sources; summaries cover episodes and derived claims but remain derived aids. Committed facts and decisions remain truth and replay history."
+    },
+    {
+      "path": "planning/runtime-directors.md",
+      "lines": "38-52, 63-78",
+      "decision": "Pure knowledge proposals pass through engine/session owner; accepted facts and decisions are committed atomically."
+    },
+    {
+      "path": "crates/df-model/src/checkpoint.rs",
+      "lines": "380-408, 1214-1245, 1780-1818, 2515-2558",
+      "decision": "Current public records carry typed separate FactId and RecordId links; validator checks existence without equating transmission evidence to claim evidence."
+    },
+    {
+      "path": "crates/df-persistence/src/checkpoint_codec.rs",
+      "lines": "437-505, 1290-1310",
+      "decision": "Codec serializes full state and reconstructs through checkpoint constructor and exact resume pins."
+    }
+  ],
+  "source_policy": {
+    "selected": "Preserve separately attributed world fact, knowledge grant, false belief, later memory episode, rumor transmission and later summary. Independent accepted transmission event may be a rumor evidence FactId distinct from the underlying claim evidence FactId. The summary references episode and claim IDs without becoming a GameFact.",
+    "alternatives": [
+      {
+        "option": "Require rumor evidence to be a subset of claim evidence",
+        "outcome": "Rejected: accepted transmission event can have its own causal FactId."
+      },
+      {
+        "option": "Require memory/summary source revisions to equal source fact revision",
+        "outcome": "Rejected: recording and consolidation may happen later."
+      },
+      {
+        "option": "Treat summary prose as canonical truth",
+        "outcome": "Rejected: violates committed fact authority."
+      }
+    ],
+    "unresolved": "The current records do not alone prove audience/contact policy, semantic agreement of prose, or the complete propagation producer contract."
+  },
+  "source_example": {
+    "canonical_world_outcome": "ResourceChanged from 5 to 4 at revision 1:3",
+    "attributed_false_claim": "I gained a resource; none was spent; evidence is outcome FactId",
+    "accepted_transmission": "Separate causal ContentEvent FactId representing a speech event; same accepted decision in the synthetic fixture",
+    "rumor": "Claim RecordId plus transmission FactId; sender and recipient differ",
+    "memory": "Episode source is transmission FactId; recorded revision 1:5",
+    "summary": "Covered episode and derived claim RecordIds; recorded revision 1:6; never copied into GameFact"
+  },
+  "implementation": {
+    "changed_path": "crates/df-persistence/src/checkpoint_codec.rs",
+    "change": "Nested codec test module only; existing production prefix byte-identical.",
+    "worker_authored_postimage": {
+      "bytes": 99841,
+      "sha256": "f275a8fe7886544ac60a84d3a399e5329fdbd43c6590112ce9239723c845007c"
+    },
+    "test_filter": "knowledge_provenance_contract",
+    "public_api_or_schema_change": false
+  },
+  "assertions": [
+    "Exact codec round trip and byte-identical re-encode preserve fact, claim, transmission, episode and summary IDs.",
+    "False claim and derived text edits do not alter facts, accepted decisions, resources, basis or pins.",
+    "Compaction of derived records leaves canonical history intact.",
+    "Missing fact, episode or claim IDs and duplicate episode identity refuse atomically.",
+    "Wrong admitted content digest refuses recovery."
+  ],
+  "verification_status": {
+    "source_preimage": "PASS, hash-matched",
+    "postimage_install": "PASS, hash-matched; compiler not run",
+    "format": "UNPERFORMED, Root owns",
+    "focused_tests": "UNPERFORMED, Root owns",
+    "Clippy": "UNPERFORMED, Root owns",
+    "native_boundary": "UNPERFORMED, Root owns",
+    "WASM": "UNPERFORMED; native-only df-persistence target gating requires Root interpretation",
+    "migration": "UNPERFORMED; none authored",
+    "PostgreSQL_browser_provider_runtime": "UNPERFORMED; outside this design source contract"
+  },
+  "completion_claim": false
+}

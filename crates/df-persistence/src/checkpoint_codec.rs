@@ -3064,4 +3064,222 @@ mod tests {
             Err(CodecError::Capacity)
         );
     }
+
+    mod knowledge_provenance_contract {
+        use super::*;
+
+        fn provenance_state() -> GameState {
+            let mut s = state();
+            let mut cause = fact(70, 0);
+            cause.revision = revision(1, 3);
+            let mut outcome = fact(71, 1);
+            outcome.revision = cause.revision;
+            outcome.cause = Some(cause.id);
+            outcome.value = FactValue::ResourceChanged {
+                entity: entity(4),
+                resource: label("fixture-resource-1"),
+                before: 5,
+                after: 4,
+                source: rule(),
+            };
+            let mut speech = fact(77, 2);
+            speech.revision = cause.revision;
+            speech.cause = Some(outcome.id);
+            speech.value = FactValue::ContentEvent {
+                definition: content(),
+                subjects: vec![entity(4), entity(5)],
+            };
+            let mut recipient = s.entities[0].clone();
+            recipient.id = entity(5);
+            recipient.identity_revision = label("fixture-recipient-1");
+            s.entities.push(recipient);
+            s.decisions.push(AcceptedDecision {
+                operation: cause.operation,
+                revision: cause.revision,
+                facts: vec![cause.id, outcome.id, speech.id],
+                draws: vec![],
+                effects: vec![],
+                source_policy: label("fixture-policy-1"),
+                semantic_output: None,
+            });
+            s.knowledge.push(KnowledgeGrant {
+                observer: member(3),
+                fact: outcome.id,
+                source: cause.id,
+            });
+            s.beliefs.push(AttributedClaim {
+                id: RecordId::from_bytes(&[72; 16]).unwrap(),
+                holder: entity(4),
+                subject: entity(4),
+                claim: "I gained a resource; none was spent".to_owned(),
+                evidence: vec![outcome.id],
+                audience: AudienceScope::Members(vec![member(3)]),
+                source: content(),
+            });
+            s.memories.push(MemoryEpisode {
+                id: RecordId::from_bytes(&[73; 16]).unwrap(),
+                holder: entity(4),
+                source_facts: vec![speech.id],
+                retained_text: "I remember sending the rumor".to_owned(),
+                audience: AudienceScope::Members(vec![member(3)]),
+                source_revision: revision(1, 5),
+            });
+            s.continuity.rumors.push(RumorTransmission {
+                id: RecordId::from_bytes(&[74; 16]).unwrap(),
+                claim: s.beliefs[0].id,
+                sender: entity(4),
+                recipient: entity(5),
+                evidence: vec![speech.id],
+                policy: content(),
+                remaining_hops: 1,
+                audience: AudienceScope::Members(vec![member(3)]),
+            });
+            s.continuity.summaries.push(MemorySummary {
+                id: RecordId::from_bytes(&[75; 16]).unwrap(),
+                episodes: vec![s.memories[0].id],
+                derived_claims: vec![s.beliefs[0].id],
+                source_digest: pins().content.content_digest,
+                source_revision: revision(1, 6),
+                summarizer: label("fixture-summarizer"),
+                model: label("fixture-model"),
+                policy: content(),
+                audience: AudienceScope::Members(vec![member(3)]),
+                text: "The witness recalls an attributed rumor".to_owned(),
+                incomplete: false,
+            });
+            s.facts = vec![cause, outcome, speech];
+            s
+        }
+
+        #[test]
+        fn later_memory_and_summary_preserve_false_belief_and_independent_rumor_event() {
+            let original = checkpoint(provenance_state()).unwrap();
+            let bytes = encode_checkpoint(&original, codec_limits()).unwrap();
+            let restored = decode(&bytes, original.basis(), original.pins()).unwrap();
+            assert_eq!(restored, original);
+            assert_eq!(encode_checkpoint(&restored, codec_limits()).unwrap(), bytes);
+            let state = restored.state();
+            let outcome = &state.facts[1];
+            let speech = &state.facts[2];
+            assert!(matches!(
+                &outcome.value,
+                FactValue::ResourceChanged {
+                    before: 5,
+                    after: 4,
+                    ..
+                }
+            ));
+            assert!(matches!(&speech.value, FactValue::ContentEvent { .. }));
+            assert_eq!(speech.cause, Some(outcome.id));
+            assert_eq!(state.knowledge[0].fact, outcome.id);
+            assert_eq!(state.knowledge[0].source, state.facts[0].id);
+            assert_eq!(state.beliefs[0].evidence, vec![outcome.id]);
+            assert_eq!(
+                state.beliefs[0].claim,
+                "I gained a resource; none was spent"
+            );
+            assert_eq!(state.memories[0].source_facts, vec![speech.id]);
+            assert!(state.memories[0].source_revision > speech.revision);
+            assert_eq!(state.continuity.rumors[0].claim, state.beliefs[0].id);
+            assert_eq!(state.continuity.rumors[0].evidence, vec![speech.id]);
+            assert_ne!(
+                state.continuity.rumors[0].evidence,
+                state.beliefs[0].evidence
+            );
+            assert_eq!(state.continuity.rumors[0].sender, entity(4));
+            assert_eq!(state.continuity.rumors[0].recipient, entity(5));
+            assert_eq!(
+                state.continuity.summaries[0].episodes,
+                vec![state.memories[0].id]
+            );
+            assert_eq!(
+                state.continuity.summaries[0].derived_claims,
+                vec![state.beliefs[0].id]
+            );
+            assert!(
+                state.continuity.summaries[0].source_revision > state.memories[0].source_revision
+            );
+            assert_ne!(state.memories[0].source_facts, state.beliefs[0].evidence);
+        }
+
+        #[test]
+        fn edits_and_compaction_of_derived_records_leave_canonical_history_intact() {
+            let original = checkpoint(provenance_state()).unwrap();
+            let mut edited = original.state().clone();
+            edited.beliefs[0].claim = "I gained two resources".to_owned();
+            edited.memories[0].retained_text = "I do not recall the words".to_owned();
+            edited.continuity.summaries[0].text = "Uncertain recollection".to_owned();
+            edited.continuity.summaries[0].incomplete = true;
+            let edited = checkpoint(edited).unwrap();
+            let mut compacted = edited.state().clone();
+            compacted.knowledge.clear();
+            compacted.beliefs.clear();
+            compacted.memories.clear();
+            compacted.continuity.rumors.clear();
+            compacted.continuity.summaries.clear();
+            let compacted = checkpoint(compacted).unwrap();
+            for candidate in [&edited, &compacted] {
+                assert_eq!(candidate.state().facts, original.state().facts);
+                assert_eq!(candidate.state().decisions, original.state().decisions);
+                assert_eq!(candidate.state().resources, original.state().resources);
+                assert_eq!(candidate.basis(), original.basis());
+                assert_eq!(candidate.pins(), original.pins());
+            }
+        }
+
+        #[test]
+        fn missing_and_ambiguous_source_ids_refuse_without_partial_checkpoint() {
+            let original = checkpoint(provenance_state()).unwrap();
+            let retained = original.clone();
+            for case in [
+                "missing-memory-fact",
+                "missing-summary-episode",
+                "missing-summary-claim",
+                "missing-rumor-claim",
+                "duplicate-memory-id",
+            ] {
+                let mut candidate = original.state().clone();
+                match case {
+                    "missing-memory-fact" => {
+                        candidate.memories[0].source_facts[0] =
+                            FactId::from_bytes(&[99; 16]).unwrap()
+                    }
+                    "missing-summary-episode" => {
+                        candidate.continuity.summaries[0].episodes[0] =
+                            RecordId::from_bytes(&[99; 16]).unwrap()
+                    }
+                    "missing-summary-claim" => {
+                        candidate.continuity.summaries[0].derived_claims[0] =
+                            RecordId::from_bytes(&[99; 16]).unwrap()
+                    }
+                    "missing-rumor-claim" => {
+                        candidate.continuity.rumors[0].claim =
+                            RecordId::from_bytes(&[99; 16]).unwrap()
+                    }
+                    "duplicate-memory-id" => candidate.memories.push(candidate.memories[0].clone()),
+                    _ => unreachable!(),
+                }
+                let expected = if case == "duplicate-memory-id" {
+                    CheckpointError::DuplicateIdentity
+                } else {
+                    CheckpointError::InvalidReference
+                };
+                assert_eq!(checkpoint(candidate), Err(expected), "{case}");
+                assert_eq!(original, retained, "{case}");
+            }
+        }
+
+        #[test]
+        fn recovery_requires_exact_admitted_source_pins() {
+            let original = checkpoint(provenance_state()).unwrap();
+            let bytes = encode_checkpoint(&original, codec_limits()).unwrap();
+            let mut wrong = pins();
+            wrong.content.content_digest = ContentDigest([99; 32]);
+            assert_eq!(
+                decode(&bytes, basis(), &wrong),
+                Err(CodecError::Checkpoint(CheckpointError::ContentMismatch))
+            );
+            assert_eq!(decode(&bytes, basis(), original.pins()).unwrap(), original);
+        }
+    }
 }
