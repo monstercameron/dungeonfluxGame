@@ -131,7 +131,11 @@ fn waiting(change: impl FnOnce(&mut GameState)) -> Checkpoint {
     state.continuity.npcs.push(NpcState {
         entity: entity(4),
         personality: content(),
+        role: content(),
         motivations: vec![],
+        goals: vec![],
+        needs: vec![],
+        fears: vec![],
         known_facts: vec![FactId::from_bytes(&[7; 16]).unwrap()],
         beliefs: vec![RecordId::from_bytes(&[18; 16]).unwrap()],
         secrets: vec![],

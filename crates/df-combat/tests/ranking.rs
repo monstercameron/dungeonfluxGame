@@ -142,7 +142,11 @@ impl Fixture {
             npcs: vec![NpcState {
                 entity: entity(7),
                 personality: reference("npc-personality"),
+                role: reference("npc-personality"),
                 motivations: vec![],
+                goals: vec![],
+                needs: vec![],
+                fears: vec![],
                 known_facts: vec![],
                 beliefs: vec![record(6)],
                 secrets: vec![],

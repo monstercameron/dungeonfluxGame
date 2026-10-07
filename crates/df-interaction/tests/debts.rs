@@ -131,8 +131,8 @@ fn all_four_transitions_retain_typed_terms_parties_and_both_provenance_sources()
     let at = GameTick(30);
     let evidence = action_evidence();
     for (action, expected) in [
-        (DebtAction::Complete, DebtStatus::Completed),
-        (DebtAction::Breach, DebtStatus::Breached),
+        (DebtAction::Fulfill, DebtStatus::Fulfilled),
+        (DebtAction::Break, DebtStatus::Broken),
         (DebtAction::Expire, DebtStatus::Expired),
         (DebtAction::Cancel, DebtStatus::Cancelled),
     ] {
@@ -223,14 +223,14 @@ fn wrong_identity_stale_basis_and_backward_time_cannot_produce_a_transition() {
     let at = GameTick(20);
     let evidence = action_evidence();
     let wrong_id = ObligationId(99);
-    let mut command = request(&record, DebtAction::Complete, &at, &evidence);
+    let mut command = request(&record, DebtAction::Fulfill, &at, &evidence);
     command.obligation_id = &wrong_id;
     assert_refused(
         propose_debt_transition(&record, command),
         DebtTransitionRefusal::WrongObligation,
     );
     let stale = 7;
-    let mut command = request(&record, DebtAction::Breach, &at, &evidence);
+    let mut command = request(&record, DebtAction::Break, &at, &evidence);
     command.expected_basis = &stale;
     assert_refused(
         propose_debt_transition(&record, command),
@@ -252,8 +252,8 @@ fn every_terminal_state_rejects_all_later_lifecycle_actions() {
     let evidence = action_evidence();
     let at = GameTick(40);
     for status in [
-        DebtStatus::Completed,
-        DebtStatus::Breached,
+        DebtStatus::Fulfilled,
+        DebtStatus::Broken,
         DebtStatus::Expired,
         DebtStatus::Cancelled,
     ] {
@@ -261,8 +261,8 @@ fn every_terminal_state_rejects_all_later_lifecycle_actions() {
         record.status = status;
         let original = record.clone();
         for action in [
-            DebtAction::Complete,
-            DebtAction::Breach,
+            DebtAction::Fulfill,
+            DebtAction::Break,
             DebtAction::Expire,
             DebtAction::Cancel,
         ] {
@@ -282,11 +282,11 @@ fn a_candidate_is_replayable_but_a_fresh_basis_must_be_supplied_after_commit() {
     let evidence = action_evidence();
     let first = proposal(propose_debt_transition(
         &record,
-        request(&record, DebtAction::Complete, &at, &evidence),
+        request(&record, DebtAction::Fulfill, &at, &evidence),
     ));
     let replay = proposal(propose_debt_transition(
         &record,
-        request(&record, DebtAction::Complete, &at, &evidence),
+        request(&record, DebtAction::Fulfill, &at, &evidence),
     ));
     assert_eq!(first.obligation_id, replay.obligation_id);
     assert_eq!(first.expected_basis, replay.expected_basis);
@@ -297,7 +297,7 @@ fn a_candidate_is_replayable_but_a_fresh_basis_must_be_supplied_after_commit() {
     let mut committed = record.clone();
     committed.status = first.status;
     committed.basis = 9;
-    let command = request(&record, DebtAction::Complete, &at, &evidence);
+    let command = request(&record, DebtAction::Fulfill, &at, &evidence);
     assert_refused(
         propose_debt_transition(&committed, command),
         DebtTransitionRefusal::StaleBasis,
@@ -312,8 +312,8 @@ fn denied_or_unresolved_authority_refuses_every_action_even_after_the_due_time()
     let at = GameTick(40);
     let evidence = action_evidence();
     for action in [
-        DebtAction::Complete,
-        DebtAction::Breach,
+        DebtAction::Fulfill,
+        DebtAction::Break,
         DebtAction::Expire,
         DebtAction::Cancel,
     ] {

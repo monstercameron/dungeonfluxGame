@@ -2,8 +2,8 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DebtStatus {
     Active,
-    Completed,
-    Breached,
+    Fulfilled,
+    Broken,
     Expired,
     Cancelled,
 }
@@ -20,8 +20,8 @@ pub enum DebtAuthorization {
 /// An explicit source-backed lifecycle action; no action is inferred from dialogue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DebtAction {
-    Complete,
-    Breach,
+    Fulfill,
+    Break,
     Expire,
     Cancel,
 }
@@ -149,8 +149,8 @@ pub fn propose_debt_transition<V: ObligationView>(
         }
     }
     let status = match request.action {
-        DebtAction::Complete => DebtStatus::Completed,
-        DebtAction::Breach => DebtStatus::Breached,
+        DebtAction::Fulfill => DebtStatus::Fulfilled,
+        DebtAction::Break => DebtStatus::Broken,
         DebtAction::Expire => DebtStatus::Expired,
         DebtAction::Cancel => DebtStatus::Cancelled,
     };

@@ -1,4 +1,4 @@
-//! Exact source-admitted obligation completion, staged through the registered rules boundary.
+//! Exact source-admitted obligation lifecycle actions staged through the registered rules boundary.
 //! A prior committed cause is required. The session ledger and commit owner resolve retries.
 
 use df_interaction::debts::{
@@ -8,7 +8,8 @@ use df_interaction::debts::{
 use df_model::checkpoint::{
     AcceptedDecision, Basis, Checkpoint, CheckpointError, CheckpointLimits, CheckpointPins,
     CommandInput, ContentReference, EntityId, FactId, FactValue, GameCommand, GameFact, GameInput,
-    Obligation, RecordId, ReferenceInventory, RuleReference,
+    Obligation, ObligationAction, ObligationStatus, ObligationTransition, RecordId,
+    ReferenceInventory, RuleReference,
 };
 use df_rules::{RulesCommandHandler, RulesCommandInput};
 use df_types::{OperationId, RevisionLabel, SessionRevision};
@@ -31,9 +32,16 @@ pub struct AcceptedFulfillmentCause {
     pub revision: SessionRevision,
 }
 
+/// Exact lifecycle action and authored definition selected by the native owner.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FulfillmentAction<'a> {
+    pub kind: DebtAction,
+    pub definition: &'a ContentReference,
+}
+
 /// Current source and actor-control admission, separate from structural membership checks.
 /// Implementations must be pure and bounded, validate the complete registration under current
-/// pins/content/source rights, and authorize this member to act for the exact obligor.
+/// pins/content/source rights, and authorize this action for the exact obligation and member.
 /// No client-provided registration, trace identity or content-reference presence grants authority.
 pub trait FulfillmentSourceOwner {
     type Refusal;
@@ -42,6 +50,7 @@ pub trait FulfillmentSourceOwner {
         &self,
         current: &Checkpoint,
         registration: &FulfillmentRegistration,
+        action: FulfillmentAction<'_>,
         command: &CommandInput,
         obligation: &Obligation,
         cause: &GameFact,
@@ -88,8 +97,10 @@ pub struct ObligationFulfillmentHandler<'a, Owner> {
     pub inventory: ReferenceInventory<'a>,
     pub registration: &'a FulfillmentRegistration,
     pub obligation: RecordId,
+    pub action: DebtAction,
+    pub action_definition: &'a ContentReference,
     pub cause: AcceptedFulfillmentCause,
-    pub completion_fact: FactId,
+    pub action_fact: FactId,
     pub limits: FulfillmentLimits,
 }
 
@@ -141,6 +152,16 @@ impl<Owner: FulfillmentSourceOwner> RulesCommandHandler
             .find(|obligation| obligation.id == self.obligation)
             .ok_or(FulfillmentError::UnknownObligation)?;
         self.validate_registration(current, obligation)?;
+        if self.action == DebtAction::Fulfill
+            && self.action_definition != &self.registration.completion_definition
+        {
+            return Err(FulfillmentError::InvalidRegistration);
+        }
+        if self.action_definition.package != current.pins().content.package
+            || !self.inventory.content.contains(self.action_definition)
+        {
+            return Err(FulfillmentError::InvalidRegistration);
+        }
         let cause = current
             .state()
             .facts
@@ -205,17 +226,26 @@ impl<Owner: FulfillmentSourceOwner> RulesCommandHandler
             .state()
             .facts
             .iter()
-            .any(|fact| fact.id == self.completion_fact)
+            .any(|fact| fact.id == self.action_fact)
         {
             return Err(FulfillmentError::DuplicateFact);
         }
         self.owner
-            .admit(current, self.registration, command, obligation, cause)
+            .admit(
+                current,
+                self.registration,
+                FulfillmentAction {
+                    kind: self.action,
+                    definition: self.action_definition,
+                },
+                command,
+                obligation,
+                cause,
+            )
             .map_err(FulfillmentError::Source)?;
         let view = CanonicalObligation {
             record: obligation,
             basis: &self.current_basis,
-            ticks: &current.state().logical_time.ticks,
         };
         let transition = propose_debt_transition(
             &view,
@@ -223,9 +253,9 @@ impl<Owner: FulfillmentSourceOwner> RulesCommandHandler
                 obligation_id: &self.obligation,
                 expected_basis: &self.current_basis,
                 at: &current.state().logical_time.ticks,
-                action: DebtAction::Complete,
+                action: self.action,
                 authorization: DebtAuthorization::Approved,
-                action_provenance: definition,
+                action_provenance: self.action_definition,
             },
         );
         let proposal = match transition {
@@ -245,7 +275,25 @@ impl<Owner: FulfillmentSourceOwner> RulesCommandHandler
             .iter_mut()
             .find(|record| record.id == proposal.obligation_id)
             .ok_or(FulfillmentError::UnknownObligation)?;
-        record.fulfilled = proposal.status == DebtStatus::Completed;
+        record.status = match proposal.status {
+            DebtStatus::Fulfilled => ObligationStatus::Fulfilled,
+            DebtStatus::Broken => ObligationStatus::Broken,
+            DebtStatus::Expired => ObligationStatus::Expired,
+            DebtStatus::Cancelled => ObligationStatus::Cancelled,
+            DebtStatus::Active => return Err(FulfillmentError::WrongCommand),
+        };
+        record.transition = Some(ObligationTransition {
+            action: match proposal.action {
+                DebtAction::Fulfill => ObligationAction::Fulfill,
+                DebtAction::Break => ObligationAction::Break,
+                DebtAction::Expire => ObligationAction::Expire,
+                DebtAction::Cancel => ObligationAction::Cancel,
+            },
+            source: self.action_definition.clone(),
+            fact: self.action_fact,
+            source_policy: self.registration.policy.clone(),
+            at: current.state().logical_time,
+        });
         state
             .facts
             .try_reserve_exact(1)
@@ -255,7 +303,7 @@ impl<Owner: FulfillmentSourceOwner> RulesCommandHandler
             .try_reserve_exact(1)
             .map_err(|_| FulfillmentError::Capacity)?;
         state.facts.push(GameFact {
-            id: self.completion_fact,
+            id: self.action_fact,
             revision: next.revision,
             operation: command.operation,
             ordinal: 0,
@@ -263,14 +311,14 @@ impl<Owner: FulfillmentSourceOwner> RulesCommandHandler
             // Completion may not widen disclosure beyond the committed cause.
             audience: cause.audience.clone(),
             value: FactValue::ContentEvent {
-                definition: self.registration.completion_definition.clone(),
+                definition: self.action_definition.clone(),
                 subjects: vec![obligation.obligor, obligation.beneficiary],
             },
         });
         state.decisions.push(AcceptedDecision {
             operation: command.operation,
             revision: next.revision,
-            facts: vec![self.completion_fact],
+            facts: vec![self.action_fact],
             draws: vec![],
             effects: vec![],
             source_policy: self.registration.policy.clone(),
@@ -322,6 +370,8 @@ impl<Owner: FulfillmentSourceOwner> ObligationFulfillmentHandler<'_, Owner> {
             &registration.source.entry,
             &registration.source.clause,
             &registration.policy,
+            &self.action_definition.package,
+            &self.action_definition.entry,
         ] {
             bytes = bytes
                 .checked_add(label.retained_heap_bytes())
@@ -359,6 +409,7 @@ impl<Owner: FulfillmentSourceOwner> ObligationFulfillmentHandler<'_, Owner> {
     ) -> Result<(), FulfillmentError<Owner::Refusal>> {
         let registration = self.registration;
         if obligation.definition != registration.obligation_definition
+            || obligation.agreement.source != registration.obligation_definition
             || registration.source.catalog != current.pins().rules.catalog
             || !self.inventory.rules.contains(&registration.source)
             || [
@@ -384,7 +435,6 @@ impl<Owner: FulfillmentSourceOwner> ObligationFulfillmentHandler<'_, Owner> {
 struct CanonicalObligation<'a> {
     record: &'a Obligation,
     basis: &'a Basis,
-    ticks: &'a u64,
 }
 
 impl ObligationView for CanonicalObligation<'_> {
@@ -405,25 +455,27 @@ impl ObligationView for CanonicalObligation<'_> {
         &self.record.beneficiary
     }
     fn terms(&self) -> &ContentReference {
-        &self.record.definition
+        &self.record.terms
     }
     fn basis(&self) -> &Basis {
         self.basis
     }
     fn status(&self) -> DebtStatus {
-        if self.record.fulfilled {
-            DebtStatus::Completed
-        } else {
-            DebtStatus::Active
+        match self.record.status {
+            ObligationStatus::Active => DebtStatus::Active,
+            ObligationStatus::Fulfilled => DebtStatus::Fulfilled,
+            ObligationStatus::Broken => DebtStatus::Broken,
+            ObligationStatus::Expired => DebtStatus::Expired,
+            ObligationStatus::Cancelled => DebtStatus::Cancelled,
         }
     }
     fn last_transition_at(&self) -> &u64 {
-        self.ticks
+        &self.record.agreement.at.ticks
     }
     fn due_at(&self) -> Option<&u64> {
         self.record.due.as_ref().map(|time| &time.ticks)
     }
     fn agreement_provenance(&self) -> &ContentReference {
-        &self.record.definition
+        &self.record.agreement.source
     }
 }

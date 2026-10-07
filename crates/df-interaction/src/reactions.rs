@@ -3,7 +3,8 @@ use std::mem::size_of;
 
 use df_model::checkpoint::{
     AcceptedDecision, Basis, Checkpoint, ContentPins, ContentReference, EntityId, FactId,
-    FactValue, GameFact, RecordId, ReferenceInventory, Relationship,
+    FactValue, GameFact, RecordId, ReferenceInventory, Relationship, RelationshipAxisProvenance,
+    RelationshipAxisState,
 };
 use df_types::{OperationId, RevisionLabel, SessionRevision};
 
@@ -398,6 +399,35 @@ fn entry_heap_bytes(entry: &ReactionEntry) -> Option<usize> {
     .checked_add(entry.to_state.retained_heap_bytes())
 }
 
+fn axis_heap_bytes(axis: &RelationshipAxisState) -> Option<usize> {
+    let provenance = match &axis.provenance {
+        RelationshipAxisProvenance::AuthoredBaseline { source } => content_heap_bytes(source)?,
+        RelationshipAxisProvenance::AcceptedFact {
+            source,
+            source_policy,
+            ..
+        } => content_heap_bytes(source)?.checked_add(source_policy.retained_heap_bytes())?,
+    };
+    axis.value.retained_heap_bytes().checked_add(provenance)
+}
+
+fn relationship_heap_bytes(relationship: &Relationship, state: &RevisionLabel) -> Option<usize> {
+    let mut bytes =
+        content_heap_bytes(&relationship.policy)?.checked_add(state.retained_heap_bytes())?;
+    for axis in [
+        &relationship.trust,
+        &relationship.affection,
+        &relationship.respect,
+        &relationship.fear,
+        &relationship.suspicion,
+        &relationship.debt,
+        &relationship.familiarity,
+    ] {
+        bytes = bytes.checked_add(axis_heap_bytes(axis)?)?;
+    }
+    Some(bytes)
+}
+
 fn proposal_bytes(
     original: &Relationship,
     entry: &ReactionEntry,
@@ -407,8 +437,7 @@ fn proposal_bytes(
         .checked_add(size_of::<ReactionProposal>())?
         .checked_add(pins.content.retained_heap_bytes())?
         .checked_add(pins.package.retained_heap_bytes())?
-        .checked_add(content_heap_bytes(&original.policy)?.checked_mul(2)?)?
-        .checked_add(original.state.retained_heap_bytes())?
-        .checked_add(entry.to_state.retained_heap_bytes())?
+        .checked_add(relationship_heap_bytes(original, &original.state)?)?
+        .checked_add(relationship_heap_bytes(original, &entry.to_state)?)?
         .checked_add(entry_heap_bytes(entry)?)
 }

@@ -6,9 +6,9 @@ use df_types::{
     RevisionLabel, RunId, SessionId, SessionRevision,
 };
 
-// Version 2 preserves the current canonical optional character appearance.
-// Version 1 is incompatible and refuses rather than synthesizing absent cosmetics.
-const CODEC_VERSION: u16 = 2;
+// Version 3 preserves persistent NPC identity, independent social axes, and obligation lineage.
+// Versions 1 and 2 refuse rather than synthesizing missing canonical state.
+const CODEC_VERSION: u16 = 3;
 pub(crate) const STORAGE_CODEC_VERSION: i32 = CODEC_VERSION as i32;
 const MAGIC: &[u8; 4] = b"DFCP";
 
@@ -506,7 +506,7 @@ pub(crate) fn decode_checkpoint(
     Ok(checkpoint)
 }
 
-// Explicit schema-1 mapping of accepted canonical fields; change only with codec migration review.
+// Explicit schema-2 mapping; schema 1 cannot supply social or agreement provenance.
 record_wire!(AcceptedChoice {
     participant,
     offer,
@@ -1328,19 +1328,118 @@ record_wire!(NarrativeState {
 });
 record_wire!(NpcState {
     entity,
+    role,
     personality,
     motivations,
+    goals,
+    needs,
+    fears,
     known_facts,
     beliefs,
     secrets
+});
+impl Wire for RelationshipAxisProvenance {
+    fn write(&self, output: &mut Encoder) -> Result<(), CodecError> {
+        match self {
+            Self::AuthoredBaseline { source } => {
+                1_u16.write(output)?;
+                source.write(output)
+            }
+            Self::AcceptedFact {
+                source,
+                fact,
+                source_policy,
+                witness,
+            } => {
+                2_u16.write(output)?;
+                source.write(output)?;
+                fact.write(output)?;
+                source_policy.write(output)?;
+                witness.write(output)
+            }
+        }
+    }
+
+    fn read(input: &mut Decoder<'_>) -> Result<Self, CodecError> {
+        match u16::read(input)? {
+            1 => Ok(Self::AuthoredBaseline {
+                source: Wire::read(input)?,
+            }),
+            2 => Ok(Self::AcceptedFact {
+                source: Wire::read(input)?,
+                fact: Wire::read(input)?,
+                source_policy: Wire::read(input)?,
+                witness: Wire::read(input)?,
+            }),
+            _ => Err(CodecError::InvalidValue),
+        }
+    }
+}
+impl Wire for ObligationStatus {
+    fn write(&self, output: &mut Encoder) -> Result<(), CodecError> {
+        match self {
+            Self::Active => 1_u16.write(output),
+            Self::Fulfilled => 2_u16.write(output),
+            Self::Broken => 3_u16.write(output),
+            Self::Expired => 4_u16.write(output),
+            Self::Cancelled => 5_u16.write(output),
+        }
+    }
+
+    fn read(input: &mut Decoder<'_>) -> Result<Self, CodecError> {
+        match u16::read(input)? {
+            1 => Ok(Self::Active),
+            2 => Ok(Self::Fulfilled),
+            3 => Ok(Self::Broken),
+            4 => Ok(Self::Expired),
+            5 => Ok(Self::Cancelled),
+            _ => Err(CodecError::InvalidValue),
+        }
+    }
+}
+impl Wire for ObligationAction {
+    fn write(&self, output: &mut Encoder) -> Result<(), CodecError> {
+        match self {
+            Self::Fulfill => 1_u16.write(output),
+            Self::Break => 2_u16.write(output),
+            Self::Expire => 3_u16.write(output),
+            Self::Cancel => 4_u16.write(output),
+        }
+    }
+
+    fn read(input: &mut Decoder<'_>) -> Result<Self, CodecError> {
+        match u16::read(input)? {
+            1 => Ok(Self::Fulfill),
+            2 => Ok(Self::Break),
+            3 => Ok(Self::Expire),
+            4 => Ok(Self::Cancel),
+            _ => Err(CodecError::InvalidValue),
+        }
+    }
+}
+record_wire!(ObligationAgreement {
+    source,
+    fact,
+    source_policy,
+    at
+});
+record_wire!(ObligationTransition {
+    action,
+    source,
+    fact,
+    source_policy,
+    at
 });
 record_wire!(Obligation {
     id,
     obligor,
     beneficiary,
     definition,
+    terms,
     due,
-    fulfilled
+    agreement,
+    status,
+    transition
 });
 record_wire!(OfferedResponse {
     participant,
@@ -1473,11 +1572,19 @@ record_wire!(RecoveryState {
     redacted_records,
     unavailable_sources
 });
+record_wire!(RelationshipAxisState { value, provenance });
 record_wire!(Relationship {
     subject,
     object,
     policy,
-    state
+    state,
+    trust,
+    affection,
+    respect,
+    fear,
+    suspicion,
+    debt,
+    familiarity
 });
 record_wire!(RemotePlayPolicy {
     definition,
@@ -2228,7 +2335,7 @@ mod tests {
         for appearance in [None, Some(appearance())] {
             let checkpoint = checkpoint(appearance_state(appearance)).unwrap();
             let bytes = encode_checkpoint(&checkpoint, codec_limits()).unwrap();
-            assert_eq!(&bytes[4..6], &2_u16.to_be_bytes());
+            assert_eq!(&bytes[4..6], &CODEC_VERSION.to_be_bytes());
             let restored = decode(&bytes, checkpoint.basis(), checkpoint.pins()).unwrap();
             assert_eq!(restored, checkpoint);
             assert_eq!(encode_checkpoint(&restored, codec_limits()).unwrap(), bytes);
@@ -2238,12 +2345,15 @@ mod tests {
     #[test]
     fn legacy_codec_refuses_instead_of_defaulting_character_appearance() {
         let checkpoint = checkpoint(appearance_state(Some(appearance()))).unwrap();
-        let mut bytes = encode_checkpoint(&checkpoint, codec_limits()).unwrap();
-        bytes[4..6].copy_from_slice(&1_u16.to_be_bytes());
-        assert_eq!(
-            decode(&bytes, checkpoint.basis(), checkpoint.pins()),
-            Err(CodecError::UnsupportedCodec)
-        );
+        let original = encode_checkpoint(&checkpoint, codec_limits()).unwrap();
+        for version in [1_u16, 2_u16, u16::MAX] {
+            let mut bytes = original.clone();
+            bytes[4..6].copy_from_slice(&version.to_be_bytes());
+            assert_eq!(
+                decode(&bytes, checkpoint.basis(), checkpoint.pins()),
+                Err(CodecError::UnsupportedCodec)
+            );
+        }
     }
 
     #[test]
@@ -2304,9 +2414,12 @@ mod tests {
     fn persisted_checkpoint_codec_matches_complete_current_envelope() {
         let checkpoint = checkpoint(appearance_state(Some(appearance()))).unwrap();
         let document = encode_checkpoint(&checkpoint, codec_limits()).unwrap();
-        assert_eq!(STORAGE_CODEC_VERSION, 2);
+        assert_eq!(STORAGE_CODEC_VERSION, 3);
         assert_eq!(checkpoint.schema(), CHECKPOINT_SCHEMA);
-        assert_eq!(validate_storage_format(2, b"DFCP", &document), Ok(()));
+        assert_eq!(
+            validate_storage_format(STORAGE_CODEC_VERSION, b"DFCP", &document),
+            Ok(())
+        );
         assert_eq!(
             decode(&document, checkpoint.basis(), checkpoint.pins()).unwrap(),
             checkpoint
@@ -2316,7 +2429,11 @@ mod tests {
             Err(CodecError::UnsupportedCodec)
         );
         assert_eq!(
-            validate_storage_format(3, b"DFCP", &document),
+            validate_storage_format(4, b"DFCP", &document),
+            Err(CodecError::UnsupportedCodec)
+        );
+        assert_eq!(
+            validate_storage_format(2, b"DFCP", &document),
             Err(CodecError::UnsupportedCodec)
         );
         let mut legacy = document;
@@ -2326,7 +2443,7 @@ mod tests {
             Err(CodecError::UnsupportedCodec)
         );
         assert_eq!(
-            validate_storage_format(2, b"DFCP", &legacy),
+            validate_storage_format(STORAGE_CODEC_VERSION, b"DFCP", &legacy),
             Err(CodecError::UnsupportedCodec)
         );
     }
@@ -2335,23 +2452,30 @@ mod tests {
     fn stored_record_formats_refuse_mismatched_metadata_magic_and_header() {
         for magic in [b"DFFA", b"DFRC", b"DFIT"] {
             let mut document = magic.to_vec();
-            document.extend_from_slice(&2_u16.to_be_bytes());
-            assert_eq!(validate_storage_format(2, magic, &document), Ok(()));
+            document.extend_from_slice(&CODEC_VERSION.to_be_bytes());
+            assert_eq!(
+                validate_storage_format(STORAGE_CODEC_VERSION, magic, &document),
+                Ok(())
+            );
             assert_eq!(
                 validate_storage_format(1, magic, &document),
                 Err(CodecError::UnsupportedCodec)
             );
             assert_eq!(
-                validate_storage_format(2, b"DFCP", &document),
+                validate_storage_format(STORAGE_CODEC_VERSION, b"DFCP", &document),
                 Err(CodecError::UnsupportedCodec)
             );
-            document[4..6].copy_from_slice(&1_u16.to_be_bytes());
             assert_eq!(
                 validate_storage_format(2, magic, &document),
                 Err(CodecError::UnsupportedCodec)
             );
+            document[4..6].copy_from_slice(&1_u16.to_be_bytes());
             assert_eq!(
-                validate_storage_format(2, magic, &document[..5]),
+                validate_storage_format(STORAGE_CODEC_VERSION, magic, &document),
+                Err(CodecError::UnsupportedCodec)
+            );
+            assert_eq!(
+                validate_storage_format(STORAGE_CODEC_VERSION, magic, &document[..5]),
                 Err(CodecError::Truncated)
             );
         }
@@ -2364,6 +2488,222 @@ mod tests {
         let restored = decode(&bytes, checkpoint.basis(), checkpoint.pins()).unwrap();
         assert_eq!(restored, checkpoint);
         assert_eq!(encode_checkpoint(&restored, codec_limits()).unwrap(), bytes);
+    }
+
+    #[test]
+    fn social_axes_npc_refs_and_obligation_lineage_round_trip_exactly() {
+        let authored = |name: &str| ContentReference {
+            package: content().package,
+            entry: label(name),
+        };
+        let axis_sources: Vec<_> = [
+            "trust-source",
+            "affection-source",
+            "respect-source",
+            "fear-source",
+            "suspicion-source",
+            "debt-source",
+            "familiarity-source",
+        ]
+        .into_iter()
+        .map(authored)
+        .collect();
+        let role = authored("npc-role");
+        let goal = authored("npc-goal");
+        let need = authored("npc-need");
+        let fear = authored("npc-fear");
+        let agreement_source = authored("explicit-agreement");
+        let terms = authored("agreement-terms");
+        let action_sources = [
+            authored("agreement-fulfilled"),
+            authored("agreement-broken"),
+            authored("agreement-expired"),
+            authored("agreement-cancelled"),
+        ];
+        let mut content_entries = vec![
+            content(),
+            role.clone(),
+            goal.clone(),
+            need.clone(),
+            fear.clone(),
+            agreement_source.clone(),
+            terms.clone(),
+        ];
+        content_entries.extend(axis_sources.iter().cloned());
+        content_entries.extend(action_sources.iter().cloned());
+        let rules = vec![rule()];
+        let resources = resource_constraints();
+
+        let mut state = state();
+        let mut target = state.entities[0].clone();
+        target.id = entity(5);
+        state.entities.push(target);
+        let axis_policy = label("accepted-axis-policy");
+        let mut axis_facts = Vec::new();
+        for (index, source) in axis_sources.iter().enumerate().skip(1) {
+            let mut accepted = fact(80 + index as u8, (index - 1) as u32);
+            accepted.value = FactValue::ContentEvent {
+                definition: source.clone(),
+                subjects: vec![entity(4), entity(5)],
+            };
+            axis_facts.push(accepted.id);
+            state.facts.push(accepted);
+        }
+        state.decisions.push(AcceptedDecision {
+            operation: OperationId::from_bytes(&[6; 16]).unwrap(),
+            revision: basis().revision,
+            facts: axis_facts.clone(),
+            draws: vec![],
+            effects: vec![],
+            source_policy: axis_policy.clone(),
+            semantic_output: None,
+        });
+        let mut agreement_fact = fact(72, 0);
+        agreement_fact.operation = OperationId::from_bytes(&[7; 16]).unwrap();
+        agreement_fact.value = FactValue::ContentEvent {
+            definition: agreement_source.clone(),
+            subjects: vec![entity(4), entity(5)],
+        };
+        state.facts.push(agreement_fact.clone());
+        let agreement_policy = label("accepted-agreement-policy");
+        state.decisions.push(AcceptedDecision {
+            operation: agreement_fact.operation,
+            revision: agreement_fact.revision,
+            facts: vec![agreement_fact.id],
+            draws: vec![],
+            effects: vec![],
+            source_policy: agreement_policy.clone(),
+            semantic_output: None,
+        });
+        let accepted_axis = |index: usize| RelationshipAxisState {
+            value: label(&format!("axis-value-{index}")),
+            provenance: RelationshipAxisProvenance::AcceptedFact {
+                source: axis_sources[index].clone(),
+                fact: axis_facts[index - 1],
+                source_policy: axis_policy.clone(),
+                witness: None,
+            },
+        };
+        state.relationships.push(Relationship {
+            subject: entity(4),
+            object: entity(5),
+            policy: content(),
+            state: label("authored-category"),
+            trust: RelationshipAxisState {
+                value: label("axis-value-0"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: axis_sources[0].clone(),
+                },
+            },
+            affection: accepted_axis(1),
+            respect: accepted_axis(2),
+            fear: accepted_axis(3),
+            suspicion: accepted_axis(4),
+            debt: accepted_axis(5),
+            familiarity: accepted_axis(6),
+        });
+        state.continuity.npcs.push(NpcState {
+            entity: entity(4),
+            role,
+            personality: content(),
+            motivations: vec![content()],
+            goals: vec![goal],
+            needs: vec![need],
+            fears: vec![fear],
+            known_facts: axis_facts,
+            beliefs: vec![],
+            secrets: vec![],
+        });
+        state.obligations.push(Obligation {
+            id: RecordId::from_bytes(&[72; 16]).unwrap(),
+            obligor: entity(4),
+            beneficiary: entity(5),
+            definition: agreement_source.clone(),
+            terms,
+            due: Some(state.logical_time),
+            agreement: ObligationAgreement {
+                source: agreement_source,
+                fact: agreement_fact.id,
+                source_policy: agreement_policy,
+                at: state.logical_time,
+            },
+            status: ObligationStatus::Active,
+            transition: None,
+        });
+
+        let assert_round_trip = |state: GameState| {
+            let checkpoint = Checkpoint::new(
+                CHECKPOINT_SCHEMA,
+                basis(),
+                pins(),
+                state,
+                ReferenceInventory {
+                    rules: &rules,
+                    content: &content_entries,
+                    resources: &resources,
+                    assets: &[],
+                },
+                limits(),
+            )
+            .unwrap();
+            let bytes = encode_checkpoint(&checkpoint, codec_limits()).unwrap();
+            let restored = decode_checkpoint(
+                &bytes,
+                basis(),
+                &pins(),
+                ReferenceInventory {
+                    rules: &rules,
+                    content: &content_entries,
+                    resources: &resources,
+                    assets: &[],
+                },
+                limits(),
+                codec_limits(),
+            )
+            .unwrap();
+            assert_eq!(restored, checkpoint);
+            assert_eq!(encode_checkpoint(&restored, codec_limits()).unwrap(), bytes);
+        };
+        assert_round_trip(state.clone());
+
+        for (index, (status, action)) in [
+            (ObligationStatus::Fulfilled, ObligationAction::Fulfill),
+            (ObligationStatus::Broken, ObligationAction::Break),
+            (ObligationStatus::Expired, ObligationAction::Expire),
+            (ObligationStatus::Cancelled, ObligationAction::Cancel),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut terminal = state.clone();
+            let mut action_fact = fact(91 + index as u8, 0);
+            action_fact.operation = OperationId::from_bytes(&[90 + index as u8; 16]).unwrap();
+            action_fact.cause = Some(agreement_fact.id);
+            action_fact.value = FactValue::ContentEvent {
+                definition: action_sources[index].clone(),
+                subjects: vec![entity(4), entity(5)],
+            };
+            terminal.facts.push(action_fact.clone());
+            let action_policy = label(&format!("accepted-action-policy-{index}"));
+            terminal.decisions.push(AcceptedDecision {
+                operation: action_fact.operation,
+                revision: action_fact.revision,
+                facts: vec![action_fact.id],
+                draws: vec![],
+                effects: vec![],
+                source_policy: action_policy.clone(),
+                semantic_output: None,
+            });
+            terminal.obligations[0].status = status;
+            terminal.obligations[0].transition = Some(ObligationTransition {
+                action,
+                source: action_sources[index].clone(),
+                fact: action_fact.id,
+                source_policy: action_policy,
+                at: terminal.logical_time,
+            });
+            assert_round_trip(terminal);
+        }
     }
     #[test]
     fn canonical_facts_actual_draws_and_unknown_intents_round_trip_without_reconstruction() {
@@ -2462,12 +2802,14 @@ mod tests {
                 Err(CodecError::UnsupportedCodec)
             );
         }
-        let mut changed = bytes;
-        changed[7] = 255;
-        assert_eq!(
-            decode(&changed, basis(), &pins()),
-            Err(CodecError::Checkpoint(CheckpointError::UnsupportedSchema))
-        );
+        for schema in [1, 255] {
+            let mut changed = bytes.clone();
+            changed[7] = schema;
+            assert_eq!(
+                decode(&changed, basis(), &pins()),
+                Err(CodecError::Checkpoint(CheckpointError::UnsupportedSchema))
+            );
+        }
     }
     #[test]
     fn row_basis_and_admitted_pins_cannot_be_overwritten_by_envelope() {

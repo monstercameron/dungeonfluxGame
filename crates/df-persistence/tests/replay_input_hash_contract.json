@@ -2,12 +2,12 @@
   "task_id": "B-C-df-engine-D04",
   "attempt_id": "B-C-df-engine-D04-a2",
   "title": "Define replay inputs and canonical hashes",
-  "source_revision": "d6648ba329750c0826b369b36879962cc7d9d128",
-  "implementation": "A private native-only df-persistence contract replays one explicitly pinned local_journey melee decision. Typed choice, policy, source/handler pins and ordered actual draws are admitted before the selected reducer runs. The reducer produces fresh AcceptedDecision semantic output and a separately reconstructed schema-1 checkpoint from the narrow retained prestate. The contract compares typed choice/draw/decision records, complete encoded checkpoint bytes, and SHA-256. It also refuses missing inputs and unsupported selected revisions without changing the original checkpoint or draw records.",
+  "source_revision": "5ded937597c95f3efbeab56c8039acfe6c085f33",
+  "implementation": "A private native-only df-persistence contract replays one explicitly pinned local_journey melee decision. Typed choice, policy, source/handler pins and ordered actual draws are admitted before the selected reducer runs. The reducer produces fresh AcceptedDecision semantic output and a separately reconstructed schema-2 checkpoint from the narrow retained prestate. The contract compares typed choice/draw/decision records, complete encoded checkpoint bytes, and SHA-256. It also refuses missing inputs and unsupported selected revisions without changing the original checkpoint or draw records.",
   "hash_identity": {
     "envelope_magic": "DFCP",
-    "storage_codec_version": 2,
-    "model_checkpoint_schema": 1,
+    "storage_codec_version": 3,
+    "model_checkpoint_schema": 2,
     "digest": "SHA-256(actual df-persistence encode_checkpoint output)",
     "domain_included": "The complete authoritative checkpoint bytes, including codec/schema, basis, all exact rules/source/handler/content/build pin fields, accepted choice, semantic decision, and ordered actual draws.",
     "known_sha256_vector": {
@@ -15,9 +15,19 @@
       "digest_hex": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     },
     "computed_checkpoint_digest": {
-      "status": "OBSERVED_IN_ROOT_PARTIAL_FAILED_A2_GATE; current repaired source requires fresh confirmation",
-      "value_hex": "52d00cd00ac9fcf5251612e1f967b95ee41feddcd09a5060217795e3f4f1aaa8",
-      "printed_by_test": "Root's 2026-10-07T09:19:17Z native gate printed this digest with codec=2, schema=1, source=SRD5.2.1-2024-local-journey-2, handler=df-rules-local-journey-resolve-melee, policy=policy-rev-1. The same gate had one failed refusal assertion, so this observed value is not whole-contract acceptance."
+      "status": "OBSERVED_NATIVE_PASS_CODEC3_SCHEMA2",
+      "value_hex": "5facc89193243f1393ab5514377b934edf18fd031b4166173460c2676908d32a",
+      "printed_by_test": "Root actual native8/8 SOURCE and codec/schema/handler/policy identity observed in retained stdout.",
+      "actual_receipt": {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/interaction-persistent-d01-20261007-a2/ROOT-current-codec3-schema2-D04-observed-digest-15.json",
+        "bytes": 1955,
+        "sha256": "2f2942c165beee43e5272fbcc1ab10f96eb255e81fb025bcc421e2ad7d4d2dcc"
+      },
+      "actual_stdout": {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/interaction-persistent-d01-20261007-a2/ROOT-current-codec3-schema2-D04-observed-digest-15.json.stdout",
+        "bytes": 1171,
+        "sha256": "1c7346e77051409a9d416945d9c759a3ee179800c534482aaedeea9244fe3db8"
+      }
     }
   },
   "recorded_input_example": {
@@ -53,9 +63,9 @@
     "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
   ],
   "evidence_cases": {
-    "observation_status": "ROOT_A2_GATE_7_PASS_1_FAIL on prior source candidate; source repair pending fresh full execution",
+    "observation_status": "Current Root codec3/schema2 native contract: all8PASS; original whole selected-reducer outcome and refusal cases preserved. Historical codec2/schema1 identity and prior failures are retained separately.",
     "positive": [
-      "An admitted codec-2/schema-1 checkpoint survives native decode and exact re-encode.",
+      "An admitted codec-3/schema-2 checkpoint survives native decode and exact re-encode.",
       "A bounded selected prestate and recorded AcceptedChoice, AcceptedDecision policy/output, and ordered ActualDraw records are re-admitted; local_journey::resolve_melee independently reconstructs accepted records and the final Checkpoint.",
       "The reconstructed accepted typed choice/draw/decision records, complete final encoded bytes, and SHA-256 equal the recorded accepted checkpoint.",
       "Choice, ordered draw values, policy, source/handler/content/build pin changes alter encoded bytes/hash; a semantic-output-byte-only perturbation also changes the hash.",
@@ -102,7 +112,7 @@
     },
     {
       "path": "crates/df-persistence/src/checkpoint_codec.rs",
-      "sha256": "43aebe4e808c71ab1419ac5a8eb4ed4ad4d9747b54ee9c920e8d533e4612da91"
+      "sha256": "0598ebcb82ff7d7f977a6232ca7a4f116b9abf77dfa83cfa5fa2487724f02431"
     },
     {
       "path": "crates/df-rules/src/local_journey.rs",
@@ -127,9 +137,27 @@
       "cargo fmt --all -- --check",
       "cargo check --offline --locked -p df-persistence --target wasm32-unknown-unknown --lib"
     ],
-    "worker_status": "This worker did not invoke Cargo, compiler, formatter, Git, browser, provider, or PostgreSQL. Root's 2026-10-07T09:19:17Z a2 native contract gate compiled and ran 8 tests: 7 PASS, 1 FAIL (input draw-side mutation expected InvalidDrawType but immutable-record mismatch correctly returned InvalidDrawOrder). That failure is retained; the repaired source requires a fresh complete native gate. Earlier a1 native 4/4 and Clippy/formatting applied to weaker source; later a1 E0277 compilation never ran tests. WASM, current fmt/lint, legacy tests, integrated Main and independent review remain unperformed for this repaired candidate."
+    "worker_status": "Original Sol worker gate history is retained in prior_codec2_schema1_verification; Root owns current compatibility edits and all current source-bound native/WASM checks.",
+    "current_Root_native_evidence": {
+      "full_eight_package_receipt": {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/interaction-persistent-d01-20261007-a2/ROOT-current-composite-native-full-15.json",
+        "bytes": 2077,
+        "sha256": "21e3659ae484f519a4c13bb75f494aace211fec1079fedeb4e7b0a0ffa25f6a0"
+      },
+      "full_current_source_proof": {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/interaction-persistent-d01-20261007-a2/ROOT-native15-current-source-bound-proof-117.json",
+        "bytes": 1824,
+        "sha256": "b5e8f25414eecd741d08343c5921c144b665c09ee40a5b8e7434ecb56c86de52"
+      },
+      "selected_reducer_eight_case_receipt": {
+        "path": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/interaction-persistent-d01-20261007-a2/ROOT-current-codec3-schema2-D04-observed-digest-15.json",
+        "bytes": 1955,
+        "sha256": "2f2942c165beee43e5272fbcc1ab10f96eb255e81fb025bcc421e2ad7d4d2dcc"
+      },
+      "no_browser_PostgreSQL_or_migration_claim": true
+    }
   },
-  "status": "a2 refusal-precedence repair awaiting Root fresh full native execution, integration, and independent review; prior 7/8 gate remains FAIL, not self-approved",
+  "status": "Rootcodec3/schema2compatibility consumer withactualobservednativegolden andall8selectedreplaycasesPASS; wholeNPCqualification governed bysource-boundRootreceipts andindependentreview.",
   "replay_prestate": {
     "actor_entity": "04 repeated 16 bytes",
     "target_entity": "The selected fixture target has 7 hit points and armor class 13, carried in the bounded test scenario.",
@@ -148,7 +176,7 @@
     "policy_revision": "policy-rev-1"
   },
   "decision_proposal": {
-    "selected": "Version-bound SHA-256 over the existing authoritative encode_checkpoint bytes, codec 2 and model schema 1.",
+    "selected": "Version-bound SHA-256 over the existing authoritative encode_checkpoint bytes, codec 3 and model schema 2.",
     "proposal_reference": {
       "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/wave51-session-submission-20261006/queue-lifecycle-prep-01/integration-prep-01/engine-D04-versioned-native-hash-execution-proposal-02.json",
       "sha256": "5c5efc428ed9350742fcfa009ae1e68f8ff608c0885a16284a40b03c3987cde1"
@@ -173,5 +201,52 @@
       "R3"
     ],
     "status": "The review's actual native4/4/Clippy/ownedfmt outputs were from the weaker pre-repair source and are not evidence for current source."
+  },
+  "prior_codec2_schema1_identity": {
+    "envelope_magic": "DFCP",
+    "storage_codec_version": 2,
+    "model_checkpoint_schema": 1,
+    "digest": "SHA-256(actual df-persistence encode_checkpoint output)",
+    "domain_included": "The complete authoritative checkpoint bytes, including codec/schema, basis, all exact rules/source/handler/content/build pin fields, accepted choice, semantic decision, and ordered actual draws.",
+    "known_sha256_vector": {
+      "input_utf8": "abc",
+      "digest_hex": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    },
+    "computed_checkpoint_digest": {
+      "status": "OBSERVED_IN_ROOT_PARTIAL_FAILED_A2_GATE; current repaired source requires fresh confirmation",
+      "value_hex": "52d00cd00ac9fcf5251612e1f967b95ee41feddcd09a5060217795e3f4f1aaa8",
+      "printed_by_test": "Root's 2026-10-07T09:19:17Z native gate printed this digest with codec=2, schema=1, source=SRD5.2.1-2024-local-journey-2, handler=df-rules-local-journey-resolve-melee, policy=policy-rev-1. The same gate had one failed refusal assertion, so this observed value is not whole-contract acceptance."
+    }
+  },
+  "prior_codec2_schema1_verification": {
+    "commands": [
+      "cargo test --offline --locked -p df-persistence replay_input_hash_contract -- --nocapture",
+      "cargo test --offline --locked -p df-persistence canonical_facts_actual_draws_and_unknown_intents_round_trip_without_reconstruction",
+      "cargo test --offline --locked -p df-engine --test command_entry",
+      "cargo clippy --locked -p df-persistence --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "cargo check --offline --locked -p df-persistence --target wasm32-unknown-unknown --lib"
+    ],
+    "worker_status": "This worker did not invoke Cargo, compiler, formatter, Git, browser, provider, or PostgreSQL. Root's 2026-10-07T09:19:17Z a2 native contract gate compiled and ran 8 tests: 7 PASS, 1 FAIL (input draw-side mutation expected InvalidDrawType but immutable-record mismatch correctly returned InvalidDrawOrder). That failure is retained; the repaired source requires a fresh complete native gate. Earlier a1 native 4/4 and Clippy/formatting applied to weaker source; later a1 E0277 compilation never ran tests. WASM, current fmt/lint, legacy tests, integrated Main and independent review remain unperformed for this repaired candidate."
+  },
+  "Root_owned_compatibility_adaptation": {
+    "owning_codec": "existing STORAGE_CODEC_VERSION; no duplicate hash codec constant",
+    "codec_schema": [
+      3,
+      2
+    ],
+    "old_codec_refusals": [
+      1,
+      2,
+      65535
+    ],
+    "old_schema_refusals": [
+      1,
+      65535
+    ],
+    "same_actual_selected_reducer_and_all8tests_preserved": true,
+    "original_NPC26worker_scope_unchanged": true,
+    "original_D04_outcome_preserved": "native authoritative encode/replay/exactbytes/sha256 with whole record comparisons; no migration claim",
+    "current_gates": "Native8/8selectedreplay andfull8packages765PASS10explicitignored; remainingformat/lint/WASM andwholeNPCindependentreview evidence is recorded separately by Root."
   }
 }

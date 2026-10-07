@@ -696,7 +696,7 @@ fn rejects_unsupported_schema_before_admitting_state() {
     let rules = vec![rule()];
     let content_entries = vec![content()];
     let resource_constraints = resource_constraints();
-    for schema in [0, 2, u16::MAX] {
+    for schema in [0, 1, u16::MAX] {
         assert_eq!(
             Checkpoint::new(
                 schema,
@@ -714,6 +714,199 @@ fn rejects_unsupported_schema_before_admitting_state() {
             Err(CheckpointError::UnsupportedSchema)
         );
     }
+}
+
+#[test]
+fn npc_references_and_directional_axis_provenance_require_admitted_sources() {
+    let mut supplied = state();
+    let mut target = supplied.entities[0].clone();
+    target.id = entity(5);
+    supplied.entities.push(target);
+    let accepted = fact(70, 0);
+    let accepted_policy = label("axis-policy");
+    supplied.facts.push(accepted.clone());
+    supplied.decisions.push(AcceptedDecision {
+        operation: accepted.operation,
+        revision: accepted.revision,
+        facts: vec![accepted.id],
+        draws: vec![],
+        effects: vec![],
+        source_policy: accepted_policy.clone(),
+        semantic_output: None,
+    });
+    let baseline = || RelationshipAxisState {
+        value: label("authored-baseline"),
+        provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+    };
+    supplied.relationships.push(Relationship {
+        subject: entity(4),
+        object: entity(5),
+        policy: content(),
+        state: label("authored-category"),
+        trust: RelationshipAxisState {
+            value: label("trust-current"),
+            provenance: RelationshipAxisProvenance::AcceptedFact {
+                source: content(),
+                fact: accepted.id,
+                source_policy: accepted_policy,
+                witness: None,
+            },
+        },
+        affection: baseline(),
+        respect: baseline(),
+        fear: baseline(),
+        suspicion: baseline(),
+        debt: baseline(),
+        familiarity: baseline(),
+    });
+    supplied.continuity.npcs.push(NpcState {
+        entity: entity(4),
+        role: content(),
+        personality: content(),
+        motivations: vec![content()],
+        goals: vec![content()],
+        needs: vec![content()],
+        fears: vec![content()],
+        known_facts: vec![accepted.id],
+        beliefs: vec![],
+        secrets: vec![],
+    });
+
+    assert!(checkpoint(supplied.clone()).is_ok());
+
+    let mut missing_fact = supplied.clone();
+    missing_fact.relationships[0].fear.provenance = RelationshipAxisProvenance::AcceptedFact {
+        source: content(),
+        fact: FactId::from_bytes(&[71; 16]).unwrap(),
+        source_policy: label("axis-policy"),
+        witness: None,
+    };
+    assert_eq!(
+        checkpoint(missing_fact),
+        Err(CheckpointError::InvalidReference)
+    );
+
+    let mut wrong_policy = supplied.clone();
+    wrong_policy.relationships[0].trust.provenance = RelationshipAxisProvenance::AcceptedFact {
+        source: content(),
+        fact: accepted.id,
+        source_policy: label("different-policy"),
+        witness: None,
+    };
+    assert_eq!(
+        checkpoint(wrong_policy),
+        Err(CheckpointError::InvalidReference)
+    );
+
+    let mut wrong_axis_source = supplied.clone();
+    if let RelationshipAxisProvenance::AcceptedFact { source, .. } =
+        &mut wrong_axis_source.relationships[0].trust.provenance
+    {
+        source.entry = label("unadmitted-axis-source");
+    }
+    assert_eq!(
+        checkpoint(wrong_axis_source),
+        Err(CheckpointError::InvalidReference)
+    );
+
+    let mut missing_witness = supplied.clone();
+    if let RelationshipAxisProvenance::AcceptedFact { witness, .. } =
+        &mut missing_witness.relationships[0].trust.provenance
+    {
+        *witness = Some(RecordId::from_bytes(&[74; 16]).unwrap());
+    }
+    assert_eq!(
+        checkpoint(missing_witness),
+        Err(CheckpointError::InvalidReference)
+    );
+
+    let mut wrong_package = supplied.clone();
+    wrong_package.continuity.npcs[0].role.package = label("unadmitted-package");
+    assert_eq!(
+        checkpoint(wrong_package),
+        Err(CheckpointError::InvalidReference)
+    );
+
+    let mut duplicate_goal = supplied;
+    duplicate_goal.continuity.npcs[0].goals.push(content());
+    assert_eq!(
+        checkpoint(duplicate_goal),
+        Err(CheckpointError::DuplicateIdentity)
+    );
+}
+
+#[test]
+fn obligation_requires_explicit_agreement_lineage_and_consistent_lifecycle() {
+    let mut supplied = state();
+    let mut target = supplied.entities[0].clone();
+    target.id = entity(5);
+    supplied.entities.push(target);
+    let mut agreement_fact = fact(72, 0);
+    agreement_fact.value = FactValue::ContentEvent {
+        definition: content(),
+        subjects: vec![entity(4), entity(5)],
+    };
+    let agreement_policy = label("agreement-policy");
+    supplied.facts.push(agreement_fact.clone());
+    supplied.decisions.push(AcceptedDecision {
+        operation: agreement_fact.operation,
+        revision: agreement_fact.revision,
+        facts: vec![agreement_fact.id],
+        draws: vec![],
+        effects: vec![],
+        source_policy: agreement_policy.clone(),
+        semantic_output: None,
+    });
+    supplied.obligations.push(Obligation {
+        id: RecordId::from_bytes(&[72; 16]).unwrap(),
+        obligor: entity(4),
+        beneficiary: entity(5),
+        definition: content(),
+        terms: content(),
+        due: None,
+        agreement: ObligationAgreement {
+            source: content(),
+            fact: agreement_fact.id,
+            source_policy: agreement_policy,
+            at: supplied.logical_time,
+        },
+        status: ObligationStatus::Active,
+        transition: None,
+    });
+    assert!(checkpoint(supplied.clone()).is_ok());
+
+    let mut missing_agreement = supplied.clone();
+    missing_agreement.obligations[0].agreement.fact = FactId::from_bytes(&[73; 16]).unwrap();
+    assert_eq!(
+        checkpoint(missing_agreement),
+        Err(CheckpointError::InvalidReference)
+    );
+
+    let mut wrong_agreement_policy = supplied.clone();
+    wrong_agreement_policy.obligations[0]
+        .agreement
+        .source_policy = label("unaccepted-agreement-policy");
+    assert_eq!(
+        checkpoint(wrong_agreement_policy),
+        Err(CheckpointError::InvalidReference)
+    );
+
+    let mut terminal_without_action = supplied.clone();
+    terminal_without_action.obligations[0].status = ObligationStatus::Fulfilled;
+    assert_eq!(
+        checkpoint(terminal_without_action),
+        Err(CheckpointError::InvalidReference)
+    );
+
+    let mut deadline_before_agreement = supplied;
+    deadline_before_agreement.obligations[0].due = Some(LogicalTime {
+        ticks: 100,
+        ticks_per_second: 10,
+    });
+    assert_eq!(
+        checkpoint(deadline_before_agreement),
+        Err(CheckpointError::InvalidTime)
+    );
 }
 
 fn pending() -> PendingResolution {
@@ -1525,13 +1718,44 @@ fn records_with_owned_ids_are_unique_within_each_canonical_family() {
                 supplied.conversations.push(value);
             }
             2 => {
+                let agreement_fact = FactId::from_bytes(&[8; 16]).unwrap();
+                let agreement_operation = OperationId::from_bytes(&[8; 16]).unwrap();
+                supplied.facts.push(GameFact {
+                    id: agreement_fact,
+                    revision: basis().revision,
+                    operation: agreement_operation,
+                    ordinal: 0,
+                    cause: None,
+                    audience: AudienceScope::Shared,
+                    value: FactValue::ContentEvent {
+                        definition: content(),
+                        subjects: vec![entity(4), entity(4)],
+                    },
+                });
+                supplied.decisions.push(AcceptedDecision {
+                    operation: agreement_operation,
+                    revision: basis().revision,
+                    facts: vec![agreement_fact],
+                    draws: vec![],
+                    effects: vec![],
+                    source_policy: label("explicit-agreement-policy"),
+                    semantic_output: None,
+                });
                 let value = Obligation {
                     id,
                     obligor: entity(4),
                     beneficiary: entity(4),
                     definition: content(),
+                    terms: content(),
                     due: None,
-                    fulfilled: false,
+                    agreement: ObligationAgreement {
+                        source: content(),
+                        fact: agreement_fact,
+                        source_policy: label("explicit-agreement-policy"),
+                        at: supplied.logical_time,
+                    },
+                    status: ObligationStatus::Active,
+                    transition: None,
                 };
                 supplied.obligations.push(value.clone());
                 assert!(checkpoint(supplied.clone()).is_ok());

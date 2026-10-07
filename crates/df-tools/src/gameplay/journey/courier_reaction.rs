@@ -26,6 +26,8 @@ pub(in crate::gameplay) const CONTENT_ENTRIES: &[&str] = &[
 ];
 const UNFAMILIAR: &str = "unfamiliar";
 const ESCORT_SUPPORTED: &str = "escort-supported";
+// The retained proposal carries both complete seven-axis relationship states.
+const REACTION_PROPOSAL_BYTES: usize = 8 * 1024;
 
 pub(super) fn courier() -> Result<EntityId, RepositoryError> {
     entity(COURIER)
@@ -78,7 +80,11 @@ pub(super) fn enter_opening(state: &mut GameState) -> Result<(), RepositoryError
     state.continuity.npcs.push(NpcState {
         entity: courier,
         personality: model::content("cautious-courier")?,
+        role: model::content("cautious-courier")?,
         motivations: vec![model::content("deliver-dispatch")?],
+        goals: vec![],
+        needs: vec![],
+        fears: vec![],
         known_facts: Vec::new(),
         beliefs: Vec::new(),
         secrets: Vec::new(),
@@ -97,6 +103,48 @@ pub(super) fn enter_opening(state: &mut GameState) -> Result<(), RepositoryError
             object: hero,
             policy: model::content("courier-escort-relationship")?,
             state: model::label(UNFAMILIAR)?,
+            trust: RelationshipAxisState {
+                value: model::label(UNFAMILIAR)?,
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: model::content("courier-escort-relationship")?,
+                },
+            },
+            affection: RelationshipAxisState {
+                value: model::label(UNFAMILIAR)?,
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: model::content("courier-escort-relationship")?,
+                },
+            },
+            respect: RelationshipAxisState {
+                value: model::label(UNFAMILIAR)?,
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: model::content("courier-escort-relationship")?,
+                },
+            },
+            fear: RelationshipAxisState {
+                value: model::label(UNFAMILIAR)?,
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: model::content("courier-escort-relationship")?,
+                },
+            },
+            suspicion: RelationshipAxisState {
+                value: model::label(UNFAMILIAR)?,
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: model::content("courier-escort-relationship")?,
+                },
+            },
+            debt: RelationshipAxisState {
+                value: model::label(UNFAMILIAR)?,
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: model::content("courier-escort-relationship")?,
+                },
+            },
+            familiarity: RelationshipAxisState {
+                value: model::label(UNFAMILIAR)?,
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: model::content("courier-escort-relationship")?,
+                },
+            },
         });
     }
     Ok(())
@@ -263,7 +311,7 @@ fn relationship_limits() -> df_engine::relationship_staging::RelationshipStaging
             maximum_entries: 1,
             maximum_policy_bytes: 4096,
             maximum_work: 16_384,
-            maximum_proposal_bytes: 4096,
+            maximum_proposal_bytes: REACTION_PROPOSAL_BYTES,
         },
     }
 }
@@ -424,7 +472,7 @@ pub(super) fn propose_on_defend(
             maximum_entries: 1,
             maximum_policy_bytes: 4096,
             maximum_work: 16_384,
-            maximum_proposal_bytes: 4096,
+            maximum_proposal_bytes: REACTION_PROPOSAL_BYTES,
         },
     )
     .map_err(bad)?;
@@ -539,6 +587,65 @@ mod tests {
             .expect("courier relationship")
             .state
             .as_str()
+    }
+
+    #[test]
+    fn persistent_axis_reaction_obeys_proposal_budget_and_preserves_checkpoint() {
+        use df_interaction::reactions::{ReactionError, ReactionLimit};
+        let current = escorted();
+        let original = current.clone();
+        let hero = entity(ENTITIES[0]).unwrap();
+        let request = request_on_defend(&current, hero).unwrap().unwrap();
+        let source = AuthoredCourierSource { current: &current };
+        let entries = [entry().unwrap()];
+        let content = model::contents().unwrap();
+        let inventory = || ReferenceInventory {
+            rules: &[],
+            content: &content,
+            resources: &[],
+            assets: &[],
+        };
+        let admitted = relationship_limits().reaction;
+        let legacy = ReactionPolicy::new(
+            &current,
+            &entries,
+            inventory(),
+            &source,
+            ReactionLimits {
+                maximum_proposal_bytes: 4096,
+                ..admitted
+            },
+        )
+        .unwrap();
+        assert!(matches!(
+            react(&current, request, &legacy),
+            Err(ReactionError::LimitExceeded(ReactionLimit::ProposalBytes)),
+        ));
+        assert_eq!(current, original);
+        let policy =
+            ReactionPolicy::new(&current, &entries, inventory(), &source, admitted).unwrap();
+        let ReactionOutcome::Proposed(proposal) = react(&current, request, &policy).unwrap() else {
+            panic!("source-qualified persistent courier reaction");
+        };
+        let relationship = current
+            .state()
+            .relationships
+            .iter()
+            .find(|relationship| {
+                relationship.subject == courier().unwrap() && relationship.object == hero
+            })
+            .unwrap();
+        assert_eq!(&proposal.original, relationship);
+        assert_eq!(proposal.proposed.state.as_str(), ESCORT_SUPPORTED);
+        assert_eq!(proposal.proposed.trust, relationship.trust);
+        assert_eq!(proposal.proposed.affection, relationship.affection);
+        assert_eq!(proposal.proposed.respect, relationship.respect);
+        assert_eq!(proposal.proposed.fear, relationship.fear);
+        assert_eq!(proposal.proposed.suspicion, relationship.suspicion);
+        assert_eq!(proposal.proposed.debt, relationship.debt);
+        assert_eq!(proposal.proposed.familiarity, relationship.familiarity);
+        assert_eq!(current, original);
+        assert_eq!(admitted.maximum_proposal_bytes, 8 * 1024);
     }
 
     #[test]

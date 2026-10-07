@@ -144,6 +144,48 @@ fn state() -> GameState {
             object: entity(4),
             policy: content("relationship-policy"),
             state: label("reserved"),
+            trust: RelationshipAxisState {
+                value: label("reserved"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: content("relationship-policy"),
+                },
+            },
+            affection: RelationshipAxisState {
+                value: label("reserved"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: content("relationship-policy"),
+                },
+            },
+            respect: RelationshipAxisState {
+                value: label("reserved"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: content("relationship-policy"),
+                },
+            },
+            fear: RelationshipAxisState {
+                value: label("reserved"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: content("relationship-policy"),
+                },
+            },
+            suspicion: RelationshipAxisState {
+                value: label("reserved"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: content("relationship-policy"),
+                },
+            },
+            debt: RelationshipAxisState {
+                value: label("reserved"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: content("relationship-policy"),
+                },
+            },
+            familiarity: RelationshipAxisState {
+                value: label("reserved"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: content("relationship-policy"),
+                },
+            },
         }],
         conversations: vec![],
         obligations: vec![],
@@ -187,7 +229,11 @@ fn state() -> GameState {
             npcs: vec![NpcState {
                 entity: entity(3),
                 personality: content("authored-personality"),
+                role: content("authored-personality"),
                 motivations: vec![content("authored-motivation")],
+                goals: vec![],
+                needs: vec![],
+                fears: vec![],
                 known_facts: vec![fact_id(7)],
                 beliefs: vec![],
                 secrets: vec![],
@@ -248,6 +294,13 @@ fn checkpoint(state: GameState) -> Checkpoint {
 }
 
 fn checkpoint_with_pins(state: GameState, pins: CheckpointPins) -> Checkpoint {
+    try_checkpoint_with_pins(state, pins).unwrap()
+}
+
+fn try_checkpoint_with_pins(
+    state: GameState,
+    pins: CheckpointPins,
+) -> Result<Checkpoint, CheckpointError> {
     let admitted = inventory();
     Checkpoint::new(
         CHECKPOINT_SCHEMA,
@@ -267,7 +320,6 @@ fn checkpoint_with_pins(state: GameState, pins: CheckpointPins) -> Checkpoint {
             maximum_retained_bytes: 1024 * 1024,
         },
     )
-    .unwrap()
 }
 
 struct SourceOwner {
@@ -543,13 +595,23 @@ fn ambiguous_matches_refuse_in_both_orders_and_preserve_input() {
     );
     assert_eq!(supplied, before);
     let mut duplicate_direction = state();
-    duplicate_direction
-        .relationships
-        .push(duplicate_direction.relationships[0].clone());
-    assert_eq!(
-        run(&checkpoint(duplicate_direction), request(), &[entry()]),
-        Err(ReactionError::AmbiguousRelationship)
-    );
+    let mut conflicting = duplicate_direction.relationships[0].clone();
+    conflicting.state = label("concerned");
+    duplicate_direction.relationships.push(conflicting);
+    let original = duplicate_direction.clone();
+    for reverse in [false, true] {
+        let mut supplied = duplicate_direction.clone();
+        if reverse {
+            supplied.relationships.reverse();
+        }
+        let before = supplied.clone();
+        assert_eq!(
+            try_checkpoint_with_pins(supplied.clone(), pins()),
+            Err(CheckpointError::DuplicateIdentity)
+        );
+        assert_eq!(supplied, before);
+    }
+    assert_eq!(duplicate_direction, original);
 }
 
 #[test]
@@ -721,6 +783,109 @@ fn native_source_revocation_after_construction_refuses_without_partial_output() 
 }
 
 #[test]
+fn proposal_budget_counts_both_relationships_and_all_axis_provenance_before_cloning() {
+    let mut supplied_state = state();
+    let axis_sources: Vec<_> = (0..7)
+        .map(|index| content(&format!("axis-{index}-{}", "s".repeat(104))))
+        .collect();
+    let relationship = &mut supplied_state.relationships[0];
+    for (index, axis) in [
+        &mut relationship.trust,
+        &mut relationship.affection,
+        &mut relationship.respect,
+        &mut relationship.fear,
+        &mut relationship.suspicion,
+        &mut relationship.debt,
+        &mut relationship.familiarity,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        axis.value = label(&format!("value-{index}-{}", "v".repeat(104)));
+        axis.provenance = if index == 3 {
+            RelationshipAxisProvenance::AcceptedFact {
+                source: axis_sources[index].clone(),
+                fact: fact_id(7),
+                source_policy: label("accepted-policy-v1"),
+                witness: Some(record(8)),
+            }
+        } else {
+            RelationshipAxisProvenance::AuthoredBaseline {
+                source: axis_sources[index].clone(),
+            }
+        };
+    }
+    let mut admitted = inventory();
+    admitted.extend(axis_sources.iter().cloned());
+    let supplied = Checkpoint::new(
+        CHECKPOINT_SCHEMA,
+        basis(),
+        pins(),
+        supplied_state,
+        ReferenceInventory {
+            rules: &[],
+            content: &admitted,
+            resources: &[],
+            assets: &[],
+        },
+        CheckpointLimits {
+            maximum_records: 100,
+            maximum_text_bytes: 256,
+            maximum_total_text_bytes: 4096,
+            maximum_retained_bytes: 1024 * 1024,
+        },
+    )
+    .unwrap();
+    let before = supplied.clone();
+    let entries = [entry()];
+    let owner = source_owner(&entries);
+    let mut bounded = limits();
+    // This cap fits the old policy/state-only estimate but not two cloned seven-axis records.
+    bounded.maximum_proposal_bytes = 4096;
+    let policy = ReactionPolicy::new(
+        &supplied,
+        &entries,
+        ReferenceInventory {
+            rules: &[],
+            content: &admitted,
+            resources: &[],
+            assets: &[],
+        },
+        &owner,
+        bounded,
+    )
+    .unwrap();
+    assert_eq!(
+        react(&supplied, request(), &policy),
+        Err(ReactionError::LimitExceeded(ReactionLimit::ProposalBytes))
+    );
+    assert_eq!(supplied, before);
+
+    bounded.maximum_proposal_bytes = 16 * 1024;
+    let policy = ReactionPolicy::new(
+        &supplied,
+        &entries,
+        ReferenceInventory {
+            rules: &[],
+            content: &admitted,
+            resources: &[],
+            assets: &[],
+        },
+        &owner,
+        bounded,
+    )
+    .unwrap();
+    let ReactionOutcome::Proposed(proposal) = react(&supplied, request(), &policy).unwrap() else {
+        panic!("sufficient proposal budget must preserve the full relationship");
+    };
+    let mut expected = before.state().relationships[0].clone();
+    assert_eq!(proposal.original, expected);
+    expected.state = label("receptive");
+    assert_eq!(proposal.proposed, expected);
+    assert_eq!(supplied, before);
+}
+
+#[test]
 fn fixed_fixture_work_and_output_bounds_fail_instead_of_truncating_evidence() {
     let supplied = checkpoint(state());
     let entries = [entry()];
@@ -869,13 +1034,43 @@ fn irrelevant_private_secrets_do_not_change_reaction_and_debug_exposes_no_payloa
         policy: content("general"),
         permitted_audience: AudienceScope::Host,
     });
+    let agreement_operation = OperationId::from_bytes(&[9; 16]).unwrap();
+    hidden.facts.push(GameFact {
+        id: fact_id(9),
+        revision: basis().revision,
+        operation: agreement_operation,
+        ordinal: 0,
+        cause: None,
+        audience: AudienceScope::Host,
+        value: FactValue::ContentEvent {
+            definition: content("general"),
+            subjects: vec![entity(3), entity(4)],
+        },
+    });
+    hidden.decisions.push(AcceptedDecision {
+        operation: agreement_operation,
+        revision: basis().revision,
+        facts: vec![fact_id(9)],
+        draws: vec![],
+        effects: vec![],
+        source_policy: label("explicit-agreement-policy"),
+        semantic_output: None,
+    });
     hidden.obligations.push(Obligation {
         id: record(14),
         obligor: entity(3),
         beneficiary: entity(4),
         definition: content("general"),
+        terms: content("general"),
         due: Some(hidden.logical_time),
-        fulfilled: false,
+        agreement: ObligationAgreement {
+            source: content("general"),
+            fact: fact_id(9),
+            source_policy: label("explicit-agreement-policy"),
+            at: hidden.logical_time,
+        },
+        status: ObligationStatus::Active,
+        transition: None,
     });
     let hidden = checkpoint(hidden);
     let before = hidden.clone();
@@ -996,6 +1191,48 @@ fn source_basis_and_witness_event_observer_and_units_remain_exact() {
         object: entity(3),
         policy: content("relationship-policy"),
         state: label("private-inverse-state"),
+        trust: RelationshipAxisState {
+            value: label("private-inverse-state"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                source: content("relationship-policy"),
+            },
+        },
+        affection: RelationshipAxisState {
+            value: label("private-inverse-state"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                source: content("relationship-policy"),
+            },
+        },
+        respect: RelationshipAxisState {
+            value: label("private-inverse-state"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                source: content("relationship-policy"),
+            },
+        },
+        fear: RelationshipAxisState {
+            value: label("private-inverse-state"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                source: content("relationship-policy"),
+            },
+        },
+        suspicion: RelationshipAxisState {
+            value: label("private-inverse-state"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                source: content("relationship-policy"),
+            },
+        },
+        debt: RelationshipAxisState {
+            value: label("private-inverse-state"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                source: content("relationship-policy"),
+            },
+        },
+        familiarity: RelationshipAxisState {
+            value: label("private-inverse-state"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                source: content("relationship-policy"),
+            },
+        },
     });
     let duplicate = checkpoint(duplicate);
     let before = duplicate.clone();

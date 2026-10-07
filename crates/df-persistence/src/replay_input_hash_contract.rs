@@ -6,8 +6,6 @@ use df_types::{
 };
 use sha2::{Digest, Sha256};
 
-const CODEC_VERSION: u16 = 2;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct CanonicalHash {
     codec_version: u16,
@@ -20,7 +18,8 @@ fn canonical_hash(
 ) -> Result<CanonicalHash, crate::checkpoint_codec::CodecError> {
     let bytes = crate::checkpoint_codec::encode_checkpoint(checkpoint, codec_limits())?;
     Ok(CanonicalHash {
-        codec_version: CODEC_VERSION,
+        codec_version: u16::try_from(crate::checkpoint_codec::STORAGE_CODEC_VERSION)
+            .map_err(|_| crate::checkpoint_codec::CodecError::UnsupportedCodec)?,
         model_schema: checkpoint.schema(),
         sha256: Sha256::digest(bytes).into(),
     })
@@ -848,9 +847,11 @@ fn recorded_choice_ordered_draws_source_pins_and_reducer_replay_round_trip() {
     let before = original.clone();
     let bytes = crate::checkpoint_codec::encode_checkpoint(&original, codec_limits()).unwrap();
     assert_eq!(&bytes[..4], b"DFCP");
-    assert_eq!(u16::from_be_bytes([bytes[4], bytes[5]]), 2);
-    assert_eq!(original.schema(), 1);
+    assert_eq!(u16::from_be_bytes([bytes[4], bytes[5]]), 3);
+    assert_eq!(original.schema(), 2);
     let hash = canonical_hash(&original).unwrap();
+    assert_eq!(hash.codec_version, u16::from_be_bytes([bytes[4], bytes[5]]));
+    assert_eq!(hash.model_schema, u16::from_be_bytes([bytes[6], bytes[7]]));
     let restored = decode(&bytes, original.basis(), original.pins()).unwrap();
     let encoded_again =
         crate::checkpoint_codec::encode_checkpoint(&restored, codec_limits()).unwrap();
@@ -949,20 +950,24 @@ fn existing_typed_admission_refusals_do_not_change_checkpoint_or_draws() {
         decode(&malformed, original.basis(), original.pins()),
         Err(crate::checkpoint_codec::CodecError::UnsupportedCodec)
     );
-    let mut wrong_codec = bytes.clone();
-    wrong_codec[4..6].copy_from_slice(&1_u16.to_be_bytes());
-    assert_eq!(
-        decode(&wrong_codec, original.basis(), original.pins()),
-        Err(crate::checkpoint_codec::CodecError::UnsupportedCodec)
-    );
-    let mut wrong_schema = bytes.clone();
-    wrong_schema[6..8].copy_from_slice(&2_u16.to_be_bytes());
-    assert_eq!(
-        decode(&wrong_schema, original.basis(), original.pins()),
-        Err(crate::checkpoint_codec::CodecError::Checkpoint(
-            CheckpointError::UnsupportedSchema
-        ))
-    );
+    for version in [1_u16, 2_u16, u16::MAX] {
+        let mut wrong_codec = bytes.clone();
+        wrong_codec[4..6].copy_from_slice(&version.to_be_bytes());
+        assert_eq!(
+            decode(&wrong_codec, original.basis(), original.pins()),
+            Err(crate::checkpoint_codec::CodecError::UnsupportedCodec)
+        );
+    }
+    for schema in [1_u16, u16::MAX] {
+        let mut wrong_schema = bytes.clone();
+        wrong_schema[6..8].copy_from_slice(&schema.to_be_bytes());
+        assert_eq!(
+            decode(&wrong_schema, original.basis(), original.pins()),
+            Err(crate::checkpoint_codec::CodecError::Checkpoint(
+                CheckpointError::UnsupportedSchema
+            ))
+        );
+    }
     let mut trailing = bytes.clone();
     trailing.push(0);
     assert_eq!(

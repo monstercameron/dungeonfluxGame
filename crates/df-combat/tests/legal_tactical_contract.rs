@@ -342,7 +342,11 @@ fn member_cannot_rank_an_npc_belief_without_a_grant_to_that_member() {
     let npc = NpcState {
         entity: entity(4),
         personality: content(),
+        role: content(),
         motivations: vec![],
+        goals: vec![],
+        needs: vec![],
+        fears: vec![],
         known_facts: vec![],
         beliefs: vec![belief_id],
         secrets: vec![],

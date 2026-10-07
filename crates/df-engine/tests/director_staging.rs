@@ -210,6 +210,14 @@ fn checkpoint_at(
     supplied_basis: Basis,
     supplied_pins: CheckpointPins,
 ) -> Checkpoint {
+    try_checkpoint_at(supplied, supplied_basis, supplied_pins).unwrap()
+}
+
+fn try_checkpoint_at(
+    supplied: GameState,
+    supplied_basis: Basis,
+    supplied_pins: CheckpointPins,
+) -> Result<Checkpoint, CheckpointError> {
     let mut entries = admitted_content();
     entries.extend(
         supplied
@@ -239,7 +247,6 @@ fn checkpoint_at(
         },
         checkpoint_limits(),
     )
-    .unwrap()
 }
 fn id(value: u8) -> RecordId {
     RecordId::from_bytes(&[value; 16]).unwrap()
@@ -299,6 +306,34 @@ fn interaction_state() -> GameState {
         object: entity(4),
         policy: content(),
         state: label("fixture-authored-reaction"),
+        trust: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
+        affection: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
+        respect: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
+        fear: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
+        suspicion: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
+        debt: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
+        familiarity: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
     });
     supplied
 }
@@ -493,16 +528,26 @@ fn directors_cannot_fabricate_canonical_facts_or_relabel_source_bindings() {
 #[test]
 fn duplicate_directional_relationships_are_not_resolved_by_vector_order() {
     let current = checkpoint(state());
+    let unchanged = current.clone();
     let mut ambiguous = interaction_state();
     let mut conflicting = ambiguous.relationships.first().unwrap().clone();
     conflicting.state = label("fixture-conflicting-reaction");
     ambiguous.relationships.push(conflicting);
-    assert_eq!(
-        compose(&current, Some(checkpoint(ambiguous)), None, limits()),
-        Err(DirectorError::DuplicateRelationship(
-            DirectorStage::Interaction
-        )),
-    );
+    let original = ambiguous.clone();
+    for reverse in [false, true] {
+        let mut supplied = ambiguous.clone();
+        if reverse {
+            supplied.relationships.reverse();
+        }
+        let before = supplied.clone();
+        assert_eq!(
+            try_checkpoint_at(supplied.clone(), basis(), pins()),
+            Err(CheckpointError::DuplicateIdentity)
+        );
+        assert_eq!(supplied, before);
+    }
+    assert_eq!(ambiguous, original);
+    assert_eq!(current, unchanged);
 }
 
 #[test]
@@ -1100,6 +1145,34 @@ fn actual_world_and_narrative_producers_compose_without_changing_declared_effect
         object: entity(5),
         policy: content(),
         state: label("fixture-authored-reaction"),
+        trust: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
+        affection: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
+        respect: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
+        fear: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
+        suspicion: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
+        debt: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
+        familiarity: RelationshipAxisState {
+            value: label("fixture-authored-reaction"),
+            provenance: RelationshipAxisProvenance::AuthoredBaseline { source: content() },
+        },
     });
     let interaction = checkpoint(interaction_state);
     let composed = compose_schedule_thread_progress(

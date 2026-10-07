@@ -5,11 +5,17 @@ use df_interaction::reactions::{
     ReactionEntry, ReactionError, ReactionLimits, ReactionOutcome, ReactionPolicy, ReactionRequest,
     ReactionSourceOwner, react,
 };
+use df_interaction::relationships::{
+    RelationshipAxes, RelationshipAxis, RelationshipAxisValue, RelationshipChange,
+    RelationshipOwner, RelationshipRefusal, RelationshipView, propose_relationship_change,
+};
 use df_model::checkpoint::{
-    Basis, Checkpoint, CheckpointError, CheckpointLimits, CheckpointPins, CommandInput,
-    GameCommand, GameInput, ReferenceInventory,
+    Basis, Checkpoint, CheckpointError, CheckpointLimits, CheckpointPins, CommandInput, EntityId,
+    GameCommand, GameInput, ReferenceInventory, Relationship, RelationshipAxisProvenance,
+    RelationshipAxisState,
 };
 use df_rules::{InvocationError, RulesCommandHandler, RulesCommandInput, stage_handler};
+use df_types::RevisionLabel;
 
 /// Native admission for this exact command and social consequence pass, distinct from entry
 /// validation. Implementations must check current source rights, controlled actor, permitted
@@ -59,13 +65,257 @@ pub enum RelationshipStagingError<CommandRefusal, SourceRefusal> {
 }
 
 /// Private selected checkpoint and exact recomputed outcomes for the native caller. NoReaction
-/// remains typed and does not invalidate the source-admitted base command. Evidence is transient:
-/// the current categorical Relationship has no persisted event-consumption/provenance field.
-/// Snapshot reload and exact operation receipts are supported; event-only reconstruction and
-/// deduplication across distinct operations require the owning model's separate schema gate.
+/// remains typed and does not invalidate the source-admitted base command. Evidence for the
+/// categorical projection remains transient; the independent seven-axis values keep their own
+/// source and accepted-fact provenance. Snapshot reload and exact operation receipts are supported.
 pub struct RelationshipTransition {
     pub checkpoint: Checkpoint,
     pub reactions: Vec<ReactionOutcome>,
+}
+
+/// One source-admitted change to one directional axis in a staged checkpoint candidate.
+pub struct RelationshipAxisChange {
+    pub subject: EntityId,
+    pub target: EntityId,
+    pub axis: RelationshipAxis,
+    pub replacement: RelationshipAxisState,
+}
+
+/// The native owner proves that this accepted event/policy may change the exact relationship.
+/// The durable checkpoint constructor independently checks ledger and pinned-reference lineage.
+pub trait RelationshipAxisOwner:
+    RelationshipOwner<
+        Subject = EntityId,
+        Basis = Basis,
+        Value = RevisionLabel,
+        Provenance = RelationshipAxisProvenance,
+    >
+{
+    fn admit_axis_change(
+        &self,
+        candidate: &Checkpoint,
+        change: &RelationshipAxisChange,
+    ) -> Result<(), Self::Refusal>;
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum RelationshipAxisStagingError<Refusal> {
+    Capacity,
+    Snapshot(CheckpointError),
+    DuplicateDirection,
+    MissingRelationship,
+    Source(Refusal),
+    Proposal(RelationshipRefusal<Refusal>),
+    InvalidCandidate(CheckpointError),
+}
+
+/// Bounds for a detached axis pass and its canonical checkpoint reconstruction.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RelationshipAxisStagingLimits {
+    pub maximum_changes: usize,
+    pub maximum_inventory_records: usize,
+    pub maximum_checkpoint_bytes: usize,
+    pub maximum_pass_bytes: usize,
+    pub checkpoint: CheckpointLimits,
+}
+
+/// Applies bounded, source-admitted axis proposals to a command-staged candidate.
+/// The caller supplies the captured full basis independently of the candidate. The input
+/// checkpoint remains untouched; canonical construction rechecks every accepted source link.
+pub fn apply_relationship_axis_changes<Owner: RelationshipAxisOwner>(
+    owner: &Owner,
+    expected_basis: Basis,
+    candidate: &Checkpoint,
+    admitted_pins: &CheckpointPins,
+    inventory: ReferenceInventory<'_>,
+    changes: &[RelationshipAxisChange],
+    limits: RelationshipAxisStagingLimits,
+) -> Result<Checkpoint, RelationshipAxisStagingError<Owner::Refusal>> {
+    candidate
+        .validate_resume(expected_basis, admitted_pins)
+        .map_err(RelationshipAxisStagingError::Snapshot)?;
+    check_axis_capacity(candidate, &inventory, changes, limits)?;
+    candidate
+        .validate_admitted(expected_basis, admitted_pins, inventory, limits.checkpoint)
+        .map_err(RelationshipAxisStagingError::Snapshot)?;
+    for (index, change) in changes.iter().enumerate() {
+        if changes.iter().take(index).any(|prior| {
+            prior.subject == change.subject
+                && prior.target == change.target
+                && prior.axis == change.axis
+        }) {
+            return Err(RelationshipAxisStagingError::DuplicateDirection);
+        }
+    }
+
+    let mut state = candidate.state().clone();
+    for change in changes {
+        owner
+            .admit_axis_change(candidate, change)
+            .map_err(RelationshipAxisStagingError::Source)?;
+        let index = state
+            .relationships
+            .iter()
+            .position(|record| record.subject == change.subject && record.object == change.target)
+            .ok_or(RelationshipAxisStagingError::MissingRelationship)?;
+        let original = state.relationships[index].clone();
+        let axes = axes_from_relationship(&original);
+        let proposal = propose_relationship_change(
+            owner,
+            RelationshipView {
+                subject: &original.subject,
+                target: &original.object,
+                basis: &expected_basis,
+                axes: &axes,
+            },
+            RelationshipChange {
+                subject: &change.subject,
+                target: &change.target,
+                expected_basis: &expected_basis,
+                axis: change.axis,
+                replacement: RelationshipAxisValue::new(
+                    change.replacement.value.clone(),
+                    change.replacement.provenance.clone(),
+                ),
+            },
+        )
+        .map_err(RelationshipAxisStagingError::Proposal)?;
+        apply_axes(&mut state.relationships[index], proposal.axes());
+    }
+
+    Checkpoint::new(
+        candidate.schema(),
+        candidate.basis(),
+        candidate.pins().clone(),
+        state,
+        inventory,
+        limits.checkpoint,
+    )
+    .map_err(RelationshipAxisStagingError::InvalidCandidate)
+}
+
+fn check_axis_capacity<R>(
+    candidate: &Checkpoint,
+    inventory: &ReferenceInventory<'_>,
+    changes: &[RelationshipAxisChange],
+    limits: RelationshipAxisStagingLimits,
+) -> Result<(), RelationshipAxisStagingError<R>> {
+    if limits.maximum_changes == 0
+        || limits.maximum_inventory_records == 0
+        || limits.maximum_checkpoint_bytes == 0
+        || limits.maximum_pass_bytes == 0
+        || limits.checkpoint.maximum_retained_bytes == 0
+        || limits.checkpoint.maximum_retained_bytes > limits.maximum_checkpoint_bytes
+    {
+        return Err(RelationshipAxisStagingError::Capacity);
+    }
+    let maximum_axes = candidate
+        .state()
+        .relationships
+        .len()
+        .checked_mul(7)
+        .ok_or(RelationshipAxisStagingError::Capacity)?;
+    if changes.len() > maximum_axes
+        || changes.len() > limits.maximum_changes
+        || changes.len() > limits.checkpoint.maximum_records
+    {
+        return Err(RelationshipAxisStagingError::Capacity);
+    }
+    let inventory_records = [
+        inventory.rules.len(),
+        inventory.content.len(),
+        inventory.resources.len(),
+        inventory.assets.len(),
+    ]
+    .into_iter()
+    .try_fold(0usize, |sum, count| sum.checked_add(count))
+    .ok_or(RelationshipAxisStagingError::Capacity)?;
+    let checkpoint_bytes = candidate
+        .retained_bytes()
+        .ok_or(RelationshipAxisStagingError::Capacity)?;
+    let mut change_bytes = changes
+        .len()
+        .checked_mul(std::mem::size_of::<RelationshipAxisChange>())
+        .ok_or(RelationshipAxisStagingError::Capacity)?;
+    for change in changes {
+        change_bytes = change_bytes
+            .checked_add(change.replacement.value.retained_heap_bytes())
+            .ok_or(RelationshipAxisStagingError::Capacity)?;
+        let source = match &change.replacement.provenance {
+            RelationshipAxisProvenance::AuthoredBaseline { source } => source,
+            RelationshipAxisProvenance::AcceptedFact {
+                source,
+                source_policy,
+                ..
+            } => {
+                change_bytes = change_bytes
+                    .checked_add(source_policy.retained_heap_bytes())
+                    .ok_or(RelationshipAxisStagingError::Capacity)?;
+                source
+            }
+        };
+        change_bytes = change_bytes
+            .checked_add(source.package.retained_heap_bytes())
+            .and_then(|total| total.checked_add(source.entry.retained_heap_bytes()))
+            .ok_or(RelationshipAxisStagingError::Capacity)?;
+    }
+    let pass_bytes = limits
+        .maximum_checkpoint_bytes
+        .checked_mul(3)
+        .and_then(|scratch| scratch.checked_add(checkpoint_bytes))
+        .and_then(|total| total.checked_add(change_bytes))
+        .ok_or(RelationshipAxisStagingError::Capacity)?;
+    if checkpoint_bytes > limits.maximum_checkpoint_bytes
+        || inventory_records > limits.maximum_inventory_records
+        || pass_bytes > limits.maximum_pass_bytes
+    {
+        return Err(RelationshipAxisStagingError::Capacity);
+    }
+    Ok(())
+}
+
+fn axes_from_relationship(
+    relationship: &Relationship,
+) -> RelationshipAxes<RevisionLabel, RelationshipAxisProvenance> {
+    RelationshipAxes::new([
+        axis_value(&relationship.trust),
+        axis_value(&relationship.affection),
+        axis_value(&relationship.respect),
+        axis_value(&relationship.fear),
+        axis_value(&relationship.suspicion),
+        axis_value(&relationship.debt),
+        axis_value(&relationship.familiarity),
+    ])
+}
+
+fn axis_value(
+    state: &RelationshipAxisState,
+) -> RelationshipAxisValue<RevisionLabel, RelationshipAxisProvenance> {
+    RelationshipAxisValue::new(state.value.clone(), state.provenance.clone())
+}
+
+fn apply_axes(
+    relationship: &mut Relationship,
+    axes: &RelationshipAxes<RevisionLabel, RelationshipAxisProvenance>,
+) {
+    relationship.trust = axis_state(axes, RelationshipAxis::Trust);
+    relationship.affection = axis_state(axes, RelationshipAxis::Affection);
+    relationship.respect = axis_state(axes, RelationshipAxis::Respect);
+    relationship.fear = axis_state(axes, RelationshipAxis::Fear);
+    relationship.suspicion = axis_state(axes, RelationshipAxis::Suspicion);
+    relationship.debt = axis_state(axes, RelationshipAxis::Debt);
+    relationship.familiarity = axis_state(axes, RelationshipAxis::Familiarity);
+}
+
+fn axis_state(
+    axes: &RelationshipAxes<RevisionLabel, RelationshipAxisProvenance>,
+    axis: RelationshipAxis,
+) -> RelationshipAxisState {
+    let value = axes.axis(axis);
+    RelationshipAxisState {
+        value: value.value().clone(),
+        provenance: value.provenance().clone(),
+    }
 }
 
 /// Compose with a real source-selected command handler and invoke through decide_registered_command.

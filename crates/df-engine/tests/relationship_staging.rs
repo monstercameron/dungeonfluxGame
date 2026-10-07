@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 #[path = "support/fixture_model.rs"]
 pub mod fixture_model;
 #[path = "support/relationship_staging.rs"]
@@ -6,10 +8,137 @@ pub mod support;
 use df_engine::obligation_fulfillment::FulfillmentError;
 use df_engine::relationship_staging::*;
 use df_interaction::reactions::*;
+use df_interaction::relationships::{RelationshipAxis, RelationshipAxisValue, RelationshipOwner};
 use df_model::checkpoint::*;
 use df_rules::{RulesCommandHandler, RulesCommandInput, stage_handler};
+use df_types::RevisionLabel;
 use fixture_model as model;
 use support::*;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AxisOwnerRefusal {
+    UnacceptedSource,
+}
+
+#[derive(Default)]
+struct AxisOwner {
+    admissions: Cell<usize>,
+    validations: Cell<usize>,
+}
+
+impl RelationshipOwner for AxisOwner {
+    type Subject = EntityId;
+    type Basis = Basis;
+    type Value = RevisionLabel;
+    type Provenance = RelationshipAxisProvenance;
+    type Refusal = AxisOwnerRefusal;
+
+    fn validate_axis_change(
+        &self,
+        _: RelationshipAxis,
+        _: &RelationshipAxisValue<Self::Value, Self::Provenance>,
+        _: &RelationshipAxisValue<Self::Value, Self::Provenance>,
+    ) -> Result<(), Self::Refusal> {
+        self.validations.set(self.validations.get() + 1);
+        Ok(())
+    }
+}
+
+impl RelationshipAxisOwner for AxisOwner {
+    fn admit_axis_change(
+        &self,
+        candidate: &Checkpoint,
+        change: &RelationshipAxisChange,
+    ) -> Result<(), Self::Refusal> {
+        self.admissions.set(self.admissions.get() + 1);
+        let RelationshipAxisProvenance::AcceptedFact {
+            source,
+            fact,
+            source_policy,
+            witness,
+        } = &change.replacement.provenance
+        else {
+            return Err(AxisOwnerRefusal::UnacceptedSource);
+        };
+        let Some(record) = candidate
+            .state()
+            .facts
+            .iter()
+            .find(|record| record.id == *fact)
+        else {
+            return Err(AxisOwnerRefusal::UnacceptedSource);
+        };
+        let admitted = candidate.state().decisions.iter().any(|decision| {
+            decision.operation == record.operation
+                && decision.revision == record.revision
+                && decision.facts.contains(fact)
+                && decision.source_policy == *source_policy
+                && decision.source_policy == model::label("original-delivery-policy")
+        });
+        let subjects_match = matches!(
+            &record.value,
+            FactValue::ContentEvent { definition, subjects }
+                if definition == &content("accepted-delivery")
+                    && subjects.as_slice() == [change.subject, change.target]
+        );
+        if admitted
+            && subjects_match
+            && source == &content("directional-policy")
+            && witness.is_none()
+        {
+            Ok(())
+        } else {
+            Err(AxisOwnerRefusal::UnacceptedSource)
+        }
+    }
+}
+
+fn axis_staging_limits() -> RelationshipAxisStagingLimits {
+    RelationshipAxisStagingLimits {
+        maximum_changes: 16,
+        maximum_inventory_records: 64,
+        maximum_checkpoint_bytes: 1024 * 1024,
+        maximum_pass_bytes: 8 * 1024 * 1024,
+        checkpoint: model::limits(),
+    }
+}
+
+fn delivery_axis_change() -> RelationshipAxisChange {
+    RelationshipAxisChange {
+        subject: model::entity(4),
+        target: model::entity(5),
+        axis: RelationshipAxis::Affection,
+        replacement: RelationshipAxisState {
+            value: model::label("affection-after-delivery"),
+            provenance: RelationshipAxisProvenance::AcceptedFact {
+                source: content("directional-policy"),
+                fact: fact(30),
+                source_policy: model::label("original-delivery-policy"),
+                witness: None,
+            },
+        },
+    }
+}
+
+fn axis_candidate(fixture: &Fixture) -> (Checkpoint, Basis) {
+    let current = fixture.current();
+    let mut expected = current.basis();
+    expected.revision = expected.revision.next_sequence().unwrap();
+    let owner = SourceOwner::new(fixture);
+    let input = fixture.input(&current);
+    let staged = stage_handler(
+        &fixture.inner(&owner, &current),
+        &fixture.pins,
+        RulesCommandInput {
+            command: &input,
+            supplied_draws: &[],
+        },
+        &current,
+        1024 * 1024,
+    )
+    .unwrap();
+    (staged, expected)
+}
 
 #[test]
 fn registered_real_completion_applies_only_exact_direction_and_retains_all_mechanical_siblings() {
@@ -38,6 +167,26 @@ fn registered_real_completion_applies_only_exact_direction_and_retains_all_mecha
         candidate.state().relationships[1],
         current.state().relationships[1]
     );
+    assert_eq!(
+        [
+            &candidate.state().relationships[0].trust,
+            &candidate.state().relationships[0].affection,
+            &candidate.state().relationships[0].respect,
+            &candidate.state().relationships[0].fear,
+            &candidate.state().relationships[0].suspicion,
+            &candidate.state().relationships[0].debt,
+            &candidate.state().relationships[0].familiarity,
+        ],
+        [
+            &current.state().relationships[0].trust,
+            &current.state().relationships[0].affection,
+            &current.state().relationships[0].respect,
+            &current.state().relationships[0].fear,
+            &current.state().relationships[0].suspicion,
+            &current.state().relationships[0].debt,
+            &current.state().relationships[0].familiarity,
+        ]
+    );
     assert_eq!(candidate.pins(), current.pins());
     assert_eq!(
         candidate.basis().revision,
@@ -50,12 +199,281 @@ fn registered_real_completion_applies_only_exact_direction_and_retains_all_mecha
     );
     assert_eq!(current.state().draws.len(), 1);
     assert_eq!(candidate.state().draws, current.state().draws);
-    assert_eq!(candidate.state().decisions[0].draws, [0]);
+    assert_eq!(
+        candidate
+            .state()
+            .decisions
+            .iter()
+            .find(|decision| decision.operation == operation(30))
+            .unwrap()
+            .draws,
+        [0]
+    );
     assert_eq!(
         candidate.state().decisions.last().unwrap().source_policy,
         fixture.registration.policy
     );
     assert_eq!(current, original);
+}
+
+#[test]
+fn accepted_axis_change_updates_one_directional_axis_and_keeps_all_siblings() {
+    let fixture = Fixture::new();
+    let source_owner = SourceOwner::new(&fixture);
+    let current = fixture.current();
+    let mut expected_basis = current.basis();
+    expected_basis.revision = expected_basis.revision.next_sequence().unwrap();
+    let input = fixture.input(&current);
+    let staged = stage_handler(
+        &fixture.inner(&source_owner, &current),
+        &fixture.pins,
+        RulesCommandInput {
+            command: &input,
+            supplied_draws: &[],
+        },
+        &current,
+        1024 * 1024,
+    )
+    .unwrap();
+    let original = staged.state().relationships[1].clone();
+    let reverse = staged.state().relationships[0].clone();
+    let change = RelationshipAxisChange {
+        subject: model::entity(4),
+        target: model::entity(5),
+        axis: RelationshipAxis::Affection,
+        replacement: RelationshipAxisState {
+            value: model::label("affection-after-delivery"),
+            provenance: RelationshipAxisProvenance::AcceptedFact {
+                source: content("directional-policy"),
+                fact: fact(30),
+                source_policy: model::label("original-delivery-policy"),
+                witness: None,
+            },
+        },
+    };
+
+    let candidate = apply_relationship_axis_changes(
+        &AxisOwner::default(),
+        expected_basis,
+        &staged,
+        &fixture.pins,
+        fixture.inventory(),
+        &[change],
+        axis_staging_limits(),
+    )
+    .unwrap();
+    let replayed = apply_relationship_axis_changes(
+        &AxisOwner::default(),
+        expected_basis,
+        &staged,
+        &fixture.pins,
+        fixture.inventory(),
+        &[RelationshipAxisChange {
+            subject: model::entity(4),
+            target: model::entity(5),
+            axis: RelationshipAxis::Affection,
+            replacement: RelationshipAxisState {
+                value: model::label("affection-after-delivery"),
+                provenance: RelationshipAxisProvenance::AcceptedFact {
+                    source: content("directional-policy"),
+                    fact: fact(30),
+                    source_policy: model::label("original-delivery-policy"),
+                    witness: None,
+                },
+            },
+        }],
+        axis_staging_limits(),
+    )
+    .unwrap();
+
+    assert_eq!(staged.state().relationships[1], original);
+    assert_eq!(replayed, candidate);
+    assert_eq!(candidate.state().relationships[0], reverse);
+    let updated = &candidate.state().relationships[1];
+    assert_eq!(updated.state, original.state);
+    assert_eq!(
+        updated.affection.value,
+        model::label("affection-after-delivery")
+    );
+    assert_eq!(
+        updated.affection.provenance,
+        RelationshipAxisProvenance::AcceptedFact {
+            source: content("directional-policy"),
+            fact: fact(30),
+            source_policy: model::label("original-delivery-policy"),
+            witness: None,
+        }
+    );
+    assert_eq!(updated.trust, original.trust);
+    assert_eq!(updated.respect, original.respect);
+    assert_eq!(updated.fear, original.fear);
+    assert_eq!(updated.suspicion, original.suspicion);
+    assert_eq!(updated.debt, original.debt);
+    assert_eq!(updated.familiarity, original.familiarity);
+}
+
+#[test]
+fn independent_axis_basis_and_current_capacity_refuse_before_owner_work() {
+    let fixture = Fixture::new();
+    let (candidate, expected) = axis_candidate(&fixture);
+    let original = candidate.clone();
+    assert_eq!(expected.revision, model::revision(2, 9));
+    let mut session = expected;
+    session.session = df_types::SessionId::from_bytes(&[71; 16]).unwrap();
+    let mut run = expected;
+    run.run = df_types::RunId::from_bytes(&[72; 16]).unwrap();
+    let mut epoch = expected;
+    epoch.revision = model::revision(3, 9);
+    let mut sequence = expected;
+    sequence.revision = model::revision(2, 10);
+    for (stale, expected_error) in [
+        (session, CheckpointError::WrongSession),
+        (run, CheckpointError::WrongRun),
+        (epoch, CheckpointError::StaleBasis),
+        (sequence, CheckpointError::StaleBasis),
+    ] {
+        let owner = AxisOwner::default();
+        assert_eq!(
+            apply_relationship_axis_changes(
+                &owner,
+                stale,
+                &candidate,
+                &fixture.pins,
+                fixture.inventory(),
+                &[delivery_axis_change()],
+                axis_staging_limits(),
+            ),
+            Err(RelationshipAxisStagingError::Snapshot(expected_error))
+        );
+        assert_eq!((owner.admissions.get(), owner.validations.get()), (0, 0));
+        assert_eq!(candidate, original);
+    }
+
+    let mut changes = axis_staging_limits();
+    changes.maximum_changes = 0;
+    let mut inventory = axis_staging_limits();
+    inventory.maximum_inventory_records = 1;
+    let mut pass = axis_staging_limits();
+    pass.maximum_pass_bytes = 1;
+    let mut records = axis_staging_limits();
+    records.checkpoint.maximum_records = 1;
+    let mut retained = axis_staging_limits();
+    retained.checkpoint.maximum_retained_bytes = 1;
+    for (limits, expected_error) in [
+        (changes, RelationshipAxisStagingError::Capacity),
+        (inventory, RelationshipAxisStagingError::Capacity),
+        (pass, RelationshipAxisStagingError::Capacity),
+        (
+            records,
+            RelationshipAxisStagingError::Snapshot(CheckpointError::Capacity),
+        ),
+        (
+            retained,
+            RelationshipAxisStagingError::Snapshot(CheckpointError::Capacity),
+        ),
+    ] {
+        let owner = AxisOwner::default();
+        assert_eq!(
+            apply_relationship_axis_changes(
+                &owner,
+                expected,
+                &candidate,
+                &fixture.pins,
+                fixture.inventory(),
+                &[delivery_axis_change()],
+                limits,
+            ),
+            Err(expected_error)
+        );
+        assert_eq!((owner.admissions.get(), owner.validations.get()), (0, 0));
+        assert_eq!(candidate, original);
+    }
+}
+
+#[test]
+fn malformed_axis_provenance_duplicates_and_late_refusal_discard_the_whole_pass() {
+    let fixture = Fixture::new();
+    let (candidate, expected) = axis_candidate(&fixture);
+    let original = candidate.clone();
+    for dimension in ["source", "policy", "fact", "missing-fact", "witness"] {
+        let mut change = delivery_axis_change();
+        let RelationshipAxisProvenance::AcceptedFact {
+            source,
+            source_policy,
+            fact: cause,
+            witness,
+        } = &mut change.replacement.provenance
+        else {
+            unreachable!()
+        };
+        match dimension {
+            "source" => *source = content("authored-reaction"),
+            "policy" => *source_policy = model::label("wrong-policy"),
+            "fact" => *cause = fact(29),
+            "missing-fact" => *cause = fact(99),
+            "witness" => *witness = Some(record(31)),
+            _ => unreachable!(),
+        }
+        let owner = AxisOwner::default();
+        assert_eq!(
+            apply_relationship_axis_changes(
+                &owner,
+                expected,
+                &candidate,
+                &fixture.pins,
+                fixture.inventory(),
+                &[change],
+                axis_staging_limits(),
+            ),
+            Err(RelationshipAxisStagingError::Source(
+                AxisOwnerRefusal::UnacceptedSource
+            ))
+        );
+        assert_eq!(owner.admissions.get(), 1);
+        assert_eq!(owner.validations.get(), 0);
+        assert_eq!(candidate, original);
+    }
+    let owner = AxisOwner::default();
+    assert_eq!(
+        apply_relationship_axis_changes(
+            &owner,
+            expected,
+            &candidate,
+            &fixture.pins,
+            fixture.inventory(),
+            &[delivery_axis_change(), delivery_axis_change()],
+            axis_staging_limits(),
+        ),
+        Err(RelationshipAxisStagingError::DuplicateDirection)
+    );
+    assert_eq!((owner.admissions.get(), owner.validations.get()), (0, 0));
+    assert_eq!(candidate, original);
+
+    let mut last = delivery_axis_change();
+    last.axis = RelationshipAxis::Trust;
+    let RelationshipAxisProvenance::AcceptedFact { source_policy, .. } =
+        &mut last.replacement.provenance
+    else {
+        unreachable!()
+    };
+    *source_policy = model::label("late-unaccepted-policy");
+    let owner = AxisOwner::default();
+    assert_eq!(
+        apply_relationship_axis_changes(
+            &owner,
+            expected,
+            &candidate,
+            &fixture.pins,
+            fixture.inventory(),
+            &[delivery_axis_change(), last],
+            axis_staging_limits(),
+        ),
+        Err(RelationshipAxisStagingError::Source(
+            AxisOwnerRefusal::UnacceptedSource
+        ))
+    );
+    assert_eq!((owner.admissions.get(), owner.validations.get()), (2, 1));
+    assert_eq!(candidate, original);
 }
 
 #[test]
@@ -90,11 +508,22 @@ fn ignorance_beliefs_memory_and_wrong_witness_return_typed_no_reaction_without_s
                 "witness" => state.continuity.witnesses.clear(),
                 "wrong-observer" => state.continuity.witnesses[0].observer = model::entity(4),
                 "wrong-event" => {
-                    let mut fact_record = state.facts[0].clone();
+                    let mut fact_record = state
+                        .facts
+                        .iter()
+                        .find(|record| record.id == fact(30))
+                        .unwrap()
+                        .clone();
                     fact_record.id = fact(32);
                     fact_record.ordinal = 2;
                     state.facts.push(fact_record);
-                    state.decisions[0].facts.push(fact(32));
+                    state
+                        .decisions
+                        .iter_mut()
+                        .find(|decision| decision.operation == operation(30))
+                        .unwrap()
+                        .facts
+                        .push(fact(32));
                     state.continuity.witnesses[0].fact = fact(32);
                 }
                 _ => unreachable!(),
@@ -268,19 +697,23 @@ fn duplicate_or_contradictory_authored_entries_and_duplicate_directions_refuse_w
         Err(RelationshipStagingError::DuplicateDirection)
     ));
     let mut state = fixture.state();
-    state.relationships.push(state.relationships[0].clone());
-    let duplicate = fixture.checkpoint(state);
-    assert!(matches!(
-        stage(
-            &fixture,
-            &owner,
-            &duplicate,
-            &fixture.input(&duplicate),
-            &[fixture.request(&duplicate)],
-            limits()
-        ),
-        Err(RelationshipStagingError::DuplicateDirection)
-    ));
+    let mut conflicting = state.relationships[0].clone();
+    conflicting.state = model::label("conflicting-direction-state");
+    state.relationships.push(conflicting);
+    let original = state.clone();
+    for reverse in [false, true] {
+        let mut supplied = state.clone();
+        if reverse {
+            supplied.relationships.reverse();
+        }
+        let before = supplied.clone();
+        assert_eq!(
+            fixture.try_checkpoint(supplied.clone()),
+            Err(CheckpointError::DuplicateIdentity)
+        );
+        assert_eq!(supplied, before);
+    }
+    assert_eq!(state, original);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -356,6 +789,8 @@ mod session {
         refuse_reload: bool,
         command_stages: usize,
         entry_checks: usize,
+        with_axes: bool,
+        axis_admissions: usize,
     }
     struct Repository {
         database: Rc<RefCell<Database>>,
@@ -428,6 +863,7 @@ mod session {
         }
     }
     struct Engine {
+        axis: super::AxisOwner,
         fixture: Fixture,
         source: SourceOwner,
         database: Rc<RefCell<Database>>,
@@ -440,11 +876,34 @@ mod session {
             input: &GameInput,
         ) -> Result<Checkpoint, RepositoryError> {
             self.database.borrow_mut().decisions += 1;
+            let captured_basis = current.basis();
+            let with_axes = self.database.borrow().with_axes;
             let result = registered(&self.fixture, &self.source, current, input)
-                .map_err(|_| RepositoryError::InvalidCandidate);
+                .map_err(|_| RepositoryError::InvalidCandidate)
+                .and_then(|candidate| {
+                    if !with_axes {
+                        return Ok(candidate);
+                    }
+                    let mut expected = captured_basis;
+                    expected.revision = expected
+                        .revision
+                        .next_sequence()
+                        .map_err(|_| RepositoryError::InvalidCandidate)?;
+                    super::apply_relationship_axis_changes(
+                        &self.axis,
+                        expected,
+                        &candidate,
+                        &self.fixture.pins,
+                        self.fixture.inventory(),
+                        &[super::delivery_axis_change()],
+                        super::axis_staging_limits(),
+                    )
+                    .map_err(|_| RepositoryError::InvalidCandidate)
+                });
             let mut db = self.database.borrow_mut();
             db.command_stages = self.source.command_calls.get();
             db.entry_checks = self.source.entry_calls.get();
+            db.axis_admissions = self.axis.admissions.get();
             result
         }
         fn validate_recovery(&mut self, checkpoint: &Checkpoint) -> Result<(), RepositoryError> {
@@ -473,7 +932,16 @@ mod session {
                 checkpoint.state().relationships[1].state,
                 model::label("independent-reverse")
             );
-            assert!(checkpoint.state().obligations[0].fulfilled);
+            assert_eq!(
+                checkpoint.state().obligations[0].status,
+                ObligationStatus::Fulfilled
+            );
+            if db.with_axes {
+                assert_eq!(
+                    checkpoint.state().relationships[1].affection,
+                    super::delivery_axis_change().replacement
+                );
+            }
             db.publications += 1;
             Ok(())
         }
@@ -486,6 +954,13 @@ mod session {
         setup_fixture(Fixture::new(), failure)
     }
     fn setup_fixture(fixture: Fixture, failure: Failure) -> (Owner, Rc<RefCell<Database>>, Scope) {
+        setup_fixture_with_axes(fixture, failure, false)
+    }
+    fn setup_fixture_with_axes(
+        fixture: Fixture,
+        failure: Failure,
+        with_axes: bool,
+    ) -> (Owner, Rc<RefCell<Database>>, Scope) {
         let current = fixture.current();
         let scope = Scope {
             input: fixture.input(&current),
@@ -501,12 +976,15 @@ mod session {
             refuse_reload: false,
             command_stages: 0,
             entry_checks: 0,
+            with_axes,
+            axis_admissions: 0,
         }));
         let owner = DurableOwner::new(
             Repository {
                 database: Rc::clone(&database),
             },
             Engine {
+                axis: super::AxisOwner::default(),
                 fixture,
                 source,
                 database: Rc::clone(&database),
@@ -534,6 +1012,105 @@ mod session {
     }
 
     #[test]
+    fn accepted_axis_and_fulfillment_commit_together_and_exact_recovery_keeps_lineage() {
+        for failure in [Failure::None, Failure::LostAck] {
+            let (mut owner, database, scope) =
+                setup_fixture_with_axes(Fixture::new(), failure, true);
+            let original = owner.checkpoint().clone();
+            let first = submit(&mut owner, &scope);
+            let receipt = if failure == Failure::LostAck {
+                assert_eq!(first, SubmissionOutcome::LookupRequired);
+                assert_eq!(owner.checkpoint(), &original);
+                assert_eq!(database.borrow().publications, 0);
+                database.borrow_mut().refuse_reload = true;
+                let receipt = submit(&mut owner, &scope);
+                assert!(matches!(&receipt, SubmissionOutcome::Confirmed(_)));
+                assert!(owner.has_uncertain_operation());
+                assert_eq!(owner.checkpoint(), &original);
+                database.borrow_mut().refuse_reload = false;
+                assert_eq!(submit(&mut owner, &scope), receipt);
+                receipt
+            } else {
+                assert!(matches!(&first, SubmissionOutcome::Confirmed(_)));
+                first
+            };
+            let committed = database.borrow().checkpoint.clone();
+            assert_eq!(submit(&mut owner, &scope), receipt);
+            assert!(owner.is_current());
+            assert_eq!(owner.checkpoint(), &committed);
+            let db = database.borrow();
+            assert_eq!(db.checkpoint, committed);
+            let mut expected = original.state().relationships[1].clone();
+            expected.affection = super::delivery_axis_change().replacement;
+            assert_eq!(committed.state().relationships[1], expected);
+            let mut reverse = original.state().relationships[0].clone();
+            reverse.state = model::label("receptive");
+            assert_eq!(committed.state().relationships[0], reverse);
+            assert_eq!(
+                committed.state().obligations[0].status,
+                ObligationStatus::Fulfilled
+            );
+            assert!(committed.state().obligations[0].transition.is_some());
+            assert_eq!(committed.state().draws, original.state().draws);
+            assert_eq!(
+                committed.state().facts.len(),
+                original.state().facts.len() + 1
+            );
+            assert_eq!(
+                (
+                    db.decisions,
+                    db.commits,
+                    db.ledger.len(),
+                    db.axis_admissions
+                ),
+                (1, 1, 1, 1)
+            );
+            assert_eq!(db.publications, usize::from(failure == Failure::None));
+        }
+    }
+
+    #[test]
+    fn refused_axis_commit_preserves_all_state_and_safe_retry_commits_once() {
+        let (mut owner, database, scope) =
+            setup_fixture_with_axes(Fixture::new(), Failure::BeforeCommit, true);
+        let original = owner.checkpoint().clone();
+        assert_eq!(
+            submit(&mut owner, &scope),
+            SubmissionOutcome::Refused(RepositoryError::Unavailable)
+        );
+        assert_eq!(owner.checkpoint(), &original);
+        assert_eq!(database.borrow().checkpoint, original);
+        assert_eq!(database.borrow().publications, 0);
+        assert!(database.borrow().ledger.is_empty());
+        database.borrow_mut().failure = Failure::None;
+        let receipt = submit(&mut owner, &scope);
+        assert!(matches!(&receipt, SubmissionOutcome::Confirmed(_)));
+        let committed = owner.checkpoint().clone();
+        assert_eq!(submit(&mut owner, &scope), receipt);
+        assert_eq!(owner.checkpoint(), &committed);
+        let db = database.borrow();
+        assert_eq!(db.checkpoint, committed);
+        assert_eq!(
+            committed.state().relationships[1].affection,
+            super::delivery_axis_change().replacement
+        );
+        assert_eq!(
+            committed.state().obligations[0].status,
+            ObligationStatus::Fulfilled
+        );
+        assert_eq!(
+            (
+                db.decisions,
+                db.commits,
+                db.publications,
+                db.ledger.len(),
+                db.axis_admissions
+            ),
+            (2, 2, 1, 1, 2)
+        );
+    }
+
+    #[test]
     fn admitted_registered_reaction_commits_only_after_ack_and_exact_retry_returns_original_receipt()
      {
         let (mut owner, database, scope) = setup(Failure::None);
@@ -557,7 +1134,16 @@ mod session {
         );
         assert_eq!(original.state().draws.len(), 1);
         assert_eq!(db.checkpoint.state().draws, original.state().draws);
-        assert_eq!(db.checkpoint.state().decisions[0].draws, [0]);
+        assert_eq!(
+            db.checkpoint
+                .state()
+                .decisions
+                .iter()
+                .find(|decision| decision.operation == operation(30))
+                .unwrap()
+                .draws,
+            [0]
+        );
         assert_eq!(
             (db.decisions, db.commits, db.publications, db.ledger.len()),
             (1, 1, 1, 1)
@@ -697,7 +1283,10 @@ mod session {
             db.checkpoint.state().relationships[2].state,
             model::label("reserved")
         );
-        assert!(!db.checkpoint.state().obligations[0].fulfilled);
+        assert_eq!(
+            db.checkpoint.state().obligations[0].status,
+            ObligationStatus::Active
+        );
     }
 }
 
@@ -967,18 +1556,34 @@ fn exact_event_acceptance_and_prior_cause_acceptance_cannot_be_replaced_by_fact_
         let fixture = Fixture::new();
         let owner = SourceOwner::new(&fixture);
         let mut state = fixture.state();
-        let mut event = state.facts[0].clone();
+        let mut event = state
+            .facts
+            .iter()
+            .find(|record| record.id == fact(30))
+            .unwrap()
+            .clone();
         event.id = fact(32);
         event.ordinal = 2;
         event.cause = Some(fact(30));
         if missing == "cause" {
-            let mut cause = state.facts[0].clone();
+            let mut cause = state
+                .facts
+                .iter()
+                .find(|record| record.id == fact(30))
+                .unwrap()
+                .clone();
             cause.id = fact(34);
             cause.operation = operation(33);
             cause.ordinal = 0;
             state.facts.push(cause);
             event.cause = Some(fact(34));
-            state.decisions[0].facts.push(fact(32));
+            state
+                .decisions
+                .iter_mut()
+                .find(|decision| decision.operation == operation(30))
+                .unwrap()
+                .facts
+                .push(fact(32));
         }
         state.facts.push(event);
         state.continuity.npcs[0].known_facts.push(fact(32));

@@ -5,10 +5,11 @@ use df_engine::command_entry::{
     CommandEntryContext, CommandEntryLimits, CommandRejection, decide_registered_command,
 };
 use df_engine::obligation_fulfillment::{
-    AcceptedFulfillmentCause, FulfillmentError, FulfillmentLimits, FulfillmentRegistration,
-    FulfillmentSourceOwner, ObligationFulfillmentHandler,
+    AcceptedFulfillmentCause, FulfillmentAction, FulfillmentError, FulfillmentLimits,
+    FulfillmentRegistration, FulfillmentSourceOwner, ObligationFulfillmentHandler,
 };
 use df_engine::relationship_staging::*;
+use df_interaction::debts::DebtAction;
 use df_interaction::reactions::*;
 use df_model::checkpoint::*;
 use df_model::commands::CommandLimits;
@@ -73,6 +74,9 @@ impl Fixture {
                 "explicit-agreement",
                 "accepted-delivery",
                 "agreement-completed",
+                "agreement-broken",
+                "agreement-expired",
+                "agreement-cancelled",
                 "authored-reaction",
                 "authored-personality",
                 "authored-motivation",
@@ -104,8 +108,37 @@ impl Fixture {
             obligor: model::entity(4),
             beneficiary: model::entity(5),
             definition: self.registration.obligation_definition.clone(),
+            terms: self.registration.obligation_definition.clone(),
             due: None,
-            fulfilled: false,
+            agreement: ObligationAgreement {
+                source: self.registration.obligation_definition.clone(),
+                fact: fact(29),
+                source_policy: model::label("explicit-agreement-policy"),
+                at: state.logical_time,
+            },
+            status: ObligationStatus::Active,
+            transition: None,
+        });
+        state.facts.push(GameFact {
+            id: fact(29),
+            revision: model::basis().revision,
+            operation: operation(29),
+            ordinal: 0,
+            cause: None,
+            audience: AudienceScope::Host,
+            value: FactValue::ContentEvent {
+                definition: self.registration.obligation_definition.clone(),
+                subjects: vec![model::entity(4), model::entity(5)],
+            },
+        });
+        state.decisions.push(AcceptedDecision {
+            operation: operation(29),
+            revision: model::basis().revision,
+            facts: vec![fact(29)],
+            draws: vec![],
+            effects: vec![],
+            source_policy: model::label("explicit-agreement-policy"),
+            semantic_output: None,
         });
         state.facts.push(GameFact {
             id: fact(30),
@@ -156,18 +189,106 @@ impl Fixture {
                 object: model::entity(4),
                 policy: content("directional-policy"),
                 state: model::label("reserved"),
+                trust: RelationshipAxisState {
+                    value: model::label("reserved"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
+                affection: RelationshipAxisState {
+                    value: model::label("reserved"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
+                respect: RelationshipAxisState {
+                    value: model::label("reserved"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
+                fear: RelationshipAxisState {
+                    value: model::label("reserved"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
+                suspicion: RelationshipAxisState {
+                    value: model::label("reserved"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
+                debt: RelationshipAxisState {
+                    value: model::label("reserved"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
+                familiarity: RelationshipAxisState {
+                    value: model::label("reserved"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
             },
             Relationship {
                 subject: model::entity(4),
                 object: model::entity(5),
                 policy: content("directional-policy"),
                 state: model::label("independent-reverse"),
+                trust: RelationshipAxisState {
+                    value: model::label("independent-reverse"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
+                affection: RelationshipAxisState {
+                    value: model::label("independent-reverse"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
+                respect: RelationshipAxisState {
+                    value: model::label("independent-reverse"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
+                fear: RelationshipAxisState {
+                    value: model::label("independent-reverse"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
+                suspicion: RelationshipAxisState {
+                    value: model::label("independent-reverse"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
+                debt: RelationshipAxisState {
+                    value: model::label("independent-reverse"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
+                familiarity: RelationshipAxisState {
+                    value: model::label("independent-reverse"),
+                    provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                        source: content("directional-policy"),
+                    },
+                },
             },
         ];
         state.continuity.npcs.push(NpcState {
             entity: model::entity(5),
             personality: content("authored-personality"),
+            role: content("authored-personality"),
             motivations: vec![content("authored-motivation")],
+            goals: vec![],
+            needs: vec![],
+            fears: vec![],
             known_facts: vec![fact(30)],
             beliefs: vec![],
             secrets: vec![],
@@ -197,6 +318,9 @@ impl Fixture {
         state
     }
     pub fn checkpoint(&self, state: GameState) -> Checkpoint {
+        self.try_checkpoint(state).unwrap()
+    }
+    pub fn try_checkpoint(&self, state: GameState) -> Result<Checkpoint, CheckpointError> {
         Checkpoint::new(
             CHECKPOINT_SCHEMA,
             model::basis(),
@@ -205,7 +329,6 @@ impl Fixture {
             self.inventory(),
             model::limits(),
         )
-        .unwrap()
     }
     pub fn current(&self) -> Checkpoint {
         self.checkpoint(self.state())
@@ -258,12 +381,14 @@ impl Fixture {
             inventory: self.inventory(),
             registration: &self.registration,
             obligation: record(40),
+            action: DebtAction::Fulfill,
+            action_definition: &self.registration.completion_definition,
             cause: AcceptedFulfillmentCause {
                 fact: fact(30),
                 operation: operation(30),
                 revision: model::basis().revision,
             },
-            completion_fact: fact(50),
+            action_fact: fact(50),
             limits: FulfillmentLimits {
                 maximum_checkpoint_bytes: 1024 * 1024,
                 maximum_pass_bytes: 4 * 1024 * 1024,
@@ -335,13 +460,17 @@ impl FulfillmentSourceOwner for SourceOwner {
         &self,
         current: &Checkpoint,
         registration: &FulfillmentRegistration,
+        action: FulfillmentAction<'_>,
         command: &CommandInput,
         _: &Obligation,
         _: &GameFact,
     ) -> Result<(), Self::Refusal> {
         self.command_calls.set(self.command_calls.get() + 1);
         self.validate_control(current, command)?;
-        if registration != &self.expected {
+        if registration != &self.expected
+            || action.kind != DebtAction::Fulfill
+            || action.definition != &registration.completion_definition
+        {
             return Err(SourceRefusal::Binding);
         }
         Ok(())

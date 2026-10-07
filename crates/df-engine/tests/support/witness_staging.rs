@@ -129,6 +129,48 @@ impl Fixture {
             object: fixture::entity(6),
             policy: self.registration.witness_policy.clone(),
             state: self.relationship_state.clone(),
+            trust: RelationshipAxisState {
+                value: self.relationship_state.clone(),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: self.registration.witness_policy.clone(),
+                },
+            },
+            affection: RelationshipAxisState {
+                value: self.relationship_state.clone(),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: self.registration.witness_policy.clone(),
+                },
+            },
+            respect: RelationshipAxisState {
+                value: self.relationship_state.clone(),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: self.registration.witness_policy.clone(),
+                },
+            },
+            fear: RelationshipAxisState {
+                value: self.relationship_state.clone(),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: self.registration.witness_policy.clone(),
+                },
+            },
+            suspicion: RelationshipAxisState {
+                value: self.relationship_state.clone(),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: self.registration.witness_policy.clone(),
+                },
+            },
+            debt: RelationshipAxisState {
+                value: self.relationship_state.clone(),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: self.registration.witness_policy.clone(),
+                },
+            },
+            familiarity: RelationshipAxisState {
+                value: self.relationship_state.clone(),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline {
+                    source: self.registration.witness_policy.clone(),
+                },
+            },
         });
         state
     }

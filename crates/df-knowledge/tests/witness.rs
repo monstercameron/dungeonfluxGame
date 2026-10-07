@@ -203,6 +203,34 @@ fn state() -> GameState {
             object: entity(6),
             policy: policy(),
             state: label("source-contact-allowed"),
+            trust: RelationshipAxisState {
+                value: label("source-contact-allowed"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline { source: policy() },
+            },
+            affection: RelationshipAxisState {
+                value: label("source-contact-allowed"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline { source: policy() },
+            },
+            respect: RelationshipAxisState {
+                value: label("source-contact-allowed"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline { source: policy() },
+            },
+            fear: RelationshipAxisState {
+                value: label("source-contact-allowed"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline { source: policy() },
+            },
+            suspicion: RelationshipAxisState {
+                value: label("source-contact-allowed"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline { source: policy() },
+            },
+            debt: RelationshipAxisState {
+                value: label("source-contact-allowed"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline { source: policy() },
+            },
+            familiarity: RelationshipAxisState {
+                value: label("source-contact-allowed"),
+                provenance: RelationshipAxisProvenance::AuthoredBaseline { source: policy() },
+            },
         }],
         conversations: vec![],
         obligations: vec![],

@@ -7,7 +7,7 @@ use df_types::{
 use std::collections::BTreeSet;
 
 /// Current domain schema. The persistence owner separately versions its codec.
-pub const CHECKPOINT_SCHEMA: u16 = 1;
+pub const CHECKPOINT_SCHEMA: u16 = 2;
 
 /// Supplied identities bind records; none grants membership, restore, or source access.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -92,6 +92,7 @@ pub struct ContentReference {
 }
 
 /// Trusted already-admitted reference inventory; checkpoint bytes cannot admit sources.
+#[derive(Clone, Copy)]
 pub struct ReferenceInventory<'a> {
     pub rules: &'a [RuleReference],
     pub content: &'a [ContentReference],
@@ -423,7 +424,36 @@ pub struct Relationship {
     pub subject: EntityId,
     pub object: EntityId,
     pub policy: ContentReference,
+    /// Authored categorical projection; it remains separate from all seven axes.
     pub state: RevisionLabel,
+    pub trust: RelationshipAxisState,
+    pub affection: RelationshipAxisState,
+    pub respect: RelationshipAxisState,
+    pub fear: RelationshipAxisState,
+    pub suspicion: RelationshipAxisState,
+    pub debt: RelationshipAxisState,
+    pub familiarity: RelationshipAxisState,
+}
+
+/// One opaque authored policy value and its independent causal origin.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RelationshipAxisState {
+    pub value: RevisionLabel,
+    pub provenance: RelationshipAxisProvenance,
+}
+
+/// Baselines are explicitly authored; changes point to an accepted decision.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RelationshipAxisProvenance {
+    AuthoredBaseline {
+        source: ContentReference,
+    },
+    AcceptedFact {
+        source: ContentReference,
+        fact: FactId,
+        source_policy: RevisionLabel,
+        witness: Option<RecordId>,
+    },
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConversationState {
@@ -438,8 +468,46 @@ pub struct Obligation {
     pub obligor: EntityId,
     pub beneficiary: EntityId,
     pub definition: ContentReference,
+    pub terms: ContentReference,
     pub due: Option<LogicalTime>,
-    pub fulfilled: bool,
+    pub agreement: ObligationAgreement,
+    pub status: ObligationStatus,
+    /// At most one lifecycle action is accepted before a terminal state.
+    pub transition: Option<ObligationTransition>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ObligationAgreement {
+    pub source: ContentReference,
+    pub fact: FactId,
+    pub source_policy: RevisionLabel,
+    pub at: LogicalTime,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ObligationStatus {
+    Active,
+    Fulfilled,
+    Broken,
+    Expired,
+    Cancelled,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ObligationAction {
+    Fulfill,
+    Break,
+    Expire,
+    Cancel,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ObligationTransition {
+    pub action: ObligationAction,
+    pub source: ContentReference,
+    pub fact: FactId,
+    pub source_policy: RevisionLabel,
+    pub at: LogicalTime,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NarrativeState {
@@ -648,6 +716,47 @@ impl Checkpoint {
         }
         Ok(self)
     }
+
+    /// Recheck a retained candidate against current inventory and narrower limits before cloning.
+    /// Source admission still belongs to the caller; this checks canonical structural lineage.
+    pub fn validate_admitted(
+        &self,
+        expected: Basis,
+        admitted: &CheckpointPins,
+        inventory: ReferenceInventory<'_>,
+        limits: CheckpointLimits,
+    ) -> Result<&Self, CheckpointError> {
+        self.validate_resume(expected, admitted)?;
+        validate_state(&self.state, self.basis, &self.pins, inventory, limits)?;
+        let retained = self.retained_bytes().ok_or(CheckpointError::Capacity)?;
+        require(
+            retained <= limits.maximum_retained_bytes,
+            CheckpointError::Capacity,
+        )?;
+        Ok(self)
+    }
+}
+
+fn accepted_fact<'a>(
+    state: &'a GameState,
+    id: FactId,
+    source_policy: &RevisionLabel,
+) -> Result<&'a GameFact, CheckpointError> {
+    let record = state
+        .facts
+        .iter()
+        .find(|record| record.id == id)
+        .ok_or(CheckpointError::InvalidReference)?;
+    require(
+        state.decisions.iter().any(|decision| {
+            decision.operation == record.operation
+                && decision.revision == record.revision
+                && decision.source_policy == *source_policy
+                && decision.facts.contains(&id)
+        }),
+        CheckpointError::InvalidReference,
+    )?;
+    Ok(record)
 }
 
 fn validate_state(
@@ -727,6 +836,7 @@ fn validate_state(
     unique(state.threats.iter().map(|x| x.id))?;
     unique(state.conversations.iter().map(|x| x.id))?;
     unique(state.obligations.iter().map(|x| x.id))?;
+    unique(state.relationships.iter().map(|x| (x.subject, x.object)))?;
     unique(state.encounters.iter().map(|x| x.id))?;
     unique(state.presentation.iter().map(|x| x.id))?;
     unique(state.inventory.iter().map(|x| x.item))?;
@@ -1146,6 +1256,40 @@ fn validate_state(
         entity(x.subject)?;
         entity(x.object)?;
         content(&x.policy)?;
+        for axis in [
+            &x.trust,
+            &x.affection,
+            &x.respect,
+            &x.fear,
+            &x.suspicion,
+            &x.debt,
+            &x.familiarity,
+        ] {
+            match &axis.provenance {
+                RelationshipAxisProvenance::AuthoredBaseline { source } => content(source)?,
+                RelationshipAxisProvenance::AcceptedFact {
+                    source,
+                    fact,
+                    source_policy,
+                    witness,
+                } => {
+                    content(source)?;
+                    accepted_fact(state, *fact, source_policy)?;
+                    if let Some(witness_id) = witness {
+                        let witness = state
+                            .continuity
+                            .witnesses
+                            .iter()
+                            .find(|witness| witness.id == *witness_id)
+                            .ok_or(CheckpointError::InvalidReference)?;
+                        require(
+                            witness.fact == *fact && witness.observer == x.subject,
+                            CheckpointError::InvalidReference,
+                        )?;
+                    }
+                }
+            }
+        }
     }
     for x in &state.conversations {
         content(&x.topic)?;
@@ -1162,8 +1306,79 @@ fn validate_state(
         entity(x.obligor)?;
         entity(x.beneficiary)?;
         content(&x.definition)?;
+        content(&x.terms)?;
+        content(&x.agreement.source)?;
+        valid_time(x.agreement.at)?;
+        require(
+            x.agreement.at.ticks_per_second == state.logical_time.ticks_per_second
+                && x.agreement.at.ticks <= state.logical_time.ticks,
+            CheckpointError::InvalidTime,
+        )?;
+        if let Some(due) = x.due {
+            require(
+                due.ticks_per_second == x.agreement.at.ticks_per_second
+                    && due.ticks >= x.agreement.at.ticks,
+                CheckpointError::InvalidTime,
+            )?;
+        }
+        let agreement = accepted_fact(state, x.agreement.fact, &x.agreement.source_policy)?;
+        require(
+            matches!(
+                &agreement.value,
+                FactValue::ContentEvent { definition, subjects }
+                    if definition == &x.agreement.source
+                        && subjects.as_slice() == [x.obligor, x.beneficiary]
+            ),
+            CheckpointError::InvalidReference,
+        )?;
         if let Some(due) = x.due {
             valid_time(due)?;
+        }
+        match (&x.status, &x.transition) {
+            (ObligationStatus::Active, None) => {}
+            (ObligationStatus::Active, Some(_)) | (_, None) => {
+                return Err(CheckpointError::InvalidReference);
+            }
+            (status, Some(transition)) => {
+                content(&transition.source)?;
+                require(
+                    transition.fact != x.agreement.fact,
+                    CheckpointError::InvalidReference,
+                )?;
+                valid_time(transition.at)?;
+                require(
+                    transition.at.ticks_per_second == state.logical_time.ticks_per_second
+                        && transition.at.ticks <= state.logical_time.ticks
+                        && transition.at.ticks >= x.agreement.at.ticks,
+                    CheckpointError::InvalidTime,
+                )?;
+                if transition.action == ObligationAction::Expire {
+                    let due = x.due.ok_or(CheckpointError::InvalidTime)?;
+                    require(
+                        due.ticks_per_second == transition.at.ticks_per_second
+                            && transition.at.ticks >= due.ticks,
+                        CheckpointError::InvalidTime,
+                    )?;
+                }
+                let accepted = accepted_fact(state, transition.fact, &transition.source_policy)?;
+                require(
+                    matches!(
+                        &accepted.value,
+                        FactValue::ContentEvent { definition, subjects }
+                            if definition == &transition.source
+                                && subjects.as_slice() == [x.obligor, x.beneficiary]
+                    ),
+                    CheckpointError::InvalidReference,
+                )?;
+                let matching_action = matches!(
+                    (*status, transition.action),
+                    (ObligationStatus::Fulfilled, ObligationAction::Fulfill)
+                        | (ObligationStatus::Broken, ObligationAction::Break)
+                        | (ObligationStatus::Expired, ObligationAction::Expire)
+                        | (ObligationStatus::Cancelled, ObligationAction::Cancel)
+                );
+                require(matching_action, CheckpointError::InvalidReference)?;
+            }
         }
     }
     content(&state.narrative.definition)?;
@@ -1418,9 +1633,27 @@ record_heap!(AttributedClaim; claim, evidence, audience, source);
 record_heap!(MemoryEpisode; source_facts, retained_text, audience);
 record_heap!(ScheduledEvent; definition);
 record_heap!(ThreatClock; definition);
-record_heap!(Relationship; policy, state);
+impl RetainedHeap for RelationshipAxisProvenance {
+    fn retained_heap(&self) -> Option<usize> {
+        match self {
+            Self::AuthoredBaseline { source } => source.retained_heap(),
+            Self::AcceptedFact {
+                source,
+                source_policy,
+                ..
+            } => source
+                .retained_heap()?
+                .checked_add(source_policy.retained_heap()?),
+        }
+    }
+}
+record_heap!(RelationshipAxisState; value, provenance);
+record_heap!(Relationship; policy, state, trust, affection, respect, fear, suspicion, debt,
+    familiarity);
 record_heap!(ConversationState; participants, topic, accepted_facts);
-record_heap!(Obligation; definition);
+record_heap!(ObligationAgreement; source, source_policy);
+record_heap!(ObligationTransition; source, source_policy);
+record_heap!(Obligation; definition, terms, agreement, transition);
 record_heap!(NarrativeState; definition, active_beats, completed_beats, open_threads, accepted_facts);
 record_heap!(EncounterState; definition, participants, turn_order, objectives, combat_policy);
 record_heap!(ActivityWindow; observed_facts);
@@ -1643,8 +1876,12 @@ pub struct SecretPolicy {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NpcState {
     pub entity: EntityId,
+    pub role: ContentReference,
     pub personality: ContentReference,
     pub motivations: Vec<ContentReference>,
+    pub goals: Vec<ContentReference>,
+    pub needs: Vec<ContentReference>,
+    pub fears: Vec<ContentReference>,
     pub known_facts: Vec<FactId>,
     pub beliefs: Vec<RecordId>,
     pub secrets: Vec<SecretPolicy>,
@@ -2412,15 +2649,45 @@ fn validate_continuity(
             require(summaries.contains(id), CheckpointError::InvalidReference)?;
         }
     }
+    unique(all.npcs.iter().map(|x| x.entity))?;
     for x in &all.npcs {
         entity(x.entity)?;
+        content(&x.role)?;
         content(&x.personality)?;
         count!(&x.motivations);
+        count!(&x.goals);
+        count!(&x.needs);
+        count!(&x.fears);
         count!(&x.known_facts);
         count!(&x.beliefs);
         count!(&x.secrets);
-        for value in &x.motivations {
+        for (index, value) in x.motivations.iter().enumerate() {
             content(value)?;
+            require(
+                !x.motivations[..index].contains(value),
+                CheckpointError::DuplicateIdentity,
+            )?;
+        }
+        for (index, value) in x.goals.iter().enumerate() {
+            content(value)?;
+            require(
+                !x.goals[..index].contains(value),
+                CheckpointError::DuplicateIdentity,
+            )?;
+        }
+        for (index, value) in x.needs.iter().enumerate() {
+            content(value)?;
+            require(
+                !x.needs[..index].contains(value),
+                CheckpointError::DuplicateIdentity,
+            )?;
+        }
+        for (index, value) in x.fears.iter().enumerate() {
+            content(value)?;
+            require(
+                !x.fears[..index].contains(value),
+                CheckpointError::DuplicateIdentity,
+            )?;
         }
         for id in &x.known_facts {
             fact(*id)?;
@@ -2903,7 +3170,8 @@ record_heap!(RetrievalRequest; topics, entities, policy);
 record_heap!(RetrievedMemory; episodes, facts, attributed_claims, snippets);
 record_heap!(ConsolidationCandidate; episodes, summaries);
 record_heap!(SecretPolicy; claims, policy, permitted_audience);
-record_heap!(NpcState; personality, motivations, known_facts, beliefs, secrets);
+record_heap!(NpcState; role, personality, motivations, goals, needs, fears, known_facts, beliefs,
+    secrets);
 record_heap!(CharacterHook; definition, source_facts, audience);
 record_heap!(StoryArc; definition, phase, source_facts, active_hooks);
 record_heap!(RemotePlayPolicy; definition, device_matrix);

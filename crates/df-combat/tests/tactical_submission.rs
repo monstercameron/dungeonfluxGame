@@ -131,7 +131,11 @@ fn waiting(reaction: bool) -> Checkpoint {
     state.continuity.npcs.push(NpcState {
         entity: entity(4),
         personality: content(),
+        role: content(),
         motivations: vec![],
+        goals: vec![],
+        needs: vec![],
+        fears: vec![],
         known_facts: vec![],
         beliefs: vec![belief],
         secrets: vec![],

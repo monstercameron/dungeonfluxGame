@@ -6,7 +6,7 @@ use df_engine::command_entry::{
     CommandEntryContext, CommandEntryLimits, CommandRejection, decide_registered_command,
 };
 use df_engine::obligation_fulfillment::*;
-use df_interaction::debts::{DebtStatus, DebtTransitionRefusal};
+use df_interaction::debts::{DebtAction, DebtStatus, DebtTransitionRefusal};
 use df_model::checkpoint::*;
 use df_model::commands::CommandLimits;
 use df_rules::{
@@ -55,6 +55,9 @@ impl Fixture {
                 content("explicit-agreement"),
                 content("accepted-delivery"),
                 content("agreement-completed"),
+                content("agreement-broken"),
+                content("agreement-expired"),
+                content("agreement-cancelled"),
                 content("other-admitted-event"),
             ],
             resources: fixture::resource_constraints(),
@@ -80,18 +83,70 @@ impl Fixture {
                 obligor: fixture::entity(4),
                 beneficiary: fixture::entity(5),
                 definition: self.registration.obligation_definition.clone(),
+                terms: self.registration.obligation_definition.clone(),
                 due: Some(state.logical_time),
-                fulfilled: false,
+                agreement: ObligationAgreement {
+                    source: self.registration.obligation_definition.clone(),
+                    fact: fact(28),
+                    source_policy: fixture::label("explicit-agreement-policy"),
+                    at: state.logical_time,
+                },
+                status: ObligationStatus::Active,
+                transition: None,
             },
             Obligation {
                 id: record(41),
                 obligor: fixture::entity(5),
                 beneficiary: fixture::entity(4),
                 definition: self.registration.obligation_definition.clone(),
+                terms: self.registration.obligation_definition.clone(),
                 due: None,
-                fulfilled: false,
+                agreement: ObligationAgreement {
+                    source: self.registration.obligation_definition.clone(),
+                    fact: fact(29),
+                    source_policy: fixture::label("explicit-agreement-policy"),
+                    at: state.logical_time,
+                },
+                status: ObligationStatus::Active,
+                transition: None,
             },
         ];
+        for (id, operation_id, obligor, beneficiary) in [
+            (
+                fact(28),
+                operation(28),
+                fixture::entity(4),
+                fixture::entity(5),
+            ),
+            (
+                fact(29),
+                operation(29),
+                fixture::entity(5),
+                fixture::entity(4),
+            ),
+        ] {
+            state.facts.push(GameFact {
+                id,
+                revision: fixture::basis().revision,
+                operation: operation_id,
+                ordinal: 0,
+                cause: None,
+                audience: AudienceScope::Members(vec![fixture::member(3)]),
+                value: FactValue::ContentEvent {
+                    definition: self.registration.obligation_definition.clone(),
+                    subjects: vec![obligor, beneficiary],
+                },
+            });
+            state.decisions.push(AcceptedDecision {
+                operation: operation_id,
+                revision: fixture::basis().revision,
+                facts: vec![id],
+                draws: vec![],
+                effects: vec![],
+                source_policy: fixture::label("explicit-agreement-policy"),
+                semantic_output: None,
+            });
+        }
         state.facts.push(GameFact {
             id: fact(30),
             revision: fixture::basis().revision,
@@ -155,12 +210,14 @@ impl Fixture {
             inventory: self.inventory(),
             registration: &self.registration,
             obligation: record(40),
+            action: DebtAction::Fulfill,
+            action_definition: &self.registration.completion_definition,
             cause: AcceptedFulfillmentCause {
                 fact: fact(30),
                 operation: operation(30),
                 revision: fixture::basis().revision,
             },
-            completion_fact: fact(50),
+            action_fact: fact(50),
             limits: FulfillmentLimits {
                 maximum_checkpoint_bytes: 1024 * 1024,
                 maximum_pass_bytes: 4 * 1024 * 1024,
@@ -202,6 +259,7 @@ impl FulfillmentSourceOwner for SourceOwner {
         &self,
         current: &Checkpoint,
         registration: &FulfillmentRegistration,
+        action: FulfillmentAction<'_>,
         command: &CommandInput,
         obligation: &Obligation,
         _: &GameFact,
@@ -210,7 +268,16 @@ impl FulfillmentSourceOwner for SourceOwner {
         if self.withdrawn.get() {
             return Err(SourceRefusal::Withdrawn);
         }
-        if current.pins() != &self.pins || registration != &self.expected {
+        let expected_action_definition = match action.kind {
+            DebtAction::Fulfill => registration.completion_definition.clone(),
+            DebtAction::Break => content("agreement-broken"),
+            DebtAction::Expire => content("agreement-expired"),
+            DebtAction::Cancel => content("agreement-cancelled"),
+        };
+        if current.pins() != &self.pins
+            || registration != &self.expected
+            || action.definition != &expected_action_definition
+        {
             return Err(SourceRefusal::Binding);
         }
         if !self.actor_control.get()
@@ -302,7 +369,14 @@ fn registered_completion_retains_exact_cause_terms_parties_and_every_unrelated_f
     )
     .unwrap();
     let mut expected = current.state().clone();
-    expected.obligations[0].fulfilled = true;
+    expected.obligations[0].status = ObligationStatus::Fulfilled;
+    expected.obligations[0].transition = Some(ObligationTransition {
+        action: ObligationAction::Fulfill,
+        source: fixture.registration.completion_definition.clone(),
+        fact: fact(50),
+        source_policy: fixture.registration.policy.clone(),
+        at: current.state().logical_time,
+    });
     let completion = candidate.state().facts.last().unwrap();
     assert_eq!(completion.cause, Some(fact(30)));
     assert_eq!(completion.operation, operation(50));
@@ -335,6 +409,75 @@ fn registered_completion_retains_exact_cause_terms_parties_and_every_unrelated_f
 }
 
 #[test]
+fn each_registered_lifecycle_action_persists_its_exact_status_and_event_lineage() {
+    for (action, definition, status, persisted_action) in [
+        (
+            DebtAction::Fulfill,
+            content("agreement-completed"),
+            ObligationStatus::Fulfilled,
+            ObligationAction::Fulfill,
+        ),
+        (
+            DebtAction::Break,
+            content("agreement-broken"),
+            ObligationStatus::Broken,
+            ObligationAction::Break,
+        ),
+        (
+            DebtAction::Expire,
+            content("agreement-expired"),
+            ObligationStatus::Expired,
+            ObligationAction::Expire,
+        ),
+        (
+            DebtAction::Cancel,
+            content("agreement-cancelled"),
+            ObligationStatus::Cancelled,
+            ObligationAction::Cancel,
+        ),
+    ] {
+        let fixture = Fixture::new();
+        let owner = SourceOwner::new(&fixture);
+        let current = fixture.current();
+        let mut handler = fixture.handler(&owner, current.basis());
+        handler.action = action;
+        handler.action_definition = &definition;
+        handler.action_fact = fact(51);
+
+        let candidate = registered_handler(
+            &fixture,
+            &current,
+            &fixture.input(current.basis(), operation(51)),
+            &handler,
+        )
+        .unwrap();
+        let obligation = &candidate.state().obligations[0];
+        assert_eq!(obligation.status, status);
+        assert_eq!(
+            obligation.transition,
+            Some(ObligationTransition {
+                action: persisted_action,
+                source: definition.clone(),
+                fact: fact(51),
+                source_policy: fixture.registration.policy.clone(),
+                at: current.state().logical_time,
+            })
+        );
+        assert_eq!(
+            obligation.agreement,
+            current.state().obligations[0].agreement
+        );
+        assert_eq!(
+            candidate.state().facts.last().unwrap().value,
+            FactValue::ContentEvent {
+                definition,
+                subjects: vec![fixture::entity(4), fixture::entity(5)],
+            }
+        );
+    }
+}
+
+#[test]
 fn uncommitted_unrelated_or_wrong_subject_causes_never_produce_a_candidate() {
     for case in ["uncommitted", "definition", "subjects", "missing"] {
         let fixture = Fixture::new();
@@ -342,26 +485,40 @@ fn uncommitted_unrelated_or_wrong_subject_causes_never_produce_a_candidate() {
         let mut state = fixture.state();
         let expected = match case {
             "uncommitted" => {
-                state.decisions.clear();
+                state
+                    .decisions
+                    .retain(|decision| decision.operation != operation(30));
                 FulfillmentError::MissingAcceptedCause
             }
             "definition" => {
-                state.facts[0].value = FactValue::ContentEvent {
+                state
+                    .facts
+                    .iter_mut()
+                    .find(|entry| entry.id == fact(30))
+                    .unwrap()
+                    .value = FactValue::ContentEvent {
                     definition: content("other-admitted-event"),
                     subjects: vec![fixture::entity(4), fixture::entity(5)],
                 };
                 FulfillmentError::WrongCause
             }
             "subjects" => {
-                state.facts[0].value = FactValue::ContentEvent {
+                state
+                    .facts
+                    .iter_mut()
+                    .find(|entry| entry.id == fact(30))
+                    .unwrap()
+                    .value = FactValue::ContentEvent {
                     definition: fixture.registration.cause_definition.clone(),
                     subjects: vec![fixture::entity(5), fixture::entity(4)],
                 };
                 FulfillmentError::WrongSubjects
             }
             "missing" => {
-                state.facts.clear();
-                state.decisions.clear();
+                state.facts.retain(|entry| entry.id != fact(30));
+                state
+                    .decisions
+                    .retain(|decision| decision.operation != operation(30));
                 FulfillmentError::MissingAcceptedCause
             }
             _ => unreachable!(),
@@ -408,7 +565,7 @@ fn current_exact_cause_identity_registration_and_capacity_are_enforced() {
                 FulfillmentError::MissingAcceptedCause
             }
             "duplicate" => {
-                handler.completion_fact = fact(30);
+                handler.action_fact = fact(30);
                 FulfillmentError::DuplicateFact
             }
             "obligation" => {
@@ -435,12 +592,20 @@ fn current_exact_cause_identity_registration_and_capacity_are_enforced() {
     assert_eq!(
         registered_handler(&fixture, &current, &input, &handler),
         Err(CommandRejection::Invocation(InvocationError::Handler(
+            FulfillmentError::InvalidRegistration,
+        ))),
+    );
+    handler.action_definition = &changed.completion_definition;
+    assert_eq!(
+        registered_handler(&fixture, &current, &input, &handler),
+        Err(CommandRejection::Invocation(InvocationError::Handler(
             FulfillmentError::Source(SourceRefusal::Binding),
         ))),
     );
     let mut unadmitted = fixture.registration.clone();
     unadmitted.completion_definition = content("unadmitted-completion");
     handler.registration = &unadmitted;
+    handler.action_definition = &unadmitted.completion_definition;
     assert_eq!(
         registered_handler(&fixture, &current, &input, &handler),
         Err(CommandRejection::Invocation(InvocationError::Handler(
@@ -473,13 +638,55 @@ fn withdrawn_source_actor_control_terminal_state_and_stale_bindings_refuse_atomi
     );
     owner.actor_control.set(true);
     let mut state = fixture.state();
-    state.obligations[0].fulfilled = true;
+    let terminal_at = state.logical_time;
+    state.obligations[0].status = ObligationStatus::Fulfilled;
+    state.obligations[0].transition = Some(ObligationTransition {
+        action: ObligationAction::Fulfill,
+        source: fixture.registration.completion_definition.clone(),
+        fact: fact(50),
+        source_policy: fixture.registration.policy.clone(),
+        at: terminal_at,
+    });
+    state.facts.push(GameFact {
+        id: fact(50),
+        revision: fixture::basis().revision,
+        operation: operation(50),
+        ordinal: 0,
+        cause: Some(fact(30)),
+        audience: AudienceScope::Members(vec![fixture::member(3)]),
+        value: FactValue::ContentEvent {
+            definition: fixture.registration.completion_definition.clone(),
+            subjects: vec![fixture::entity(4), fixture::entity(5)],
+        },
+    });
+    state.decisions.push(AcceptedDecision {
+        operation: operation(50),
+        revision: fixture::basis().revision,
+        facts: vec![fact(50)],
+        draws: vec![],
+        effects: vec![],
+        source_policy: fixture.registration.policy.clone(),
+        semantic_output: None,
+    });
     let terminal = fixture.checkpoint(current.basis(), state);
     assert_eq!(
         registered(&fixture, &owner, &terminal, &input),
+        Err(CommandRejection::Invocation(
+            InvocationError::AlreadyAccepted
+        ))
+    );
+    let mut terminal_handler = fixture.handler(&owner, terminal.basis());
+    terminal_handler.action_fact = fact(51);
+    assert_eq!(
+        registered_handler(
+            &fixture,
+            &terminal,
+            &fixture.input(terminal.basis(), operation(51)),
+            &terminal_handler,
+        ),
         Err(CommandRejection::Invocation(InvocationError::Handler(
             FulfillmentError::Lifecycle(DebtTransitionRefusal::AlreadyTerminal(
-                DebtStatus::Completed
+                DebtStatus::Fulfilled
             )),
         )))
     );
@@ -685,7 +892,10 @@ mod session {
         ) -> Result<(), DeliveryError> {
             let mut db = self.database.borrow_mut();
             assert_eq!(checkpoint, &db.checkpoint);
-            assert!(checkpoint.state().obligations[0].fulfilled);
+            assert_eq!(
+                checkpoint.state().obligations[0].status,
+                ObligationStatus::Fulfilled
+            );
             db.publications += 1;
             Ok(())
         }
@@ -742,15 +952,49 @@ mod session {
     #[test]
     fn normal_submit_commits_whole_completion_and_exact_retry_uses_original_receipt() {
         let (mut owner, database, scope) = setup(Failure::None);
+        let original = owner.checkpoint().clone();
         let first = submit(&mut owner, &scope);
         assert!(matches!(first, SubmissionOutcome::Confirmed(_)));
         assert_eq!(submit(&mut owner, &scope), first);
         let db = database.borrow();
         assert_eq!(owner.checkpoint(), &db.checkpoint);
-        assert!(db.checkpoint.state().obligations[0].fulfilled);
-        assert!(!db.checkpoint.state().obligations[1].fulfilled);
-        assert_eq!(db.checkpoint.state().facts.len(), 2);
-        assert_eq!(db.checkpoint.state().decisions.len(), 2);
+        assert_eq!(
+            db.checkpoint.state().obligations[0].status,
+            ObligationStatus::Fulfilled
+        );
+        assert_eq!(
+            db.checkpoint.state().obligations[1].status,
+            ObligationStatus::Active
+        );
+        assert!(
+            db.checkpoint
+                .state()
+                .facts
+                .starts_with(&original.state().facts)
+        );
+        assert!(
+            db.checkpoint
+                .state()
+                .decisions
+                .starts_with(&original.state().decisions)
+        );
+        assert_eq!(
+            db.checkpoint.state().facts.len(),
+            original.state().facts.len() + 1
+        );
+        assert_eq!(
+            db.checkpoint.state().decisions.len(),
+            original.state().decisions.len() + 1
+        );
+        assert_eq!(db.checkpoint.state().facts.last().unwrap().id, fact(50));
+        assert_eq!(
+            db.checkpoint.state().facts.last().unwrap().cause,
+            Some(fact(30))
+        );
+        assert_eq!(
+            db.checkpoint.state().decisions.last().unwrap().operation,
+            operation(50)
+        );
         assert_eq!(
             (db.decisions, db.commits, db.publications, db.ledger.len()),
             (1, 1, 1, 1)
@@ -801,7 +1045,10 @@ mod session {
         );
         assert!(owner.has_uncertain_operation());
         assert_eq!(owner.checkpoint(), &original);
-        assert!(database.borrow().checkpoint.state().obligations[0].fulfilled);
+        assert_eq!(
+            database.borrow().checkpoint.state().obligations[0].status,
+            ObligationStatus::Fulfilled
+        );
         assert_eq!(database.borrow().publications, 0);
         let mut other = scope.clone();
         let GameInput::Game(command) = &mut other.input else {
@@ -823,7 +1070,31 @@ mod session {
             (db.decisions, db.commits, db.publications, db.ledger.len()),
             (1, 1, 0, 1)
         );
-        assert_eq!(db.checkpoint.state().facts.len(), 2);
+        assert!(
+            db.checkpoint
+                .state()
+                .facts
+                .starts_with(&original.state().facts)
+        );
+        assert!(
+            db.checkpoint
+                .state()
+                .decisions
+                .starts_with(&original.state().decisions)
+        );
+        assert_eq!(
+            db.checkpoint.state().facts.len(),
+            original.state().facts.len() + 1
+        );
+        assert_eq!(
+            db.checkpoint.state().decisions.len(),
+            original.state().decisions.len() + 1
+        );
+        assert_eq!(db.checkpoint.state().facts.last().unwrap().id, fact(50));
+        assert_eq!(
+            db.checkpoint.state().facts.last().unwrap().cause,
+            Some(fact(30))
+        );
     }
     #[test]
     fn unknown_absent_commit_never_replays_even_when_original_ledger_lookup_is_not_recorded() {
