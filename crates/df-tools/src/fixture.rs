@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    extract::{RawQuery, State, WebSocketUpgrade},
+    extract::{Path, RawQuery, State, WebSocketUpgrade, ws::Message},
     http::HeaderMap,
     response::{Html, IntoResponse},
     routing::get,
@@ -15,7 +15,7 @@ use df_rpc_bridge::{
     CONCURRENT_STREAMS, ConnectionMetrics, FRAME_BYTES, MESSAGE_BYTES, NativeAdmission,
     NativeIncoming, RPC_MESSAGE_BYTES,
 };
-use futures::{Stream, StreamExt};
+use futures::{SinkExt, Stream, StreamExt};
 use std::{
     collections::VecDeque,
     io,
@@ -283,6 +283,223 @@ struct PreviewState {
     resources: Arc<Mutex<VecDeque<Arc<ConnectionMetrics>>>>,
     origin: Arc<str>,
     reports: Arc<Mutex<ReportState>>,
+    shapes: Arc<Mutex<VecDeque<ShapeWitness>>>,
+}
+#[derive(Clone)]
+struct ShapeWitness {
+    id: u64,
+    mode: String,
+    messages: usize,
+    frames: usize,
+    bytes: usize,
+    domain_calls: u32,
+    closed: bool,
+    failed: bool,
+}
+fn record_shape(state: &PreviewState, witness: ShapeWitness) {
+    if let Ok(mut shapes) = state.shapes.lock() {
+        if shapes.len() == 20 {
+            shapes.pop_front();
+        }
+        shapes.push_back(witness);
+    }
+}
+async fn shape_report(
+    State(state): State<PreviewState>,
+    Path(id): Path<u64>,
+) -> axum::response::Response {
+    let Ok(shapes) = state.shapes.lock() else {
+        return axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    match shapes.iter().rev().find(|shape| shape.id == id) {
+        Some(shape) => format!(
+            "mode={} messages={} frames={} bytes={} domain_calls={} closed={} failed={} build={}",
+            shape.mode,
+            shape.messages,
+            shape.frames,
+            shape.bytes,
+            shape.domain_calls,
+            shape.closed,
+            shape.failed,
+            crate::BUILD_ID,
+        )
+        .into_response(),
+        None => axum::http::StatusCode::NOT_FOUND.into_response(),
+    }
+}
+async fn read_h2_frame(
+    reader: &mut tokio::io::ReadHalf<tokio::io::DuplexStream>,
+) -> io::Result<Vec<u8>> {
+    use tokio::io::AsyncReadExt;
+    let mut header = [0; 9];
+    reader.read_exact(&mut header).await?;
+    let length =
+        (usize::from(header[0]) << 16) | (usize::from(header[1]) << 8) | usize::from(header[2]);
+    if length > FRAME_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "shape frame exceeds bound",
+        ));
+    }
+    let mut frame = header.to_vec();
+    frame.resize(9 + length, 0);
+    reader.read_exact(&mut frame[9..]).await?;
+    Ok(frame)
+}
+// Test-only source-bound delivery shapes. The browser still runs its production
+// WebSocketIo/h2/generated-client stack; this fixture owns the peer's WS writes.
+async fn byte_shape(
+    State(state): State<PreviewState>,
+    Path((mode, id)): Path<(String, u64)>,
+    headers: HeaderMap,
+    upgrade: WebSocketUpgrade,
+) -> axum::response::Response {
+    if headers.get("origin").and_then(|value| value.to_str().ok()) != Some(state.origin.as_ref()) {
+        return axum::http::StatusCode::FORBIDDEN.into_response();
+    }
+    if !matches!(mode.as_str(), "split" | "coalesced" | "text") {
+        return axum::http::StatusCode::NOT_FOUND.into_response();
+    }
+    let Ok(permit) = state.connections.clone().try_acquire_owned() else {
+        return axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    upgrade
+        .read_buffer_size(FRAME_BYTES)
+        .write_buffer_size(FRAME_BYTES)
+        .max_write_buffer_size(MESSAGE_BYTES)
+        .max_message_size(MESSAGE_BYTES)
+        .max_frame_size(MESSAGE_BYTES)
+        .on_upgrade(move |socket| async move {
+            let _permit = permit;
+            let mut witness = ShapeWitness {
+                id,
+                mode: mode.clone(),
+                messages: 0,
+                frames: 0,
+                bytes: 0,
+                domain_calls: 0,
+                closed: false,
+                failed: false,
+            };
+            if mode == "text" {
+                let (mut outgoing, mut incoming) = socket.split();
+                // Require real browser h2 preface activity before injecting the unsupported frame.
+                let result =
+                    tokio::time::timeout(std::time::Duration::from_secs(2), incoming.next()).await;
+                if result.is_ok_and(|message| message.is_some_and(|message| message.is_ok())) {
+                    witness.messages = 1;
+                    witness.bytes = 16;
+                    witness.failed = outgoing
+                        .send(Message::Text("unsupported text".into()))
+                        .await
+                        .is_err();
+                } else {
+                    witness.failed = true;
+                }
+                let _ =
+                    tokio::time::timeout(std::time::Duration::from_secs(2), incoming.next()).await;
+                witness.closed = true;
+                record_shape(&state, witness);
+                return;
+            }
+            let statistics = Arc::new(Statistics::default());
+            let service = TransportFixtureServer::new(FixtureService {
+                statistics: statistics.clone(),
+                telemetry: state.telemetry.clone(),
+            })
+            .max_decoding_message_size(RPC_MESSAGE_BYTES)
+            .max_encoding_message_size(RPC_MESSAGE_BYTES);
+            let (peer, grpc_end) = tokio::io::duplex(64 * 1024);
+            let server = tokio::spawn(async move {
+                tonic::transport::Server::builder()
+                    .initial_stream_window_size(MESSAGE_BYTES as u32)
+                    .initial_connection_window_size(df_rpc_bridge::RECEIVE_BYTES as u32)
+                    .max_frame_size(FRAME_BYTES as u32)
+                    .http2_max_header_list_size(FRAME_BYTES as u32)
+                    .max_concurrent_streams(CONCURRENT_STREAMS)
+                    .add_service(service)
+                    .serve_with_incoming(futures::stream::once(async move {
+                        Ok::<_, io::Error>(grpc_end)
+                    }))
+                    .await
+            });
+            let (mut outgoing, mut incoming) = socket.split();
+            let (mut reader, mut writer) = tokio::io::split(peer);
+            let receive = async {
+                use tokio::io::AsyncWriteExt;
+                while let Some(message) = incoming.next().await {
+                    match message.map_err(io::Error::other)? {
+                        Message::Binary(bytes) if bytes.len() <= MESSAGE_BYTES => {
+                            writer.write_all(&bytes).await?;
+                        }
+                        Message::Close(_) => return Ok::<(), io::Error>(()),
+                        Message::Ping(_) | Message::Pong(_) => {}
+                        _ => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "nonbinary shape input",
+                            ));
+                        }
+                    }
+                }
+                Ok(())
+            };
+            let send = async {
+                use tokio::io::AsyncReadExt;
+                let first = tokio::time::timeout(
+                    std::time::Duration::from_secs(2),
+                    read_h2_frame(&mut reader),
+                )
+                .await
+                .map_err(io::Error::other)??;
+                if mode == "split" {
+                    for byte in &first {
+                        outgoing
+                            .send(Message::Binary(vec![*byte].into()))
+                            .await
+                            .map_err(io::Error::other)?;
+                    }
+                    witness.messages = first.len();
+                    witness.frames = 1;
+                    witness.bytes = first.len();
+                } else {
+                    let second = tokio::time::timeout(
+                        std::time::Duration::from_secs(2),
+                        read_h2_frame(&mut reader),
+                    )
+                    .await
+                    .map_err(io::Error::other)??;
+                    let mut combined = first;
+                    combined.extend(second);
+                    outgoing
+                        .send(Message::Binary(combined.clone().into()))
+                        .await
+                        .map_err(io::Error::other)?;
+                    witness.messages = 1;
+                    witness.frames = 2;
+                    witness.bytes = combined.len();
+                }
+                let mut buffer = [0; FRAME_BYTES];
+                loop {
+                    let count = reader.read(&mut buffer).await?;
+                    if count == 0 {
+                        return Ok::<(), io::Error>(());
+                    }
+                    outgoing
+                        .send(Message::Binary(buffer[..count].to_vec().into()))
+                        .await
+                        .map_err(io::Error::other)?;
+                }
+            };
+            let result = tokio::select! { result = receive => result, result = send => result };
+            witness.failed = result.is_err() || witness.frames == 0;
+            witness.closed = true;
+            witness.domain_calls = statistics.completed.load(Ordering::Relaxed)
+                + statistics.cancelled.load(Ordering::Relaxed);
+            server.abort();
+            let _ = server.await;
+            record_shape(&state, witness);
+        })
 }
 struct ReportState {
     slots: [String; 4],
@@ -597,6 +814,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         statistics,
         connections: Arc::new(Semaphore::new(4)),
         resources: Arc::new(Mutex::new(VecDeque::new())),
+        shapes: Arc::new(Mutex::new(VecDeque::new())),
         reports: Arc::new(Mutex::new(ReportState {
             slots: std::array::from_fn(|_| String::new()),
             credit_order: None,
@@ -606,6 +824,8 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let router = Router::new()
         .route("/", get(|| async { Html(HTML) }))
         .route("/tunnel", get(websocket))
+        .route("/byte-shape/{mode}/{id}", get(byte_shape))
+        .route("/byte-shape-report/{id}", get(shape_report))
         .route("/fixture-health", get(health))
         .route("/fixture-telemetry", get(fixture_telemetry))
         .route("/fixture-resources", get(fixture_resources))
@@ -849,6 +1069,7 @@ mod tests {
             statistics: Arc::new(Statistics::default()),
             connections: Arc::new(Semaphore::new(4)),
             resources: Arc::new(Mutex::new(VecDeque::new())),
+            shapes: Arc::new(Mutex::new(VecDeque::new())),
             origin: format!("http://{address}").into(),
             reports: Arc::new(Mutex::new(ReportState {
                 slots: std::array::from_fn(|_| String::new()),
@@ -857,6 +1078,7 @@ mod tests {
         };
         let router = Router::new()
             .route("/tunnel", get(websocket))
+            .route("/byte-shape/{mode}/{id}", get(byte_shape))
             .with_state(state.clone());
         let task = tokio::spawn(async move { axum::serve(listener, router).await });
         (address, state, IncomingTestTasks(vec![task]))
@@ -864,9 +1086,10 @@ mod tests {
     fn tunnel_request(
         address: std::net::SocketAddr,
         origin: &str,
+        path: &str,
     ) -> tokio_tungstenite::tungstenite::http::Request<()> {
         use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-        let mut request = format!("ws://{address}/tunnel")
+        let mut request = format!("ws://{address}{path}")
             .into_client_request()
             .unwrap();
         request
@@ -877,6 +1100,7 @@ mod tests {
     async fn generated_client_over_websocket(
         address: std::net::SocketAddr,
         origin: Arc<str>,
+        path: &'static str,
         tasks: &mut IncomingTestTasks,
     ) -> TransportFixtureClient<tonic::transport::Channel> {
         // Test-only TCP connector preserves generated native client behavior. Its
@@ -888,9 +1112,10 @@ mod tests {
             use tokio::io::{AsyncReadExt, AsyncWriteExt};
             use tokio_tungstenite::tungstenite::Message;
             let (tcp, _) = listener.accept().await?;
-            let (socket, _) = tokio_tungstenite::connect_async(tunnel_request(address, &origin))
-                .await
-                .map_err(io::Error::other)?;
+            let (socket, _) =
+                tokio_tungstenite::connect_async(tunnel_request(address, &origin, path))
+                    .await
+                    .map_err(io::Error::other)?;
             let (mut websocket_writer, mut websocket_reader) = socket.split();
             let (mut tcp_reader, mut tcp_writer) = tcp.into_split();
             let upload = async {
@@ -898,6 +1123,10 @@ mod tests {
                 loop {
                     let count = tcp_reader.read(&mut buffer).await?;
                     if count == 0 {
+                        websocket_writer
+                            .send(Message::Close(None))
+                            .await
+                            .map_err(io::Error::other)?;
                         return Ok::<_, io::Error>(());
                     }
                     websocket_writer
@@ -974,8 +1203,13 @@ mod tests {
                 NativeIncoming::bounded(NonZeroUsize::new(1).unwrap()).unwrap();
             let (address, state, mut tasks) = incoming_listener(admission).await;
             start_generated_server(incoming, &state, &mut tasks);
-            let mut client =
-                generated_client_over_websocket(address, state.origin.clone(), &mut tasks).await;
+            let mut client = generated_client_over_websocket(
+                address,
+                state.origin.clone(),
+                "/tunnel",
+                &mut tasks,
+            )
+            .await;
             let sample = |sequence| Sample {
                 sequence,
                 payload: b"native-incoming".to_vec(),
@@ -1082,9 +1316,10 @@ mod tests {
                     axum::http::StatusCode::SERVICE_UNAVAILABLE,
                 ),
             ] {
-                let error = tokio_tungstenite::connect_async(tunnel_request(address, origin))
-                    .await
-                    .unwrap_err();
+                let error =
+                    tokio_tungstenite::connect_async(tunnel_request(address, origin, "/tunnel"))
+                        .await
+                        .unwrap_err();
                 let tokio_tungstenite::tungstenite::Error::Http(response) = error else {
                     panic!("expected HTTP refusal");
                 };
@@ -1092,9 +1327,10 @@ mod tests {
             }
             drop(reservation);
             drop(incoming);
-            let error = tokio_tungstenite::connect_async(tunnel_request(address, &state.origin))
-                .await
-                .unwrap_err();
+            let error =
+                tokio_tungstenite::connect_async(tunnel_request(address, &state.origin, "/tunnel"))
+                    .await
+                    .unwrap_err();
             let tokio_tungstenite::tungstenite::Error::Http(response) = error else {
                 panic!("expected closed-server HTTP refusal");
             };
@@ -1119,7 +1355,7 @@ mod tests {
             let (address, state, mut tasks) = incoming_listener(admission).await;
             start_generated_server(incoming, &state, &mut tasks);
             let (mut socket, _) =
-                tokio_tungstenite::connect_async(tunnel_request(address, &state.origin))
+                tokio_tungstenite::connect_async(tunnel_request(address, &state.origin, "/tunnel"))
                     .await
                     .unwrap();
             socket
@@ -1134,8 +1370,13 @@ mod tests {
             assert_eq!(state.statistics.active.load(Ordering::Relaxed), 0);
             assert_eq!(state.statistics.completed.load(Ordering::Relaxed), 0);
             drop(socket);
-            let mut client =
-                generated_client_over_websocket(address, state.origin.clone(), &mut tasks).await;
+            let mut client = generated_client_over_websocket(
+                address,
+                state.origin.clone(),
+                "/tunnel",
+                &mut tasks,
+            )
+            .await;
             assert_eq!(
                 client
                     .unary(Request::new(Sample {
@@ -1152,6 +1393,134 @@ mod tests {
             drop(client);
             tasks.stop().await;
             wait_for_released_tunnels(&state).await;
+        })
+        .await
+        .unwrap();
+    }
+    #[tokio::test]
+    async fn shaped_websocket_messages_preserve_generated_rpc_fields_and_terminal_ownership() {
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            let (admission, _incoming) =
+                NativeIncoming::bounded(NonZeroUsize::new(1).unwrap()).unwrap();
+            let (address, state, mut tasks) = incoming_listener(admission).await;
+            let sample = |sequence| Sample {
+                sequence,
+                payload: b"byte-shape".to_vec(),
+                behavior: Behavior::Echo as i32,
+                ..Sample::default()
+            };
+            for (mode, id, path) in [
+                ("split", 1, "/byte-shape/split/1"),
+                ("coalesced", 2, "/byte-shape/coalesced/2"),
+            ] {
+                let mut client = generated_client_over_websocket(
+                    address,
+                    state.origin.clone(),
+                    path,
+                    &mut tasks,
+                )
+                .await;
+                let reply = client.unary(Request::new(sample(43))).await.unwrap();
+                assert_eq!(
+                    reply.metadata().get("fixture-server").unwrap(),
+                    "native-tonic"
+                );
+                assert_eq!(reply.into_inner(), sample(43));
+                let mut stream = client
+                    .server_stream(Request::new(sample(0)))
+                    .await
+                    .unwrap()
+                    .into_inner();
+                for sequence in 0..3 {
+                    assert_eq!(stream.message().await.unwrap(), Some(sample(sequence)));
+                }
+                assert!(stream.message().await.unwrap().is_none());
+                assert_eq!(
+                    stream
+                        .trailers()
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .get("fixture-terminal")
+                        .unwrap(),
+                    "observed"
+                );
+                drop(stream);
+                drop(client);
+                let proxy = tasks.0.pop().expect("owned test proxy missing");
+                tokio::time::timeout(std::time::Duration::from_secs(2), proxy)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap();
+                tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                    loop {
+                        let witness = state
+                            .shapes
+                            .lock()
+                            .unwrap()
+                            .iter()
+                            .find(|w| w.id == id)
+                            .cloned();
+                        if let Some(witness) = witness.filter(|w| w.closed) {
+                            assert_eq!(witness.mode, mode);
+                            assert!(!witness.failed);
+                            assert_eq!(witness.domain_calls, 2);
+                            if mode == "split" {
+                                assert!(witness.messages >= 9);
+                                assert_eq!(witness.frames, 1);
+                            } else {
+                                assert_eq!(witness.messages, 1);
+                                assert_eq!(witness.frames, 2);
+                            }
+                            break;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                    }
+                })
+                .await
+                .unwrap();
+            }
+            let (mut socket, _) = tokio_tungstenite::connect_async(tunnel_request(
+                address,
+                &state.origin,
+                "/byte-shape/text/3",
+            ))
+            .await
+            .unwrap();
+            socket
+                .send(tokio_tungstenite::tungstenite::Message::Binary(
+                    b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".to_vec().into(),
+                ))
+                .await
+                .unwrap();
+            let message = socket.next().await.unwrap().unwrap();
+            assert!(matches!(
+                message,
+                tokio_tungstenite::tungstenite::Message::Text(_)
+            ));
+            socket.close(None).await.unwrap();
+            tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                loop {
+                    let witness = state
+                        .shapes
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .find(|w| w.id == 3)
+                        .cloned();
+                    if let Some(witness) = witness.filter(|w| w.closed) {
+                        assert_eq!(witness.messages, 1);
+                        assert_eq!(witness.domain_calls, 0);
+                        assert!(!witness.failed);
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                }
+            })
+            .await
+            .unwrap();
+            tasks.stop().await;
         })
         .await
         .unwrap();

@@ -303,6 +303,7 @@ async fn run(document: Document) -> Result<(), String> {
         &mut lines,
         "PASS · Simultaneous streams share the same connection",
     );
+    byte_shape_checks(&document, &mut lines).await?;
     let wire = connection.snapshot().map_err(|error| error.to_string())?;
     connection.close();
     let context = OperationContext {
@@ -322,6 +323,209 @@ async fn run(document: Document) -> Result<(), String> {
     );
     crate::qualification::save_report("semantics", &format!("Build: {}\n{lines}", crate::BUILD_ID))
         .await?;
+    Ok(())
+}
+async fn shape_report(id: u64) -> Result<String, String> {
+    let window = web_sys::window().ok_or("window unavailable")?;
+    for _ in 0..50 {
+        let response = wasm_bindgen_futures::JsFuture::from(
+            window.fetch_with_str(&format!("/byte-shape-report/{id}")),
+        )
+        .await
+        .map_err(|_| "byte shape report request failed")?
+        .dyn_into::<web_sys::Response>()
+        .map_err(|_| "byte shape report response unavailable")?;
+        if response.status() == 200 {
+            let text = wasm_bindgen_futures::JsFuture::from(
+                response
+                    .text()
+                    .map_err(|_| "byte shape report was not text")?,
+            )
+            .await
+            .map_err(|_| "byte shape report text failed")?
+            .as_string()
+            .ok_or("byte shape report text missing")?;
+            if text.contains("closed=true") {
+                return Ok(text);
+            }
+        }
+        TimeoutFuture::new(10).await;
+    }
+    Err("byte shape endpoint did not reach terminal cleanup".to_owned())
+}
+async fn shaped_mode(mode: &str, id: u64) -> Result<String, String> {
+    let (connection, channel) =
+        BrowserConnection::connect(&tunnel_url(&format!("/byte-shape/{mode}/{id}"))?)
+            .await
+            .map_err(|error| format!("{mode} browser connection: {error}"))?;
+    let mut client = FixtureClient::new(channel)
+        .max_decoding_message_size(RPC_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MESSAGE_BYTES * 2);
+    let reply = client
+        .unary(request(sample(43))?)
+        .await
+        .map_err(|error| format!("{mode} unary: {error}"))?;
+    require(
+        reply
+            .metadata()
+            .get("fixture-server")
+            .is_some_and(|value| value == "native-tonic")
+            && reply.into_inner() == sample(43),
+        "shaped unary metadata or exact protobuf fields mismatch",
+    )?;
+    let mut stream = client
+        .server_stream(request(sample(0))?)
+        .await
+        .map_err(|error| format!("{mode} server stream: {error}"))?
+        .into_inner();
+    for sequence in 0..3 {
+        require(
+            stream.message().await.map_err(|error| error.to_string())? == Some(sample(sequence)),
+            "shaped server stream fields/order mismatch",
+        )?;
+    }
+    require(
+        stream
+            .message()
+            .await
+            .map_err(|error| error.to_string())?
+            .is_none()
+            && stream
+                .trailers()
+                .await
+                .map_err(|error| error.to_string())?
+                .is_some_and(|trailers| {
+                    trailers
+                        .get("fixture-terminal")
+                        .is_some_and(|value| value == "observed")
+                }),
+        "shaped server stream EOF/trailer mismatch",
+    )?;
+    let response = client
+        .client_stream(request(futures::stream::iter([sample(1), sample(2)]))?)
+        .await
+        .map_err(|error| format!("{mode} client stream: {error}"))?
+        .into_inner();
+    require(
+        response.sequence == 2 && response.payload == b"half-close observed",
+        "shaped client half-close mismatch",
+    )?;
+    let mut bidi = client
+        .bidi(request(futures::stream::iter([sample(3), sample(4)]))?)
+        .await
+        .map_err(|error| format!("{mode} bidi: {error}"))?
+        .into_inner();
+    require(
+        bidi.message().await.map_err(|error| error.to_string())? == Some(sample(3))
+            && bidi.message().await.map_err(|error| error.to_string())? == Some(sample(4))
+            && bidi
+                .message()
+                .await
+                .map_err(|error| error.to_string())?
+                .is_none()
+            && bidi
+                .trailers()
+                .await
+                .map_err(|error| error.to_string())?
+                .is_some_and(|trailers| {
+                    trailers
+                        .get("fixture-terminal")
+                        .is_some_and(|value| value == "observed")
+                }),
+        "shaped bidi fields/order/EOF/trailer mismatch",
+    )?;
+    drop(client);
+    connection.close();
+    let snapshot = connection.snapshot().map_err(|error| error.to_string())?;
+    require(
+        snapshot.received_frames > 0 && snapshot.received_bytes > 0,
+        "shaped browser adapter did not receive HTTP2 bytes",
+    )?;
+    let report = shape_report(id).await?;
+    require(
+        report.contains(&format!("mode={mode}"))
+            && report.contains("domain_calls=4")
+            && report.contains("closed=true")
+            && report.contains("failed=false")
+            && report.contains(&format!("build={}", crate::BUILD_ID)),
+        "shaped endpoint source, RPC dispatch or cleanup mismatch",
+    )?;
+    if mode == "split" {
+        let messages = report
+            .split_whitespace()
+            .find_map(|part| part.strip_prefix("messages="))
+            .and_then(|value| value.parse::<usize>().ok())
+            .ok_or("split message count missing")?;
+        require(
+            messages >= 9 && report.contains("frames=1"),
+            "one HTTP2 frame was not split into many real WebSocket messages",
+        )?;
+    } else {
+        require(
+            report.contains("messages=1") && report.contains("frames=2"),
+            "two HTTP2 frames were not coalesced into one real WebSocket message",
+        )?;
+    }
+    Ok(report)
+}
+async fn byte_shape_checks(document: &Document, lines: &mut String) -> Result<(), String> {
+    let id = js_sys::Date::now() as u64;
+    let split = shaped_mode("split", id).await?;
+    append(
+        document,
+        lines,
+        &format!("PASS · Browser HTTP2 frame split across real WS messages: {split}"),
+    );
+    let coalesced = shaped_mode("coalesced", id + 1).await?;
+    append(
+        document,
+        lines,
+        &format!("PASS · Browser receives two HTTP2 frames in one real WS message: {coalesced}"),
+    );
+    let text_id = id + 2;
+    let attempted =
+        BrowserConnection::connect(&tunnel_url(&format!("/byte-shape/text/{text_id}"))?).await;
+    match attempted {
+        Ok((connection, channel)) => {
+            let mut client = FixtureClient::new(channel);
+            let status = client
+                .unary(request(sample(0))?)
+                .await
+                .err()
+                .ok_or("unsupported WS text produced accepted RPC")?;
+            require(
+                status.code() != Code::InvalidArgument,
+                "unsupported WS text was misclassified as a domain rejection",
+            )?;
+            connection.close();
+            TimeoutFuture::new(20).await;
+            let snapshot = connection.snapshot().map_err(|error| error.to_string())?;
+            require(
+                snapshot.rejected && snapshot.closed,
+                "browser text rejection did not close owned adapter",
+            )?;
+        }
+        Err(error) => require(
+            error.kind() == std::io::ErrorKind::Other
+                || error.kind() == std::io::ErrorKind::InvalidData,
+            "unsupported WS text did not produce typed transport failure",
+        )?,
+    }
+    let report = shape_report(text_id).await?;
+    require(
+        report.contains("mode=text")
+            && report.contains("messages=1")
+            && report.contains("domain_calls=0")
+            && report.contains("closed=true")
+            && report.contains("failed=false")
+            && report.contains(&format!("build={}", crate::BUILD_ID)),
+        "unsupported WS text did not produce source-bound refusal and cleanup",
+    )?;
+    append(
+        document,
+        lines,
+        &format!("PASS · Browser rejects unsupported WS text before domain dispatch: {report}"),
+    );
     Ok(())
 }
 pub(super) async fn wait_for_cancellation(
