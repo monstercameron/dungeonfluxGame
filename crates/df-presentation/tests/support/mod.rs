@@ -140,7 +140,7 @@ impl Fixture {
             id: record(14),
             basis: basis(),
             key: AssetRequestKey {
-                schema: 1,
+                schema: df_model::checkpoint::CHECKPOINT_SCHEMA,
                 source: pins.content.content_digest,
                 moment: moment.id,
                 identity: moment.identity_revision.clone(),
