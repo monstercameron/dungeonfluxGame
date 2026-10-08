@@ -107,7 +107,7 @@ fn invoke(
             dependencies: &dependencies,
         },
         PreconditionLimits {
-            maximum_dependencies: 2,
+            maximum_dependencies: 3,
             maximum_comparisons: 12_582_942,
             maximum_checkpoint_bytes: 1024 * 1024,
         },
