@@ -595,9 +595,14 @@ dependencies = [
 name = "df-testkit"
 version = "0.1.0"
 dependencies = [
+ "df-ai",
+ "df-content",
  "df-experience",
+ "df-interaction",
  "df-model",
+ "df-provider-api",
  "df-types",
+ "serde_json",
 ]
 
 [[package]]

@@ -6,8 +6,13 @@ license.workspace = true
 
 [dependencies]
 df-model = { path = "../df-model" }
+df-provider-api = { path = "../df-provider-api" }
 df-types = { path = "../df-types" }
 
 [dev-dependencies]
+df-ai = { path = "../df-ai" }
+df-content = { path = "../df-content" }
 df-experience = { path = "../df-experience" }
+df-interaction = { path = "../df-interaction" }
 df-types = { path = "../df-types" }
+serde_json = "=1.0.151"
