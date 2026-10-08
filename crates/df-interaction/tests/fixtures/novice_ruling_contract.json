@@ -1,0 +1,135 @@
+{
+  "original_task": "B-C-df-interaction-D04",
+  "stage": "design",
+  "objective": "Define source-guided novice ruling response; expected: automatic supported adjudication differs from human discretion.",
+  "criteria": [
+    "automatic supported adjudication differs from human discretion",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "original_verification": [
+    "Freeze the cited source decision and a bounded contract example; compare automatic supported adjudication differs from human discretion. Retain decision, alternatives and unresolved facts.",
+    "Exact executable commands: TBD at G01 and scoped prerequisite resolution; this planned procedure is not a claim that Rust/browser/provider checks ran."
+  ],
+  "governing_sources": [
+    {
+      "path": "planning/interaction-engine.md",
+      "sections": [
+        "Source-guided rulings for an inexperienced host",
+        "Intent, affordances and compound plans"
+      ]
+    },
+    {
+      "path": "planning/subsystem-interfaces.md",
+      "sections": [
+        "Pure domain and content",
+        "Separate runtime subsystem boundaries"
+      ]
+    },
+    {
+      "path": "planning/runtime-directors.md",
+      "sections": [
+        "Authority and composition",
+        "Pure public boundaries"
+      ]
+    },
+    {
+      "path": "planning/rules-support.md",
+      "sections": [
+        "Paid rights and novice adjudication"
+      ]
+    },
+    {
+      "path": "planning/rules-coverage.md",
+      "sections": [
+        "Standard rules support",
+        "Coverage contracts"
+      ]
+    },
+    {
+      "path": "planning/coding-style.md",
+      "sections": [
+        "Names, modules, and public contracts",
+        "Functions, ownership, and errors",
+        "Documentation, tests, and changes"
+      ]
+    }
+  ],
+  "source_revision": "a676a198d184306e0ba60d3cdb8345f1883ff923",
+  "source_pins": [
+    {
+      "bytes": 11517,
+      "path": "planning/interaction-engine.md",
+      "sha256": "1bad7c28609ac5e5a51a3ea0b3c1fae17ebeb6380dbdb8fce582085a8ede354f"
+    },
+    {
+      "bytes": 4169,
+      "path": "crates/df-rules/src/ability_check.rs",
+      "sha256": "c60fb86b8dfa59894e4b3bf8019fe2986c134d71aa91752295a5b8549b47bd90"
+    },
+    {
+      "bytes": 110600,
+      "path": "crates/df-model/src/checkpoint.rs",
+      "sha256": "5d490868133662a88f78fabe519f07189b020304205a7f88b21b55ed208d7fbd"
+    },
+    {
+      "bytes": 10964,
+      "path": "crates/df-model/src/commands.rs",
+      "sha256": "7f28c019a9b93f5b2d024073adb61f9d0278a758189c1d564ff755c37ddc8207"
+    },
+    {
+      "bytes": 3062,
+      "path": "development/rules-sources/manifest.json",
+      "sha256": "0defa673b21d19f98b10513b3c51c2a430d0aa3b3af339b57abfaa3d758fdeac"
+    },
+    {
+      "bytes": 6031375,
+      "path": "development/rules-sources/srd-5.2.1-en.pdf",
+      "sha256": "8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87"
+    }
+  ],
+  "decision": "Automatically evaluate only represented source-backed normal ability-check mechanics after a trusted owner supplies die, applicable modifiers/proficiency and adjudicated DC. Choosing whether/how a check applies and its discretionary DC is separate human/source policy. Canonical permitted ruling inputs are structurally admitted only for current pending resolution/window/designated offered participant; admission is not authentication, rights, real mechanics or durable commit.",
+  "alternatives": [
+    "Universal AI-created DC or prose-defined rule injection rejected: source discretion stays explicit.",
+    "Inventing public RulingRequest/Response or adding df-rules dependency rejected: this Design contract freezes examples of current boundaries without changing their public contracts.",
+    "Test-local arithmetic/pending state machine rejected: invoke existing actual resolver and canonical structural admission instead."
+  ],
+  "unresolved": [
+    "Original stage is Design, not delivery of novice-host product flow. Test-only actual source mount is not reachable production composition.",
+    "Public RulingRequest/Response types, source-safe explanation projection, decline/wait/cancel/alternative producer semantics and absent/disconnected/unready host notices remain unresolved.",
+    "Full2024 source/catalog/rights denominator and source-qualified auto/discretion classification remain unresolved; SRD5.2.1 page6 normal-check subset only.",
+    "Authorized adjudicator transfer/current capability binding, durable pending generation, operation retry/recovery once-only and pause/cost timing production execution remain unresolved.",
+    "Phone/TV visual notice, actual audio/private-context novice playtest and discretionary interventions/minutes qualification remain unperformed.",
+    "Source PDF contents were not freshly extracted during preparation: pdftotext unavailable; actual local PDF digest and existing source-linked reviewed resolver are pinned. No install attempted."
+  ],
+  "example_contract": {
+    "automatic": "Actual reviewed normal-check resolver compares supplied die11+ability2+proficiency2 against already adjudicated DC15: success; die10: failure. The resolver does not decide whether a check applies, set a DC, roll dice or produce durable state.",
+    "discretion": "Changing the trusted adjudicated DC15 to DC16 changes the same supplied total15 from success to failure; no human intervention is needed to perform the comparison, but source-discretionary choice of DC is not inferred.",
+    "designated_ruling": "Actual canonical HostCommand::ResolveRuling admission requires the exact pending resolution/window and offered participant/offer/option. Synthetic labels are opaque structural inputs, not implemented DC/decline/wait/cancel/alternative semantics.",
+    "await_and_preservation": "A participant without the offered adjudicator response receives typed UnofferedResponse; pending checkpoint, prior spent resource and prior ruling remain unchanged. No native absent-host policy, timeout or resume is run.",
+    "scope": "Test-only source mount of df-rules/src/ability_check.rs plus actual linked df-model APIs. Reuses the existing canonical interaction checkpoint fixture. This contract is not registered in a production native dispatcher."
+  },
+  "failure_cases": [
+    "Matching DC succeeds and one below fails; natural1/20 do not override comparison; invalid/missing draw or zero DC returns typed error without a fabricated answer.",
+    "An explicit pending Ruling accepts exactly an offered adjudicator/offer/option and rejects another participant, stale window, stale basis, wrong pending kind, unoffered option and zero limits.",
+    "Absent offered adjudicator returns canonical UnofferedResponse and unchanged pending checkpoint; no timeout, default draw/DC/resource spend or accepted ruling is invented.",
+    "Supplied checkpoint remains unchanged on successful structural admission and all refusals; already recorded spent resources/rulings remain intact."
+  ],
+  "integration_hooks": [
+    {
+      "hook": "Native contract auto-discovered by existing Cargo manifest; actual rules resolver source mounted only in this test target and actual canonical model admission linked through existing df-model dependency.",
+      "owner": "df-interaction test target"
+    },
+    {
+      "hook": "Production source-qualified automatic adjudication, authorized native RulingRequest/Response issuance, exact host binding/transfer, durable receipt lookup/once-only resume and cancellation remain unresolved; this test cannot supply those authorities.",
+      "owner": "df-rules / df-engine / df-session / df-auth"
+    },
+    {
+      "hook": "Independent exact-boundary output evaluation and sequential source integration/checks before normal Done.",
+      "owner": "Root"
+    }
+  ],
+  "source_provenance": "Local SRD5.2.1 PDF digest verified against manifest; page6 locator carried by existing reviewed resolver. Partial source subset only; full2024 qualification and source discretionary classification remain unresolved.",
+  "evidence_policy": "Supplied fixture basis/build/rules labels are synthetic metadata, not proof of a producing build, authorization or executed checks. Worker/evaluator evidence separately records exact source/build identity and actual outcomes.",
+  "execution_status": "authored; no runtime result asserted",
+  "model_provenance": "unknown"
+}
