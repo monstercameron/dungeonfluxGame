@@ -503,6 +503,7 @@ name = "df-provider-api"
 version = "0.1.0"
 dependencies = [
  "df-ai",
+ "df-commerce",
  "df-model",
  "df-types",
 ]

@@ -10,3 +10,4 @@ df-model = { path = "../df-model" }
 
 [dev-dependencies]
 df-ai = { path = "../df-ai" }
+df-commerce = { path = "../df-commerce" }
