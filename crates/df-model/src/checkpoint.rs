@@ -994,7 +994,7 @@ fn validate_state(
             }
             FactValue::DrawAccepted { operation, ordinal } => {
                 require(
-                    draws.contains(&(*operation, *ordinal)),
+                    *operation == x.operation && draws.contains(&(*operation, *ordinal)),
                     CheckpointError::InvalidReference,
                 )?;
             }
