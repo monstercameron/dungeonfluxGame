@@ -1,0 +1,65 @@
+{
+  "actual_path": [
+    "df-engine::director_staging::compose_director_candidates",
+    "df-engine::director_staging::compose_schedule_candidates",
+    "df-world::stage_schedule_advancement via schedule composition",
+    "df-tempo::elapsed::advance_elapsed",
+    "df-model::Checkpoint::new"
+  ],
+  "alternatives": [
+    {
+      "disposition": "Rejected: canonical time requires its existing admitted decision owner.",
+      "name": "Wall elapsed drives game timers"
+    },
+    {
+      "disposition": "Rejected: a stopped presentation cannot establish new policy or basis authority.",
+      "name": "Pause skips source/current checks"
+    },
+    {
+      "disposition": "Rejected: exact integral ticks and checked explicit bounds refuse rather than hide loss.",
+      "name": "Silent rounding or clamping elapsed"
+    }
+  ],
+  "case_selectors": [
+    "paused_actual_schedule_and_maximum_wall_elapsed_preserve_canonical_state",
+    "actual_director_cosmetic_advance_cannot_advance_threat_or_rule_history",
+    "cosmetic_elapsed_cannot_supply_missing_accepted_game_time",
+    "paused_request_still_requires_exact_current_binding_and_policy",
+    "logical_time_and_presentation_anchor_are_separate_refusal_boundaries",
+    "replay_and_prepared_only_preserve_their_distinct_owner_contracts",
+    "checked_wall_conversion_refuses_fractional_excess_and_overflow_without_partial_state",
+    "repeated_pure_input_is_deterministic_but_an_advanced_anchor_refuses_old_elapsed",
+    "capacity_and_invalid_policy_are_not_bypassed_by_pause_or_replay"
+  ],
+  "decision": {
+    "canonical_logical_time": "Existing current Checkpoint logical_time and source-admitted world/director decisions own mechanical time.",
+    "pause": "The admitted server pause boolean preserves every tempo field; it does not bypass current validation.",
+    "prepared_only": "A detached cosmetic proposal retains PreparedOnly mode and has no commit/dispatch capability.",
+    "presentation_time": "Existing advance_elapsed validates current basis/pins/policy and separately advances only presentation_ticks.",
+    "replay": "Recorded state is preserved, with no new elapsed work or provider/effect execution.",
+    "wall_time": "An explicit bounded Duration is an input supplied by the owner; no wall clock is read by this pure contract."
+  },
+  "fixture_values": {
+    "canonical_logical_ticks": 9,
+    "fatigue": 7,
+    "presentation_anchor": 40,
+    "scope": "Versioned fixture-only illustration; not selected gameplay tuning, source rights, live pause authorization or device calibration.",
+    "threat_capacity": 8,
+    "threat_progress": 3,
+    "ticks_per_second": 10
+  },
+  "original_acceptance": [
+    "pause cannot advance canonical time",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "stage": "design",
+  "task_id": "B-C-df-tempo-D01",
+  "title": "Define logical presentation and wall clock separation",
+  "unperformed": [
+    "Native clock/cause/pause policy/current preference producer and persistent Session acceptance for cosmetic frames",
+    "Durable idempotency, cue publication or actual media/browser/audio/physical device acceptance",
+    "No calibrated impulse, inertia, novelty rotation or accessibility/device safety claim",
+    "Current executable commands/results and whole source/build/binary identity are bound by author handoff after actual gates; this source ledger is not itself a PASS claim."
+  ],
+  "verification": "Freeze the cited source decision and a bounded contract example; compare pause cannot advance canonical time. Retain decision, alternatives and unresolved facts."
+}

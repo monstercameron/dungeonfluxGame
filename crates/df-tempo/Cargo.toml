@@ -25,3 +25,7 @@ path = "tests/engine_elapsed.rs"
 [[test]]
 name = "fatigue"
 path = "tests/fatigue.rs"
+
+[[test]]
+name = "clock_separation_contract"
+path = "tests/clock_separation_contract.rs"
