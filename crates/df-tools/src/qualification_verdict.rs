@@ -31,6 +31,112 @@ pub(crate) struct Verdict {
     pub(crate) block_dependents: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum TerminalDisposition {
+    ReplaceCurrentReport,
+    KeepCurrentReport,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct TerminalOutcome {
+    verdict: Verdict,
+    detail: String,
+    disposition: TerminalDisposition,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum TerminalPresentation {
+    Replace(String),
+    KeepCurrent,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum TerminalContext {
+    Qualification,
+    CallbackCapacity,
+    ConnectionCredit,
+}
+
+impl TerminalContext {
+    fn description(self) -> &'static str {
+        match self {
+            Self::Qualification => {
+                "G02 qualification remains incomplete until all required evidence is available."
+            }
+            Self::CallbackCapacity => "Callback capacity and G02 qualification remain unverified.",
+            Self::ConnectionCredit => {
+                "Connection-credit attribution remains unverified. Hostile over-credit bursts, full G02/D03, total 8 MiB, pre-callback allocation, 128-frame/256 KiB control queue and fairness, physical phones, audio, gameplay and production remain pending. The run owner and its streams were dropped."
+            }
+        }
+    }
+}
+
+impl TerminalOutcome {
+    pub(crate) fn from_verdict(verdict: Verdict, detail: impl Into<String>) -> Self {
+        Self {
+            verdict,
+            detail: detail.into(),
+            disposition: TerminalDisposition::ReplaceCurrentReport,
+        }
+    }
+
+    pub(crate) fn inconclusive(detail: impl Into<String>) -> Self {
+        Self::from_verdict(evaluate(None, false, false), detail)
+    }
+
+    pub(crate) fn retain_current_report(verdict: Verdict) -> Self {
+        Self {
+            verdict,
+            detail: String::new(),
+            disposition: TerminalDisposition::KeepCurrentReport,
+        }
+    }
+
+    pub(crate) fn verdict(&self) -> Verdict {
+        self.verdict
+    }
+
+    pub(crate) fn detail(&self) -> &str {
+        &self.detail
+    }
+}
+
+impl From<String> for TerminalOutcome {
+    fn from(detail: String) -> Self {
+        Self::from_verdict(
+            Verdict {
+                observed_subcase: Outcome::Fail,
+                full_g02: Outcome::Inconclusive,
+                stop_owned_run: false,
+                block_dependents: true,
+            },
+            detail,
+        )
+    }
+}
+
+impl From<&str> for TerminalOutcome {
+    fn from(detail: &str) -> Self {
+        Self::from(detail.to_owned())
+    }
+}
+
+pub(crate) fn present_terminal_outcome(
+    outcome: &TerminalOutcome,
+    build: &str,
+    context: TerminalContext,
+) -> TerminalPresentation {
+    match outcome.disposition {
+        TerminalDisposition::KeepCurrentReport => TerminalPresentation::KeepCurrent,
+        TerminalDisposition::ReplaceCurrentReport => TerminalPresentation::Replace(format!(
+            "{}\n{}\nBuild: {build}\n{}\n",
+            format_verdict(outcome.verdict),
+            outcome.detail,
+            context.description(),
+        )),
+    }
+}
+
 pub(crate) fn evaluate(
     snapshot: Option<&ConnectionSnapshot>,
     subcase_observed: bool,

@@ -17,13 +17,13 @@ use web_time::Instant;
 fn stop_on_resource_breach(
     connection: &BrowserConnection,
     snapshot: &ConnectionSnapshot,
-) -> Result<(), String> {
+) -> Result<(), qualification_verdict::TerminalOutcome> {
     let verdict = qualification_verdict::evaluate(Some(snapshot), false, false);
     if verdict.stop_owned_run {
         connection.close();
-        return Err(format!(
-            "{}\nResource bound exceeded; owned browser connection closed immediately.",
-            qualification_verdict::format_verdict(verdict)
+        return Err(qualification_verdict::TerminalOutcome::from_verdict(
+            verdict,
+            "Resource bound exceeded; owned browser connection closed immediately.",
         ));
     }
     Ok(())
@@ -33,11 +33,8 @@ fn local_verdict(snapshot: &ConnectionSnapshot, observed: bool) -> Verdict {
     qualification_verdict::evaluate(Some(snapshot), observed, false)
 }
 
-fn incomplete_observation(reason: &str) -> String {
-    format!(
-        "{}\n{reason}",
-        qualification_verdict::format_verdict(qualification_verdict::evaluate(None, false, false))
-    )
+fn incomplete_observation(reason: &str) -> qualification_verdict::TerminalOutcome {
+    qualification_verdict::TerminalOutcome::inconclusive(reason)
 }
 
 fn memory_bytes() -> Result<usize, String> {
@@ -159,7 +156,7 @@ async fn consume(
     count: u32,
     pause: u32,
     connection: &BrowserConnection,
-) -> Result<StreamObservation, String> {
+) -> Result<StreamObservation, qualification_verdict::TerminalOutcome> {
     let started = Instant::now();
     let mut stream = client
         .server_stream(request(Sample {
@@ -320,7 +317,7 @@ async fn probe(
     )?;
     Ok((snapshot, closed, status, elapsed_ms))
 }
-async fn run(document: &Document) -> Result<(), String> {
+async fn run(document: &Document) -> Result<(), qualification_verdict::TerminalOutcome> {
     display(
         document,
         "RUNNING · simultaneous slow consumer / paced synthetic media / bulk / small RPC",
@@ -371,10 +368,7 @@ async fn run(document: &Document) -> Result<(), String> {
         );
         display(document, &report);
         save_report("qualification", &report).await?;
-        return Err(
-            "unchanged simultaneous pressure workload failed; retained frame and cleanup evidence"
-                .to_owned(),
-        );
+        return Err(qualification_verdict::TerminalOutcome::retain_current_report(verdict));
     }
     let slow = slow?;
     let paced = paced?;
@@ -491,7 +485,9 @@ async fn run(document: &Document) -> Result<(), String> {
     save_report("qualification", &text).await?;
     Ok(())
 }
-async fn run_callback_capacity(document: &Document) -> Result<(), String> {
+async fn run_callback_capacity(
+    document: &Document,
+) -> Result<(), qualification_verdict::TerminalOutcome> {
     display_callback_capacity(
         document,
         "RUNNING · eight slow replies and one same-connection unary",
@@ -563,7 +559,7 @@ async fn run_callback_capacity(document: &Document) -> Result<(), String> {
                 }),
             "slow stream terminal trailers missing",
         )?;
-        Ok::<usize, String>(payload_bytes)
+        Ok::<usize, qualification_verdict::TerminalOutcome>(payload_bytes)
     };
     let unary = async {
         TimeoutFuture::new(25).await;
@@ -582,7 +578,8 @@ async fn run_callback_capacity(document: &Document) -> Result<(), String> {
         require(
             output.sequence == 77 && output.payload == b"synthetic protobuf",
             "same-connection unary response changed",
-        )
+        )?;
+        Ok::<(), qualification_verdict::TerminalOutcome>(())
     };
     let (slow_result, unary_result) = futures::join!(slow, unary);
     let payload_bytes = slow_result?;
@@ -626,7 +623,8 @@ async fn run_callback_capacity(document: &Document) -> Result<(), String> {
         crate::BUILD_ID,
     );
     display_callback_capacity(document, &report);
-    save_report("callback-capacity", &report).await
+    save_report("callback-capacity", &report).await?;
+    Ok(())
 }
 
 async fn consume_credit_stream(
@@ -676,7 +674,7 @@ async fn observe_connection_credit(
     connection: &BrowserConnection,
     channel: df_rpc_bridge::BrowserChannel,
     report: &mut String,
-) -> Result<(String, Verdict), String> {
+) -> Result<(String, Verdict), qualification_verdict::TerminalOutcome> {
     let started = Instant::now();
     let baseline = credit_point(connection, started)?;
     report.push_str(&credit_line("Baseline", &baseline));
@@ -961,7 +959,10 @@ async fn observe_browser_connection_drop() -> Result<String, String> {
     ))
 }
 
-async fn run_connection_credit(document: &Document, generation: u64) -> Result<(), String> {
+async fn run_connection_credit(
+    document: &Document,
+    generation: u64,
+) -> Result<(), qualification_verdict::TerminalOutcome> {
     let running_report = "RUNNING · connection-credit observation admitted";
     save_credit_report(generation, 0, running_report).await?;
     display_connection_credit(document, "RUNNING · opening four pressure:slow streams");
@@ -995,17 +996,14 @@ async fn run_connection_credit(document: &Document, generation: u64) -> Result<(
             .ok_or("generated unary succeeded after explicit close")?,
         Either::Right(((), pending)) => {
             drop(pending);
-            return Err("generated unary remained pending after explicit close".to_owned());
+            return Err("generated unary remained pending after explicit close".into());
         }
     };
     let drop_observation = observe_browser_connection_drop().await?;
     require_stale_credit_report_rejected(generation, running_report).await?;
     let (status, verdict) = match outcome {
         Ok((credit_result, verdict)) => (credit_result, verdict),
-        Err(error) => (
-            format!("FAIL · {error}"),
-            qualification_verdict::evaluate(None, false, true),
-        ),
+        Err(error) => (error.detail().to_owned(), error.verdict()),
     };
     let browser = web_sys::window()
         .ok_or("window unavailable")?
@@ -1060,19 +1058,15 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
                     ))
                 }
             };
-            if let Err(error) = result {
-                let retained_failure = document
-                    .get_element_by_id("qualification")
-                    .and_then(|element| element.text_content())
-                    .is_some_and(|text| {
-                        text.starts_with("FAIL · unchanged simultaneous pressure workload")
-                    });
-                if !retained_failure {
-                    display(
-                        &document,
-                        &format!("FAIL · {error}\nG02 INCONCLUSIVE · incomplete qualification"),
-                    );
-                }
+            if let Err(error) = result
+                && let qualification_verdict::TerminalPresentation::Replace(report) =
+                    qualification_verdict::present_terminal_outcome(
+                        &error,
+                        crate::BUILD_ID,
+                        qualification_verdict::TerminalContext::Qualification,
+                    )
+            {
+                display(&document, &report);
             }
             button.set_disabled(false);
             active.set(false);
@@ -1112,12 +1106,17 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
                 }
             };
             if let Err(error) = result {
-                let report = format!(
-                    "FAIL · {error}\nBuild: {}\nCallback capacity and G02 qualification remain unverified.\n",
-                    crate::BUILD_ID
-                );
-                display_callback_capacity(&document, &report);
-                let _ = save_report("callback-capacity", &report).await;
+                match qualification_verdict::present_terminal_outcome(
+                    &error,
+                    crate::BUILD_ID,
+                    qualification_verdict::TerminalContext::CallbackCapacity,
+                ) {
+                    qualification_verdict::TerminalPresentation::Replace(report) => {
+                        display_callback_capacity(&document, &report);
+                        let _ = save_report("callback-capacity", &report).await;
+                    }
+                    qualification_verdict::TerminalPresentation::KeepCurrent => {}
+                }
             }
             button.set_disabled(false);
             active.set(false);
@@ -1165,16 +1164,21 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
                 }
             };
             if let Err(error) = result {
-                let report = format!(
-                    "FAIL · {error}\nBuild: {}\nConnection-credit attribution remains unverified. Hostile over-credit bursts, full G02/D03, total 8 MiB, pre-callback allocation, 128-frame/256 KiB control queue and fairness, physical phones, audio, gameplay and production remain pending. The run owner and its streams were dropped.\n",
+                match qualification_verdict::present_terminal_outcome(
+                    &error,
                     crate::BUILD_ID,
-                );
-                display_connection_credit(&document, &report);
-                let _ = select(
-                    save_credit_report(generation, 2, &report).boxed_local(),
-                    TimeoutFuture::new(1000).boxed_local(),
-                )
-                .await;
+                    qualification_verdict::TerminalContext::ConnectionCredit,
+                ) {
+                    qualification_verdict::TerminalPresentation::Replace(report) => {
+                        display_connection_credit(&document, &report);
+                        let _ = select(
+                            save_credit_report(generation, 2, &report).boxed_local(),
+                            TimeoutFuture::new(1000).boxed_local(),
+                        )
+                        .await;
+                    }
+                    qualification_verdict::TerminalPresentation::KeepCurrent => {}
+                }
             }
             button.set_disabled(false);
             active.set(false);
