@@ -1,5 +1,6 @@
 //! Pure narrative proposals over canonical checkpoints; the session owner commits selected state.
 mod beat_selection;
+mod bookend;
 mod convergence;
 mod thread_progress;
 mod threat_relevance;
@@ -26,4 +27,8 @@ pub use threat_relevance::{
 pub use beat_selection::{
     AdmittedBeatAlternative, BeatCause, BeatSelectionError, BeatSelectionLimits,
     CheckpointBeatRequest, stage_checkpoint_beat_selection,
+};
+
+pub use bookend::{
+    BookendEvidenceError, BookendEvidenceLimits, BookendEvidenceRequest, select_bookend_evidence,
 };
