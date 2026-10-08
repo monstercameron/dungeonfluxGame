@@ -54,6 +54,50 @@ pub enum CatalogError {
     VersionMismatch,
 }
 
+pub(crate) fn validate_entries<ItemId: Eq>(
+    complete_bytes: &[u8],
+    entries: &[CatalogEntry<'_, ItemId>],
+    limits: CatalogLimits,
+) -> Result<(), CatalogError> {
+    if complete_bytes.len() > limits.max_complete_bytes {
+        return Err(CatalogError::CompleteBytesLimit {
+            actual: complete_bytes.len(),
+            maximum: limits.max_complete_bytes,
+        });
+    }
+    if entries.len() > limits.max_entries {
+        return Err(CatalogError::EntryCountLimit {
+            actual: entries.len(),
+            maximum: limits.max_entries,
+        });
+    }
+    let mut total_item_bytes = 0_usize;
+    for (entry_index, entry) in entries.iter().enumerate() {
+        if entry.bytes.len() > limits.max_item_bytes {
+            return Err(CatalogError::ItemBytesLimit {
+                entry_index,
+                actual: entry.bytes.len(),
+                maximum: limits.max_item_bytes,
+            });
+        }
+        total_item_bytes = total_item_bytes
+            .checked_add(entry.bytes.len())
+            .filter(|total| *total <= limits.max_total_item_bytes)
+            .ok_or(CatalogError::TotalItemBytesLimit {
+                maximum: limits.max_total_item_bytes,
+            })?;
+        for (first_index, prior) in entries.iter().take(entry_index).enumerate() {
+            if prior.item_id == entry.item_id {
+                return Err(CatalogError::DuplicateItem {
+                    first_index,
+                    duplicate_index: entry_index,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
 /// A bounded, immutable view of one already-published version.
 ///
 /// The owner supplies the exact version, complete bytes, pinned manifest/rights
@@ -95,42 +139,7 @@ impl<'a, Version: Eq, Pins, ItemId: Eq> CatalogSnapshot<'a, Version, Pins, ItemI
         entries: &'a [CatalogEntry<'a, ItemId>],
         limits: CatalogLimits,
     ) -> Result<Self, CatalogError> {
-        if complete_bytes.len() > limits.max_complete_bytes {
-            return Err(CatalogError::CompleteBytesLimit {
-                actual: complete_bytes.len(),
-                maximum: limits.max_complete_bytes,
-            });
-        }
-        if entries.len() > limits.max_entries {
-            return Err(CatalogError::EntryCountLimit {
-                actual: entries.len(),
-                maximum: limits.max_entries,
-            });
-        }
-        let mut total_item_bytes = 0_usize;
-        for (entry_index, entry) in entries.iter().enumerate() {
-            if entry.bytes.len() > limits.max_item_bytes {
-                return Err(CatalogError::ItemBytesLimit {
-                    entry_index,
-                    actual: entry.bytes.len(),
-                    maximum: limits.max_item_bytes,
-                });
-            }
-            total_item_bytes = total_item_bytes
-                .checked_add(entry.bytes.len())
-                .filter(|total| *total <= limits.max_total_item_bytes)
-                .ok_or(CatalogError::TotalItemBytesLimit {
-                    maximum: limits.max_total_item_bytes,
-                })?;
-            for (first_index, prior) in entries.iter().take(entry_index).enumerate() {
-                if prior.item_id == entry.item_id {
-                    return Err(CatalogError::DuplicateItem {
-                        first_index,
-                        duplicate_index: entry_index,
-                    });
-                }
-            }
-        }
+        validate_entries(complete_bytes, entries, limits)?;
         Ok(Self {
             version,
             pins,
