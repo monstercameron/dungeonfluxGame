@@ -357,7 +357,7 @@ async fn byte_shape(
     if headers.get("origin").and_then(|value| value.to_str().ok()) != Some(state.origin.as_ref()) {
         return axum::http::StatusCode::FORBIDDEN.into_response();
     }
-    if !matches!(mode.as_str(), "split" | "coalesced" | "text") {
+    if !matches!(mode.as_str(), "split" | "coalesced" | "text" | "loss") {
         return axum::http::StatusCode::NOT_FOUND.into_response();
     }
     let Ok(permit) = state.connections.clone().try_acquire_owned() else {
@@ -462,7 +462,7 @@ async fn byte_shape(
                     witness.messages = first.len();
                     witness.frames = 1;
                     witness.bytes = first.len();
-                } else {
+                } else if mode == "coalesced" {
                     let second = tokio::time::timeout(
                         std::time::Duration::from_secs(2),
                         read_h2_frame(&mut reader),
@@ -478,6 +478,14 @@ async fn byte_shape(
                     witness.messages = 1;
                     witness.frames = 2;
                     witness.bytes = combined.len();
+                } else {
+                    outgoing
+                        .send(Message::Binary(first.clone().into()))
+                        .await
+                        .map_err(io::Error::other)?;
+                    witness.messages = 1;
+                    witness.frames = 1;
+                    witness.bytes = first.len();
                 }
                 let mut buffer = [0; FRAME_BYTES];
                 loop {
@@ -491,18 +499,40 @@ async fn byte_shape(
                         .map_err(io::Error::other)?;
                 }
             };
-            let result = tokio::select! { result = receive => result, result = send => result };
+            let result = if mode == "loss" {
+                let wait_for_dispatch = async {
+                    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                        while statistics.active.load(Ordering::Relaxed) == 0 {
+                            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                        }
+                    })
+                    .await
+                    .map_err(io::Error::other)?;
+                    Ok::<(), io::Error>(())
+                };
+                let result = tokio::select! {
+                    result = receive => result,
+                    result = send => result,
+                    result = wait_for_dispatch => result,
+                };
+                witness.domain_calls = statistics.active.load(Ordering::Relaxed);
+                result
+            } else {
+                tokio::select! { result = receive => result, result = send => result }
+            };
             witness.failed = result.is_err() || witness.frames == 0;
             witness.closed = true;
-            witness.domain_calls = statistics.completed.load(Ordering::Relaxed)
-                + statistics.cancelled.load(Ordering::Relaxed);
+            if mode != "loss" {
+                witness.domain_calls = statistics.completed.load(Ordering::Relaxed)
+                    + statistics.cancelled.load(Ordering::Relaxed);
+            }
             server.abort();
             let _ = server.await;
             record_shape(&state, witness);
         })
 }
 struct ReportState {
-    slots: [String; 4],
+    slots: [String; 5],
     credit_order: Option<(u64, u8)>,
 }
 impl ReportState {
@@ -643,6 +673,7 @@ fn report_index(kind: &str) -> Option<usize> {
         "qualification" => Some(1),
         "callback-capacity" => Some(2),
         "connection-credit" => Some(3),
+        "close-reconnect" => Some(4),
         _ => None,
     }
 }
@@ -775,7 +806,7 @@ async fn malicious(
             }
         })
 }
-const HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DungeonFlux S00 transport laboratory</title><style>body{margin:0;background:#10141c;color:#e6eaf3;font:17px system-ui,sans-serif}main{max-width:880px;margin:64px auto;padding:0 24px}h1{font-size:38px;line-height:1.1}p{color:#b7c3d4;line-height:1.5}button{background:#88dfb5;color:#10141c;border:0;border-radius:8px;font:600 17px system-ui;padding:14px 22px;cursor:pointer}button:disabled{opacity:.5}pre{white-space:pre-wrap;padding:20px;background:#1a2331;line-height:1.7;border-radius:10px}.tag{color:#88dfb5;letter-spacing:2px;font-size:13px}a{color:#88dfb5}</style></head><body><main><div class="tag">DUNGEONFLUX / EXPERIMENTAL S00</div><h1>Rust transport laboratory</h1><p>Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly.</p><p>This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.</p><button id="run" disabled>Loading Rust/WASM…</button><button id="qualify" disabled>Loading qualification…</button><button id="callback-capacity" disabled>Loading callback observation…</button><button id="connection-credit" disabled>Loading connection-credit observation…</button><pre id="connection-credit-report" role="status" aria-live="polite">Connection-credit stall observation has not run.</pre><pre id="callback-capacity-report" role="status" aria-live="polite">Callback capacity observation has not run.</pre><pre id="qualification" role="status" aria-live="polite">Desktop pressure qualification has not run.</pre><pre id="results" role="status" aria-live="polite">Loading generated WebAssembly bindings…</pre><p><a href="/fixture-health">Native fixture diagnostics</a></p><p id="build"></p></main><script type="module">import init from '/pkg/df_tools.js';await init();</script></body></html>"#;
+const HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DungeonFlux S00 transport laboratory</title><style>body{margin:0;background:#10141c;color:#e6eaf3;font:17px system-ui,sans-serif}main{max-width:880px;margin:64px auto;padding:0 24px}h1{font-size:38px;line-height:1.1}p{color:#b7c3d4;line-height:1.5}button{background:#88dfb5;color:#10141c;border:0;border-radius:8px;font:600 17px system-ui;padding:14px 22px;cursor:pointer}button:disabled{opacity:.5}pre{white-space:pre-wrap;padding:20px;background:#1a2331;line-height:1.7;border-radius:10px}.tag{color:#88dfb5;letter-spacing:2px;font-size:13px}a{color:#88dfb5}</style></head><body><main><div class="tag">DUNGEONFLUX / EXPERIMENTAL S00</div><h1>Rust transport laboratory</h1><p>Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly.</p><p>This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.</p><button id="run" disabled>Loading Rust/WASM…</button><button id="qualify" disabled>Loading qualification…</button><button id="callback-capacity" disabled>Loading callback observation…</button><button id="connection-credit" disabled>Loading connection-credit observation…</button><button id="close-reconnect" disabled>Loading close/reconnect observation…</button><pre id="close-reconnect-report" role="status" aria-live="polite">Close/reconnect observation has not run.</pre><pre id="connection-credit-report" role="status" aria-live="polite">Connection-credit stall observation has not run.</pre><pre id="callback-capacity-report" role="status" aria-live="polite">Callback capacity observation has not run.</pre><pre id="qualification" role="status" aria-live="polite">Desktop pressure qualification has not run.</pre><pre id="results" role="status" aria-live="polite">Loading generated WebAssembly bindings…</pre><p><a href="/fixture-health">Native fixture diagnostics</a></p><p id="build"></p></main><script type="module">import init from '/pkg/df_tools.js';await init();</script></body></html>"#;
 
 /// Start only a synthetic loopback preview. The caller owns process and output directory.
 pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
@@ -1521,6 +1552,98 @@ mod tests {
             .await
             .unwrap();
             tasks.stop().await;
+        })
+        .await
+        .unwrap();
+    }
+    #[tokio::test]
+    async fn forced_websocket_loss_after_generated_wait_has_no_domain_terminal_or_replay() {
+        tokio::time::timeout(std::time::Duration::from_secs(6), async {
+            let (admission, incoming) =
+                NativeIncoming::bounded(NonZeroUsize::new(1).unwrap()).unwrap();
+            let (address, state, mut tasks) = incoming_listener(admission).await;
+            start_generated_server(incoming, &state, &mut tasks);
+            let mut lost = generated_client_over_websocket(
+                address,
+                state.origin.clone(),
+                "/byte-shape/loss/4",
+                &mut tasks,
+            )
+            .await;
+            let transport = lost
+                .unary(Request::new(Sample {
+                    sequence: 62,
+                    behavior: Behavior::Wait as i32,
+                    ..Sample::default()
+                }))
+                .await
+                .unwrap_err();
+            assert_ne!(transport.code(), Code::InvalidArgument);
+            assert!(transport.metadata().get("fixture-terminal").is_none());
+            drop(lost);
+            let proxy = tasks.0.pop().expect("owned forced-loss proxy missing");
+            let proxy_error = tokio::time::timeout(std::time::Duration::from_secs(2), proxy)
+                .await
+                .expect("forced-loss proxy close bound")
+                .expect("forced-loss proxy join")
+                .expect_err("forced WebSocket loss must terminate its proxy");
+            assert!(
+                proxy_error
+                    .get_ref()
+                    .is_some_and(|source| source.is::<tokio_tungstenite::tungstenite::Error>())
+            );
+            tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                loop {
+                    let witness = state
+                        .shapes
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .find(|witness| witness.id == 4)
+                        .cloned();
+                    if let Some(witness) = witness.filter(|witness| witness.closed) {
+                        assert_eq!(witness.mode, "loss");
+                        assert_eq!(witness.domain_calls, 1);
+                        assert_eq!(witness.messages, 1);
+                        assert_eq!(witness.frames, 1);
+                        assert!(!witness.failed);
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                }
+            })
+            .await
+            .unwrap();
+            let mut fresh = generated_client_over_websocket(
+                address,
+                state.origin.clone(),
+                "/tunnel",
+                &mut tasks,
+            )
+            .await;
+            let reply = fresh
+                .unary(Request::new(Sample {
+                    sequence: 64,
+                    behavior: Behavior::Echo as i32,
+                    ..Sample::default()
+                }))
+                .await
+                .unwrap();
+            assert_eq!(reply.into_inner().sequence, 64);
+            assert_eq!(
+                state
+                    .shapes
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .find(|witness| witness.id == 4)
+                    .unwrap()
+                    .domain_calls,
+                1
+            );
+            drop(fresh);
+            tasks.stop().await;
+            wait_for_released_tunnels(&state).await;
         })
         .await
         .unwrap();

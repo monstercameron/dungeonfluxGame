@@ -2,14 +2,14 @@ use df_observe::OperationContext;
 use df_protocol::transport_fixture::{
     Sample, sample::Behavior, transport_fixture_client::TransportFixtureClient,
 };
-use df_rpc_bridge::{BrowserChannel, BrowserConnection, RPC_MESSAGE_BYTES};
+use df_rpc_bridge::{BrowserChannel, BrowserConnection, ConnectionSnapshot, RPC_MESSAGE_BYTES};
 use futures::{
     FutureExt, SinkExt,
     channel::mpsc,
     future::{Either, select},
 };
 use gloo_timers::future::TimeoutFuture;
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, error::Error, rc::Rc};
 use tonic::{Code, Request, Status};
 use wasm_bindgen::{JsCast, prelude::*};
 use web_sys::{Document, HtmlButtonElement};
@@ -353,6 +353,212 @@ async fn shape_report(id: u64) -> Result<String, String> {
     }
     Err("byte shape endpoint did not reach terminal cleanup".to_owned())
 }
+fn show_close(document: &Document, report: &str) {
+    if let Some(element) = document.get_element_by_id("close-reconnect-report") {
+        element.set_text_content(Some(report));
+    }
+}
+fn append_close(document: &Document, lines: &mut String, line: &str) {
+    lines.push_str(line);
+    lines.push('\n');
+    show_close(document, lines);
+}
+async fn closed_browser(connection: &BrowserConnection) -> Result<ConnectionSnapshot, String> {
+    for _ in 0..100 {
+        let snapshot = connection.snapshot().map_err(|error| error.to_string())?;
+        if snapshot.closed
+            && snapshot.callback_bytes.current == 0
+            && snapshot.callback_items.current == 0
+            && snapshot.browser_callback_vec_capacity.current == 0
+        {
+            return Ok(snapshot);
+        }
+        TimeoutFuture::new(5).await;
+    }
+    Err("browser connection owners did not close within 500ms".to_owned())
+}
+async fn run_close_reconnect(document: Document) -> Result<(), String> {
+    let mut lines = String::new();
+    append_close(
+        &document,
+        &mut lines,
+        "CONNECTING · close/drain/reconnect contract",
+    );
+
+    let (idle, _) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
+        .await
+        .map_err(|error| error.to_string())?;
+    idle.close();
+    let idle_snapshot = closed_browser(&idle).await?;
+    require(
+        !idle_snapshot.driver_failed,
+        "idle close failed the browser driver",
+    )?;
+    append_close(
+        &document,
+        &mut lines,
+        "PASS · Idle close released browser callback owners",
+    );
+
+    let (drained, channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut client = FixtureClient::new(channel)
+        .max_decoding_message_size(RPC_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MESSAGE_BYTES * 2);
+    let rejected = Sample {
+        behavior: Behavior::Reject as i32,
+        ..sample(60)
+    };
+    let domain = client
+        .unary(request(rejected)?)
+        .await
+        .err()
+        .ok_or("domain refusal unexpectedly succeeded")?;
+    require(
+        domain.code() == Code::InvalidArgument
+            && domain.message() == "synthetic terminal"
+            && domain
+                .metadata()
+                .get("fixture-terminal")
+                .is_some_and(|value| value == "observed")
+            && domain.source().is_none(),
+        "authoritative domain status/trailer/source mismatch",
+    )?;
+    append_close(
+        &document,
+        &mut lines,
+        "PASS · Domain refusal: InvalidArgument, exact terminal trailer, no transport source",
+    );
+    let response = client
+        .unary(request(sample(61))?)
+        .await
+        .map_err(|error| error.to_string())?;
+    require(
+        response.into_inner() == sample(61),
+        "drained unary mismatch",
+    )?;
+    finish(
+        client
+            .server_stream(request(sample(0))?)
+            .await
+            .map_err(|error| error.to_string())?
+            .into_inner(),
+        &[0, 1, 2],
+    )
+    .await?;
+    drop(client);
+    drained.close();
+    let drained_snapshot = closed_browser(&drained).await?;
+    require(
+        !drained_snapshot.driver_failed && drained_snapshot.received_frames > 0,
+        "after-terminal close lost the drained response",
+    )?;
+    append_close(
+        &document,
+        &mut lines,
+        "PASS · Close after observed terminal trailers preserved authority and released owners",
+    );
+
+    let id = js_sys::Date::now() as u64;
+    let (lost, channel) =
+        BrowserConnection::connect(&tunnel_url(&format!("/byte-shape/loss/{id}"))?)
+            .await
+            .map_err(|error| error.to_string())?;
+    let mut old_client = FixtureClient::new(channel)
+        .max_decoding_message_size(RPC_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MESSAGE_BYTES * 2);
+    let transport = old_client
+        .unary(request(Sample {
+            behavior: Behavior::Wait as i32,
+            ..sample(62)
+        })?)
+        .await
+        .err()
+        .ok_or("forced WebSocket loss produced a domain success")?;
+    require(
+        transport.source().is_some()
+            && transport.metadata().get("fixture-terminal").is_none()
+            && transport.code() != Code::InvalidArgument,
+        "forced WebSocket loss was mistaken for authoritative domain refusal",
+    )?;
+    lost.close();
+    let lost_snapshot = closed_browser(&lost).await?;
+    let witness = shape_report(id).await?;
+    require(
+        witness.contains("mode=loss")
+            && witness.contains("domain_calls=1")
+            && witness.contains("closed=true")
+            && witness.contains("failed=false")
+            && witness.contains(&format!("build={}", crate::BUILD_ID)),
+        "forced loss lacks actual preterminal dispatch and peer close witness",
+    )?;
+    append_close(
+        &document,
+        &mut lines,
+        &format!(
+            "PASS · Preterminal WS loss: transport source present, no domain trailer, code={:?}, old_driver_failed={}, {witness}",
+            transport.code(),
+            lost_snapshot.driver_failed
+        ),
+    );
+    let stale = old_client
+        .unary(request(sample(63))?)
+        .await
+        .err()
+        .ok_or("closed old generation accepted a new RPC")?;
+    require(
+        stale.metadata().get("fixture-terminal").is_none(),
+        "closed old generation acquired an authoritative status",
+    )?;
+    let old_snapshot = lost.snapshot().map_err(|error| error.to_string())?;
+
+    let (fresh, channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut fresh_client = FixtureClient::new(channel)
+        .max_decoding_message_size(RPC_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MESSAGE_BYTES * 2);
+    let reply = fresh_client
+        .unary(request(sample(64))?)
+        .await
+        .map_err(|error| error.to_string())?;
+    require(
+        reply
+            .metadata()
+            .get("fixture-server")
+            .is_some_and(|value| value == "native-tonic")
+            && reply.into_inner() == sample(64),
+        "fresh connection did not deliver exact generated RPC",
+    )?;
+    require(
+        lost.snapshot()
+            .map_err(|error| error.to_string())?
+            .received_bytes
+            == old_snapshot.received_bytes
+            && shape_report(id).await?.contains("domain_calls=1"),
+        "old generation received late bytes or replayed the pending operation",
+    )?;
+    drop(fresh_client);
+    fresh.close();
+    closed_browser(&fresh).await?;
+    append_close(
+        &document,
+        &mut lines,
+        "PASS · Fresh connection served new RPC; old generation stayed closed without replay",
+    );
+    append_close(
+        &document,
+        &mut lines,
+        "COMPLETE · Close/reconnect contract passed; preterminal operation outcome UNKNOWN, external operation-ID resync unimplemented",
+    );
+    crate::qualification::save_report(
+        "close-reconnect",
+        &format!("Build: {}\n{lines}", crate::BUILD_ID),
+    )
+    .await?;
+    Ok(())
+}
 async fn shaped_mode(mode: &str, id: u64) -> Result<String, String> {
     let (connection, channel) =
         BrowserConnection::connect(&tunnel_url(&format!("/byte-shape/{mode}/{id}"))?)
@@ -577,6 +783,7 @@ pub fn start() -> Result<(), JsValue> {
     }
     let active = Rc::new(Cell::new(false));
     crate::qualification::install(&document, active.clone())?;
+    install_close_reconnect(&document, active.clone())?;
     let callback_button = button.clone();
     let callback = Closure::wrap(Box::new(move || {
         if active.replace(true) {
@@ -612,6 +819,52 @@ pub fn start() -> Result<(), JsValue> {
     }) as Box<dyn FnMut()>);
     button.set_onclick(Some(callback.as_ref().unchecked_ref()));
     // Page-lifetime owner: browser drops the document and WASM instance together on navigation.
+    callback.forget();
+    Ok(())
+}
+
+fn install_close_reconnect(document: &Document, active: Rc<Cell<bool>>) -> Result<(), JsValue> {
+    let button = document
+        .get_element_by_id("close-reconnect")
+        .ok_or_else(|| JsValue::from_str("close/reconnect button unavailable"))?
+        .dyn_into::<HtmlButtonElement>()?;
+    button.set_disabled(false);
+    button.set_text_content(Some("Run close/reconnect observation"));
+    let document = document.clone();
+    let callback_button = button.clone();
+    let callback = Closure::wrap(Box::new(move || {
+        if active.replace(true) {
+            return;
+        }
+        callback_button.set_disabled(true);
+        let document = document.clone();
+        let button = callback_button.clone();
+        let active = active.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let result = match select(
+                run_close_reconnect(document.clone()).boxed_local(),
+                TimeoutFuture::new(15000).boxed_local(),
+            )
+            .await
+            {
+                Either::Left((result, _)) => result,
+                Either::Right(((), future)) => {
+                    drop(future);
+                    Err("close/reconnect exceeded its 15-second deadline".to_owned())
+                }
+            };
+            if let Err(error) = result {
+                show_close(
+                    &document,
+                    &format!("FAIL · {error}\nClose/reconnect INCONCLUSIVE"),
+                );
+            }
+            active.set(false);
+            button.set_disabled(false);
+            button.set_text_content(Some("Run close/reconnect observation again"));
+        });
+    }) as Box<dyn FnMut()>);
+    button.set_onclick(Some(callback.as_ref().unchecked_ref()));
     callback.forget();
     Ok(())
 }
