@@ -3,14 +3,14 @@ use df_ai::admission::{
     CompleteRecord, RecordEvent, RecordIdentity, RecordLimits, RecordingPublisher,
     admit_complete_record,
 };
-use df_ai::lookup::{PreparedRead, ReadResult, lookup_prepared};
+use df_ai::lookup::{PreparedRead, ReadResult, lookup_authorized_prepared};
 use df_engine::effect_emission::{
     EffectEmissionLimits, EffectInspectionError, EffectRegistrationInspector,
     inspect_staged_effects,
 };
 use df_model::checkpoint::*;
 use df_session::submission::RepositoryError;
-use df_types::{MemberId, OperationId, RevisionLabel};
+use df_types::{LocaleTag, MemberId, OperationId, RevisionLabel, SessionRevision};
 use sha2::{Digest, Sha256};
 
 use super::{journey, model};
@@ -18,6 +18,8 @@ use super::{journey, model};
 pub(super) const DEFINITION: &str = "courier-private-answer-prepared-1";
 pub(super) const POLICY: &str = "courier-private-answer-policy-1";
 pub(super) const MODEL: &str = "authored-courier-recording-1";
+// Exact authored byte locale; this is not listener negotiation or translation.
+const SOURCE_LOCALE: &str = "en";
 pub(super) const RESPONSE: &str = "The courier quietly tells you: the sealed packet is addressed to Vell at the Harbor Inn. Keep its destination between you.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -185,14 +187,25 @@ pub(super) fn recipient(
     current: &Checkpoint,
     intent: &DurableIntent,
 ) -> Result<MemberId, CourierError> {
+    if current.state().mode != ExecutionMode::PreparedOnly {
+        return Err(CourierError::Unavailable);
+    }
+    source_recipient(current, intent)
+}
+
+/// Source ownership qualification shared by the distinct bounded recording example;
+/// this does not select an execution mode or execute/replay any content.
+fn source_recipient(
+    current: &Checkpoint,
+    intent: &DurableIntent,
+) -> Result<MemberId, CourierError> {
     current
         .validate_resume(
             current.basis(),
             &model::pins().map_err(|_| CourierError::Source)?,
         )
         .map_err(|_| CourierError::Stale)?;
-    if current.state().mode != ExecutionMode::PreparedOnly
-        || intent.kind != EffectKind::RunAi
+    if intent.kind != EffectKind::RunAi
         || intent.definition != model::content(DEFINITION).map_err(|_| CourierError::Source)?
     {
         return Err(CourierError::Unavailable);
@@ -248,12 +261,26 @@ struct RecordingBasis {
     pins: CheckpointPins,
     policy: ContentReference,
     model: RevisionLabel,
+    source_locale: LocaleTag,
+    current_basis: Basis,
+    completion: JobCompletion,
+    cause: AcceptedDecision,
+    source: (
+        FactId,
+        SessionRevision,
+        OperationId,
+        AudienceScope,
+        FactValue,
+    ),
+    listener: MemberId,
 }
-struct AuthoredRecording {
+struct AuthoredRecording<'a> {
+    current: &'a Checkpoint,
+    intent: &'a DurableIntent,
     key: ContentReference,
     basis: RecordingBasis,
 }
-impl PreparedRead for AuthoredRecording {
+impl PreparedRead for AuthoredRecording<'_> {
     type Key = ContentReference;
     type Basis = RecordingBasis;
     type Artifact = &'static str;
@@ -269,6 +296,66 @@ impl PreparedRead for AuthoredRecording {
         _: &Self::Key,
     ) -> ReadResult<'_, Self::Key, Self::Basis, Self::Artifact, Self::Failure> {
         Ok(None)
+    }
+}
+
+fn recording_basis(
+    current: &Checkpoint,
+    intent: &DurableIntent,
+) -> Result<RecordingBasis, CourierError> {
+    let listener = source_recipient(current, intent)?;
+    let cause = current
+        .state()
+        .decisions
+        .iter()
+        .find(|d| d.operation == intent.operation && d.revision == intent.basis.revision)
+        .ok_or(CourierError::Source)?
+        .clone();
+    let source_definition =
+        model::content("private-courier-note").map_err(|_| CourierError::Source)?;
+    let source = current.state().facts.iter().find(|f| cause.facts.contains(&f.id) && f.operation == intent.operation && matches!(&f.value, FactValue::ContentEvent { definition, subjects } if definition == &source_definition && subjects.is_empty())).ok_or(CourierError::Source)?;
+    Ok(RecordingBasis {
+        pins: current.pins().clone(),
+        policy: model::content(POLICY).map_err(|_| CourierError::Source)?,
+        model: model::label(MODEL).map_err(|_| CourierError::Source)?,
+        source_locale: LocaleTag::parse(SOURCE_LOCALE).map_err(|_| CourierError::Source)?,
+        current_basis: current.basis(),
+        completion: expected_completion(intent)?,
+        cause,
+        source: (
+            source.id,
+            source.revision,
+            source.operation,
+            source.audience.clone(),
+            source.value.clone(),
+        ),
+        listener,
+    })
+}
+
+impl df_ai::lookup::ReadAuthority for AuthoredRecording<'_> {
+    type AuthorizationFailure = CourierError;
+    fn authorize_prepared(
+        &self,
+        key: &ContentReference,
+        basis: &RecordingBasis,
+    ) -> Result<(), CourierError> {
+        recipient(self.current, self.intent)?;
+        if self.intent.status != DurableStatus::Pending {
+            return Err(CourierError::Stale);
+        }
+        if key != &self.intent.definition || basis != &recording_basis(self.current, self.intent)? {
+            return Err(CourierError::Stale);
+        }
+        Ok(())
+    }
+    fn authorize_replay(
+        &self,
+        _: &ContentReference,
+        _: &RecordingBasis,
+    ) -> Result<(), CourierError> {
+        // This registered authored consumer has no recording-storage Replay owner.
+        Err(CourierError::Unavailable)
     }
 }
 
@@ -313,16 +400,14 @@ pub(super) fn execute(
     if intent.status != DurableStatus::Pending {
         return Err(CourierError::Stale);
     }
-    let basis = RecordingBasis {
-        pins: current.pins().clone(),
-        policy: model::content(POLICY).map_err(|_| CourierError::Source)?,
-        model: model::label(MODEL).map_err(|_| CourierError::Source)?,
-    };
+    let basis = recording_basis(current, intent)?;
     let recording = AuthoredRecording {
+        current,
+        intent,
         key: model::content(DEFINITION).map_err(|_| CourierError::Source)?,
         basis: basis.clone(),
     };
-    let text = lookup_prepared(&recording, &intent.definition, &basis)
+    let text = lookup_authorized_prepared(&recording, &intent.definition, &basis)
         .map_err(|_| CourierError::Unavailable)?;
     let job = intent.job.ok_or(CourierError::Source)?;
     admit_record(
