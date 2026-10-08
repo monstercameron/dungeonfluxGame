@@ -10,3 +10,7 @@ df-model = { path = "../df-model" }
 df-protocol = { path = "../df-protocol" }
 df-types = { path = "../df-types" }
 prost.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+df-auth = { path = "../df-auth" }
+df-commerce = { path = "../df-commerce" }
