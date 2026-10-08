@@ -1,0 +1,399 @@
+{
+  "task_id": "B-C-df-knowledge-D04",
+  "stage": "design",
+  "objective": "Define summary and index generation lifetimes; expected: stale source and revoked access are detectable.",
+  "acceptance": [
+    "stale source and revoked access are detectable",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "original_verification": [
+    "Freeze the cited source decision and a bounded contract example; compare stale source and revoked access are detectable. Retain decision, alternatives and unresolved facts.",
+    "Exact executable commands: TBD at G01 and scoped prerequisite resolution; this planned procedure is not a claim that Rust/browser/provider checks ran."
+  ],
+  "original_stored_brief_sha256": "088555c2aa6b77024765d7d6a1b2bcdb75283ac41d45e90f6f5f474516c70e9a",
+  "original_source_fingerprint": "3676e59e6316d9e4d77eab1f9dd812776041c2c9eb70f5dc2e396a13e50bf6b0",
+  "original_brief": {
+    "backlog_generated": true,
+    "canonical_implementation_policy": "Crate child owns the primitive; rules child owns source behavior; feature child owns this named use-case adapter; slice child owns this specific cross-system connection and end-to-end proof. Reuse canonical_task_refs, never create a second implementation.",
+    "canonical_key": "C-df-knowledge:D:Define summary and index generation lifetimes",
+    "canonical_task_refs": [],
+    "case_phase": "D",
+    "completion_policy": "Existing task/attempt independent review and integrated revision triggers; no automatic completion from dependencies or child counts.",
+    "dispatch_guard": "Planning only. Coordinator freezes exact source/tool/types/paths/limits and applicable rights/phase approvals before changing record_role to atomic, scope_status to frozen and dispatch_ready to true.",
+    "dispatch_ready": false,
+    "governing_sources": [
+      {
+        "path": "planning/subsystem-architecture.md",
+        "sections": [
+          "Design",
+          "Shared and transport crates",
+          "Server crates",
+          "Browser crates",
+          "Tooling crates",
+          "Integration and refinement",
+          "Commercial service composition"
+        ],
+        "sha256": "cf549f4f046f76713c881228d82c6a7111d8ccc84db208cb9d9db67bb192d9f6"
+      },
+      {
+        "path": "planning/subsystem-interfaces.md",
+        "sections": [
+          "Common contract rules",
+          "Pure domain and content",
+          "Separate runtime subsystem boundaries",
+          "Identity and session ownership",
+          "PostgreSQL persistence and durable media",
+          "AI/provider/media ports",
+          "Projection, RPC and transport",
+          "Feature-specific candidates within existing boundaries",
+          "Browser interfaces",
+          "Observability and development tooling",
+          "Commerce and lifecycle ports"
+        ],
+        "sha256": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a"
+      },
+      {
+        "path": "planning/runtime-directors.md",
+        "sections": [
+          "Authority and composition",
+          "Pure public boundaries",
+          "Time, recovery and bounded work",
+          "Added feature projections",
+          "Acceptance and unresolved gates"
+        ],
+        "sha256": "ed8944f316d912498107ee550431e560795ba8114cb63a181b6aadeca70b48ca"
+      },
+      {
+        "path": "planning/long-horizon-state.md",
+        "sections": [
+          "Retrieval and contradiction semantics",
+          "World granularity and pause",
+          "Acceptance",
+          "Personal payload and rights lifecycle"
+        ],
+        "sha256": "977b5a346190a55c119242fdb7009a645e6d76aa2946d0684c46571d846e96ff"
+      },
+      {
+        "path": "planning/interaction-engine.md",
+        "sections": [
+          "Persistent social and epistemic model",
+          "Reaction and schedules",
+          "Intent, affordances and compound plans",
+          "Acceptance",
+          "Grounded creative speech and listener-safe generation",
+          "Source-guided rulings for an inexperienced host"
+        ],
+        "sha256": "1bad7c28609ac5e5a51a3ea0b3c1fae17ebeb6380dbdb8fce582085a8ede354f"
+      },
+      {
+        "path": "development/backlog-catalog.json",
+        "sections": [
+          "C-df-knowledge",
+          "B-C-df-knowledge-D04"
+        ],
+        "sha256": "039b0a03b4085b43ad32c4063e2cb8fc789fc55fff7552aec6e951ec3b4704c3"
+      }
+    ],
+    "granularity": "one independently reviewable explicit outcome; exact paths/limits frozen before execution",
+    "handoff": "Task/attempt, input/submitted/integrated source, permitted changed paths, delivered behavior/hook owners, checks and unperformed checks, retained evidence, known gaps and devlog IDs.",
+    "input_revision": "3676e59e6316d9e4d77eab1f9dd812776041c2c9eb70f5dc2e396a13e50bf6b0",
+    "inputs": {
+      "case": "Define summary and index generation lifetimes",
+      "family_models": "CanonicalFact, KnowledgeGrant, Belief, EvidenceSource, WitnessRecord, Memory, RumorTransmission, KnowledgeDelta; Pure contract authority: Who observed/knows/believes/remembers a claim. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit. Gap refinement: Pure rank_candidates over bounded supplied MemoryCandidateBatch, observer/source/access revalidation and source-grounded MemoryEpisode/MemorySummary/RetrievalRequest/RetrievedMemory/ConsolidationCandidate; no DB/provider I/O. Native df-session-owned MemoryCandidateStore implemented by df-persistence supplies candidates; planning/long-horizon-state.md.",
+      "prerequisite_contracts": "Exact reviewed children named in dependencies; later production types remain G03 wave-specific."
+    },
+    "integration_hooks": [
+      {
+        "hook": "Define summary and index generation lifetimes -> stale source and revoked access are detectable",
+        "owner": "df-knowledge"
+      },
+      {
+        "hook": "Define summary and index generation lifetimes",
+        "owner": "df-knowledge"
+      }
+    ],
+    "known_pitfalls": [
+      "An isolated helper or schema count cannot prove running integrated behavior. Preserve source/build/evidence identity; no fabricated completeness or unperformed checks.",
+      "Pure shared/domain owner has no SDK clock DB provider socket I/O; diagnostic facts handed to native consumer. Domain wire/serialization codecs belong to df-api/df-client/df-persistence consumers."
+    ],
+    "mandatory_workflow_sources": [
+      {
+        "path": "AGENTS.md",
+        "sections": [
+          "1. Think Before Coding",
+          "2. Simplicity First",
+          "3. Surgical Changes",
+          "4. Goal-Driven Execution",
+          "Planning and project documentation",
+          "Mandatory coding style",
+          "Application architecture",
+          "Development strategies",
+          "Implementation and evaluation",
+          "Agent devlog",
+          "Generated files and artifacts",
+          "Changelog",
+          "Hosted-service authority",
+          "Visual development journey"
+        ],
+        "sha256": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182"
+      },
+      {
+        "path": "planning/coding-style.md",
+        "sections": [
+          "Scope and enforcement",
+          "Names, modules, and public contracts",
+          "Functions, ownership, and errors",
+          "Async code and deterministic gameplay",
+          "Persistence, RPC, and instrumentation",
+          "Documentation, tests, and changes"
+        ],
+        "sha256": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb"
+      },
+      {
+        "path": "ADR/0001-sqlite-agent-workflow.md",
+        "sections": [
+          "Context",
+          "Decision",
+          "Consequences"
+        ],
+        "sha256": "acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8"
+      },
+      {
+        "path": "ADR/0004-development-reliability.md",
+        "sections": [
+          "Context",
+          "Decision",
+          "Evidence from the archive"
+        ],
+        "sha256": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae"
+      },
+      {
+        "path": "ADR/0005-frontier-output-evaluation.md",
+        "sections": [
+          "Context",
+          "Decision",
+          "Consequences"
+        ],
+        "sha256": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c"
+      }
+    ],
+    "matching_prerequisites": [
+      "B-C-df-knowledge-D01",
+      "B-C-df-knowledge-D02",
+      "B-C-df-knowledge-D03"
+    ],
+    "objective": "Define summary and index generation lifetimes; expected: stale source and revoked access are detectable.",
+    "outputs": [
+      "stale source and revoked access are detectable",
+      "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+    ],
+    "owners": [
+      "df-knowledge"
+    ],
+    "record_role": "atomic_blueprint",
+    "required_capabilities": {
+      "audio": false,
+      "computer_use": false,
+      "vision": false
+    },
+    "required_output_review": "Independent frontier review of this exact boundary; actual computer use/vision for user-facing cases, actual audible observation where audio is required. Logs alone do not prove output.",
+    "routing": {
+      "coordinator": "frontier",
+      "escalation": "Two unsuccessful Luna/Terra/Muse attempts on same task -> Sol logic/interfaces/computer-use, Sol/Opus UI/UX/gameplay; no counter reset",
+      "implementation": "Luna/Muse if available for bounded simple work; Terra/Sol for demonstrated complexity; Sonnet current/newer or Opus sparingly for UI as actually available",
+      "review": "independent frontier with actual computer-use/vision; audio observation when required"
+    },
+    "scope_status": "planned",
+    "semantics": {
+      "cancellation": "Owned bounded work, explicit terminal outcome; request cancellation cannot undo committed decisions/jobs; generation/timer/job and binding checks reject stale results.",
+      "coding_style": "planning/coding-style.md and rustfmt.toml mandatory; exact fmt/Clippy/native/WASM checks frozen by G01; no check claimed run before workspace exists.",
+      "error_semantics": "Typed domain rejections versus safe transport/auth/capacity/storage failures; preserve uncertainty after ambiguous commit; never fabricated success or parsed strings.",
+      "observability": "Shared OTEL context capture at dispatch, decision/job/delivery/presentation checkpoints and classified errors; separate SQLite review corpus, visible gaps/retention; pure crates return facts instead of SDK calls.",
+      "privacy": "Authorize trusted principal/audience independently of trace IDs; filter before serialization; credential/private payloads excluded from default logs.",
+      "versioning": "Pinned source/config/content/rules/schema and build identity; compatibility fixtures and coordinated consumer changes; no silent edition/field meaning change."
+    },
+    "verification_environment": "Planned authorized native/WASM environment; commands TBD by G01, production contracts by G03. No executable application currently exists.",
+    "why": "Model and preserve df-knowledge: Truth-linked knowledge/beliefs, witness provenance, memory/rumor policy. Public boundary: KnowledgeSystem::perceive/query/propagate/decay; KnowledgeDelta."
+  },
+  "input_source_revision": "a676a198d184306e0ba60d3cdb8345f1883ff923",
+  "decision": {
+    "alternatives": [
+      {
+        "decision": "rejected by long-horizon-state retrieval/truth/reauthorization requirements",
+        "option": "Treat summary text or embedding/index similarity as canonical truth or access grant"
+      },
+      {
+        "decision": "rejected; recorded old summaries are valid provenance; new completion acceptance separately revalidates current source/basis",
+        "option": "Require historical summaries to match current session revision"
+      },
+      {
+        "decision": "rejected; actual RetrievalOwner documents and implements pre-read/post-read/return reauthorization",
+        "option": "Use one old native authorization check for all later return/publication"
+      },
+      {
+        "decision": "unselected; production ports/shared types/storage atomicity require separately frozen owners/gates",
+        "option": "Implement a new public summary/index executor in this Design task"
+      }
+    ],
+    "prospective_only": [
+      "Summary/index native publication atomic switch and stale/revoked rebuild discard",
+      "Pre-admission cancellation, accepted run lifetime/owner cancellation and replay no regeneration beyond current retrieval example"
+    ],
+    "selected": "Capture source digest/revision, scoped audience/access and index generation with admitted summary/index work. Current owner revalidates supplied source/index/access generation before selecting or returning derived material. Publish a derived generation only after current source/access and run/job fences; atomic switch preserves previous valid generation on refusal. Historical recorded summary revision may precede current state and never replaces canonical episodes/facts. Caller disconnect does not cancel admitted run-owned work; pre-admission cancellation discards work. Replay consumes recorded canonical material with no summary/index generation.",
+    "unresolved": [
+      "Production df-session summary/consolidation/index executor and effect registration are not qualified by these tests",
+      "Atomic PostgreSQL index publish/restart fencing, exact generation allocation and recovery policy remain native persistence/session owner work",
+      "Embedding/index algorithm/provider/tokenizer and measured limits remain G03/G05/G08/G11 gates",
+      "Rights suppression/deletion invalidation and tombstone replay remain service-operations/lifecycle owner work",
+      "Summary source_revision producer admissibility and semantic consistency are not proven by structural checkpoint validation"
+    ]
+  },
+  "evidence_boundary": {
+    "executed_by_rust_examples": "Existing df_knowledge::rank_candidates/retrieve_ranked call sequence and typed no-partial result behavior with private RankingOwner/RetrievalOwner fixture implementations",
+    "not_proven": "Conformance of a real native storage/authorization owner, summary generator, index publisher, PostgreSQL transaction, rights lifecycle, provider executor or replay path",
+    "production_implemented": false,
+    "private_publication_state_machine": false,
+    "source_version_mapping": "Test source/index/access u64 labels are existing retrieval_inputs fixture generations. Canonical MemorySummary uses source_digest/source_revision; fixture labels are not newly frozen production representation."
+  },
+  "existing_source_boundaries": [
+    {
+      "path": "crates/df-knowledge/src/ranking.rs",
+      "contract": "Actual bounded pure ranking; owner batch validation before candidate inspection; per-row access precedes source validation/order/cost; return reauthorization runs on success and ranking error; borrowed selection is not future commit/disclosure grant"
+    },
+    {
+      "path": "crates/df-knowledge/src/retrieval_inputs.rs",
+      "contract": "Existing test-only owner types and source/index/access generation comparison reused unchanged"
+    },
+    {
+      "path": "crates/df-model/src/checkpoint.rs",
+      "contract": "MemorySummary retains episode/derived-claim references, content source digest, recording revision, policy/model/summarizer/audience/incomplete fields; historical summary source_revision <= checkpoint basis remains legitimate; structural validation is not new-result publication authority"
+    }
+  ],
+  "executable_examples": [
+    {
+      "test": "each_stale_batch_generation_refuses_before_candidate_inspection",
+      "cases": 3,
+      "observes": "Current source/index/access generation versus old batch: typed StaleBasis, no candidate ordering/validation/cost and final empty-return check"
+    },
+    {
+      "test": "borrowed_selection_does_not_authorize_a_new_source_or_access_generation",
+      "cases": 3,
+      "observes": "Previously borrowed source-bound result remains associated with old basis; subsequent retrieval under current source/index/access refuses stale batch"
+    },
+    {
+      "test": "current_generation_changes_during_read_refuse_before_ranking",
+      "cases": 3,
+      "observes": "Current owner source/index/access changed inside read; actual post-read authorize_query rejects before ranking/return"
+    },
+    {
+      "test": "return_reauthorization_supersedes_both_selected_success_and_ranking_error",
+      "cases": 6,
+      "observes": "Late source/index/access change refuses selected success and incomplete ranking diagnostics; current owner receives selected count 1 or 0; actual API exposes only typed refusal"
+    },
+    {
+      "test": "denied_query_reads_nothing_even_when_a_stale_index_contains_private_material",
+      "cases": 1,
+      "observes": "Unauthorized request does not read candidate batch, stale/private count/IDs or diagnostics"
+    },
+    {
+      "test": "hidden_stale_material_cannot_change_bounded_current_visible_selection",
+      "cases": 3,
+      "observes": "Zero/one/two unauthorized stale rows within explicit cap preserve same visible IDs and cannot reach validation/comparison/cost; exact output budget succeeds"
+    }
+  ],
+  "prospective_generation_contract": {
+    "classification": "Source-backed policy decision for later native implementation; not an executable publisher or accepted-job evidence",
+    "admission": "Native session-owned effect admits bounded work with current source digest/revision, access/audience generation, index generation and run/job/basis fence; before-admission cancellation returns discard",
+    "ownership": "Accepted work belongs to session/run independent of requester disconnect; explicit owner cancellation, termination and shutdown outcomes apply; late results must pass current run/job fence",
+    "summary_acceptance": "Revalidate source hashes, visibility and version before accepting consolidation; stale completion cannot overwrite newer episodes or become canonical truth; contradictory source claims are rejected/quarantined without world-fact changes",
+    "index_publication": "Native publisher validates current source/access generation and atomically switches derived generation; stale/revoked rebuild is discarded and cannot replace prior valid publication",
+    "read": "Native indexed access filters before selection and checks returned rows again; optional missing/stale index uses bounded canonical fallback or explicit Incomplete coverage, never unbounded scan",
+    "return_commit_projection": "Ranking does not grant future disclosure/commit; engine/session owner rechecks current basis/source/access before commit or projection",
+    "replay_restart": "Replay loads recorded canonical episodes/summaries and performs no summary/embedding/index regeneration or paid calls; absent optional index is explicit and rebuildable; restarted scope enforces current deletion/suppression tombstones"
+  },
+  "governing_source_pins": [
+    {
+      "bytes": 13664,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0001-sqlite-agent-workflow.md",
+      "sha256": "acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8"
+    },
+    {
+      "bytes": 5249,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0002-resource-scheduling-and-cleanup.md",
+      "sha256": "a6476cfef449e089639109cc6d3cf5f0800b792b57a32696258d5ac0b9511966"
+    },
+    {
+      "bytes": 7575,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0003-agent-devlog.md",
+      "sha256": "ee293673b01391c3a39577bd116a60abb3edfa662a7a8d1315556d6fe537d912"
+    },
+    {
+      "bytes": 8670,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0004-development-reliability.md",
+      "sha256": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae"
+    },
+    {
+      "bytes": 6534,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0005-frontier-output-evaluation.md",
+      "sha256": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c"
+    },
+    {
+      "bytes": 20121,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/AGENTS.md",
+      "sha256": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182"
+    },
+    {
+      "bytes": 9448,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/coding-style.md",
+      "sha256": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb"
+    },
+    {
+      "bytes": 11517,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/interaction-engine.md",
+      "sha256": "1bad7c28609ac5e5a51a3ea0b3c1fae17ebeb6380dbdb8fce582085a8ede354f"
+    },
+    {
+      "bytes": 7690,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/long-horizon-state.md",
+      "sha256": "977b5a346190a55c119242fdb7009a645e6d76aa2946d0684c46571d846e96ff"
+    },
+    {
+      "bytes": 12985,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/observability.md",
+      "sha256": "30860fcd071abe3664487a796e424748f40622fafbaf15d56dd18dd0328cbbf2"
+    },
+    {
+      "bytes": 11747,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/runtime-directors.md",
+      "sha256": "ed8944f316d912498107ee550431e560795ba8114cb63a181b6aadeca70b48ca"
+    },
+    {
+      "bytes": 12250,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/runtime-reliability.md",
+      "sha256": "176e5a8fb04e1d9cb2402225c9eb1bb4ffd110abf353f226a302e10e780acf05"
+    },
+    {
+      "bytes": 8897,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/storage-architecture.md",
+      "sha256": "69c6ef1ec2ce02b0ecc33c361e83ef9a027f669df1abe49199605552466a1da6"
+    },
+    {
+      "bytes": 14004,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/subsystem-architecture.md",
+      "sha256": "cf549f4f046f76713c881228d82c6a7111d8ccc84db208cb9d9db67bb192d9f6"
+    },
+    {
+      "bytes": 35522,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/subsystem-interfaces.md",
+      "sha256": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a"
+    }
+  ],
+  "unperformed_checks": [
+    "Native summary/index generation and atomic publication",
+    "Canonical accepted-job cancellation/restart/replay implementation",
+    "Provider/embedding/tokenizer calls and numerical capacity calibration",
+    "PostgreSQL lifecycle and deletion suppression acceptance",
+    "Independent frontier review and Main integration until coordinator evidence"
+  ],
+  "model_provenance": "unknown"
+}
