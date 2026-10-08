@@ -8,6 +8,15 @@ use df_session::submission::RepositoryError;
 use tokio::time::{Instant, timeout_at};
 use tokio_postgres::{Client, Row, Transaction};
 
+pub(crate) fn fixture_storage_header(magic: [u8; 4]) -> Result<[u8; 6], RepositoryError> {
+    let version =
+        u16::try_from(STORAGE_CODEC_VERSION).map_err(|_| RepositoryError::InvalidCandidate)?;
+    let mut header = [0_u8; 6];
+    header[..4].copy_from_slice(&magic);
+    header[4..].copy_from_slice(&version.to_be_bytes());
+    Ok(header)
+}
+
 pub(crate) struct FixtureGrant<'a> {
     pub(crate) service_role: &'a str,
     pub(crate) tenant: &'a [u8; 16],
@@ -213,6 +222,10 @@ pub(crate) async fn physical_snapshot(
     }
     let epoch = basis.revision.epoch().get().to_string();
     let sequence = basis.revision.sequence().to_string();
+    let checkpoint_header = fixture_storage_header(*b"DFCP")?;
+    let fact_header = fixture_storage_header(*b"DFFA")?;
+    let receipt_header = fixture_storage_header(*b"DFRC")?;
+    let intent_header = fixture_storage_header(*b"DFIT")?;
     let row = timeout_at(deadline, client.query_one("SELECT
         (SELECT count(*) FROM df_game.checkpoints WHERE tenant_id=$1::bytea AND session_id=$2::bytea
             AND recovery_epoch=$3::text::numeric AND in_epoch_sequence=$4::text::numeric) AS checkpoints,
@@ -247,8 +260,8 @@ pub(crate) async fn physical_snapshot(
             WHERE tenant_id=$1::bytea AND session_id=$2::bytea) AS session_sequence",
         &[&tenant.as_slice(), &basis.session.as_bytes().as_slice(), &epoch, &sequence, &maximum,
           &i32::from(df_model::checkpoint::CHECKPOINT_SCHEMA), &STORAGE_CODEC_VERSION,
-          &b"DFCP\0\x02".as_slice(), &b"DFFA\0\x02".as_slice(),
-          &b"DFRC\0\x02".as_slice(), &b"DFIT\0\x02".as_slice()]))
+          &checkpoint_header.as_slice(), &fact_header.as_slice(),
+          &receipt_header.as_slice(), &intent_header.as_slice()]))
         .await.map_err(|_| RepositoryError::Unavailable)?.map_err(|_| RepositoryError::Unavailable)?;
     let mut counts = [0; 4];
     for (slot, column) in ["checkpoints", "facts", "operations", "intents"]

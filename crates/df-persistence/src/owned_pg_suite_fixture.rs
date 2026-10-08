@@ -901,7 +901,8 @@ fn run_registered_suite(stage: &std::cell::Cell<&'static str>) -> Result<(), Rep
                     &physical,
                 )
                 .and_then(|receipt| {
-                    stage.set("actual persisted codec2 metadata and legacy/mismatch refusal");
+                    stage
+                        .set("actual persisted current codec metadata and legacy/mismatch refusal");
                     observe_persisted_codec_metadata(
                         &physical,
                         &mut repository,
@@ -2563,6 +2564,46 @@ fn assert_fixture_structural_recovery(restored: &Checkpoint) -> Result<(), Repos
         return Err(RepositoryError::InvalidCandidate);
     }
     Ok(())
+}
+
+#[test]
+fn physical_fixture_header_expectations_match_current_encoded_records() {
+    let (_, candidate, _) = fixture_recovery_candidate();
+    let receipt = df_session::submission::DecisionReceipt::new(
+        candidate.basis(),
+        candidate.state().decisions[0].clone(),
+        16384,
+    )
+    .unwrap();
+    let records = [
+        (
+            *b"DFCP",
+            crate::checkpoint_codec::encode_checkpoint(&candidate, codec_limits()),
+        ),
+        (
+            *b"DFFA",
+            crate::checkpoint_codec::encode_fact(&candidate.state().facts[0], codec_limits()),
+        ),
+        (
+            *b"DFRC",
+            crate::checkpoint_codec::encode_receipt(&receipt, codec_limits()),
+        ),
+        (
+            *b"DFIT",
+            crate::checkpoint_codec::encode_intent(&candidate.state().intents[0], codec_limits()),
+        ),
+    ];
+    for (magic, encoded) in records {
+        let encoded = encoded.unwrap();
+        let expected = crate::owned_pg_admin_fixture::fixture_storage_header(magic).unwrap();
+        assert_eq!(encoded.get(..expected.len()), Some(expected.as_slice()));
+        crate::checkpoint_codec::validate_storage_format(
+            crate::checkpoint_codec::STORAGE_CODEC_VERSION,
+            &magic,
+            &encoded,
+        )
+        .unwrap();
+    }
 }
 
 #[test]
@@ -4595,45 +4636,61 @@ fn observe_persisted_codec_metadata(
     let tenant = scope.tenant_bytes();
     let session = candidate.basis().session;
     let (epoch, sequence) = crate::revision_codec::encode_revision(candidate.basis().revision);
-    for rejected in [1_i32, 3_i32] {
+    let current = crate::checkpoint_codec::STORAGE_CODEC_VERSION;
+    let mismatched = current.checked_add(1).ok_or(RepositoryError::Capacity)?;
+    for rejected in [1_i32, mismatched] {
         // Only this fresh registered fixture row is deliberately corrupted;
         // restore the metadata before proving reuse of the actual adapter.
-        let changed = actor_block_on(physical.runtime, within_deadline(physical.deadline,
-            physical.administrator.execute(
-                "UPDATE df_game.checkpoints SET codec_version=$5::integer WHERE tenant_id=$1::bytea
-                 AND session_id=$2::bytea AND recovery_epoch=$3::text::numeric
-                 AND in_epoch_sequence=$4::text::numeric AND codec_version=2",
-                &[&tenant, &session.as_bytes().as_slice(), &epoch, &sequence, &rejected],
-            )))?.map_err(|_| RepositoryError::Unavailable)?.map_err(|_| RepositoryError::Unavailable)?;
-        if changed != 1
-            || !matches!(
-                repository.load_current(scope, context),
-                Err(RepositoryError::InvalidCandidate)
-            )
-        {
-            return Err(RepositoryError::InvalidCandidate);
-        }
         let changed = actor_block_on(
             physical.runtime,
             within_deadline(
                 physical.deadline,
                 physical.administrator.execute(
-                    "UPDATE df_game.checkpoints SET codec_version=2 WHERE tenant_id=$1::bytea
-                 AND session_id=$2::bytea AND recovery_epoch=$3::text::numeric
-                 AND in_epoch_sequence=$4::text::numeric AND codec_version=$5::integer",
+                    "UPDATE df_game.checkpoints SET codec_version=$5::integer WHERE tenant_id=$1::bytea
+                     AND session_id=$2::bytea AND recovery_epoch=$3::text::numeric
+                     AND in_epoch_sequence=$4::text::numeric AND codec_version=$6::integer",
                     &[
                         &tenant,
                         &session.as_bytes().as_slice(),
                         &epoch,
                         &sequence,
                         &rejected,
+                        &current,
                     ],
                 ),
             ),
         )?
         .map_err(|_| RepositoryError::Unavailable)?
         .map_err(|_| RepositoryError::Unavailable)?;
-        if changed != 1 || repository.load_current(scope, context)? != *candidate {
+        if changed != 1 {
+            return Err(RepositoryError::InvalidCandidate);
+        }
+        let refused = matches!(
+            repository.load_current(scope, context),
+            Err(RepositoryError::InvalidCandidate)
+        );
+        let restored = actor_block_on(
+            physical.runtime,
+            within_deadline(
+                physical.deadline,
+                physical.administrator.execute(
+                    "UPDATE df_game.checkpoints SET codec_version=$6::integer WHERE tenant_id=$1::bytea
+                     AND session_id=$2::bytea AND recovery_epoch=$3::text::numeric
+                     AND in_epoch_sequence=$4::text::numeric AND codec_version=$5::integer",
+                    &[
+                        &tenant,
+                        &session.as_bytes().as_slice(),
+                        &epoch,
+                        &sequence,
+                        &rejected,
+                        &current,
+                    ],
+                ),
+            ),
+        )?
+        .map_err(|_| RepositoryError::Unavailable)?
+        .map_err(|_| RepositoryError::Unavailable)?;
+        if restored != 1 || !refused || repository.load_current(scope, context)? != *candidate {
             return Err(RepositoryError::InvalidCandidate);
         }
     }
@@ -4660,7 +4717,8 @@ fn observe_persisted_codec_metadata(
         physical.codec_limits,
     )?;
     println!(
-        "registered physical codec2 storage boundary: all four format metadata values match encoded codec2; legacy1 and mismatched3 checkpoint metadata refuse through actual load_current; exact full candidate reload after each restoration on same adapter; canonical schema1 retained"
+        "registered physical codec{} storage boundary: all four format metadata values match encoded records; legacy1 and mismatched{} checkpoint metadata refuse through actual load_current; exact full candidate reload after each restoration on same adapter; canonical schema{} retained",
+        current, mismatched, CHECKPOINT_SCHEMA
     );
     Ok(())
 }
