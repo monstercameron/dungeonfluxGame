@@ -807,6 +807,35 @@ async fn exercise() -> Result<(), Error> {
             Some(rpc::submit_action_response::Outcome::CommittedDecision(_))
         ))?;
         let opening = running.service.updates.borrow().clone();
+        let after_enter = counts(&inspector).await?;
+        let enter_preparations = counter.load(Ordering::SeqCst);
+        required(
+            dialogue
+                .confirm(authenticated(stale_confirm, &second))
+                .await
+                .err()
+                .is_some_and(|error| error.code() == tonic::Code::FailedPrecondition),
+        )?;
+        required(
+            counts(&inspector).await? == after_enter
+                && counter.load(Ordering::SeqCst) == enter_preparations,
+        )?;
+
+        let cancelled_pending = dialogue
+            .submit(authenticated(
+                raw(
+                    &opening,
+                    0x6a,
+                    rpc::DialogueContext::Unspecified,
+                    rpc::DialogueFinality::Final,
+                    journey::offer_id(&opening, rpc::GameplayActionKind::EscortCourier),
+                    "perhaps escort",
+                ),
+                &second,
+            ))
+            .await?
+            .into_inner();
+        required(!cancelled_pending.confirmation_token.is_empty())?;
         let selected_begin = dialogue
             .submit(authenticated(
                 raw(
@@ -905,28 +934,13 @@ async fn exercise() -> Result<(), Error> {
                 .await
                 .is_err(),
         )?;
-        let cancelled_pending = dialogue
-            .submit(authenticated(
-                raw(
-                    &pending_checkpoint,
-                    0x6a,
-                    rpc::DialogueContext::Unspecified,
-                    rpc::DialogueFinality::Final,
-                    journey::offer_id(&pending_checkpoint, rpc::GameplayActionKind::EscortCourier),
-                    "perhaps escort",
-                ),
-                &first,
-            ))
-            .await?
-            .into_inner();
-        required(!cancelled_pending.confirmation_token.is_empty())?;
         dialogue
             .cancel(authenticated(
                 rpc::CancelDialogueRequest {
                     input_id: input_id(0x6a),
                     confirmation_token: cancelled_pending.confirmation_token,
                 },
-                &first,
+                &second,
             ))
             .await?;
         required(
@@ -1026,17 +1040,6 @@ async fn exercise() -> Result<(), Error> {
         }
         let after_advance = counts(&inspector).await?;
         let advance_preparations = counter.load(Ordering::SeqCst);
-        required(
-            dialogue
-                .confirm(authenticated(stale_confirm, &second))
-                .await
-                .err()
-                .is_some_and(|error| error.code() == tonic::Code::FailedPrecondition),
-        )?;
-        required(
-            counts(&inspector).await? == after_advance
-                && counter.load(Ordering::SeqCst) == advance_preparations,
-        )?;
 
         let current = running.service.updates.borrow().clone();
         let revoked = dialogue
@@ -1046,8 +1049,8 @@ async fn exercise() -> Result<(), Error> {
                     0x35,
                     rpc::DialogueContext::Unspecified,
                     rpc::DialogueFinality::Final,
-                    journey::offer_id(&current, rpc::GameplayActionKind::EscortCourier),
-                    "perhaps ask",
+                    journey::offer_id(&current, rpc::GameplayActionKind::DefendCourier),
+                    "perhaps defend",
                 ),
                 &first,
             ))
@@ -1059,7 +1062,7 @@ async fn exercise() -> Result<(), Error> {
             action: Some(action(
                 &current,
                 0x44,
-                rpc::GameplayActionKind::EscortCourier,
+                rpc::GameplayActionKind::DefendCourier,
             )),
         };
         let changed = inspector
@@ -1198,7 +1201,7 @@ async fn uncertain_confirmation(
             .connect()
             .await?;
         let mut dialogue = rpc::dialogue_service_client::DialogueServiceClient::new(channel);
-        let offer = journey::offer_id(&baseline, rpc::GameplayActionKind::EscortCourier);
+        let offer = journey::offer_id(&baseline, rpc::GameplayActionKind::DefendCourier);
         let pending = dialogue
             .submit(authenticated(
                 raw(
@@ -1207,7 +1210,7 @@ async fn uncertain_confirmation(
                     rpc::DialogueContext::Unspecified,
                     rpc::DialogueFinality::Final,
                     offer,
-                    "perhaps escort",
+                    "perhaps defend",
                 ),
                 &credential,
             ))
@@ -1220,7 +1223,7 @@ async fn uncertain_confirmation(
             action: Some(action(
                 &baseline,
                 0x50,
-                rpc::GameplayActionKind::EscortCourier,
+                rpc::GameplayActionKind::DefendCourier,
             )),
         };
         let first = dialogue
