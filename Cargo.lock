@@ -243,6 +243,8 @@ dependencies = [
 name = "df-api"
 version = "0.1.0"
 dependencies = [
+ "df-auth",
+ "df-commerce",
  "df-model",
  "df-protocol",
  "df-types",
