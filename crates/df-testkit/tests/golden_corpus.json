@@ -1,0 +1,73 @@
+{
+  "task_id": "B-C-df-testkit-D02",
+  "attempt_id": "B-C-df-testkit-D02-a1",
+  "private_test_ledger": true,
+  "public_contract": false,
+  "original_acceptance": [
+    "expected mechanics require G07 evidence",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "decision": "Use existing df-content source-owner ImportAdmission refusal and exact immutable CatalogSnapshot identity for the bounded source-linked corpus example. A structurally admitted synthetic ledger grants no mechanics golden authority.",
+  "identity": {
+    "corpus": "synthetic-corpus-v1",
+    "source_qualification": "G07-unqualified",
+    "mechanics_handler": "none",
+    "version": 1,
+    "complete_fixture_bytes": "This exact embedded JSON document; producing source/build proof retains its actual SHA-256."
+  },
+  "g07": {
+    "status": "UNQUALIFIED",
+    "reviewed_sources": [],
+    "source_locator": null,
+    "source_checksum": null,
+    "books_and_errata": null,
+    "permitted_use": null,
+    "expected_mechanics": null,
+    "golden_mechanics_accepted": false
+  },
+  "current_owners": {
+    "source_and_rights_admission": "df-content::import::ImportAdmission",
+    "source_version_and_pin_refusal": "df-content::import::validate_import",
+    "immutable_exact_item_lookup": "df-content::catalog::CatalogSnapshot",
+    "future_mechanics": "G07 source owner and df-rules handler; neither created by this item"
+  },
+  "source_decision": {
+    "source": "planning/rules-effect-model.md: Source-linked testing architecture",
+    "golden_requirement": "Goldens are reviewed against exact source clauses before acceptance; LLM-generated expected outcomes remain unverified candidates.",
+    "current_limitation": "No G07-qualified expected mechanics or source corpus delivered here. Existing ImportAdmission::Admitted input is trusted owner-supplied fixture data; constructing it cannot establish rights, source review, decoding, checksums or legal mechanics."
+  },
+  "alternatives": [
+    {
+      "option": "Treat a passing synthetic replay or catalog as a reviewed mechanics golden",
+      "rejected": "Structural equality and fixture success cannot replace G07 source review."
+    },
+    {
+      "option": "Use latest catalog or ignore changed source/version identity",
+      "rejected": "Existing exact pinned lookup and source admission preserve the original identity."
+    },
+    {
+      "option": "Invent a shared RuleFixture schema or copy production mechanics into testkit",
+      "rejected": "Current canonical owners supply source admission and mechanics; this Design item adds only bounded test Rust/JSON."
+    }
+  ],
+  "bounded_cases": [
+    "missing_g07_source_admission_cannot_produce_a_corpus_candidate",
+    "absent_rights_and_unsupported_rules_remain_distinct_source_owner_refusals",
+    "stale_corpus_version_or_source_identity_is_refused_before_record_processing",
+    "admitted_synthetic_identity_retains_exact_bytes_without_qualifying_mechanics",
+    "immutable_corpus_lookup_requires_the_exact_published_version",
+    "a_complete_corpus_is_bounded_without_truncating_or_rewriting_fixture_bytes"
+  ],
+  "unresolved_facts": [
+    "G07 must identify exact required 2024 mechanics sources, books/catalogs, errata, immutable source locators/checksums and permitted use.",
+    "No production mechanics handler or real expected mechanics golden has been admitted by this fixture.",
+    "Independent current native output and integrated Main evidence are separate retained receipts; this immutable ledger does not assert future PASS."
+  ],
+  "non_claims": [
+    "Real source/book mechanics",
+    "G07 or rights completion",
+    "Public corpus schema or production integration",
+    "Browser, provider, PostgreSQL or audio execution"
+  ],
+  "execution_evidence": "Actual producing/native/review/integration receipts are retained separately and bound to this file; source text alone is not PASS."
+}
