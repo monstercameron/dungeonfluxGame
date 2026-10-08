@@ -60,3 +60,6 @@ mod owned_pg_suite_fixture;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod replay_input_hash_contract;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod protected_recovery_overlay_contract;
