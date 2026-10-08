@@ -7,3 +7,6 @@ license.workspace = true
 [dependencies]
 df-types = { path = "../df-types" }
 sha2 = "=0.10.9"
+df-model = { path = "../df-model" }
+df-interaction = { path = "../df-interaction" }
+df-provider-api = { path = "../df-provider-api" }

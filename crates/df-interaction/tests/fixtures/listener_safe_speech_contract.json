@@ -1,0 +1,15 @@
+{
+  "original_task": "B-C-df-interaction-D02",
+  "stage": "design",
+  "criteria": [
+    "private reasoning facts never enter public provider input",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "decision": "Source-admitted SpeechActPlan projects actual df-knowledge selections into owned ExpressionContext; the df-ai adapter privately constructs df-provider-api::CheckedRequest::new payload and public metadata from that projection.",
+  "alternative": "Generic caller-supplied provider payload and test-local serialization do not establish listener privacy.",
+  "limitations": [
+    "native source owner and egress remain unperformed",
+    "No paid provider, caption, audio, broad NLP, persistent speech plan or reveal authority is established."
+  ],
+  "execution_status": "authored; no runtime result asserted"
+}
