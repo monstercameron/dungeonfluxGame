@@ -1,0 +1,66 @@
+{
+  "task_id": "B-C-df-auth-D04",
+  "attempt_id": "B-C-df-auth-D04-a2",
+  "decision": "Operator permissions are separate from membership, host, customer, payer and tenant relations. Consent-based export is an independent exact recipient/audience/fact/media grant. Current authority and synchronous use share one owner fence.",
+  "prior_author_candidate": "12af3fbcd1e5de715417468dc9c2ccc98b81b034",
+  "prior_candidate_status": "Preserved unsubmitted source author policy and finite fixture; not independently approved or integrated.",
+  "source_owner": "df-auth::permissions",
+  "source_basis": [
+    "planning/service-operations.md: Recovery and operator access; Deletion and retention",
+    "planning/subsystem-interfaces.md: Identity and session ownership; Projection, RPC and transport",
+    "planning/c-df-auth-d01-decision.md: Decision and failure semantics",
+    "planning/c-df-auth-d02-decision.md: Credential/binding generation fencing",
+    "planning/c-df-auth-d03-decision.md: Single commerce entitlement authority",
+    "planning/rpc-api.md: Debug, telemetry and compatibility; Customer and payment boundary",
+    "Retained original a1 decision-final.md: Decision; Alternatives and unresolved implementation facts"
+  ],
+  "permission_families": [
+    {
+      "family": "Host controls",
+      "authority": "Existing current campaign membership/binding owner; no operator permission is inferred.",
+      "restrictions": "Approved controls/status only; no support, forced dice, private audience or export implication."
+    },
+    {
+      "family": "Support inspection",
+      "authority": "Independent operator authentication, MFA, verified reason/ticket, exact active scope/action/version and time.",
+      "restrictions": "Redacted state, receipt IDs and diagnostic aggregates; no host/private audience grant. Projection remains the owning API responsibility."
+    },
+    {
+      "family": "Telemetry query, pin and export",
+      "authority": "Three distinct operator permission variants; exact current source scope.",
+      "restrictions": "Existing telemetry owner exposes bounded read-only queries and retention operations; no agent SQL mutation/deletion. Telemetry export grants no game/media export."
+    },
+    {
+      "family": "Debug mutation, refund, deletion, restore and rights unlock",
+      "authority": "Five distinct explicit operator permission variants, never support inspection.",
+      "restrictions": "Debug additionally requires deployment enablement. Typed reviewed commands, strict preconditions and durable session/commerce commit remain the respective owners; no arbitrary event/code/wallet injection."
+    },
+    {
+      "family": "Private capture and break glass",
+      "authority": "Separate explicit variants, approved exceptional audit and private rights, independent of support/host/capture permission.",
+      "restrictions": "Break glass grant duration at most 900 seconds and current within its issue/expiry interval. No rights bypass or arbitrary game/wallet mutation."
+    },
+    {
+      "family": "Campaign fact/media export",
+      "authority": "Current enabled explicit exact principal, recipient, audience, tenant/campaign/session, export identity and selected fact/media item. Consent, capture/contributor rights, source rights/attribution/license and exact source/access/rights versions must all hold.",
+      "restrictions": "Credential/binding/grant/consent/rights rechecked inside serialized owner callback before every synchronous disclosure and after asynchronous preparation. Expiry/revocation/absence/mismatch/unavailable authority emits no new bytes. Already delivered bytes cannot be recalled. Sharing/community/marketplace endpoints are not enabled by this policy."
+    }
+  ],
+  "alternatives_rejected": [
+    "Derive support from host, payer or tenant ownership: collapses independent authorities.",
+    "One broad operator permission: read-only support cannot authorize private capture or mutations.",
+    "Treat private viewing/capture/cache/hash as export permission: omits recipient, selection, rights and current versions.",
+    "Check once before asynchronous work: permits disclosure after revocation.",
+    "Return a checked cached capability then unlock before use: leaves a check/use race."
+  ],
+  "bounded_runtime_verification": "Native integration fixtures exercise actual synchronous handler/byte receivers, all eleven positive operator permissions, every cross-action refusal, host/payer/customer role negatives, trusted MFA/ticket/current-access refusals, debug enablement, private audit/rights, the exact break-glass boundary, positive facts/media, complete export scope/rights/version refusal families, and revocation after preparation/between chunks.",
+  "safe_observation_contract": "Pure typed result facts only; the module starts no exporter, logs no principal/credentials/private payload and uses no trace identity as permission. Caller uses df-observe to record classified safe operation/grant-version outcomes.",
+  "unresolved_external_qualification": [
+    "Real credential/operator issuers, MFA/reason verification and durable audit authority adapters.",
+    "Reviewed legal source/contributor/attribution/license rights evidence, consent issuance and actual export selection adapters.",
+    "PostgreSQL/RLS transaction implementations of the current-authority serialization port and production revocation propagation bounds.",
+    "Generated RPC/admin/customer listener mounting, private audience projection and real asynchronous bounded export byte transport.",
+    "Restore replay of durable deletion/revocation tombstones before serving. This pure policy neither deletes nor restores data."
+  ],
+  "qualification": "Rust policy/source boundary and deterministic native/WASM checks; no production credential, rights, UI, provider, database or whole-game acceptance is claimed. Independent evaluation and integrated source acceptance remain required."
+}
