@@ -1,0 +1,72 @@
+{
+  "task_id": "B-G02-D03",
+  "stage": "design",
+  "original_outcome": "receive allocation observed",
+  "decision": "Observe original Rust callback Vec capacity across Bytes aliases separately from logical queue bytes and conservative reservation. HTTP/2 DATA consumes passive observed credit; opposite-direction connection WINDOW_UPDATE grants it. Snapshot reads do not fabricate credit release. Use existing pinned limits; full platform receive-memory qualification remains required.",
+  "source_decisions": [
+    {
+      "path": "planning/rpc-transport.md",
+      "sections": [
+        "Latency and bounded resources",
+        "Browser resource proof and feasibility result"
+      ],
+      "basis": "Byte/item bounds, consumption-based flow credit, conservative connection envelope; WebSocket bufferedAmount measures outbound backlog only. Browser engine receive allocation before callback must be physically qualified."
+    },
+    {
+      "path": "crates/df-rpc-bridge/src/resources.rs",
+      "symbols": [
+        "ConnectionMetrics::browser_callback_from_vec",
+        "BrowserCallbackBacking::drop",
+        "ConnectionMetrics::observe",
+        "ConnectionSnapshot::envelope_within_limit"
+      ],
+      "basis": "Vec::capacity is retained through Bytes aliases; final backing drop frees original Vec before capacity release. Passive credit facts and conservative reservation remain separate observables."
+    },
+    {
+      "path": "crates/df-rpc-bridge/src/browser.rs",
+      "symbol": "WebSocket MessageEvent callback",
+      "basis": "Actual Uint8Array.to_vec calls the same canonical Rust allocation owner after the engine has allocated callback input."
+    }
+  ],
+  "existing_limits": {
+    "frame_bytes": 16384,
+    "message_bytes": 262144,
+    "receive_bytes": 1048576,
+    "rpc_message_bytes": 65536,
+    "concurrent_streams": 8,
+    "connection_reservation_ceiling_bytes": 8388608
+  },
+  "bounded_example": {
+    "callback_length_bytes": 16384,
+    "requested_vec_capacity_bytes": 262144,
+    "split_prefix_length_bytes": 3,
+    "expected": "Actual Vec capacity is measured dynamically and retained until final alias drop even when logical queue is empty/closed; no zero capacity is inferred from partial reads or empty queue."
+  },
+  "alternatives": [
+    {
+      "choice": "Treat queue length as actual retained allocation",
+      "disposition": "Rejected: split/clone aliases retain original backing capacity."
+    },
+    {
+      "choice": "Use bufferedAmount or conservative reservation as receive-memory proof",
+      "disposition": "Rejected: send backlog/reservation are distinct from actual Rust Vec capacity and engine memory."
+    },
+    {
+      "choice": "Release receive credit from snapshot/queue counters alone",
+      "disposition": "Rejected: passive wire observations do not authorize h2 release; actual h2 owner remains authoritative."
+    }
+  ],
+  "unresolved": [
+    "Browser engine pre-callback allocation/platform memory qualification UNPERFORMED",
+    "Rust allocator overhead, Bytes metadata and h2 buffers excluded from observed original Vec capacity",
+    "Native WebSocket allocator/gateway traffic and four-mode browser/native qualification UNPERFORMED",
+    "Independent review and Main integration UNPERFORMED by this source decision"
+  ],
+  "executable_cases": [
+    "receive_allocation_retains_original_vec_until_last_alias",
+    "receive_allocation_failure_releases_only_dropped_backing",
+    "receive_allocation_credit_changes_only_with_data_and_window_update",
+    "receive_allocation_peer_exceeding_credit_is_visibly_refused",
+    "receive_allocation_reservations_are_distinct_from_observed_vec_capacity"
+  ]
+}
