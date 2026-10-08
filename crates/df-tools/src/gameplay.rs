@@ -4,6 +4,9 @@ mod actor;
 mod courier_ai;
 mod courier_npc_qualification;
 mod courier_process_qualification;
+mod dialogue;
+#[cfg(test)]
+mod dialogue_tests;
 mod inn_qualification;
 mod journey;
 mod model;
@@ -635,6 +638,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let (sender, inbox) = bounded_inbox::<actor::Call>();
     let actor = actor::Actor {
         owner,
+        dialogue: dialogue::DialogueState::default(),
         bootstrap_credential: player_credential,
         issuer,
         codec,
@@ -756,6 +760,11 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .max_frame_size(FRAME_BYTES as u32)
         .http2_max_header_list_size(FRAME_BYTES as u32)
         .max_concurrent_streams(CONCURRENT_STREAMS)
+        .add_service(
+            rpc::dialogue_service_server::DialogueServiceServer::new(service.clone())
+                .max_decoding_message_size(8192)
+                .max_encoding_message_size(8192),
+        )
         .add_service(
             rpc::action_service_server::ActionServiceServer::new(service.clone())
                 .max_decoding_message_size(8192)
