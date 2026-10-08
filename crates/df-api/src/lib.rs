@@ -1,6 +1,8 @@
 //! Common generated wire fields and closed structural game-command admission.
 //! No production action request or service is declared in the current protocol schema.
 //! These functions do not authenticate, bind a client, decide rules, or commit a receipt.
+#[cfg(test)]
+mod customer;
 mod request;
 mod wire_decode;
 

@@ -1,0 +1,11 @@
+{
+  "contract_version": 2,
+  "decision": "Only observed gRPC terminal trailers authorize a domain outcome; preterminal transport loss remains Unknown.",
+  "alternatives": ["Do not infer drain from WebSocket Close", "Do not replay an uncertain mutating RPC", "Do not classify by gRPC code text alone"],
+  "unsupported": ["Production operation-ID query/resync", "Authentication and permitted-view recovery", "Physical-device receive-memory qualification"],
+  "native_cases": [
+    {"case":"idle","pending_before_close":true,"woken_after_close":true,"buffered_before_close":false,"prefix_bytes":0,"terminal":"Eof","pump":"Ok","closed":true,"rejected":false,"pipe_owners":0,"pipe_to_grpc_current":0,"pipe_to_websocket_current":0,"websocket_receive_current":0},
+    {"case":"partial_preface","pending_before_close":true,"woken_after_close":true,"buffered_before_close":false,"prefix_bytes":8,"terminal":"Eof","pump":"UnexpectedEof","closed":true,"rejected":true,"pipe_owners":0,"pipe_to_grpc_current":0,"pipe_to_websocket_current":0,"websocket_receive_current":0},
+    {"case":"pending_writer","pending_before_close":true,"woken_after_close":true,"buffered_before_close":true,"prefix_bytes":0,"terminal":"BrokenPipe","pump":"Ok","closed":true,"rejected":false,"pipe_owners":0,"pipe_to_grpc_current":0,"pipe_to_websocket_current":0,"websocket_receive_current":0}
+  ]
+}
