@@ -1,0 +1,76 @@
+{
+  "acceptance": [
+    "changed turn basis invalidates old candidate",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "actual_composition": [
+    "enumerate_registered_responses",
+    "stage_preferred_response",
+    "stage_tactical_response",
+    "PreconditionedCommandHandler",
+    "Checkpoint::new"
+  ],
+  "alternatives": [
+    {
+      "choice": "Accept preview checkpoint or equal detached offers",
+      "disposition": "Rejected: previews confer no admission authority and detached objects do not prove exact current canonical membership."
+    },
+    {
+      "choice": "Introduce cancellation RPC, TurnId, replacement schema or inferred mechanics",
+      "disposition": "Rejected: original task is defined by existing canonical Basis/current source/native fence semantics."
+    }
+  ],
+  "cases": [
+    "unchanged_choice_and_reaction_are_staged_only_by_the_current_registered_engine",
+    "changed_turn_basis_invalidates_old_candidate_before_the_final_handler",
+    "equal_detached_checkpoint_is_not_a_current_offer_receipt",
+    "cancellation_and_generation_changes_discard_only_unadmitted_work",
+    "changed_source_version_pins_invalidate_the_previously_selected_input",
+    "current_native_membership_operation_and_offered_option_remain_required",
+    "source_handler_refusal_after_preview_never_applies_the_preview_checkpoint"
+  ],
+  "decision": {
+    "authority": "Existing exact canonical Basis + full CheckpointPins + current registered offered-response identity and independently admitted member/operation/ResumeFence",
+    "cancellation": "Native cancel_before_admission rejects the staged proposal. Cancellation does not erase accepted decision/fact history; no cancellation command or durable rollback is introduced.",
+    "owner": "Combat prepares immutable suggestions; Engine stages registered canonical response; Session remains sole durable acceptance owner.",
+    "revalidation": "Registered enumeration and preview selection do not authorize applying a stale result. Engine stage_tactical_response must revalidate against the exact current checkpoint before real registered handler execution.",
+    "turn_basis": "Use existing Basis.revision next_sequence with current pending basis rebased by the canonical model constructor; no separate turn counter or timing/mechanics invented."
+  },
+  "fixture_scope": "Synthetic source-registered continuation; actual production enumeration/ranking/engine handlers used. No attack, dice outcome, action cost, rewards or gameplay policy invented. Retained accepted decision is canonical fixture history, not a new physical commit.",
+  "governing": [
+    {
+      "path": "planning/runtime-directors.md",
+      "sections": [
+        "Authority and composition",
+        "Pure public boundaries",
+        "Time, recovery and bounded work"
+      ]
+    },
+    {
+      "path": "planning/subsystem-interfaces.md",
+      "sections": [
+        "Common contract rules",
+        "Pure domain and content",
+        "Separate runtime subsystem boundaries",
+        "Identity and session ownership"
+      ]
+    }
+  ],
+  "outcome": "changed turn basis invalidates old candidate",
+  "source_base": "f228d16192ee8e9fdf003dee9ca873199eddebbd",
+  "stage": "design",
+  "task_id": "B-C-df-combat-D04",
+  "unperformed": [
+    "Rust checks pending author qualification at source write; actual results retained separately in immutable source/build handoff.",
+    "Browser/provider/PG/phones not performed or claimed by this pure Design witness."
+  ],
+  "unresolved": [
+    "General persistent CombatPolicyState/TacticalProposal/ReinforcementTrigger types and autonomous NPC control belong to separately governed tasks.",
+    "Rules retain initiative, actions/reactions, resources and licensed standard-2024 source authority.",
+    "Session operation lookup, durable Postgres commit, retry/publication remain existing separate boundaries and are not performed by this test target."
+  ],
+  "verification": [
+    "Freeze the cited source decision and a bounded contract example; compare changed turn basis invalidates old candidate. Retain decision, alternatives and unresolved facts.",
+    "Exact executable commands: TBD at G01 and scoped prerequisite resolution; this planned procedure is not a claim that Rust/browser/provider checks ran."
+  ]
+}
