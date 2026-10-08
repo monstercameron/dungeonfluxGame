@@ -1,0 +1,56 @@
+{
+  "task_id": "B-C-df-tools-D04",
+  "objective": "Define retained evidence versus disposable artifacts; expected: active output is never guessed stale.",
+  "governing_decision": {
+    "source": "ADR/0002-resource-scheduling-and-cleanup.md",
+    "section": "Define stale output by ownership and use"
+  },
+  "decision": "Every eligibility condition is required. Eligible output still requires immediate ownership/use recheck under the coordinator cleanup claim; the example never deletes files.",
+  "criteria": [
+    "Approved build/temporary output root, regular known boundary",
+    "Terminal or confirmed abandoned owner; expired lease alone insufficient",
+    "No worker/evaluator/integrator/preview active or unknown use claim",
+    "Superseded or reproducible output",
+    "Not retained verification evidence or latest verified build",
+    "At least 30 minutes since confirmed terminal/abandoned transition"
+  ],
+  "existing_behavior": {
+    "source": "crates/df-tools/src/preview.rs",
+    "invariant": "Held file is the capability; Drop retains ambiguous ownership; changed identity/bytes refuse release."
+  },
+  "protected": [
+    "source",
+    "Git",
+    "workflow/telemetry/gameplay database and WAL/SHM",
+    "runtime data",
+    "user deliverables",
+    "retained source/build/review evidence",
+    "latest verified build",
+    "shared caches without separate retention policy",
+    "outside roots",
+    "symlinks",
+    "unknown or ambiguous ownership/use"
+  ],
+  "alternatives": [
+    {
+      "approach": "Age-only cleanup",
+      "outcome": "Rejected: active or retained evidence can be old."
+    },
+    {
+      "approach": "Lease-expiry cleanup",
+      "outcome": "Rejected: expiry does not establish process/use termination."
+    },
+    {
+      "approach": "Every condition plus coordinator recheck",
+      "outcome": "Selected from existing ADR0002."
+    }
+  ],
+  "unresolved": [
+    "No filesystem discovery or deleting cleanup executor is delivered by this design example.",
+    "No evidence that existing retained artifacts are currently stale is inferred.",
+    "Trusted claim collection, race-safe immediate coordinator cleanup and shared-cache retention remain their owning implementation tasks.",
+    "The pure example takes explicitly supplied facts; it does not authenticate or invent ownership."
+  ],
+  "production_cleanup_implemented": false,
+  "whole_Original_accepted": false
+}
