@@ -407,6 +407,150 @@ fn preserves_actual_draw_values_and_rejects_invalid_dice() {
         Err(CheckpointError::DuplicateIdentity)
     );
 }
+fn accepted_draw_decision() -> GameState {
+    let mut supplied = state();
+    let operation = OperationId::from_bytes(&[6; 16]).unwrap();
+    let draw = ActualDraw {
+        operation,
+        ordinal: 0,
+        resolution: ResolutionId::from_bytes(&[7; 16]).unwrap(),
+        window: WindowId::from_bytes(&[8; 16]).unwrap(),
+        sides: 20,
+        value: 13,
+        source: rule(),
+    };
+    let mut accepted = fact(9, 0);
+    accepted.value = FactValue::DrawAccepted {
+        operation,
+        ordinal: draw.ordinal,
+    };
+    let intent = DurableIntent {
+        id: EffectId::from_bytes(&[11; 16]).unwrap(),
+        basis: basis(),
+        operation,
+        slot: 0,
+        kind: EffectKind::PublishPresentation,
+        job: None,
+        timer: None,
+        generation: 1,
+        status: DurableStatus::Pending,
+        definition: content(),
+    };
+    supplied.draws.push(draw);
+    supplied.facts.push(accepted.clone());
+    supplied.intents.push(intent.clone());
+    supplied.decisions.push(AcceptedDecision {
+        operation,
+        revision: basis().revision,
+        facts: vec![accepted.id],
+        draws: vec![0],
+        effects: vec![intent.id],
+        source_policy: label("fixture-policy-1"),
+        semantic_output: Some("accepted exact outcome".to_owned()),
+    });
+    supplied
+}
+#[test]
+fn reconstructs_exact_accepted_decision_with_source_policy_and_pins() {
+    let supplied = accepted_draw_decision();
+    let retained = supplied.clone();
+    let original = checkpoint(supplied).unwrap();
+    let reconstructed = checkpoint(retained.clone()).unwrap();
+    assert_eq!(reconstructed, original);
+    assert_eq!(reconstructed.state(), &retained);
+    assert_eq!(reconstructed.pins(), &pins());
+    assert_eq!(reconstructed.state().draws[0].value, 13);
+    assert_eq!(reconstructed.state().draws[0].source, rule());
+    assert_eq!(
+        reconstructed.state().decisions[0].source_policy,
+        label("fixture-policy-1")
+    );
+    assert_eq!(
+        reconstructed.state().decisions[0]
+            .semantic_output
+            .as_deref(),
+        Some("accepted exact outcome")
+    );
+    let rules = vec![rule()];
+    let content_entries = vec![content()];
+    let resource_constraints = resource_constraints();
+    assert_eq!(
+        reconstructed.validate_admitted(
+            basis(),
+            &pins(),
+            ReferenceInventory {
+                rules: &rules,
+                content: &content_entries,
+                resources: &resource_constraints,
+                assets: &[],
+            },
+            limits(),
+        ),
+        Ok(&reconstructed)
+    );
+    let mut historical = retained;
+    historical.facts[0].revision = revision(2, 7);
+    historical.decisions[0].revision = revision(2, 7);
+    historical.intents[0].basis.revision = revision(2, 7);
+    assert_eq!(checkpoint(historical.clone()).unwrap().state(), &historical);
+}
+#[test]
+fn decision_provenance_refuses_foreign_draw_fact_and_effect_operation() {
+    let original = checkpoint(accepted_draw_decision()).unwrap();
+    let mut foreign_draw = accepted_draw_decision();
+    let other_operation = OperationId::from_bytes(&[16; 16]).unwrap();
+    foreign_draw.draws[0].operation = other_operation;
+    foreign_draw.facts[0].value = FactValue::DrawAccepted {
+        operation: other_operation,
+        ordinal: 0,
+    };
+    foreign_draw.decisions[0].draws.clear();
+    assert_eq!(
+        checkpoint(foreign_draw),
+        Err(CheckpointError::InvalidReference)
+    );
+
+    let mut foreign_effect = accepted_draw_decision();
+    foreign_effect.intents[0].operation = other_operation;
+    assert_eq!(
+        checkpoint(foreign_effect),
+        Err(CheckpointError::InvalidReference)
+    );
+    assert_eq!(
+        original.state().decisions,
+        accepted_draw_decision().decisions
+    );
+}
+#[test]
+fn decision_provenance_refuses_unadmitted_draw_source_and_capacity() {
+    let original = checkpoint(accepted_draw_decision()).unwrap();
+    let mut unadmitted = accepted_draw_decision();
+    unadmitted.draws[0].source.clause = label("unadmitted-clause");
+    assert_eq!(
+        checkpoint(unadmitted),
+        Err(CheckpointError::InvalidReference)
+    );
+    let mut narrower = limits();
+    narrower.maximum_records = 1;
+    let rules = vec![rule()];
+    let content_entries = vec![content()];
+    let resource_constraints = resource_constraints();
+    assert_eq!(
+        original.validate_admitted(
+            basis(),
+            &pins(),
+            ReferenceInventory {
+                rules: &rules,
+                content: &content_entries,
+                resources: &resource_constraints,
+                assets: &[],
+            },
+            narrower,
+        ),
+        Err(CheckpointError::Capacity)
+    );
+    assert_eq!(original.state(), &accepted_draw_decision());
+}
 #[test]
 fn rejects_decision_fact_from_another_operation() {
     let mut supplied = state();
