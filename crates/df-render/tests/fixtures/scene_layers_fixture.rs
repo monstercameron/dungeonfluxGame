@@ -462,9 +462,11 @@ mod browser {
                             fixture
                                 .campaign
                                 .complete_scene_asset(&token, b"abc".to_vec()),
-                            Err(CampaignError::SceneImage(SceneImageError::InvalidPng))
+                            Err(CampaignError::SceneImage(SceneImageError::Decode(
+                                df_render::ImageDecodeError::UnsupportedMime,
+                            )))
                         ),
-                        "invalid bytes became image",
+                        "unknown image format was not refused",
                     )?;
                     require(
                         fixture.svg.is_connected(),
