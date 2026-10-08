@@ -1,0 +1,148 @@
+{
+  "actual_path": [
+    "df-model::Checkpoint::new",
+    "df-tempo::impulse::advance_impulse",
+    "df-tempo::elapsed::advance_elapsed"
+  ],
+  "alternatives": [
+    {
+      "disposition": "Rejected by source privacy policy; equal qualified inputs produce equal proposals.",
+      "name": "Infer public intensity from hidden threats or future schedule"
+    },
+    {
+      "disposition": "Rejected at the actual boundary with HiddenImpulse, including pause/replay.",
+      "name": "Use private named fact as a shared shock"
+    },
+    {
+      "disposition": "Rejected with UnknownFact until a current admitted canonical event exists.",
+      "name": "Treat future scheduled event as committed fact"
+    },
+    {
+      "disposition": "Rejected: current binding establishes freshness only; authorized producer remains a prerequisite.",
+      "name": "Trust basis or type name to authorize target"
+    },
+    {
+      "disposition": "Rejected: original design permits an existing-boundary example; G03/profile and consumer-owner decisions remain gates.",
+      "name": "Invent full TempoFrame/cue/prefetch schema here"
+    }
+  ],
+  "case_selectors": [
+    "paired_hidden_future_variants_leave_complete_scalar_proposal_equal",
+    "public_committed_cue_changes_output_only_after_admitted_input",
+    "host_and_member_facts_never_become_shared_named_impulses",
+    "scheduled_future_event_without_committed_fact_is_not_an_impulse",
+    "exact_binding_and_anchor_rejections_preserve_canonical_state",
+    "pause_replay_keep_hidden_variants_equal_and_validate_inputs",
+    "target_sensitivity_retains_owner_authorization_gate"
+  ],
+  "decision": {
+    "authority": "No canonical game state is mutated; cosmetic candidate tempo is detached. No profile, cue, demand, serialization, provider or publication API is created.",
+    "authorization": "Basis equality proves freshness, not authorization. Target sensitivity proves the existing boundary can accept different caller targets; these tests do not authenticate their information sources.",
+    "noninterference": "Given equal admitted scalar state, source/policy/current bindings and owner-qualified input, private committed facts and hidden future schedules/threat stages do not alter the entire current scalar proposal or bounded curve.",
+    "private_routing": "This existing boundary supports Shared impulses only. A private KnowledgeGrant does not broaden the shared event scope; separately routed private profiles remain unresolved.",
+    "public_input": "Only a current committed Shared named ContentEvent may supply an impulse; an absent scheduled future fact is refused. Target intensity must be independently qualified from audience-permitted facts/recommendations by the trusted native owner."
+  },
+  "fixture_values": {
+    "base_intensity": 31,
+    "future_due_variants": [
+      900,
+      90
+    ],
+    "maximum_intensity": 50,
+    "presentation_anchor": 40,
+    "private_threat_variants": [
+      1,
+      7
+    ],
+    "scope": "Fixture coefficients, IDs and times are explicit illustrative values; no production calibration, source rights, countdown or device safety claim.",
+    "target": 31,
+    "ticks_per_second": 10
+  },
+  "governing_sources": [
+    {
+      "path": "planning/subsystem-architecture.md",
+      "sections": [
+        "Design",
+        "Shared and transport crates",
+        "Server crates",
+        "Browser crates",
+        "Tooling crates",
+        "Integration and refinement",
+        "Commercial service composition"
+      ],
+      "sha256": "cf549f4f046f76713c881228d82c6a7111d8ccc84db208cb9d9db67bb192d9f6"
+    },
+    {
+      "path": "planning/subsystem-interfaces.md",
+      "sections": [
+        "Common contract rules",
+        "Pure domain and content",
+        "Separate runtime subsystem boundaries",
+        "Identity and session ownership",
+        "PostgreSQL persistence and durable media",
+        "AI/provider/media ports",
+        "Projection, RPC and transport",
+        "Feature-specific candidates within existing boundaries",
+        "Browser interfaces",
+        "Observability and development tooling",
+        "Commerce and lifecycle ports"
+      ],
+      "sha256": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a"
+    },
+    {
+      "path": "planning/runtime-directors.md",
+      "sections": [
+        "Authority and composition",
+        "Pure public boundaries",
+        "Time, recovery and bounded work",
+        "Added feature projections",
+        "Acceptance and unresolved gates"
+      ],
+      "sha256": "ed8944f316d912498107ee550431e560795ba8114cb63a181b6aadeca70b48ca"
+    },
+    {
+      "path": "development/backlog-catalog.json",
+      "sections": [
+        "C-df-tempo",
+        "B-C-df-tempo-D04"
+      ],
+      "sha256": "039b0a03b4085b43ad32c4063e2cb8fc789fc55fff7552aec6e951ec3b4704c3"
+    },
+    {
+      "path": "planning/tempo-engine.md",
+      "sections": [
+        "State and server output",
+        "Audience, preferences and observations",
+        "Acceptance and optimization"
+      ]
+    }
+  ],
+  "original_acceptance": [
+    "hidden future events never shape visible hints",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "original_canonical_brief_sha256": "0fd4900a27e101d7f8b291f7ee2a51d50973e76e07997044458a213a35a5a140",
+  "original_snapshot": {
+    "bytes": 9359,
+    "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/wave51-session-submission-20261006/ROOT-Tempo-D04-preserved-original-01.json",
+    "sha256": "064a0bece03a2ebb2760b8432f76a70d5675ef0813d023374490356dcca1ce19"
+  },
+  "original_stored_raw_brief_sha256": "3d38d6e823811e9d168a684baf051a6aa02ee653a3f79952a96d4cc4d7521cea",
+  "stage": "design",
+  "task_id": "B-C-df-tempo-D04",
+  "title": "Define audience-safe tempo profile",
+  "unperformed": [
+    "This source decision ledger is not a PASS receipt. Native/WASM gates, exact producing source/build/tool/binary identity, independent review and integration require current retained handoff evidence.",
+    "Server permitted target/recommendation producer and complete audience profiles/cues/asset-demand projection",
+    "Actual Watch serialization/private-phone/shared-display routing and client rendering",
+    "Actual audible playback, device/accessibility limits, G03/G12 production contracts and calibration"
+  ],
+  "unresolved": [
+    "No audience-qualifying target producer; arbitrary caller target can influence intensity",
+    "Existing scalar proposal emits no TempoFrame, one-shot cues or asset demands; equality tests do not prove absent production paths",
+    "No private member profile routing, Watch serialization, browser rendering/audio playback or device calibration executed",
+    "No production privacy/completion claim; original Design stage, alternatives and unresolved facts retained",
+    "Independent review/integration unperformed until actual lifecycle evidence"
+  ],
+  "verification": "Freeze the cited source decision and a bounded contract example; compare hidden future events never shape visible hints. Retain decision, alternatives and unresolved facts."
+}
