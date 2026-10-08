@@ -1,0 +1,141 @@
+{
+  "task_id": "B-C-df-rpc-bridge-D03",
+  "attempt_id": "B-C-df-rpc-bridge-D03-a2",
+  "lease_generation": 2,
+  "objective": "Demonstrate that the current browser RPC Service future is owned by the single-threaded local executor and does not acquire a Send compatibility requirement.",
+  "input_revision": "b1ebc9e71e1897fd7fda14fdbfbecb527e3345c9",
+  "permitted_paths": [
+    "crates/df-rpc-bridge/tests/local_executor_contract.rs",
+    "crates/df-rpc-bridge/tests/local_executor_contract.json"
+  ],
+  "source_boundary": {
+    "browser_service_future": {
+      "path": "crates/df-rpc-bridge/src/browser.rs",
+      "sha256_at_read": "9dd577b486cba0b74639d25d322c0a17ac1d391e503c48beccb2341402c292b8",
+      "fact": "BrowserChannel implements tower_service::Service<http::Request<tonic::body::Body>> with type Future = Pin<Box<dyn Future<Output = Result<Response<ReceiveBody>, Status>>>>; the trait object has no Send bound and call returns boxed_local()."
+    },
+    "browser_connection": {
+      "path": "crates/df-rpc-bridge/src/browser.rs",
+      "fact": "BrowserConnection::connect owns the h2 driver with wasm_bindgen_futures::spawn_local; BrowserConnection::close aborts the owned driver and Drop aborts through AbortOnDrop."
+    },
+    "upload_owner": {
+      "path": "crates/df-rpc-bridge/src/upload.rs",
+      "sha256_at_read": "a880045709d4a0b0f4fd0150b1a57d2d69379b10f81d53dad96aa2b81284180e",
+      "fact": "The browser upload driver is spawned locally and its response owner aborts it on body drop."
+    },
+    "public_exports": {
+      "path": "crates/df-rpc-bridge/src/lib.rs",
+      "sha256_at_read": "7875f20e98f0a07a4219918a7abc0ac42d905a233451eabe349468b10614fffb",
+      "fact": "BrowserChannel and BrowserConnection are the crate's public wasm32 exports."
+    }
+  },
+  "positive_probe": {
+    "path": "crates/df-rpc-bridge/tests/local_executor_contract.rs",
+    "form": "WASM-only integration target; spawn_local_browser_service owns BrowserConnection::connect(url), invokes the concrete BrowserChannel Service::call request, awaits its exact associated Service Future while the connection remains owned, then closes the connection.",
+    "argv": "RUSTFLAGS='--check-cfg=cfg(rpc_local_executor_require_send)' cargo check --offline --locked -p df-rpc-bridge --test local_executor_contract --target wasm32-unknown-unknown",
+    "expected": "Successful compilation of the actual public BrowserConnection/BrowserChannel path with the local future passed through wasm_bindgen_futures::spawn_local. Root must separately bind the existing generated-client source and current browser build/runtime.",
+    "execution_status": "PASS. Fresh receipt: development/evidence/fanout-20261001/rpc-local-executor-d03-a2/a2-positive-wasm-channel-probe-20261008-01.json. The current df-tools generated TransportFixtureClient<BrowserChannel> also compiled for wasm32-unknown-unknown; see a2-generated-client-wasm-compile-20261008-01.json. Browser runtime remains separate and unperformed."
+  },
+  "negative_probe": {
+    "path": "crates/df-rpc-bridge/tests/local_executor_contract.rs",
+    "cfg": "rpc_local_executor_require_send",
+    "argv": "RUSTFLAGS='--cfg rpc_local_executor_require_send --check-cfg=cfg(rpc_local_executor_require_send)' cargo check --offline --locked -p df-rpc-bridge --test local_executor_contract --target wasm32-unknown-unknown",
+    "expected": {
+      "compiler_error": "E0277",
+      "failure_site": "require_send::<BrowserServiceFuture>()",
+      "diagnostic_requirement": "The missing Send implementation must be attributed to the exact <BrowserChannel as Service<http::Request<tonic::body::Body>>>::Future, whose boxed dyn Future is not Send.",
+      "unacceptable": [
+        "wrong target or cfg not active",
+        "missing symbol or target-only dependency",
+        "unused/unknown-cfg warning",
+        "any error other than the exact missing-Send E0277"
+      ]
+    },
+    "execution_status": "EXPECTED_NON_SEND_COMPILE_REFUSAL_OBSERVED. Fresh C6 receipt: development/evidence/fanout-20261001/rpc-local-executor-d03-a2/a2-negative-wasm-send-check-20261008-01.json; exact E0277 on require_send::<BrowserServiceFuture>() is classified in a2-negative-wasm-classification-20261008-01.json."
+  },
+  "generated_client_binding": {
+    "owner": "Root, using the current existing df-tools browser fixture read-only",
+    "source": "crates/df-tools/src/browser.rs",
+    "sha256_at_read": "e319df074e0fa13b1fbcdc95195cd6bb6c2fe2a992bb290f48227fc5da173c8e",
+    "callsites": [
+      "line 17: FixtureClient = TransportFixtureClient<BrowserChannel>",
+      "line 84: generated_browser_bindings::verify(&mut client)",
+      "lines 91, 104, 115, 138: generated unary, server-stream, client-stream, and bidi client calls",
+      "line 221: generated unary future boxed_local() for the local browser deadline path"
+    ],
+    "constraint": "No df-protocol/df-tools dependency, generated client clone, or private source import is added to df-rpc-bridge. Root binds and compiles/operates this existing generated client.",
+    "execution_status": "PASS, compile only: fresh wasm32 df-tools library check compiled the existing generated TransportFixtureClient<BrowserChannel> callsites; receipt a2-generated-client-wasm-compile-20261008-01.json. Actual browser runtime is UNPERFORMED."
+  },
+  "required_integrated_browser_gate": {
+    "owner": "Root",
+    "requirement": "Run current source/build-bound generated Rust/WASM browser client against the native server and exercise unary, server-streaming, client-streaming, and bidirectional streaming; status and trailers; deadlines; half-close and cancellation; simultaneous streams; and terminal owner cleanup.",
+    "qualification": "A positive compile probe, native-only test, or static search does not pass this gate.",
+    "execution_status": "UNPERFORMED; awaits Root's separate finite fixture grant."
+  },
+  "preserved_semantics_and_gaps": {
+    "stale_result_safety": "Existing connection generation, cancellation, closed-owner, stale-result and terminal-cleanup requirements remain part of the integrated runtime gate; this compile-only probe does not claim they pass.",
+    "resource_boundary": "Current source ownership facts only; no memory/device/acoustic observation is made.",
+    "unsupported_observations": [
+      "physical device behavior",
+      "audio playback/audibility",
+      "complete browser memory bound"
+    ]
+  },
+  "current_source_pins": [
+    {
+      "path": "crates/df-rpc-bridge/src/browser.rs",
+      "sha256": "9dd577b486cba0b74639d25d322c0a17ac1d391e503c48beccb2341402c292b8"
+    },
+    {
+      "path": "crates/df-rpc-bridge/src/upload.rs",
+      "sha256": "a880045709d4a0b0f4fd0150b1a57d2d69379b10f81d53dad96aa2b81284180e"
+    },
+    {
+      "path": "crates/df-rpc-bridge/src/lib.rs",
+      "sha256": "7875f20e98f0a07a4219918a7abc0ac42d905a233451eabe349468b10614fffb"
+    },
+    {
+      "path": "crates/df-tools/src/browser.rs",
+      "sha256": "e319df074e0fa13b1fbcdc95195cd6bb6c2fe2a992bb290f48227fc5da173c8e"
+    }
+  ],
+  "unperformed_checks": [
+    "Actual current controlled browser/runtime execution for all four modes, status/trailers, deadlines, half-close/cancel, simultaneous streams and terminal cleanup; awaits separate Root fixture grant.",
+    "Independent frontier evaluation and integrated source equivalence/Main integration."
+  ],
+  "fresh_qualification": {
+    "captured_at": "2026-10-08",
+    "source_freeze": "development/evidence/fanout-20261001/rpc-local-executor-d03-a2/ROOT-source-freeze-01.json",
+    "source_freeze_sha256": "ad640069a72d0f8c30f8cc3174302a950c60fe866aeed27326fda5171b37fcfe",
+    "source_pins": {
+      "crates/df-rpc-bridge/tests/local_executor_contract.rs": "5b6bc3b7cc8de3c9d512a4402038cb08746a33e9cec16e242ba685d80a72deff"
+    },
+    "passed_gates": [
+      "cargo fmt --all -- --check",
+      "cargo test --no-run --offline --locked -p df-rpc-bridge --tests",
+      "N4 native core test executable: 34 passed, 0 failed",
+      "cargo check --offline --locked -p df-rpc-bridge --test local_executor_contract --target wasm32-unknown-unknown",
+      "cargo check --offline --locked -p df-tools --lib --target wasm32-unknown-unknown (existing generated-client source)",
+      "cargo clippy --offline --locked -p df-rpc-bridge --all-targets -- -D warnings",
+      "cargo clippy --offline --locked -p df-rpc-bridge --lib --target wasm32-unknown-unknown -- -D warnings",
+      "cargo build --offline --locked -p df-rpc-bridge --target wasm32-unknown-unknown"
+    ],
+    "expected_negative": {
+      "status": "EXPECTED_NON_SEND_COMPILE_REFUSAL_OBSERVED",
+      "receipt": "development/evidence/fanout-20261001/rpc-local-executor-d03-a2/a2-negative-wasm-send-check-20261008-01.json",
+      "classification": "development/evidence/fanout-20261001/rpc-local-executor-d03-a2/a2-negative-wasm-classification-20261008-01.json",
+      "code": "E0277",
+      "message": "`dyn Future<Output = Result<Response<ReceiveBody>, Status>>` cannot be sent between threads safely",
+      "source_line": 30,
+      "warnings": 0,
+      "unrelated_errors": 0
+    },
+    "native_scope": {
+      "case_count": 34,
+      "native_wasm_only_probe_cases": 0,
+      "native_runtime_behavior_claimed_for_browser_future": false
+    },
+    "browser_runtime": "UNPERFORMED; separate Root fixture grant required. No device, acoustic, or complete browser memory observation was made.",
+    "self_pin_note": "The final hash of this JSON is recorded by the separate E qualification receipt to avoid a self-referential pin."
+  }
+}
