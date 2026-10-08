@@ -1,0 +1,17 @@
+{
+  "decision": "PreparedOnly selects only prepared lookup; Replay selects only replay lookup; neither enters live dispatch on hit, miss, stale identity, storage failure, or rights refusal.",
+  "alternatives": ["fall through to another artifact mode", "retry with live provider"],
+  "observed": {
+    "prepared_hit": "prepared bytes",
+    "replay_hit": "replay bytes",
+    "prepared_miss": "typed Missing; live calls 0",
+    "replay_miss_with_prepared_entry": "typed Missing; replay reads 1; prepared reads 0; live calls 0",
+    "stale": "typed Stale; live calls 0",
+    "storage_failure": "typed Unavailable(Offline); live calls 0",
+    "rights_denied_before_read": "typed Authority(Revoked); reads 0; live calls 0",
+    "rights_revoked_after_read": "typed Authority(Revoked); reads 1; live calls 0",
+    "owner_cancelled_expired_unqualified_or_mode_drifted": "typed owner refusal; reads 0; live calls 0",
+    "live_positive_control": "explicit Live selects finite callback once"
+  },
+  "unresolved": ["native provider egress admission and supplier authority are outside this contract", "all six modality runtime integrations are not established by this test"]
+}
