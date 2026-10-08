@@ -40,7 +40,7 @@ fn configuration() -> Result<Config, Error> {
     let user = std::env::var("DF_DIALOGUE_PG_USER")?;
     required(
         port >= 1024
-            && database == "df_intent_dialogue_d02"
+            && database == "df_gameplay_demo_intent_dialogue_d02"
             && user == "df_intent_dialogue_d02_owner",
     )?;
     let mut config = Config::new();
@@ -1163,7 +1163,7 @@ async fn uncertain_confirmation(
     proxied
         .host("127.0.0.1")
         .port(proxy_address.port())
-        .dbname("df_intent_dialogue_d02")
+        .dbname("df_gameplay_demo_intent_dialogue_d02")
         .user("df_intent_dialogue_d02_owner")
         .ssl_mode(tokio_postgres::config::SslMode::Disable)
         .application_name("df-intent-dialogue-d02-commit-ack-proof");
