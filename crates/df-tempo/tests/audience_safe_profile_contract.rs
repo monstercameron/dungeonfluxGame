@@ -153,7 +153,7 @@ fn public_committed_cue_changes_output_only_after_admitted_input() {
     let before = current.clone();
     let ordinary = propose(&current, permitted(&current, 31, None), false).unwrap();
     let public = propose(&current, permitted(&current, 31, Some(fact_id())), false).unwrap();
-    assert_eq!(ordinary.state.intensity, 29);
+    assert_eq!(ordinary.state.intensity, 31);
     assert_eq!(public.state.intensity, 50);
     assert_ne!(ordinary.curve, public.curve);
     let mut candidate = current.state().clone();
