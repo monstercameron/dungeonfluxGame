@@ -6112,7 +6112,9 @@ fn observe_registered_actor_lost_commit_ack(
                     ),
                     (
                         different_receipt,
-                        df_session::submission::SubmissionOutcome::LookupRequired,
+                        df_session::submission::SubmissionOutcome::Refused(
+                            RepositoryError::Unavailable,
+                        ),
                     ),
                 ] {
                     let wait = deadline
@@ -6241,7 +6243,9 @@ fn observe_registered_actor_lost_commit_ack(
             return Err(RepositoryError::Unavailable);
         }
         println!(
-            "registered physical actual actor lost COMMIT acknowledgement: session59; one engine decision; LookupRequired then same Refused(Unavailable)/different LookupRequired (prelookup exact-key gate); no publication/wake; four-family counts2/1/1/1 and complete codec2/schema1 appearance equal; inbox stop/drain -> same actor native joined close -> parent join; backend_pid={backend_pid} backend_start={backend_start} OSidentity={}; exact actor recovery remains unqualified",
+            "registered physical actual actor lost COMMIT acknowledgement: session59; one engine decision; LookupRequired then same/different Refused(Unavailable) on poisoned repository; no publication/wake; four-family counts2/1/1/1 and complete codec{}/schema{} appearance equal; inbox stop/drain -> same actor native joined close -> parent join; backend_pid={backend_pid} backend_start={backend_start} OSidentity={}; exact actor recovery remains unqualified",
+            crate::checkpoint_codec::STORAGE_CODEC_VERSION,
+            CHECKPOINT_SCHEMA,
             os_identity.trim()
         );
         Ok(())
