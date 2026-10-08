@@ -329,6 +329,46 @@ async fn counts(client: &tokio_postgres::Client) -> Result<[i64; 4], Error> {
         row.try_get(3)?,
     ])
 }
+
+async fn current_projection(
+    sessions: &mut rpc::session_service_client::SessionServiceClient<tonic::transport::Channel>,
+    checkpoint: &Checkpoint,
+    credential: &[u8; 32],
+    binding: rpc::ClientBindingId,
+) -> Result<rpc::ViewMessage, Error> {
+    let basis = checkpoint.basis();
+    let mut stream = sessions
+        .watch(authenticated(
+            rpc::WatchViewRequest {
+                session_id: Some(rpc::SessionId {
+                    value: Some(basis.session.as_bytes().to_vec()),
+                }),
+                run_id: Some(rpc::RunId {
+                    value: Some(basis.run.as_bytes().to_vec()),
+                }),
+                client_binding_id: Some(binding),
+                after_revision: Some(wire::revision(basis.revision)),
+            },
+            credential,
+        ))
+        .await?
+        .into_inner();
+    timeout(Duration::from_secs(2), stream.message())
+        .await??
+        .ok_or_else(|| io::Error::other("mounted current projection absent").into())
+}
+fn pending_ai(checkpoint: &Checkpoint) -> usize {
+    checkpoint
+        .state()
+        .intents
+        .iter()
+        .filter(|intent| {
+            intent.kind == df_model::checkpoint::EffectKind::RunAi
+                && intent.status == df_model::checkpoint::DurableStatus::Pending
+        })
+        .count()
+}
+
 async fn exercise() -> Result<(), Error> {
     let config = configuration()?;
     let (mut inspector, connection) =
@@ -389,6 +429,9 @@ async fn exercise() -> Result<(), Error> {
                 service.clone(),
             ))
             .add_service(rpc::action_service_server::ActionServiceServer::new(
+                service.clone(),
+            ))
+            .add_service(rpc::session_service_server::SessionServiceServer::new(
                 service,
             ))
             .serve_with_incoming_shutdown(
@@ -405,8 +448,10 @@ async fn exercise() -> Result<(), Error> {
         let mut rooms = rpc::room_service_client::RoomServiceClient::new(channel.clone());
         let mut dialogue =
             rpc::dialogue_service_client::DialogueServiceClient::new(channel.clone());
-        let mut actions = rpc::action_service_client::ActionServiceClient::new(channel);
+        let mut actions = rpc::action_service_client::ActionServiceClient::new(channel.clone());
+        let mut sessions = rpc::session_service_client::SessionServiceClient::new(channel);
         let mut credentials = Vec::new();
+        let mut bindings = Vec::new();
         for operation in [0x91_u8, 0x92] {
             let joined = rooms
                 .join(rpc::JoinRoomRequest {
@@ -436,6 +481,12 @@ async fn exercise() -> Result<(), Error> {
                 };
                 credential[i] = digit(pair[0])? * 16 + digit(pair[1])?;
             }
+            bindings.push(
+                joined
+                    .client_binding_id
+                    .clone()
+                    .ok_or_else(|| io::Error::other("joined member binding absent"))?,
+            );
             credentials.push(credential);
         }
         let first = credentials[0];
@@ -625,6 +676,67 @@ async fn exercise() -> Result<(), Error> {
         let after_commit = counts(&inspector).await?;
         let committed_checkpoint = running.service.updates.borrow().clone();
         required(committed_checkpoint.basis().revision != baseline.basis().revision)?;
+        let player_projection = current_projection(
+            &mut sessions,
+            &committed_checkpoint,
+            &first,
+            bindings[0].clone(),
+        )
+        .await?;
+        let display_projection = current_projection(
+            &mut sessions,
+            &committed_checkpoint,
+            &[0x82; 32],
+            rpc::ClientBindingId {
+                value: Some(vec![0x72; 16]),
+            },
+        )
+        .await?;
+        required(
+            player_projection.revision
+                == Some(wire::revision(committed_checkpoint.basis().revision)),
+        )?;
+        required(display_projection.revision == player_projection.revision)?;
+        let Some(rpc::view_message::Audience::Player(player)) = player_projection.audience.as_ref()
+        else {
+            return Err(io::Error::other("player watch audience absent").into());
+        };
+        let Some(rpc::view_message::Audience::Display(display)) =
+            display_projection.audience.as_ref()
+        else {
+            return Err(io::Error::other("display watch audience absent").into());
+        };
+        let own = player
+            .journey
+            .as_ref()
+            .and_then(|journey| journey.own_character.as_ref())
+            .ok_or_else(|| {
+                io::Error::other("confirmed character missing from current player projection")
+            })?;
+        let shared = display
+            .journey
+            .as_ref()
+            .ok_or_else(|| io::Error::other("current display journey absent"))?;
+        required(shared.own_character.is_none() && shared.creation.is_none())?;
+        required(
+            player
+                .journey
+                .as_ref()
+                .is_some_and(|journey| journey.party == shared.party),
+        )?;
+        let private_sheet = prost::Message::encode_to_vec(own);
+        let display_bytes = prost::Message::encode_to_vec(&display_projection);
+        required(
+            !private_sheet.is_empty()
+                && !display_bytes
+                    .windows(private_sheet.len())
+                    .any(|window| window == private_sheet),
+        )?;
+        required(
+            counts(&inspector).await? == after_commit
+                && counter.load(Ordering::SeqCst) == preparations + 1,
+        )?;
+
         let replay = dialogue
             .confirm(authenticated(confirm.clone(), &first))
             .await?
@@ -675,7 +787,7 @@ async fn exercise() -> Result<(), Error> {
                     journey::offer_id(&current, rpc::GameplayActionKind::BeginStory),
                     "perhaps begin",
                 ),
-                &first,
+                &second,
             ))
             .await?
             .into_inner();
@@ -685,19 +797,238 @@ async fn exercise() -> Result<(), Error> {
             confirmation_token: stale.confirmation_token,
             action: Some(begin.clone()),
         };
-        let typed = actions
+
+        let entered = actions
             .submit(authenticated(begin, &first))
+            .await?
+            .into_inner();
+        required(matches!(
+            &entered.outcome,
+            Some(rpc::submit_action_response::Outcome::CommittedDecision(_))
+        ))?;
+        let opening = running.service.updates.borrow().clone();
+        let selected_begin = dialogue
+            .submit(authenticated(
+                raw(
+                    &opening,
+                    0x36,
+                    rpc::DialogueContext::Unspecified,
+                    rpc::DialogueFinality::Final,
+                    journey::offer_id(&opening, rpc::GameplayActionKind::AskCourier),
+                    "perhaps ask",
+                ),
+                &first,
+            ))
+            .await?
+            .into_inner();
+        let typed = dialogue
+            .confirm(authenticated(
+                rpc::ConfirmDialogueRequest {
+                    input_id: input_id(0x36),
+                    confirmation_token: selected_begin.confirmation_token,
+                    action: Some(action(&opening, 0x46, rpc::GameplayActionKind::AskCourier)),
+                },
+                &first,
+            ))
             .await?
             .into_inner();
         required(matches!(
             &typed.outcome,
             Some(rpc::submit_action_response::Outcome::CommittedDecision(_))
         ))?;
+        let pending_checkpoint = running.service.updates.borrow().clone();
+        required(pending_ai(&pending_checkpoint) > 0)?;
+        let pending_rows = counts(&inspector).await?;
+        let pending_preparations = counter.load(Ordering::SeqCst);
+        let mut pending_updates = running.service.updates.clone();
+        pending_updates.borrow_and_update();
+        for (index, context) in [
+            rpc::DialogueContext::Question,
+            rpc::DialogueContext::Joke,
+            rpc::DialogueContext::Meta,
+            rpc::DialogueContext::PlanOnly,
+            rpc::DialogueContext::Social,
+            rpc::DialogueContext::Unspecified,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            for finality in [rpc::DialogueFinality::Partial, rpc::DialogueFinality::Final] {
+                let response = dialogue
+                    .submit(authenticated(
+                        raw(
+                            &pending_checkpoint,
+                            0x60 + index as u8,
+                            context,
+                            finality,
+                            String::new(),
+                            "attack the courier?",
+                        ),
+                        &first,
+                    ))
+                    .await?
+                    .into_inner();
+                required(response.disposition != rpc::DialogueDisposition::Action as i32)?;
+            }
+        }
+        let refused_raw = raw(
+            &pending_checkpoint,
+            0x69,
+            rpc::DialogueContext::Question,
+            rpc::DialogueFinality::Final,
+            String::new(),
+            "attack the courier?",
+        );
+        required(
+            dialogue
+                .submit(Request::new(refused_raw.clone()))
+                .await
+                .err()
+                .is_some_and(|error| error.code() == tonic::Code::Unauthenticated),
+        )?;
+        // The valid bootstrap grant reaches Actor authentication but has no joined member.
+        required(
+            dialogue
+                .submit(authenticated(refused_raw, &[0x81; 32]))
+                .await
+                .is_err(),
+        )?;
+        required(
+            dialogue
+                .cancel(authenticated(
+                    rpc::CancelDialogueRequest {
+                        input_id: input_id(0x69),
+                        confirmation_token: vec![0; 32],
+                    },
+                    &first,
+                ))
+                .await
+                .is_err(),
+        )?;
+        let cancelled_pending = dialogue
+            .submit(authenticated(
+                raw(
+                    &pending_checkpoint,
+                    0x6a,
+                    rpc::DialogueContext::Unspecified,
+                    rpc::DialogueFinality::Final,
+                    journey::offer_id(&pending_checkpoint, rpc::GameplayActionKind::EscortCourier),
+                    "perhaps escort",
+                ),
+                &first,
+            ))
+            .await?
+            .into_inner();
+        required(!cancelled_pending.confirmation_token.is_empty())?;
+        dialogue
+            .cancel(authenticated(
+                rpc::CancelDialogueRequest {
+                    input_id: input_id(0x6a),
+                    confirmation_token: cancelled_pending.confirmation_token,
+                },
+                &first,
+            ))
+            .await?;
+        required(
+            inspector
+                .execute(
+                    "UPDATE df_local_demo.grants SET active=false WHERE credential=$1::bytea",
+                    &[&first.as_slice()],
+                )
+                .await?
+                == 1,
+        )?;
+        required(
+            dialogue
+                .submit(authenticated(
+                    raw(
+                        &pending_checkpoint,
+                        0x6b,
+                        rpc::DialogueContext::Question,
+                        rpc::DialogueFinality::Final,
+                        String::new(),
+                        "can I attack?",
+                    ),
+                    &first,
+                ))
+                .await
+                .is_err(),
+        )?;
+        required(
+            inspector
+                .execute(
+                    "UPDATE df_local_demo.grants SET active=true WHERE credential=$1::bytea",
+                    &[&first.as_slice()],
+                )
+                .await?
+                == 1,
+        )?;
+        required(
+            *running.service.updates.borrow() == pending_checkpoint
+                && counts(&inspector).await? == pending_rows
+                && counter.load(Ordering::SeqCst) == pending_preparations
+                && !pending_updates.has_changed()?,
+        )?;
+        // A deliberate, authenticated Session watch is the ordinary non-dialogue poll path.
+        let polled = current_projection(
+            &mut sessions,
+            &pending_checkpoint,
+            &first,
+            bindings[0].clone(),
+        )
+        .await?;
+        let progressed = running.service.updates.borrow().clone();
+        required(
+            pending_ai(&progressed) < pending_ai(&pending_checkpoint)
+                && progressed.basis().revision > pending_checkpoint.basis().revision
+                && polled.revision == Some(wire::revision(progressed.basis().revision)),
+        )?;
+
+        let Some(rpc::view_message::Audience::Player(private_player)) = polled.audience.as_ref()
+        else {
+            return Err(io::Error::other("completed private player watch absent").into());
+        };
+        required(private_player.private_clue == super::courier_ai::RESPONSE)?;
+        let other_player =
+            current_projection(&mut sessions, &progressed, &second, bindings[1].clone()).await?;
+        let shared_display = current_projection(
+            &mut sessions,
+            &progressed,
+            &[0x82; 32],
+            rpc::ClientBindingId {
+                value: Some(vec![0x72; 16]),
+            },
+        )
+        .await?;
+        required(
+            other_player.revision == polled.revision && shared_display.revision == polled.revision,
+        )?;
+        let Some(rpc::view_message::Audience::Player(other)) = other_player.audience.as_ref()
+        else {
+            return Err(io::Error::other("other player watch absent").into());
+        };
+        required(
+            other.private_clue.is_empty()
+                && matches!(
+                    shared_display.audience,
+                    Some(rpc::view_message::Audience::Display(_))
+                ),
+        )?;
+        for bytes in [
+            prost::Message::encode_to_vec(&other_player),
+            prost::Message::encode_to_vec(&shared_display),
+        ] {
+            required(
+                !bytes
+                    .windows(super::courier_ai::RESPONSE.len())
+                    .any(|window| window == super::courier_ai::RESPONSE.as_bytes()),
+            )?;
+        }
         let after_advance = counts(&inspector).await?;
         let advance_preparations = counter.load(Ordering::SeqCst);
         required(
             dialogue
-                .confirm(authenticated(stale_confirm, &first))
+                .confirm(authenticated(stale_confirm, &second))
                 .await
                 .err()
                 .is_some_and(|error| error.code() == tonic::Code::FailedPrecondition),
@@ -715,7 +1046,7 @@ async fn exercise() -> Result<(), Error> {
                     0x35,
                     rpc::DialogueContext::Unspecified,
                     rpc::DialogueFinality::Final,
-                    journey::offer_id(&current, rpc::GameplayActionKind::AskCourier),
+                    journey::offer_id(&current, rpc::GameplayActionKind::EscortCourier),
                     "perhaps ask",
                 ),
                 &first,
@@ -725,7 +1056,11 @@ async fn exercise() -> Result<(), Error> {
         let revoked_confirm = rpc::ConfirmDialogueRequest {
             input_id: input_id(0x35),
             confirmation_token: revoked.confirmation_token,
-            action: Some(action(&current, 0x44, rpc::GameplayActionKind::AskCourier)),
+            action: Some(action(
+                &current,
+                0x44,
+                rpc::GameplayActionKind::EscortCourier,
+            )),
         };
         let changed = inspector
             .execute(

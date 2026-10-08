@@ -774,7 +774,12 @@ impl Actor {
 }
 impl Reducer<Call> for Actor {
     fn reduce(&mut self, _: AdmissionSequence, call: Call) {
-        self.run_committed_intents();
+        // Dialogue admission must not dispatch previously committed work.
+        // Accepted jobs retain their ordinary non-dialogue dispatch/poll path.
+        let dispatch_committed_jobs = !matches!(&call, Call::Dialogue { .. });
+        if dispatch_committed_jobs {
+            self.run_committed_intents();
+        }
         if self.calls_remaining == 0 {
             match call {
                 Call::QualificationInputs { reply } => {
@@ -872,7 +877,9 @@ impl Reducer<Call> for Actor {
         } else {
             "caller_gone_outcome_retained"
         });
-        self.run_committed_intents();
+        if dispatch_committed_jobs {
+            self.run_committed_intents();
+        }
     }
 }
 

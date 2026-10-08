@@ -67,6 +67,14 @@
     {
       "case": "Input capacity/context/queue/deadline failures",
       "expected": "Bounded safe classified failure; no panic, raw-text diagnostics or fabricated completed outcome"
+    },
+    {
+      "case": "Raw dialogue while registered RunAi is genuinely durable Pending",
+      "expected": "Mounted explicit AskCourier confirmation creates current Pending RunAi. Casual categories, partial/final raw, missing metadata, authenticated bootstrap nonmember, revoked grant, and cancelled ticket leave exact checkpoint/revision/SQL counts/preparation counter/watch publications unchanged. Only a deliberate authenticated ordinary Session watch/poll dispatches the accepted background job."
+    },
+    {
+      "case": "Current SessionService player/display privacy after real confirmation",
+      "expected": "Mounted player and display watches match the confirmed durable revision, display omits own sheet/creation and whole encoded own-sheet bytes. After native courier completion, actual saved private response is present only in confirming player, absent from other player and display full encoded projections."
     }
   ],
   "alternatives": [
@@ -95,5 +103,11 @@
     "General natural-language action/target interpretation",
     "Provider/ASR integration"
   ],
-  "execution": "Private inventory, not NLP interpretation evidence; meaningful native RPC cases must execute and bind to actual source/build."
+  "execution": "Private inventory, not NLP interpretation evidence; meaningful native RPC cases must execute and bind to actual source/build.",
+  "repair_qualification": {
+    "generation": 2,
+    "historical_build": "gen1 c127 environment/SDK closure incomplete; not retroactively qualified",
+    "replacement_build": "Fresh empty private target; exact env-i whitelist; complete resolved native SDK headers/TBD/libraries and CLT compiler/linker/resources pinned before offline locked native build",
+    "physical_mounted_execution": "Root-only; unperformed until actual owned runtime witness"
+  }
 }
