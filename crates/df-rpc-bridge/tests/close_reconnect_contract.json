@@ -1,88 +1,11 @@
 {
-  "contract_version": 1,
-  "task_id": "B-C-df-rpc-bridge-D04",
-  "attempt_id": "B-C-df-rpc-bridge-D04-a1",
-  "objective": "Define tunnel close, drain and reconnect outcomes: transport loss remains separate from authoritative domain refusal.",
-  "decision": {
-    "terminal_authority": "Only a generated gRPC call that observes the server terminal status/trailers has an authoritative domain outcome. A WebSocket or HTTP/2 closure before that terminal is a transport outcome, even when the peer received the request.",
-    "drain": "The caller may close after consuming terminal gRPC trailers and releasing streams. Existing native pump selects the first completed direction; a WebSocket Close during an active RPC does not promise continued response draining.",
-    "reconnect": "A fresh BrowserConnection owns a new WebSocket/h2 driver, callback queue and BrowserChannel. Old connection callbacks/queues are released; a lost call is not automatically replayed. An external operation-ID query/resync is needed to resolve possible committed effects.",
-    "classification": "The executable fixture compares exact terminal metadata/status with the transport Status error source, actual closed connection owner and server-side forced-loss witness. Code text alone is not the classifier."
-  },
-  "alternatives": [
-    {
-      "choice": "Keep current public NativeAdmission/TunnelStream and BrowserConnection/BrowserChannel; add fixture-only close/loss probes",
-      "reason": "The existing generated Tonic client and h2 adapter remain the only wire and authority path."
-    },
-    {
-      "rejected": "Treat clean WebSocket Close as successful RPC drain",
-      "reason": "The current native pump stops the other byte direction when close wins, and an active RPC may lack terminal trailers."
-    },
-    {
-      "rejected": "Automatically replay an uncertain mutating call after reconnect",
-      "reason": "The current fixture has no durable operation-ID lookup; replay could duplicate a committed effect."
-    },
-    {
-      "rejected": "Classify errors by gRPC code or status-message substring alone",
-      "reason": "HTTP/2 errors can map to ordinary gRPC codes and messages are not authority evidence."
-    }
-  ],
-  "executable_cases": {
-    "native_idle_close": "Real loopback WebSocket through public NativeIncoming/TunnelStream; blocked read wakes at EOF, all pipe owners release.",
-    "native_partial_close": "Real partial HTTP/2 preface over WebSocket; close yields UnexpectedEof and rejected transport, blocked read wakes and owners release.",
-    "browser_domain_refusal": "Real generated client receives InvalidArgument, exact fixture-terminal trailer, no transport error source.",
-    "browser_afterdrain_close": "Generated unary and server stream complete with terminal trailers before BrowserConnection::close; callback owners release.",
-    "browser_forced_loss": "Real generated Wait RPC dispatches into native Tonic fixture; native WebSocket is forced closed before terminal; browser sees transport source/no domain trailer plus exact peer loss witness.",
-    "browser_reconnect": "Fresh BrowserConnection executes a new generated unary while old connection stays closed with no queued callback and no replay of Wait."
-  },
-  "verification": {
-    "native_contract": "PASS: 2/2 public native cases, rerun after browser witness was added; worker-d04-native-contract-02.json",
-    "native_regressions": "PASS: df-rpc-bridge complete suite 55 cases (34+2 D1+2 D4+1 D2+16 resources); worker-d04-native-bridge-suite-01.json",
-    "browser_fixture": "PASS: personal IAB #close-reconnect report COMPLETE on owned native port 55443; exact domain refusal trailer, after-terminal close, preterminal forced loss, fresh new-generation RPC and no replay; worker-d04-browser-producer-01.json owned exit 0/group empty",
-    "wasm_compile": "PASS: df-tools WASM build and bindgen web package; worker-d04-wasm-library-build-02.json and worker-d04-wasm-bindgen-02.json",
-    "source_build_binding": "PASS: browser report build rpc-d04a1-a4467559-72c3b14b matches sealed native and web assets for current source hashes",
-    "independent_review": "UNPERFORMED",
-    "native_fixture": "PASS: 9/9 fixture tests including actual generated Wait forced loss and reconnect; worker-d04-native-fixture-suite-02.json",
-    "native_clippy": "PASS: -D warnings, df-rpc-bridge and df-tools all targets; worker-d04-native-clippy-02.json",
-    "wasm_clippy": "PASS: -D warnings, both libraries on wasm32; worker-d04-wasm-clippy-02.json",
-    "fmt": "PASS: cargo fmt --all -- --check; worker-d04-fmt-check-03.json",
-    "native_build": "PASS: df-transport-fixture; worker-d04-native-fixture-build-02.json",
-    "wasm_build": "PASS: df-tools WASM library; worker-d04-wasm-library-build-02.json",
-    "wasm_bindgen": "PASS: generated web package; worker-d04-wasm-bindgen-02.json"
-  },
-  "unresolved_facts": [
-    "Production operation-ID query/resync, authentication and permitted-view recovery are outside this fixture and remain unsupported here.",
-    "G02 physical-device/adversarial receive memory qualification remains inconclusive.",
-    "Independent review remains unperformed in this worker handoff."
-  ],
-  "source_build_pins": {
-    "base_main": "4c75163bbbb934892856bea3c836f97d1da2a61d",
-    "source_rust_sha256": "f4bcb2fca54e4157e54ab9acff57edc297ffcb8442932a4a9712a16090cdc2f6",
-    "fixture_rs_sha256": "72c3b14b422de59f43de082f013b27ac3902a61af4f70a39e695a39de4df4b97",
-    "browser_rs_sha256": "a4467559b1baa6e3f0f130323d7ff9841ab60d9e38c2a8c226ca7ea1a3f80e3b",
-    "build_id": "rpc-d04a1-a4467559-72c3b14b",
-    "native_fixture_sha256": "b6d7b43c9584533107ab5a7ca1d55b3d47abcfddf686d603e277068d5d5d27b0",
-    "raw_wasm_sha256": "5b083d8e51a37fb0f4e360318c0f5ace40e383c9df9343da67bf312be26db1e9",
-    "web_js_sha256": "1d2f1bb0e0fc8d47bbf5d9a7949e66b46ed947ea8a294eb5108c2a6cc626bf88",
-    "web_wasm_sha256": "4be44dfa36e7f8db35cd785f0c2b8305987178aee2c3f565f49b123b293344e8",
-    "receipts_root": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/rpc-close-reconnect-d04-a1"
-  },
-  "browser_producer_observation": {
-    "url": "http://127.0.0.1:55443/",
-    "control_id": "close-reconnect",
-    "report_terminal": "COMPLETE · Close/reconnect contract passed; preterminal operation outcome UNKNOWN, external operation-ID resync unimplemented",
-    "forced_loss": "mode=loss messages=1 frames=1 bytes=33 domain_calls=1 closed=true failed=false build=rpc-d04a1-a4467559-72c3b14b",
-    "transport_status_code_diagnostic_only": "Unknown",
-    "transport_error_source": true,
-    "domain_terminal_trailer_on_lost_call": false,
-    "owned_native_pid": 36046,
-    "owned_native_exit_code": 0,
-    "owned_native_remaining_group": [],
-    "native_peak_sampled_bytes": 31752192,
-    "receipt": "worker-d04-browser-producer-01.json"
-  },
-  "diagnosed_failures": [
-    "worker-d04-native-forced-loss-01.json: actual generated Wait did produce transport loss, but test cleanup incorrectly treated expected abrupt proxy reset as success; fixed to assert typed tungstenite error, focused run02 and full fixture suite PASS.",
-    "Initial native test compile emitted rust-objcopy libLLVM loader warnings; DYLD_LIBRARY_PATH set to bundled toolchain lib in subsequent commands."
+  "contract_version": 2,
+  "decision": "Only observed gRPC terminal trailers authorize a domain outcome; preterminal transport loss remains Unknown.",
+  "alternatives": ["Do not infer drain from WebSocket Close", "Do not replay an uncertain mutating RPC", "Do not classify by gRPC code text alone"],
+  "unsupported": ["Production operation-ID query/resync", "Authentication and permitted-view recovery", "Physical-device receive-memory qualification"],
+  "native_cases": [
+    {"case":"idle","pending_before_close":true,"woken_after_close":true,"buffered_before_close":false,"prefix_bytes":0,"terminal":"Eof","pump":"Ok","closed":true,"rejected":false,"pipe_owners":0,"pipe_to_grpc_current":0,"pipe_to_websocket_current":0,"websocket_receive_current":0},
+    {"case":"partial_preface","pending_before_close":true,"woken_after_close":true,"buffered_before_close":false,"prefix_bytes":8,"terminal":"Eof","pump":"UnexpectedEof","closed":true,"rejected":true,"pipe_owners":0,"pipe_to_grpc_current":0,"pipe_to_websocket_current":0,"websocket_receive_current":0},
+    {"case":"pending_writer","pending_before_close":true,"woken_after_close":true,"buffered_before_close":true,"prefix_bytes":0,"terminal":"BrokenPipe","pump":"Ok","closed":true,"rejected":false,"pipe_owners":0,"pipe_to_grpc_current":0,"pipe_to_websocket_current":0,"websocket_receive_current":0}
   ]
 }
