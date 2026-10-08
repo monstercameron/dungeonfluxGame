@@ -85,7 +85,7 @@ enum ProductionHandlerEvidence {
     ClaimedImplemented,
 }
 
-const SERVICE_OWNERS: [ServiceOwner; 12] = [
+const SERVICE_OWNERS: [ServiceOwner; 13] = [
     ServiceOwner {
         service: "IdentityService",
         namespace: Namespace::Public,
@@ -194,6 +194,14 @@ const SERVICE_OWNERS: [ServiceOwner; 12] = [
         result_owner: "df-telemetry",
         stream_owner: Some("df-telemetry owns bounded evidence export and stream lifecycle"),
     },
+    ServiceOwner {
+        service: "DialogueService",
+        namespace: Namespace::Public,
+        access: AccessClass::PublicMemberInput,
+        request_owner: "df-intent / native df-tools authenticated Actor",
+        result_owner: "df-intent disposition / native df-session decision receipt",
+        stream_owner: None,
+    },
 ];
 
 const fn method(
@@ -213,7 +221,7 @@ const fn method(
     }
 }
 
-const PLANNED_METHODS: [PlannedMethod; 41] = [
+const PLANNED_METHODS: [PlannedMethod; 44] = [
     method(
         "IdentityService",
         "BeginGuest",
@@ -501,6 +509,27 @@ const PLANNED_METHODS: [PlannedMethod; 41] = [
         "EvidenceChunk",
         RpcMode::ServerStreaming,
     ),
+    method(
+        "DialogueService",
+        "Submit",
+        "RawDialogueRequest",
+        "DialogueResponse",
+        RpcMode::Unary,
+    ),
+    method(
+        "DialogueService",
+        "Confirm",
+        "ConfirmDialogueRequest",
+        "SubmitActionResponse",
+        RpcMode::Unary,
+    ),
+    method(
+        "DialogueService",
+        "Cancel",
+        "CancelDialogueRequest",
+        "DialogueResponse",
+        RpcMode::Unary,
+    ),
 ];
 
 const METHOD_OWNER_CONSTRAINTS: [MethodOwnerConstraint; 10] = [
@@ -639,10 +668,10 @@ fn validate_contract(
     owners: &[ServiceOwner],
     methods: &[PlannedMethod],
 ) -> Result<(), InventoryError> {
-    if owners.len() != 12 {
+    if owners.len() != 13 {
         return Err(InventoryError::WrongServiceCount);
     }
-    if methods.len() != 41 {
+    if methods.len() != 44 {
         return Err(InventoryError::WrongMethodCount);
     }
 
@@ -829,6 +858,7 @@ fn expected_current_service_keys() -> BTreeSet<String> {
         "dungeonflux.public.v1.SessionService",
         "dungeonflux.public.v1.RoomService",
         "dungeonflux.experimental.transport.v1.TransportFixture",
+        "dungeonflux.public.v1.DialogueService",
     ]
     .into_iter()
     .map(str::to_owned)
@@ -920,14 +950,35 @@ fn expected_current_descriptor() -> Vec<DescriptorMethod> {
             ".dungeonflux.experimental.transport.v1.Sample",
             RpcMode::BidirectionalStreaming,
         ),
+        actual(
+            "dungeonflux.public.v1.DialogueService",
+            "Submit",
+            ".dungeonflux.public.v1.RawDialogueRequest",
+            ".dungeonflux.public.v1.DialogueResponse",
+            RpcMode::Unary,
+        ),
+        actual(
+            "dungeonflux.public.v1.DialogueService",
+            "Confirm",
+            ".dungeonflux.public.v1.ConfirmDialogueRequest",
+            ".dungeonflux.public.v1.SubmitActionResponse",
+            RpcMode::Unary,
+        ),
+        actual(
+            "dungeonflux.public.v1.DialogueService",
+            "Cancel",
+            ".dungeonflux.public.v1.CancelDialogueRequest",
+            ".dungeonflux.public.v1.DialogueResponse",
+            RpcMode::Unary,
+        ),
     ]
 }
 
 #[test]
 fn original_twelve_services_and_forty_one_methods_have_typed_complete_contract_owners() {
     validate_full_contract(&SERVICE_OWNERS, &PLANNED_METHODS, &METHOD_OWNER_CONSTRAINTS).unwrap();
-    assert_eq!(SERVICE_OWNERS.len(), 12);
-    assert_eq!(PLANNED_METHODS.len(), 41);
+    assert_eq!(SERVICE_OWNERS.len(), 13);
+    assert_eq!(PLANNED_METHODS.len(), 44);
     assert!(PLANNED_METHODS.iter().all(|method| {
         method.production_handler == ProductionHandlerEvidence::NotEstablishedByInventory
     }));

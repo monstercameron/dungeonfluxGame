@@ -283,3 +283,51 @@ service dungeonflux.experimental.transport.v1.TransportFixture
 service dungeonflux.public.v1.ActionService
 service dungeonflux.public.v1.RoomService
 service dungeonflux.public.v1.SessionService
+enum dungeonflux.public.v1.DialogueContext
+enum dungeonflux.public.v1.DialogueDisposition
+enum dungeonflux.public.v1.DialogueFinality
+enum-value dungeonflux.public.v1.DialogueContext 0 DIALOGUE_CONTEXT_UNSPECIFIED
+enum-value dungeonflux.public.v1.DialogueContext 1 DIALOGUE_CONTEXT_QUESTION
+enum-value dungeonflux.public.v1.DialogueContext 2 DIALOGUE_CONTEXT_SOCIAL
+enum-value dungeonflux.public.v1.DialogueContext 3 DIALOGUE_CONTEXT_PLAN_ONLY
+enum-value dungeonflux.public.v1.DialogueContext 4 DIALOGUE_CONTEXT_META
+enum-value dungeonflux.public.v1.DialogueContext 5 DIALOGUE_CONTEXT_JOKE
+enum-value dungeonflux.public.v1.DialogueContext 6 DIALOGUE_CONTEXT_CLARIFY
+enum-value dungeonflux.public.v1.DialogueDisposition 0 DIALOGUE_DISPOSITION_UNSPECIFIED
+enum-value dungeonflux.public.v1.DialogueDisposition 1 DIALOGUE_DISPOSITION_ACTION
+enum-value dungeonflux.public.v1.DialogueDisposition 2 DIALOGUE_DISPOSITION_QUESTION
+enum-value dungeonflux.public.v1.DialogueDisposition 3 DIALOGUE_DISPOSITION_SOCIAL
+enum-value dungeonflux.public.v1.DialogueDisposition 4 DIALOGUE_DISPOSITION_PLAN_ONLY
+enum-value dungeonflux.public.v1.DialogueDisposition 5 DIALOGUE_DISPOSITION_META
+enum-value dungeonflux.public.v1.DialogueDisposition 6 DIALOGUE_DISPOSITION_JOKE
+enum-value dungeonflux.public.v1.DialogueDisposition 7 DIALOGUE_DISPOSITION_CLARIFY
+enum-value dungeonflux.public.v1.DialogueDisposition 8 DIALOGUE_DISPOSITION_REJECTED
+enum-value dungeonflux.public.v1.DialogueFinality 0 DIALOGUE_FINALITY_UNSPECIFIED
+enum-value dungeonflux.public.v1.DialogueFinality 1 DIALOGUE_FINALITY_PARTIAL
+enum-value dungeonflux.public.v1.DialogueFinality 2 DIALOGUE_FINALITY_FINAL
+field dungeonflux.public.v1.CancelDialogueRequest 1 input_id type=11 label=1 presence=false target=.dungeonflux.public.v1.OperationId oneof=-
+field dungeonflux.public.v1.CancelDialogueRequest 2 confirmation_token type=12 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.ConfirmDialogueRequest 1 input_id type=11 label=1 presence=false target=.dungeonflux.public.v1.OperationId oneof=-
+field dungeonflux.public.v1.ConfirmDialogueRequest 2 confirmation_token type=12 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.ConfirmDialogueRequest 3 action type=11 label=1 presence=false target=.dungeonflux.public.v1.SubmitActionRequest oneof=-
+field dungeonflux.public.v1.DialogueResponse 1 input_id type=11 label=1 presence=false target=.dungeonflux.public.v1.OperationId oneof=-
+field dungeonflux.public.v1.DialogueResponse 2 disposition type=14 label=1 presence=false target=.dungeonflux.public.v1.DialogueDisposition oneof=-
+field dungeonflux.public.v1.DialogueResponse 3 confirmation_token type=12 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.DialogueResponse 4 revision type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionRevision oneof=-
+field dungeonflux.public.v1.DialogueResponse 5 confirmation_required type=8 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.RawDialogueRequest 1 session_id type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionId oneof=-
+field dungeonflux.public.v1.RawDialogueRequest 2 run_id type=11 label=1 presence=false target=.dungeonflux.public.v1.RunId oneof=-
+field dungeonflux.public.v1.RawDialogueRequest 3 observed_revision type=11 label=1 presence=false target=.dungeonflux.public.v1.SessionRevision oneof=-
+field dungeonflux.public.v1.RawDialogueRequest 4 input_id type=11 label=1 presence=false target=.dungeonflux.public.v1.OperationId oneof=-
+field dungeonflux.public.v1.RawDialogueRequest 5 text type=9 label=1 presence=false target=- oneof=-
+field dungeonflux.public.v1.RawDialogueRequest 6 context type=14 label=1 presence=false target=.dungeonflux.public.v1.DialogueContext oneof=-
+field dungeonflux.public.v1.RawDialogueRequest 7 finality type=14 label=1 presence=false target=.dungeonflux.public.v1.DialogueFinality oneof=-
+field dungeonflux.public.v1.RawDialogueRequest 8 offer_id type=9 label=1 presence=false target=- oneof=-
+message dungeonflux.public.v1.CancelDialogueRequest
+message dungeonflux.public.v1.ConfirmDialogueRequest
+message dungeonflux.public.v1.DialogueResponse
+message dungeonflux.public.v1.RawDialogueRequest
+method dungeonflux.public.v1.DialogueService Cancel .dungeonflux.public.v1.CancelDialogueRequest .dungeonflux.public.v1.DialogueResponse client-stream=false server-stream=false
+method dungeonflux.public.v1.DialogueService Confirm .dungeonflux.public.v1.ConfirmDialogueRequest .dungeonflux.public.v1.SubmitActionResponse client-stream=false server-stream=false
+method dungeonflux.public.v1.DialogueService Submit .dungeonflux.public.v1.RawDialogueRequest .dungeonflux.public.v1.DialogueResponse client-stream=false server-stream=false
+service dungeonflux.public.v1.DialogueService

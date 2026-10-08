@@ -1,0 +1,99 @@
+{
+  "task": "B-C-df-intent-D02",
+  "criterion": "no unintended action from casual dialogue",
+  "policy": "Raw declared discourse context never authorizes Action. Untagged raw language conservatively returns Clarify. Partial input never creates an executable ticket. Separate current authenticated explicit offered typed confirmation enters existing native durable authority.",
+  "cases": [
+    {
+      "case": "All discourse categories and raw attack/target wording",
+      "input": "Questions, social greeting, hypothetical plan, meta question, joke and ambiguous/plain commands, with valid-looking current offer IDs",
+      "expected": "Mounted generated native RPC->Actor->canonical raw producer returns nonaction; no receipt, rules call, dice, resources, facts, intents, revision or publication change"
+    },
+    {
+      "case": "ASR partial requests action and later final contradicts it",
+      "expected": "Partial no ticket/commit; final remains nonaction unless distinct exact typed confirmation; superseded partial/input token cannot execute"
+    },
+    {
+      "case": "Positive explicitly confirmed current offered action",
+      "expected": "Real loopback native DialogueService Confirm->Actor->existing submit->DurableOwner->source-registered Journey mechanics->owned Postgres durable receipt. Observe exact source/state/facts/decision, current player+display projections and committed response. Do not replace this with policy/helper/mock-only PASS."
+    },
+    {
+      "case": "Casual text with forged Action context or guessed token",
+      "expected": "Rejected/nonaction; never enters native mechanics"
+    },
+    {
+      "case": "Partial/no-offer/unsupported-offer/nonaction-context ticket attempt",
+      "expected": "No executable ticket; typed refusal and snapshot unchanged"
+    },
+    {
+      "case": "Explicit cancellation then confirmation",
+      "expected": "Cancelled input ticket refused; no new gameplay state or durable decision"
+    },
+    {
+      "case": "Stale observed basis, source pins/catalog or changed offer",
+      "expected": "Native capture/confirmation refusal, no mechanical side effects; complete source pins checked"
+    },
+    {
+      "case": "Different member/removed membership/display principal/stale credentials",
+      "expected": "Native authorization/member refusal; ticket cannot transfer to another principal"
+    },
+    {
+      "case": "Different typed offer/action/selection under same ticket",
+      "expected": "Exact offer and generated fingerprint mismatch refused"
+    },
+    {
+      "case": "Confirmation accepted but durable outcome remains pending",
+      "expected": "Prepared/proposed or durable pending job is not completed success; response and source state retain explicit pending identity"
+    },
+    {
+      "case": "Source handler refusal and unsupported mechanic",
+      "expected": "Existing typed failed/rejected/unsupported outcome; no fabricated default success"
+    },
+    {
+      "case": "Repeated same confirmation after confirmed commit",
+      "expected": "Exact durable operation lookup returns prior receipt; no repeated source mechanics, dice or cost"
+    },
+    {
+      "case": "Ambiguous durable acknowledgment then same confirmation retry",
+      "expected": "Lookup-only uncertainty retained and resolved through same native authority; no write replay/reroll"
+    },
+    {
+      "case": "Changed request/operation under uncertain confirmation",
+      "expected": "Refused exact-retry mismatch; cannot clear uncertainty"
+    },
+    {
+      "case": "Actor restart drops uncommitted ticket",
+      "expected": "Explicit expired/unavailable confirmation; accepted operation recovery follows existing exact authenticated operation lookup"
+    },
+    {
+      "case": "Input capacity/context/queue/deadline failures",
+      "expected": "Bounded safe classified failure; no panic, raw-text diagnostics or fabricated completed outcome"
+    }
+  ],
+  "alternatives": [
+    {
+      "choice": "Treat private disposition matrix and refused arbitrary candidates as proof of production dialogue safety",
+      "decision": "REJECTED",
+      "reason": "Valid offered Choice can pass without knowledge it originated in a joke/question; no raw interpreter/finality producer exists"
+    },
+    {
+      "choice": "Invent a new public IntentDisposition/InputEnvelope/classifier now",
+      "decision": "REJECTED",
+      "reason": "No initially frozen shared DTO/producer scope; violates original bounded Design task and canonical owner contracts"
+    },
+    {
+      "choice": "Declare production interpretation outside original criterion to make Design pass",
+      "decision": "REJECTED",
+      "reason": "Original literal criterion preserved; required unresolved gap remains visible"
+    },
+    {
+      "choice": "Preserve whole Original Design source decision/examples plus actual typed-boundary test inventory, with runtime gaps",
+      "decision": "SELECTED",
+      "reason": "Permitted Design evidence can be reviewed without invented mechanics, narrowing or fabricated execution; evaluator decides sufficiency"
+    }
+  ],
+  "unsupported": [
+    "General natural-language action/target interpretation",
+    "Provider/ASR integration"
+  ],
+  "execution": "Private inventory, not NLP interpretation evidence; meaningful native RPC cases must execute and bind to actual source/build."
+}

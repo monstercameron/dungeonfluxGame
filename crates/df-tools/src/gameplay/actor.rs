@@ -65,6 +65,11 @@ pub(super) enum Call {
         request: rpc::SubmitActionRequest,
         reply: oneshot::Sender<Result<rpc::SubmitActionResponse, tonic::Status>>,
     },
+    Dialogue {
+        credential: [u8; 32],
+        request: super::dialogue::DialogueRequest,
+        reply: oneshot::Sender<Result<super::dialogue::DialogueReply, tonic::Status>>,
+    },
     View {
         credential: [u8; 32],
         request: rpc::WatchViewRequest,
@@ -88,6 +93,7 @@ impl ActorInput for Call {
                         .map_or(0, |id| bytes(&id.value)),
                 ),
             Self::QualificationInputs { .. } => Some(0),
+            Self::Dialogue { request, .. } => Some(request.retained_heap_bytes()),
             Self::Submit { request, .. } => {
                 let character_bytes = if let Some(character) = &request.character {
                     character.choices.iter().try_fold(
@@ -267,6 +273,7 @@ impl CompletionRetry {
 }
 pub(super) struct Actor {
     pub owner: Owner,
+    pub dialogue: super::dialogue::DialogueState,
     pub bootstrap_credential: [u8; 32],
     pub issuer: LocalDemoScopeIssuer,
     pub codec: NativeCodecLimits,
@@ -499,7 +506,7 @@ impl Actor {
             self.owner.checkpoint(),
         );
     }
-    fn submit(
+    pub(super) fn submit(
         &mut self,
         credential: [u8; 32],
         request: rpc::SubmitActionRequest,
@@ -785,6 +792,11 @@ impl Reducer<Call> for Actor {
                         "finite demonstration call budget exhausted",
                     )));
                 }
+                Call::Dialogue { reply, .. } => {
+                    let _ = reply.send(Err(tonic::Status::resource_exhausted(
+                        "finite dialogue budget exhausted",
+                    )));
+                }
                 Call::View { reply, .. } => {
                     let _ = reply.send(Err(tonic::Status::resource_exhausted(
                         "finite demonstration call budget exhausted",
@@ -826,6 +838,15 @@ impl Reducer<Call> for Actor {
                 .is_ok(),
             Call::Join { request, reply } => reply
                 .send(after_grant_reconnect(reconnected, || self.join(request)))
+                .is_ok(),
+            Call::Dialogue {
+                credential,
+                request,
+                reply,
+            } => reply
+                .send(after_grant_reconnect(reconnected, || {
+                    self.handle_dialogue(credential, request)
+                }))
                 .is_ok(),
             Call::Submit {
                 credential,
