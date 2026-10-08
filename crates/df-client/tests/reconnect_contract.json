@@ -1,0 +1,89 @@
+{
+  "task_id": "B-C-df-client-D01",
+  "attempt_id": "B-C-df-client-D01-a2",
+  "stage": "design",
+  "title": "Define binding revision and view freshness contract",
+  "objective": "Define binding revision and view freshness contract; expected: reconnect resumes identity without Join.",
+  "source_fingerprint": "585e9d6e5157914d2c72119a33971b5ab8103065bdb136ea82151ec3885a1eeb",
+  "original_acceptance": [
+    "reconnect resumes identity without Join",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "original_verification": [
+    "Freeze the cited source decision and a bounded contract example; compare reconnect resumes identity without Join. Retain decision, alternatives and unresolved facts.",
+    "Exact executable commands: TBD at G01 and scoped prerequisite resolution; this planned procedure is not a claim that Rust/browser/provider checks ran."
+  ],
+  "decision": "Resume the existing authenticated session/member reference; retain role/readiness and durable watermark; issue a fresh binding generation and require a permitted full snapshot on a new local connection. Never use Join as reconnect recovery. Fence old local connections and server bindings independently; compare durable recovery epoch/sequence lexicographically; validate a separate presentation epoch/sequence before admitting equal durable revisions.",
+  "authority": "FixtureAuthority owns exactly one synthetic existing member, credential lookup, current access, binding generation and permitted projection. Its Resume response is authoritative only within this Design fixture. Client references and stamps are correlation, never credentials. Actual ConnectionViews and RpcConnection own local generation and canonical ViewStore ordering. There is no generated production Resume or BindClient service in this source.",
+  "source_boundary": {
+    "input_commit": "3bef91a610805fd46275be9e4581b227704a7a00",
+    "consumer": [
+      "crates/df-client/src/connection.rs",
+      "crates/df-client/src/connection_views.rs",
+      "crates/df-client/src/revisions.rs"
+    ],
+    "typed_contract": "crates/df-types/src",
+    "governing_design": [
+      "planning/client-architecture.md",
+      "planning/client-presentation.md",
+      "planning/runtime-reliability.md",
+      "planning/rpc-api.md",
+      "planning/rpc-transport.md",
+      "planning/subsystem-interfaces.md",
+      "planning/remote-play.md"
+    ],
+    "retained_original_decision": {
+      "commit": "41c9be48aaa6d9ebc758f16555653e5a47d8d7d1",
+      "path": "planning/c-df-client-d01-decision.md",
+      "sha256": "c052ea013b1fc899dda08d3ac424113969465f9c3e187a1e49a4794dcfb34f6a"
+    },
+    "retained_prior_verdict": "a1 inconclusive: isolated freshness example did not observe Resume/identity/Join consumer outcome; retained unchanged, never promoted to approval"
+  },
+  "alternatives": [
+    {
+      "alternative": "Join again after transport loss",
+      "disposition": "Rejected: creates or changes membership instead of resuming existing identity."
+    },
+    {
+      "alternative": "Scalar durable revision or sequence alone",
+      "disposition": "Rejected: restored recovery epoch must dominate an older high sequence."
+    },
+    {
+      "alternative": "Presentation ViewSequence alone",
+      "disposition": "Rejected: binding generation and presentation/recovery epochs fence stale namespaces."
+    },
+    {
+      "alternative": "Client-selected role, generation or correlation ID authorizes a view",
+      "disposition": "Rejected: owner checks current credential/member/role before constructing a permitted payload."
+    },
+    {
+      "alternative": "Retain only last payload or reset durable watermark on reconnect",
+      "disposition": "Rejected: hide old private view during recovery but preserve accepted canonical durable watermark."
+    },
+    {
+      "alternative": "Admit an old connection or binding carrying a newer revision",
+      "disposition": "Rejected: freshness cannot override generation fencing."
+    },
+    {
+      "alternative": "Use only durable revision to refresh same-phase presentation",
+      "disposition": "Rejected for planned presentation: an independent validated presentation cursor is needed; current ViewStore still classifies equal durable revision Duplicate."
+    }
+  ],
+  "bounded_cases": [
+    "both_roles_resume_the_same_member_without_join_seat_allocation_or_readiness_reset",
+    "expired_or_wrong_credentials_require_recovery_without_join_fallback_or_old_view_revival",
+    "mismatched_resume_identity_or_role_cannot_rebind_the_existing_member",
+    "authority_filters_member_and_role_before_publication_and_display_ignores_hidden_clues",
+    "current_consumer_fences_old_connections_and_preserves_composite_revision_watermark",
+    "resumed_snapshot_and_presentation_cursor_refuse_stale_or_incomplete_delivery",
+    "explicit_join_positive_control_proves_allocation_observations_are_not_constant_zero"
+  ],
+  "unresolved_facts_and_unperformed_checks": [
+    "Generated production Resume/BindClient messages and server current-authority integration remain unimplemented/unqualified.",
+    "This test fixture does not qualify production authentication, RPC reconnect, or membership persistence.",
+    "Current gameplay protobuf lacks independent presentation epoch/sequence; the private fixture must not be described as production same-phase payload delivery.",
+    "Actual mounted browser reconnect, device/browser matrix, assets and audio playback are unperformed and outside this Design task.",
+    "Independent frontier boundary execution and coordinator integration are required after submission."
+  ],
+  "evidence_contract": "Exact commands, source/dependency/generated/config/tool/environment/fixture pins, observed output, resource receipts and build binary are retained in the attempt handoff. A fixture assertion or planning decision alone is not production or browser evidence."
+}
