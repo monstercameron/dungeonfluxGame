@@ -15,6 +15,8 @@ mod generated_browser_bindings;
 mod preview;
 #[cfg(target_arch = "wasm32")]
 mod qualification;
+#[cfg(target_arch = "wasm32")]
+mod qualification_verdict;
 
 /// Source identity injected by the reproducible fixture build command.
 pub const BUILD_ID: &str = match option_env!("DF_FIXTURE_BUILD") {
