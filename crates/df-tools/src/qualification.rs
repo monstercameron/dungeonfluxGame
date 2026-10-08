@@ -777,17 +777,147 @@ async fn save_credit_report(generation: u64, phase: u8, report: &str) -> Result<
     .await
 }
 
-async fn run_connection_credit(document: &Document, generation: u64) -> Result<(), String> {
-    save_credit_report(
-        generation,
-        0,
-        "RUNNING · connection-credit observation admitted",
+async fn require_stale_credit_report_rejected(
+    generation: u64,
+    expected_report: &str,
+) -> Result<(), String> {
+    let window = web_sys::window().ok_or("window unavailable")?;
+    let older_generation = generation
+        .checked_sub(1)
+        .filter(|value| *value > 0)
+        .ok_or("report generation has no older valid generation")?;
+    for (stale_generation, stale_phase) in [(generation, 0), (older_generation, 2)] {
+        let options = web_sys::RequestInit::new();
+        options.set_method("POST");
+        options.set_body(&JsValue::from_str(
+            "STALE · must not replace current report",
+        ));
+        let response = wasm_bindgen_futures::JsFuture::from(window.fetch_with_str_and_init(
+            &format!(
+                "/fixture-report/connection-credit?generation={stale_generation}&phase={stale_phase}"
+            ),
+            &options,
+        ))
+        .await
+        .map_err(|_| "stale report request failed")?
+        .dyn_into::<web_sys::Response>()
+        .map_err(|_| "stale report response unavailable")?;
+        require(
+            response.status() == 409,
+            "stale report was not refused with HTTP 409",
+        )?;
+    }
+    let response = wasm_bindgen_futures::JsFuture::from(
+        window.fetch_with_str("/fixture-report/connection-credit"),
     )
-    .await?;
+    .await
+    .map_err(|_| "stored report request failed")?
+    .dyn_into::<web_sys::Response>()
+    .map_err(|_| "stored report response unavailable")?;
+    require(response.status() == 200, "stored report GET failed")?;
+    let stored = wasm_bindgen_futures::JsFuture::from(
+        response
+            .text()
+            .map_err(|_| "stored report body unavailable")?,
+    )
+    .await
+    .map_err(|_| "stored report body read failed")?
+    .as_string()
+    .ok_or("stored report was not text")?;
+    require(
+        stored == expected_report,
+        "stale publication changed the stored report",
+    )
+}
+
+async fn observe_browser_connection_drop() -> Result<String, String> {
+    let (connection, channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut monitor =
+        FixtureClient::new(channel.clone()).max_decoding_message_size(RPC_MESSAGE_BYTES);
+    let baseline = stats(&mut monitor).await?;
+    let mut waiting_client =
+        FixtureClient::new(channel).max_decoding_message_size(RPC_MESSAGE_BYTES);
+    let waiting = waiting_client
+        .unary(request(Sample {
+            behavior: df_protocol::transport_fixture::sample::Behavior::Wait as i32,
+            ..sample(0)
+        })?)
+        .boxed_local();
+    let pending = match select(waiting, TimeoutFuture::new(40).boxed_local()).await {
+        Either::Left((Ok(_), _)) => {
+            return Err("waiting generated unary succeeded before owner drop".to_owned());
+        }
+        Either::Left((Err(error), _)) => {
+            return Err(format!(
+                "waiting generated unary failed before owner drop: {error}"
+            ));
+        }
+        Either::Right(((), pending)) => pending,
+    };
+    let mut active_observed = false;
+    for _ in 0..20 {
+        if stats(&mut monitor).await?.active_calls > baseline.active_calls {
+            active_observed = true;
+            break;
+        }
+        TimeoutFuture::new(20).await;
+    }
+    require(
+        active_observed,
+        "waiting generated unary never became active on server",
+    )?;
+    let before_drop = connection.snapshot().map_err(|error| error.to_string())?;
+    drop(connection);
+    let terminal = match select(pending, TimeoutFuture::new(1000).boxed_local()).await {
+        Either::Left((result, _)) => result
+            .err()
+            .ok_or("waiting generated unary succeeded after owner drop")?,
+        Either::Right(((), pending)) => {
+            drop(pending);
+            return Err("waiting generated unary remained pending after owner drop".to_owned());
+        }
+    };
+    let (replacement, replacement_channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut replacement_client =
+        FixtureClient::new(replacement_channel).max_decoding_message_size(RPC_MESSAGE_BYTES);
+    let mut released = None;
+    for _ in 0..30 {
+        let point = stats(&mut replacement_client).await?;
+        if point.sequence > baseline.sequence && point.active_calls <= baseline.active_calls {
+            released = Some(point);
+            break;
+        }
+        TimeoutFuture::new(20).await;
+    }
+    let released = released.ok_or("dropped connection did not release server call")?;
+    let reply = replacement_client
+        .unary(request(sample(9001))?)
+        .await
+        .map_err(|error| error.to_string())?
+        .into_inner();
+    require(
+        reply.sequence == 9001,
+        "replacement connection unary did not recover",
+    )?;
+    replacement.close();
+    Ok(format!(
+        "PASS · real generated Wait unary active on server, owner dropped implicitly, pending future returned typed {terminal:?} before 1000ms; cancellation count {}→{}, active calls {}→{}, replacement connection unary recovered. Pre-drop snapshot: {before_drop:?}\n",
+        baseline.sequence, released.sequence, baseline.active_calls, released.active_calls,
+    ))
+}
+
+async fn run_connection_credit(document: &Document, generation: u64) -> Result<(), String> {
+    let running_report = "RUNNING · connection-credit observation admitted";
+    save_credit_report(generation, 0, running_report).await?;
     display_connection_credit(document, "RUNNING · opening four pressure:slow streams");
     let (connection, channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
         .await
         .map_err(|error| error.to_string())?;
+    let closed_channel = channel.clone();
     let mut observations = String::new();
     let outcome =
         observe_connection_credit(document, &connection, channel, &mut observations).await;
@@ -800,9 +930,27 @@ async fn run_connection_credit(document: &Document, generation: u64) -> Result<(
             && snapshot.callback_items.current == 0
             && snapshot.browser_callback_vec_capacity.current == 0
     });
+    require(cleaned, "explicit close did not release browser callbacks")?;
+    let mut closed_client =
+        FixtureClient::new(closed_channel).max_decoding_message_size(RPC_MESSAGE_BYTES);
+    let closed_status = match select(
+        closed_client.unary(request(sample(9002))?).boxed_local(),
+        TimeoutFuture::new(1000).boxed_local(),
+    )
+    .await
+    {
+        Either::Left((result, _)) => result
+            .err()
+            .ok_or("generated unary succeeded after explicit close")?,
+        Either::Right(((), pending)) => {
+            drop(pending);
+            return Err("generated unary remained pending after explicit close".to_owned());
+        }
+    };
+    let drop_observation = observe_browser_connection_drop().await?;
+    require_stale_credit_report_rejected(generation, running_report).await?;
     let status = match outcome {
-        Ok(credit_result) if cleaned => credit_result,
-        Ok(_) => "FAIL · connection/callback owner cleanup was not observed".to_owned(),
+        Ok(credit_result) => credit_result,
         Err(error) => format!("FAIL · {error}"),
     };
     let browser = web_sys::window()
@@ -811,11 +959,13 @@ async fn run_connection_credit(document: &Document, generation: u64) -> Result<(
         .user_agent()
         .map_err(|_| "user agent unavailable")?;
     let report = format!(
-        "{status}\n{observations}Callback cleanup observed: {cleaned}\nPost-close snapshot: {closed:?}\nBrowser: {browser}\nBuild: {}\nReport generation: {generation}\nScope: connection wire DATA credit is not stream credit or memory allocation. WASM buffer length is the whole allocated linear memory, not live heap or browser-engine storage. Hostile over-credit bursts, full G02/D03, total 8 MiB, pre-callback allocation, 128-frame/256 KiB control queue and fairness, physical phones, audio, gameplay and production remain pending.\n",
+        "{status}\n{observations}Callback cleanup observed: {cleaned}\nPost-close snapshot: {closed:?}\nPASS · post-explicit-close generated unary returned typed {closed_status:?} before 1000ms.\n{drop_observation}PASS · stale phase/generation POST returned HTTP 409 and GET preserved the admitted report.\nBrowser: {browser}\nBuild: {}\nReport generation: {generation}\nScope: connection wire DATA credit is not stream credit or memory allocation. WASM buffer length is the whole allocated linear memory, not live heap or browser-engine storage. Hostile over-credit bursts, full G02/D03, total 8 MiB, pre-callback allocation, 128-frame/256 KiB control queue and fairness, physical phones, audio, gameplay and production remain pending.\n",
         crate::BUILD_ID,
     );
+    save_credit_report(generation, 1, &report).await?;
+    require_stale_credit_report_rejected(generation, &report).await?;
     display_connection_credit(document, &report);
-    save_credit_report(generation, 1, &report).await
+    Ok(())
 }
 
 pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(), JsValue> {
