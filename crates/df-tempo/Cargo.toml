@@ -33,3 +33,7 @@ path = "tests/clock_separation_contract.rs"
 [[test]]
 name = "impulse"
 path = "tests/impulse.rs"
+
+[[test]]
+name = "audience_safe_profile_contract"
+path = "tests/audience_safe_profile_contract.rs"
