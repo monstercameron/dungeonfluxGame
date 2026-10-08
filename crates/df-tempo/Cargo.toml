@@ -29,3 +29,7 @@ path = "tests/fatigue.rs"
 [[test]]
 name = "clock_separation_contract"
 path = "tests/clock_separation_contract.rs"
+
+[[test]]
+name = "impulse"
+path = "tests/impulse.rs"
