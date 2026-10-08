@@ -3282,4 +3282,155 @@ mod tests {
             assert_eq!(decode(&bytes, basis(), original.pins()).unwrap(), original);
         }
     }
+
+    mod narrative_history_d01_source_contract {
+        use super::*;
+
+        fn record(value: u8) -> RecordId {
+            RecordId::from_bytes(&[value; 16]).unwrap()
+        }
+
+        fn accepted_structural_state() -> GameState {
+            let mut supplied = state();
+            let cause = fact(71, 0);
+            supplied.facts.push(cause.clone());
+            supplied.decisions.push(AcceptedDecision {
+                operation: cause.operation,
+                revision: cause.revision,
+                facts: vec![cause.id],
+                draws: vec![],
+                effects: vec![],
+                source_policy: label("fixture-structural-policy-1"),
+                semantic_output: None,
+            });
+            supplied.narrative.completed_beats.push(content());
+            supplied.narrative.open_threads.push(content());
+            supplied.narrative.accepted_facts.push(cause.id);
+            supplied.continuity.hooks.push(CharacterHook {
+                id: record(72),
+                member: member(3),
+                definition: content(),
+                source_facts: vec![cause.id],
+                consent_generation: 1,
+                audience: AudienceScope::Members(vec![member(3)]),
+            });
+            supplied.continuity.arcs.push(StoryArc {
+                id: record(73),
+                definition: content(),
+                phase: content(),
+                source_facts: vec![cause.id],
+                active_hooks: vec![record(72)],
+            });
+            supplied.threats.push(ThreatClock {
+                id: record(74),
+                definition: content(),
+                progress: 2,
+                capacity: 5,
+            });
+            supplied
+        }
+
+        #[test]
+        fn accepted_structural_records_survive_native_checkpoint_round_trip() {
+            let current = checkpoint(accepted_structural_state()).unwrap();
+            let bytes = encode_checkpoint(&current, codec_limits()).unwrap();
+            let restored = decode(&bytes, current.basis(), current.pins()).unwrap();
+
+            assert_eq!(restored, current);
+            assert_eq!(restored.state().narrative.completed_beats, vec![content()]);
+            assert_eq!(restored.state().narrative.open_threads, vec![content()]);
+            let cause = &restored.state().facts[0];
+            assert_eq!(restored.state().narrative.accepted_facts, vec![cause.id]);
+            assert_eq!(restored.state().decisions[0].facts, vec![cause.id]);
+            assert_eq!(
+                restored.state().continuity.hooks[0].source_facts,
+                vec![cause.id]
+            );
+            assert_eq!(
+                restored.state().continuity.arcs[0].source_facts,
+                vec![cause.id]
+            );
+            assert_eq!(
+                restored.state().continuity.arcs[0].active_hooks,
+                vec![record(72)]
+            );
+            assert_eq!(
+                restored.state().continuity.hooks[0].audience,
+                AudienceScope::Members(vec![member(3)])
+            );
+            assert_eq!(restored.state().threats[0].definition, content());
+            assert_eq!(restored.state().threats[0].progress, 2);
+            assert_eq!(restored.state().threats[0].capacity, 5);
+            assert_eq!(restored.pins(), &pins());
+        }
+
+        #[test]
+        fn foreign_content_and_missing_cause_or_hook_refuse_complete_candidate() {
+            let original = checkpoint(accepted_structural_state()).unwrap();
+            let mut foreign = original.state().clone();
+            foreign.continuity.hooks[0].definition.package = label("foreign-package-1");
+            assert_eq!(checkpoint(foreign), Err(CheckpointError::InvalidReference));
+
+            let mut missing_cause = original.state().clone();
+            missing_cause.continuity.arcs[0].source_facts[0] =
+                FactId::from_bytes(&[99; 16]).unwrap();
+            assert_eq!(
+                checkpoint(missing_cause),
+                Err(CheckpointError::InvalidReference)
+            );
+
+            let mut missing_hook = original.state().clone();
+            missing_hook.continuity.arcs[0].active_hooks[0] = record(98);
+            assert_eq!(
+                checkpoint(missing_hook),
+                Err(CheckpointError::InvalidReference)
+            );
+            assert_eq!(original.state(), &accepted_structural_state());
+        }
+
+        #[test]
+        fn replay_refuses_stale_or_foreign_checkpoint_pins() {
+            let current = checkpoint(accepted_structural_state()).unwrap();
+            let bytes = encode_checkpoint(&current, codec_limits()).unwrap();
+            let mut old_basis = current.basis();
+            old_basis.revision = revision(2, 7);
+            assert_eq!(
+                decode(&bytes, old_basis, current.pins()),
+                Err(CodecError::Checkpoint(CheckpointError::StaleBasis))
+            );
+
+            let mut foreign_pins = current.pins().clone();
+            foreign_pins.content.package_digest = ContentDigest([99; 32]);
+            assert_eq!(
+                decode(&bytes, current.basis(), &foreign_pins),
+                Err(CodecError::Checkpoint(CheckpointError::ContentMismatch))
+            );
+        }
+
+        #[test]
+        fn oversized_codec_and_invalid_threat_value_refuse_without_mutating_current() {
+            let current = checkpoint(accepted_structural_state()).unwrap();
+            let mut invalid_threat = current.state().clone();
+            invalid_threat.threats[0].progress = 6;
+            assert_eq!(
+                checkpoint(invalid_threat),
+                Err(CheckpointError::InvalidResource)
+            );
+
+            let mut zero_capacity = current.state().clone();
+            zero_capacity.threats[0].capacity = 0;
+            assert_eq!(
+                checkpoint(zero_capacity),
+                Err(CheckpointError::InvalidResource)
+            );
+
+            let mut oversized = codec_limits();
+            oversized.maximum_document_bytes = 1;
+            assert_eq!(
+                encode_checkpoint(&current, oversized),
+                Err(CodecError::Capacity)
+            );
+            assert_eq!(current.state(), &accepted_structural_state());
+        }
+    }
 }
