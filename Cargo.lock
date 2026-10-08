@@ -315,6 +315,7 @@ dependencies = [
 name = "df-commerce"
 version = "0.1.0"
 dependencies = [
+ "df-auth",
  "df-types",
 ]
 

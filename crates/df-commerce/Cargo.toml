@@ -6,3 +6,6 @@ license.workspace = true
 
 [dependencies]
 df-types = { path = "../df-types" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+df-auth = { path = "../df-auth" }

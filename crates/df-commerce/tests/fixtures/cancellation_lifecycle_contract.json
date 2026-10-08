@@ -1,0 +1,44 @@
+{
+  "contract": "B-C-df-commerce-D04/a1",
+  "stage": "design",
+  "decision": "Payment and spend policy values never issue private access. Current authenticated membership, scoped permission, consent, rights, and publication checks remain separate authorities. Cancellation, refund, and deletion observations in this contract are finite test inputs, not verified gateway events or durable production transitions.",
+  "cases": [
+    {
+      "id": "verified-payment-no-private-grant",
+      "source": "observe_subscription + effective_access + authorize_membership + publish_export",
+      "expected": "Active paid access and current membership still refuse private export until a separate current grant exists; payer identity does not inherit recipient rights."
+    },
+    {
+      "id": "governed-cancellation-and-refund-candidates",
+      "source": "effective_access + observe_subscription + publish_export",
+      "expected": "Period-end cancellation retains paid-through access; immediate cancellation and confirmed entitlement-ending refund restrict a candidate without changing an admitted game decision. Unknown refund produces pending reconciliation, no confirmed refund or new allowance. Private revocation still refuses disclosure."
+    },
+    {
+      "id": "unknown-supplier-exposure",
+      "source": "propose_spend",
+      "expected": "An Unknown operation refuses a new reservation and retains all existing counter exposure through cancellation."
+    },
+    {
+      "id": "deletion-and-retention-suppression",
+      "source": "publish_export + revalidate_membership",
+      "expected": "Current revocation, changed access version, missing consent, missing rights, or disabled export refuses old private bytes while payment remains Active. Limited billing retention cannot issue private dialogue access."
+    },
+    {
+      "id": "separate-operator-powers",
+      "source": "invoke_operator + publish_export",
+      "expected": "Current Refund permission does not imply Deletion permission or private export permission."
+    }
+  ],
+  "alternatives_rejected": [
+    "Treat a paid subscription, payer, host, or retained billing record as permission to disclose private material.",
+    "Treat request cancellation, refund timeout, or expired provider lease as proof of no supplier send or as an automatic release of Unknown liability.",
+    "Serve a pre-deletion snapshot or cache without current suppression and rights checks.",
+    "Invent public payment events, lifecycle IDs, gateway receipts, persistence schema, or production refund and deletion authority in a pure design-stage crate."
+  ],
+  "production_gaps": [
+    "Gateway verification, refund dispatch and same-key reconciliation are not implemented.",
+    "A durable CommerceRepository, grant projection, protected recovery journal, deletion plan, backup replay and physical erasure are not implemented or qualified by this fixture.",
+    "The test-owned current authorities are synthetic; they do not prove PostgreSQL concurrency, native publication integration, browser output, customer payment, or legal retention periods.",
+    "Deletion completion and actual external refund remain pending or unsupported until owning consumers provide durable evidence."
+  ]
+}
