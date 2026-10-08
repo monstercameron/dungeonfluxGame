@@ -1,0 +1,255 @@
+{
+  "format_version": 1,
+  "task": "B-C-df-rpc-bridge-D02",
+  "attempt": "B-C-df-rpc-bridge-D02-a3",
+  "input_revision": "b1ebc9e71e1897fd7fda14fdbfbecb527e3345c9",
+  "objective": "Freeze HTTP/2 receive credit and bounded-buffer accounting around the actual h2 flow-control boundary.",
+  "decision": {
+    "expected": "WINDOW_UPDATE and peer DATA progress follow released bytes only.",
+    "production_owner": "crates/df-rpc-bridge/src/resources.rs::ReceiveCredit and crates/df-rpc-bridge/src/browser.rs::ReceiveBody",
+    "production_release": "ReceiveBody reports previous DATA length on its next poll, releases accumulated bytes via h2::FlowControl::release_capacity, flushes partial credit when h2 returns Pending, and releases/removes its slot at terminal completion or Drop.",
+    "public_boundary": "BrowserConnection/BrowserChannel/ReceiveBody are the production browser receive path; NativeAdmission/TunnelStream are the native measured transport. ReceiveCredit is crate-private and the browser body is wasm-only."
+  },
+  "bounds": {
+    "initial_frame_bytes": 16384,
+    "stream_window_bytes": 262144,
+    "connection_window_bytes": 1048576,
+    "header_bytes": 16384,
+    "decoded_message_bytes": 262144,
+    "concurrent_rpc_streams": 8,
+    "planned_connection_envelope_bytes": 8388608,
+    "observation_limit": "ConnectionSnapshot counts actual DATA and connection WINDOW_UPDATE frames plus Rust callback/pipe capacities; it excludes allocator metadata, h2 buffers and browser engine allocations before callbacks."
+  },
+  "integration_test": {
+    "path": "crates/df-rpc-bridge/tests/flow_credit_contract.rs",
+    "boundary": "Uses actual h2 client/server SendStream and RecvStream over bounded Tokio async I/O. Four stream windows remain owned without capacity release until the aggregate receive window stalls; releasing bytes must wake the blocked peer sender and return DATA.",
+    "assertions": [
+      "Polling and retaining four stream windows leaves used_capacity unchanged and exhausts the actual shared connection window.",
+      "The next DATA byte remains blocked until the consumer releases a held DATA buffer.",
+      "Releasing held DATA restores h2 send capacity and the corresponding DATA is observed by the receiver.",
+      "After terminal bodies are drained, used_capacity is zero while body values remain retained."
+    ],
+    "limits": [
+      "This host integration target exercises h2 flow-control windows directly; it does not import private ReceiveCredit or claim its slot bookkeeping is covered here.",
+      "Existing resources.rs real-h2 unit tests cover ReceiveCredit partial batches, aggregate credit, slot reuse, failed release visibility and slot ownership.",
+      "The actual df-tools browser connection-credit fixture is still required to exercise BrowserConnection/BrowserChannel/ReceiveBody in wasm."
+    ],
+    "exact_command": "cargo test --offline --locked -p df-rpc-bridge --test flow_credit_contract",
+    "run_state": "UNPERFORMED",
+    "test_fixture_window_settings": {
+      "configured_stream_window_bytes": 1048576,
+      "production_stream_window_bytes": 262144,
+      "connection_window_bytes": 1048576,
+      "reason": "The host contract deliberately raises each test stream window to the production connection-window size so four streams exhaust shared connection credit before any one stream exhausts its own window."
+    },
+    "task_ownership": {
+      "server_owner": "The server task retains every producer JoinHandle, receives an explicit stop signal after terminal bodies drain, and awaits all producers before returning.",
+      "client_owner": "The client driver is explicitly aborted and its JoinHandle is awaited; unexpected driver errors remain failures.",
+      "producer_errors": "Producer h2 send errors and producer task panics propagate through explicit expectations and JoinHandle awaits."
+    },
+    "terminal_accounting": "Each producer sends an explicit empty END_STREAM DATA frame. The receiver checks any terminal frame has no payload, confirms end-of-stream, checks subsequent data() returns None, and retains completed bodies with zero used_capacity."
+  },
+  "browser_fixture": {
+    "path": "crates/df-tools/src/qualification.rs",
+    "scenario": "Run the current four-stream held/resumed connection-credit fixture at the pinned candidate build; retain its explicit INCONCLUSIVE branch when snapshots do not establish exhausted connection DATA credit and stalled DATA/WINDOW_UPDATE progress.",
+    "run_state": "UNPERFORMED",
+    "evidence_requirements": [
+      "Candidate/build identity and browser/runtime versions.",
+      "Four stream results with held and resumed measurements.",
+      "receive_credit.data_bytes, update_bytes and available values at each snapshot.",
+      "Producer's exact PASS/FAIL/INCONCLUSIVE outcome."
+    ]
+  },
+  "alternatives": [
+    {
+      "option": "Replace h2 with synthetic counters or a test-only coordinator.",
+      "disposition": "Rejected because it cannot establish real WINDOW_UPDATE and peer progress."
+    },
+    {
+      "option": "Expose ReceiveCredit or import a private module.",
+      "disposition": "Rejected because public API/source module changes are outside scope."
+    },
+    {
+      "option": "Claim callback observations bound total browser allocation.",
+      "disposition": "Rejected because pre-callback engine storage and allocator overhead are excluded."
+    }
+  ],
+  "unresolved": [
+    "ReceiveCredit bookkeeping cases rely on existing internal resource tests and still need current-source test execution.",
+    "The wasm-only browser fixture and independent review remain unperformed.",
+    "No total browser process or pre-callback allocation bound is claimed.",
+    "Native, WASM, rustfmt, Clippy, Cargo integration and runtime checks are unperformed."
+  ],
+  "verification": {
+    "exact_commands": [
+      "cargo test --offline --locked -p df-rpc-bridge --test flow_credit_contract",
+      "cargo test --offline --locked -p df-rpc-bridge real_h2_pending_flush_recovers_partial_window_without_end_stream",
+      "cargo test --offline --locked -p df-rpc-bridge real_h2_aggregate_credit_and_slot_reuse_are_bounded",
+      "cargo fmt --all -- --check",
+      "cargo clippy --offline --locked -p df-rpc-bridge --all-targets -- -D warnings",
+      "cargo check --offline --locked -p df-rpc-bridge --target wasm32-unknown-unknown"
+    ],
+    "runtime": "UNPERFORMED",
+    "browser": "UNPERFORMED",
+    "historical_failures": [
+      {
+        "kind": "genuine_compile_failure",
+        "source_pin": {
+          "rust_path": "crates/df-rpc-bridge/tests/flow_credit_contract.rs",
+          "rust_sha256": "2255ceacbc1eb7127405de137f591688e89c6783bca449fd50684a9bea843e29",
+          "contract_json_sha256": "7e74a69e499b079fcbc423bf654dfd983950662679f9c89f0c9cce8b296de44a",
+          "rust_bytes": 9723,
+          "source_freeze_authority": {
+            "path": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/rpc-flow-credit-d02-a2/ROOT-source-freeze-01.json",
+            "bytes": 369389,
+            "sha256": "a60dca2dc1a86ed82d82349e9c0567e556885e1d7859542dc38402eb74e12650",
+            "relative_source_snapshot": "source-freeze-01/source/crates/df-rpc-bridge/tests/flow_credit_contract.rs",
+            "source_bytes": 9723,
+            "source_sha256": "2255ceacbc1eb7127405de137f591688e89c6783bca449fd50684a9bea843e29",
+            "source_count": 560,
+            "source_checks": 1120
+          },
+          "preformat_historical_pin": {
+            "bytes": 9383,
+            "sha256": "39462a43f0253a7fb70bcb8ab674a8bf4cf26a93d99ce0998d6abd329122d584",
+            "role": "pre-format historical pin only; it is not the source compiled by the failed Root command"
+          }
+        },
+        "command": "cargo test --offline --locked -p df-rpc-bridge --test flow_credit_contract --message-format=json -- --test-threads=1",
+        "receipt": {
+          "path": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/rpc-flow-credit-d02-a2/ROOT-a2-focused-contract-tests-01.json",
+          "bytes": 1735,
+          "sha256": "7bac0a7a52336c079369977980a3742453df2b9bf2ea90e3576c3daac90729cb",
+          "exit_code": 101,
+          "duration_seconds": 51.709566083,
+          "peak_sampled_guard_and_group_rss_bytes": 463175680,
+          "last_free_proxy_percent": 36,
+          "abort_reason": null,
+          "remaining_owned_group": [],
+          "terminal_observation": "Root personally observed owned handle 59513 reach terminal."
+        },
+        "diagnostic": {
+          "path": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/rpc-flow-credit-d02-a2/ROOT-a2-first-genuine-compile-diagnostics-02-guard.json.stdout",
+          "bytes": 2937,
+          "sha256": "43d06a0d15a4d21406a99162a43590b6f3f86f5854e1f4912bf7bd109a4d6cb0",
+          "errors": [
+            {
+              "code": "E0283",
+              "location": "flow_credit_contract.rs:19",
+              "issue": "Reason::CANCEL.into() was ambiguous between h2::Error and u32 conversions."
+            },
+            {
+              "code": "E0283",
+              "location": "flow_credit_contract.rs:19",
+              "issue": "The inferred error conversion remained ambiguous at the h2::Error return boundary."
+            },
+            {
+              "code": "E0596",
+              "location": "flow_credit_contract.rs:180",
+              "issue": "flow_control() requires mutable access; bodies.iter() supplied shared references."
+            },
+            {
+              "code": "E0596",
+              "location": "flow_credit_contract.rs:186",
+              "issue": "flow_control() requires mutable access; bodies.iter() supplied shared references."
+            }
+          ],
+          "native_test_started": false
+        },
+        "resolution": {
+          "source_change": "Use explicit h2::Error::from(h2::Reason::CANCEL) and iter_mut() for both flow_control observations.",
+          "current_successor_checks": "UNPERFORMED",
+          "root_owned_compile_and_runtime_recheck_required": true
+        },
+        "pin_correction": {
+          "reason": "The earlier ledger incorrectly attributed the pre-format hash to the compile failure. ROOT-source-freeze-01 is the source authority for the actual compiler input and pins the formatted Rust test at 9723 bytes.",
+          "previous_ledger_rust_sha256": "39462a43f0253a7fb70bcb8ab674a8bf4cf26a93d99ce0998d6abd329122d584",
+          "corrected_failed_input_rust_sha256": "2255ceacbc1eb7127405de137f591688e89c6783bca449fd50684a9bea843e29"
+        }
+      },
+      {
+        "kind": "genuine_runtime_failure",
+        "source_pin": {
+          "rust_path": "crates/df-rpc-bridge/tests/flow_credit_contract.rs",
+          "rust_sha256": "3ba80d0327c002c8d3638aabf3664834ef8ebeb9632da150aec81474debad7b5",
+          "contract_json_sha256": "a99891eaf640af8b9b740f3b00645b55bce78406b559e6017d9459f9c1184fed",
+          "rust_bytes": 9741,
+          "source_freeze_authority": {
+            "path": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/rpc-flow-credit-d02-a2/ROOT-source-freeze-02.json",
+            "bytes": 370274,
+            "sha256": "2ce2e4dd552a875740cc040f47aa142f1a4f7b1f2d3d885be1d489f0a7b81ac8",
+            "source_count": 560,
+            "source_checks": 1120
+          }
+        },
+        "command": "cargo test --offline --locked -p df-rpc-bridge --test flow_credit_contract --message-format=json -- --test-threads=1",
+        "receipt": {
+          "path": "/Users/earlcameron/Desktop/dungeonflux/development/evidence/fanout-20261001/rpc-flow-credit-d02-a2/ROOT-a2-focused-contract-tests-02.json",
+          "exit_code": 101,
+          "duration_seconds": 3.446464917,
+          "peak_sampled_guard_and_group_rss_bytes": 317800448,
+          "last_free_proxy_percent": 36,
+          "abort_reason": null,
+          "remaining_owned_group": []
+        },
+        "diagnostic": {
+          "path": "/Users/earlcameron/Desktop/dungeonflux/artifacts/tmp/wave51-session-submission-20261006/ROOT-RPC-D02-second-source-version-failure-diagnostics-01-guard.json.stdout",
+          "compiler_succeeded": true,
+          "native_test_started": true,
+          "passed": 0,
+          "failed": 1,
+          "failed_test": "real_h2_aggregate_held_data_only_progresses_after_released_bytes",
+          "failed_line": 228,
+          "assertion": "completed h2 body returned unexpected DATA"
+        },
+        "resolution": {
+          "source_change": "The server deliberately sends empty END_STREAM DATA. Consume and verify that terminal frame, then require data() to return None and used_capacity to equal zero.",
+          "current_successor_checks": "UNPERFORMED",
+          "root_owned_compile_and_runtime_recheck_required": true
+        }
+      }
+    ]
+  },
+  "required_case_coverage": [
+    {
+      "case": "Hold delivered DATA without returning receive credit; resume only after consumption releases capacity.",
+      "source": "New integration test real_h2_aggregate_held_data_only_progresses_after_released_bytes; existing source unit test real_h2_pending_flush_recovers_partial_window_without_end_stream.",
+      "status": "source_present_unrun",
+      "evidence_limit": "Host test observes actual h2 sender stalling and peer DATA progress. Direct measured DATA/WINDOW_UPDATE snapshots still require the browser fixture."
+    },
+    {
+      "case": "Partial consumption and aggregate held credit across four streams preserve byte ownership.",
+      "source": "New four-stream h2 test; existing resources.rs::real_h2_aggregate_credit_and_slot_reuse_are_bounded; browser fixture observe_connection_credit.",
+      "status": "source_present_browser_unrun"
+    },
+    {
+      "case": "Pending receive progress flushes a partial batch; terminal close/drop detaches credit handles and reports failures.",
+      "source": "Existing resources.rs::real_h2_pending_flush_recovers_partial_window_without_end_stream and ReceiveCredit::finish; browser.rs::ReceiveBody::finish/Drop.",
+      "status": "unit_source_present_browser_runtime_unrun",
+      "gap": "No new integration test imports the crate-private ReceiveCredit. Actual wasm ReceiveBody close/drop behavior remains to be observed by Root's browser fixture."
+    },
+    {
+      "case": "Completed body retention and slot reuse do not retain released credit.",
+      "source": "Existing resources.rs::real_h2_aggregate_credit_and_slot_reuse_are_bounded; new test retains completed RecvStream values and checks used_capacity is zero.",
+      "status": "source_present_unrun"
+    },
+    {
+      "case": "Failed release, impossible accounting, and poisoned coordinator state surface failure without fabricated credit.",
+      "source": "Existing resources.rs::real_h2_aggregate_credit_and_slot_reuse_are_bounded exercises impossible consumed accounting and poisoned-lock terminal cleanup.",
+      "status": "source_present_unrun",
+      "gap": "A real h2 FlowControl::release_capacity failure is not injected by the new public integration test."
+    },
+    {
+      "case": "Current wasm browser four-stream connection-credit fixture records held and resumed snapshots, preserving producer INCONCLUSIVE.",
+      "source": "crates/df-tools/src/qualification.rs::observe_connection_credit",
+      "status": "unperformed_root_required"
+    }
+  ],
+  "source_generation": {
+    "generation": 3,
+    "rust_sha256": "99db61db2eff019f8b9fede884fb55b1b605088a1b4730ba106e0e10471cb81f",
+    "state": "submitted_for_root_owned_current_source_checks",
+    "repair": "Consume and verify the explicit empty h2 END_STREAM DATA after the exact held and resumed payload; require true EOF and zero used capacity.",
+    "format_note": "Root-owned rustfmt passed on generation 3 source before final pair pin."
+  }
+}
