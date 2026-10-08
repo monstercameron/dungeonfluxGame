@@ -582,6 +582,61 @@ fn occupied_digest_destination_refuses_bad_backing_without_new_visibility_or_ove
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn occupied_digest_symlink_to_matching_cache_refuses_publication() {
+    use std::os::unix::fs::symlink;
+
+    let path = root();
+    let bytes = Arc::new(NativeFileStore::new(&path, 1024).unwrap());
+    let metadata = Metadata::new(bytes.clone());
+    let content = b"asset-v1";
+    let cache = root().join("cached-copy");
+    fs::write(&cache, content).unwrap();
+    let object = path.join("objects").join(
+        expected(content)
+            .sha256
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>(),
+    );
+    symlink(&cache, &object).unwrap();
+    let staged = bytes.stage(operation(25), &mut &content[..]).unwrap();
+    let candidate = publication(operation(25), 1, "image", expected(content));
+
+    assert!(matches!(
+        publish(&context(), &candidate, &staged, bytes.as_ref(), &metadata),
+        Err(PublicationError::Store(StoreError::BackingIntegrity)),
+    ));
+    assert_eq!(metadata.publish_calls.load(Ordering::Relaxed), 0);
+    assert_eq!(metadata.count(), 0);
+    assert_eq!(fs::read(&cache).unwrap(), content);
+}
+
+#[cfg(unix)]
+#[test]
+fn symlinked_objects_directory_refuses_new_publication_without_writing_cache() {
+    use std::os::unix::fs::symlink;
+
+    let path = root();
+    let bytes = Arc::new(NativeFileStore::new(&path, 1024).unwrap());
+    let metadata = Metadata::new(bytes.clone());
+    let cache = root();
+    fs::rename(path.join("objects"), path.join("original-objects")).unwrap();
+    symlink(&cache, path.join("objects")).unwrap();
+    let content = b"asset-v1";
+    let staged = bytes.stage(operation(26), &mut &content[..]).unwrap();
+    let candidate = publication(operation(26), 1, "image", expected(content));
+
+    assert!(matches!(
+        publish(&context(), &candidate, &staged, bytes.as_ref(), &metadata),
+        Err(PublicationError::Store(StoreError::BackingIntegrity)),
+    ));
+    assert_eq!(metadata.publish_calls.load(Ordering::Relaxed), 0);
+    assert_eq!(metadata.count(), 0);
+    assert_eq!(fs::read_dir(cache).unwrap().count(), 0);
+}
+
 #[test]
 fn missing_backing_remains_typed_missing_for_confirm_and_unknown_ack_retry() {
     let path = root();
