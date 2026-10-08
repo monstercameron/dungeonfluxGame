@@ -1277,14 +1277,40 @@ fn hidden_wire_checkpoint(
     payload: &str,
     salt: u8,
     replace_semantic: bool,
+    private_operation: OperationId,
 ) -> Checkpoint {
     let (current, _) = with_memory(current, first, payload, salt);
     let mut state = current.state().clone();
     if replace_semantic {
+        let mut replaced = 0;
         for decision in &mut state.decisions {
-            if decision.semantic_output.is_some() {
+            if decision.operation == private_operation && decision.source_policy.as_str() == POLICY
+            {
+                assert_eq!(decision.semantic_output.as_deref(), Some(RESPONSE));
+                assert!(decision.facts.is_empty());
+                assert!(decision.draws.is_empty());
+                assert!(decision.effects.is_empty());
+                assert!(decision.revision > intent(&current).basis.revision);
+                assert!(decision.revision <= current.basis().revision);
                 decision.semantic_output = Some(payload.to_owned());
+                replaced += 1;
             }
+        }
+        assert_eq!(
+            replaced, 1,
+            "the retained private completion alone is varied"
+        );
+    }
+    for (before, after) in current.state().decisions.iter().zip(&state.decisions) {
+        if before.operation != private_operation || before.source_policy.as_str() != POLICY {
+            assert_eq!(before, after);
+        }
+        if after.source_policy.as_str() == crate::gameplay::journey::THREAD_POLICY {
+            assert_eq!(
+                crate::gameplay::journey::accepted(before).unwrap(),
+                crate::gameplay::journey::accepted(after).unwrap(),
+                "public AcceptedAction payloads remain valid and unchanged"
+            );
         }
     }
     model::checkpoint(current.basis(), state).unwrap()
@@ -1305,6 +1331,9 @@ fn all_actual_wire_fields_and_encoded_bytes_are_noninterfering_for_retained_priv
         ("sibling", LocalDemoRole::Player, second),
         ("display", LocalDemoRole::Display, first),
     ];
+    let private_operation = completion_operation(intent(&pending)).unwrap();
+    let mut authorized_success = [false; 3];
+    let mut withdrawal_success = [false; 3];
     let mut safe_empty = [0usize; 3];
     for case in 0..10 {
         let (name, mut current, replace_semantic) = match case {
@@ -1337,6 +1366,7 @@ fn all_actual_wire_fields_and_encoded_bytes_are_noninterfering_for_retained_priv
             "PRIVATE-LEFT: hidden name, destination and memory metadata",
             150,
             replace_semantic,
+            private_operation,
         );
         let right = hidden_wire_checkpoint(
             &current,
@@ -1344,6 +1374,7 @@ fn all_actual_wire_fields_and_encoded_bytes_are_noninterfering_for_retained_priv
             "PRIVATE-RIGHT: different hidden name, destination and memory metadata",
             170,
             replace_semantic,
+            private_operation,
         );
         for (slot, (role, role_kind, principal)) in roles.iter().enumerate() {
             let a = wire::journey_view(&left, *role_kind, *principal);
@@ -1354,6 +1385,16 @@ fn all_actual_wire_fields_and_encoded_bytes_are_noninterfering_for_retained_priv
                     let encoded_a = a.encode_to_vec();
                     let encoded_b = b.encode_to_vec();
                     assert_eq!(encoded_a, encoded_b, "{name}/{role}: entire encoded wire");
+                    assert!(
+                        !encoded_a.is_empty(),
+                        "{name}/{role}: actual encoded success"
+                    );
+                    if case == 0 {
+                        authorized_success[slot] = true;
+                    }
+                    if case == 4 {
+                        withdrawal_success[slot] = true;
+                    }
                     assert_eq!(
                         crate::gameplay::rpc::ViewMessage::decode(encoded_a.as_slice()).unwrap(),
                         a
@@ -1387,6 +1428,10 @@ fn all_actual_wire_fields_and_encoded_bytes_are_noninterfering_for_retained_priv
                     retain_wire(name, role, "right", &encoded_b, "success");
                 }
                 (Err(a), Err(b)) => {
+                    assert!(
+                        case != 0 && case != 4,
+                        "{name}/{role}: required successful projection refused: {a:?} / {b:?}"
+                    );
                     assert_eq!(
                         format!("{a:?}"),
                         format!("{b:?}"),
@@ -1402,8 +1447,93 @@ fn all_actual_wire_fields_and_encoded_bytes_are_noninterfering_for_retained_priv
             }
         }
     }
+    assert!(authorized_success.into_iter().all(|success| success));
+    assert!(
+        withdrawal_success.into_iter().all(|success| success),
+        "source definition withdrawal must produce full successful safe-empty wire for every role"
+    );
     assert!(
         safe_empty.into_iter().all(|count| count > 0),
         "each role has actual full safe-empty witnesses"
     );
+}
+
+#[test]
+fn source_withdrawal_refuses_current_prepared_summary_and_replay_after_positive_controls() {
+    let (pending, first, second) = pending();
+    let completed = stage_completion(
+        &pending,
+        &execute(&pending, intent(&pending)).unwrap(),
+        completion_operation(intent(&pending)).unwrap(),
+    )
+    .unwrap();
+    for salt in [150, 170] {
+        let (current, request) = with_memory(&pending, first, RESPONSE, salt);
+        let prepared = authored(&current);
+        let selected =
+            lookup_authorized_prepared(&prepared, &prepared.key, &prepared.basis).unwrap();
+        assert_eq!(*selected, RESPONSE);
+        let memory = NativeMemoryOwner::new(&current);
+        assert_eq!(
+            retrieve_ranked(&memory, &request, &current.basis(), memory_limits())
+                .unwrap()
+                .candidates(),
+            &[&current.state().continuity.summaries[0]]
+        );
+        assert_eq!(memory.reads.get(), 1);
+        assert_eq!(memory.costs.get(), 1);
+        let mut replay = RecordingReplayOwner::new(&current, request.clone());
+        install_record(&mut replay);
+        replay.replay_mode();
+        assert_eq!(
+            lookup_authorized_replay(&replay, &replay.key, &replay.binding).unwrap(),
+            &expected_completion(intent(&current)).unwrap()
+        );
+        assert_eq!(replay.replay_reads.get(), 1);
+        let withdrawn = withdraw_source(&current, 2);
+        let mut prepared = prepared;
+        prepared.current = &withdrawn;
+        prepared.intent = intent(&withdrawn);
+        assert!(matches!(
+            lookup_authorized_prepared(&prepared, &prepared.key, &prepared.basis),
+            Err(AuthorizedLookupError::Authority(_))
+        ));
+        let refused_memory = NativeMemoryOwner::new(&current);
+        *refused_memory.current.borrow_mut() = withdrawn.clone();
+        assert!(
+            retrieve_ranked(&refused_memory, &request, &current.basis(), memory_limits()).is_err()
+        );
+        assert_eq!(refused_memory.reads.get(), 0);
+        assert_eq!(refused_memory.costs.get(), 0);
+        assert_eq!(refused_memory.comparisons.get(), 0);
+        let replay_current = replay.memory.current.borrow().clone();
+        let replay_withdrawn = withdraw_source(&replay_current, 2);
+        *replay.memory.current.borrow_mut() = replay_withdrawn.clone();
+        assert!(matches!(
+            lookup_authorized_replay(&replay, &replay.key, &replay.binding),
+            Err(AuthorizedLookupError::Authority(_))
+        ));
+        assert_eq!(
+            replay.replay_reads.get(),
+            1,
+            "withdrawal adds no replay storage read"
+        );
+        assert_eq!(replay.prepared_reads.get(), 0);
+        assert_eq!(*refused_memory.current.borrow(), withdrawn);
+        assert_eq!(*replay.memory.current.borrow(), replay_withdrawn);
+        let wire_withdrawn = withdraw_source(&completed, 2);
+        for (role, principal) in [
+            (LocalDemoRole::Player, first),
+            (LocalDemoRole::Player, second),
+            (LocalDemoRole::Display, first),
+        ] {
+            let view = wire::journey_view(&wire_withdrawn, role, principal).unwrap();
+            if let Some(crate::gameplay::rpc::view_message::Audience::Player(player)) =
+                &view.audience
+            {
+                assert!(player.private_clue.is_empty());
+            }
+            assert!(!view.encode_to_vec().is_empty());
+        }
+    }
 }

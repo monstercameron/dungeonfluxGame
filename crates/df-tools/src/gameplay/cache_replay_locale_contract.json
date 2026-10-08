@@ -70,9 +70,10 @@
     "generic_complete_recording_identity_checks_every_canonical_request_payload_locale_and_projection_dimension",
     "recording_replay_current_authority_refuses_before_read_and_masks_every_late_lookup_outcome",
     "registered_prepared_consumer_reauthorizes_its_full_current_binding",
-    "all_actual_wire_fields_and_encoded_bytes_are_noninterfering_for_retained_private_payloads"
+    "all_actual_wire_fields_and_encoded_bytes_are_noninterfering_for_retained_private_payloads",
+    "source_withdrawal_refuses_current_prepared_summary_and_replay_after_positive_controls"
   ],
-  "verification": "Authored tests require fresh actual source/build-bound gates. This contract does not itself claim compilation, runtime acceptance, translation, provider execution, physical PostgreSQL restart, or production tenant authentication.",
+  "verification": "Authored tests require fresh actual source/build-bound gates. This contract does not itself claim compilation, runtime acceptance, translation, provider execution, physical PostgreSQL restart, or production tenant authentication. Full-wire fixtures preserve every public AcceptedAction semantic payload and vary only the original private terminal completion operation with its canonical policy and causal revision. The authorized baseline and the named source-definition withdrawal MUST return successful nonempty complete encoded ViewMessage bytes for recipient, sibling and display; the latter must disclose no private clue. Typed refusals cannot satisfy that positive branch. Paired hidden payload/summary/source RecordId changes compare all message fields and exact bytes; paired positive prepared/summary/recording Replay controls precede current source-definition refusal without another read/cost/rank or canonical mutation.",
   "preserved_existing_coverage": "Existing courier tests remain intact, including lost acknowledgement, uncertain lookup, corrupt/truncated/cancelled/trailing complete records and causal completion binding.",
   "whole_original_design": {
     "full_wire_witness": {
