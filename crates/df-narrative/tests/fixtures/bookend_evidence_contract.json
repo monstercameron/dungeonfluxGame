@@ -1,0 +1,42 @@
+{
+  "task": "B-C-df-narrative-D04",
+  "source": "planning/campaign-cinematics.md: Recaps and trailers; planning/narrative-engine.md: Realization and acceptance",
+  "decision": "Recaps select exact accepted and observer-permitted facts, retaining claims as attributed; trailers select only an admitted current open thread and no fact or claim references.",
+  "rejected_alternatives": [
+    "Treat a trailer outline as a committed future event",
+    "Promote an NPC belief or a summary into canonical truth",
+    "Infer thread disclosure from its bare content reference"
+  ],
+  "unresolved": [
+    "No current df-presentation bookend shot/caption planner or mounted session publisher consumes this selector",
+    "Arbitrary image, audio and caption semantics require separate audience and speculative-label validation",
+    "Browser, media/provider, PostgreSQL and independent integrated review remain unperformed by this contract"
+  ],
+  "cases": [
+    {"case":"accepted_recap","outcome":"ok:facts=2:claims=1:thread=false"},
+    {"case":"unknown_fact","outcome":"error:Evidence"},
+    {"case":"orphan_fact","outcome":"error:Evidence"},
+    {"case":"hidden_fact","outcome":"error:Evidence"},
+    {"case":"out_of_range_fact","outcome":"error:Evidence"},
+    {"case":"reordered_chronology","outcome":"error:Evidence"},
+    {"case":"attributed_claim","outcome":"ok:facts=0:claims=1:thread=false"},
+    {"case":"hidden_claim","outcome":"error:Evidence"},
+    {"case":"unknown_claim","outcome":"error:Evidence"},
+    {"case":"uncommitted_claim_evidence","outcome":"error:Evidence"},
+    {"case":"unsupported_claim","outcome":"error:Evidence"},
+    {"case":"out_of_range_claim_evidence","outcome":"error:Evidence"},
+    {"case":"stale_run","outcome":"error:Checkpoint(WrongRun)"},
+    {"case":"stale_basis","outcome":"error:Checkpoint(StaleBasis)"},
+    {"case":"invalid_range","outcome":"error:Range"},
+    {"case":"stale_pins","outcome":"error:Checkpoint(ContentMismatch)"},
+    {"case":"observer_mismatch","outcome":"error:Audience"},
+    {"case":"bounded_work","outcome":"error:Capacity"},
+    {"case":"bounded_selection","outcome":"error:Capacity"},
+    {"case":"authorized_trailer","outcome":"ok:facts=0:claims=0:thread=true"},
+    {"case":"trailer_fact_refused","outcome":"error:Evidence"},
+    {"case":"trailer_claim_refused","outcome":"error:Evidence"},
+    {"case":"unadmitted_thread","outcome":"error:Thread"},
+    {"case":"closed_thread","outcome":"error:Thread"},
+    {"case":"hidden_state_noninterference","outcome":"ok:facts=0:claims=0:thread=true"}
+  ]
+}
