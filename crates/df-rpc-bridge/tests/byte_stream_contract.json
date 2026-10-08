@@ -1,0 +1,281 @@
+{
+  "contract_version": 1,
+  "task_id": "B-C-df-rpc-bridge-D01",
+  "attempt_id": "B-C-df-rpc-bridge-D01-a2",
+  "objective": "Specify and exercise the existing continuous byte-stream adaptation: WebSocket message boundaries do not define RPC messages.",
+  "source_decision": {
+    "transport": "The existing native admission handle transfers an accepted WebSocket into the existing TunnelStream. HTTP/2 reads and writes the ordered bytes as one continuous stream across arbitrary binary WebSocket message boundaries.",
+    "limits": {
+      "frame_bytes": 16384,
+      "websocket_message_bytes": 262144,
+      "receive_pipe_bytes": 1048576
+    },
+    "refusals": [
+      "NativeAdmission reports Full when the bounded pending-connection reservation is exhausted.",
+      "NativeAdmission reports Closed after its NativeIncoming receiver is dropped.",
+      "The existing adapter visibly rejects unsupported messages, oversize input, and truncated HTTP/2 input."
+    ],
+    "ownership": "The accepted connection owns the WebSocket pump and both byte directions; dropping either end terminates the pump and releases pipe owners."
+  },
+  "source_pins": [
+    {
+      "path": "crates/df-rpc-bridge/src/native.rs",
+      "bytes": 40667,
+      "sha256": "ab2dd986820e56a21eb87e8ea207d32dd9f5a2072765368c7b83b67819bcea2e"
+    },
+    {
+      "path": "crates/df-rpc-bridge/src/browser.rs",
+      "bytes": 24295,
+      "sha256": "9dd577b486cba0b74639d25d322c0a17ac1d391e503c48beccb2341402c292b8"
+    },
+    {
+      "path": "crates/df-rpc-bridge/src/lib.rs",
+      "bytes": 927,
+      "sha256": "7875f20e98f0a07a4219918a7abc0ac42d905a233451eabe349468b10614fffb"
+    },
+    {
+      "path": "crates/df-rpc-bridge/src/resources.rs",
+      "bytes": 46731,
+      "sha256": "d8e5c27590ffaadcad264e52e6ffa76599d3129b5438bb0d6bb3491fd5e15564"
+    }
+  ],
+  "implementation_paths": [
+    "crates/df-rpc-bridge/tests/byte_stream_contract.rs",
+    "crates/df-rpc-bridge/tests/byte_stream_contract.json"
+  ],
+  "cases": {
+    "new_public_boundary_test": {
+      "name": "websocket_messages_are_only_chunks_of_the_http2_byte_stream",
+      "procedure": "Start an owned loopback Axum WebSocket endpoint using NativeAdmission and NativeIncoming; pass the admitted public TunnelStream to an actual h2 server handshake; run an h2 client over the direct seven-byte test adapter or a bounded DuplexStream with an independently owned WebSocket pump; echo a request body through the real native adapter.",
+      "delivery_shapes": [
+        "The split mode sends each AsyncWrite portion as a distinct binary WebSocket message, caps each at seven bytes, reconstructs the observed wire bytes, and checks the actual HTTP/2 preface is preserved.",
+        "The coalescing mode writes actual h2 bytes into a bounded 64 KiB DuplexStream, whose flush completes to its peer byte pipe. An independently owned pump then groups the request bytes after the server handshake until the last body marker and sends them as one binary WebSocket message.",
+        "The coalescing assertion requires both separated body markers, more than FRAME_BYTES apart, to appear in one observed WebSocket message. Since one HTTP/2 DATA frame carries at most FRAME_BYTES payload bytes, this proves at least two DATA frames shared that message without parsing or reimplementing HTTP/2 framing.",
+        "Run a real HTTP/2 request/response through the tunnel and compare the exact echoed 32 KiB body."
+      ],
+      "cleanup": "Observe public ConnectionMetrics after the WebSocket pumps complete; require closed connection state and zero pipe owners. The coalescing client pump is joined or cancelled and reaped within a finite bound. A late inbound BrokenPipe is terminal only after the exact response and actual coalescence assertions complete and the owned h2 driver returns Ok; earlier or other pipe failures remain assertions.",
+      "coalescence_evidence": {
+        "method": "Record exact outbound binary WebSocket messages from the h2 client's AsyncWrite adapter.",
+        "required_assertion": "A single recorded message contains the first and last unique body markers separated by more than FRAME_BYTES.",
+        "frame_parsing": "None; the test relies on the established HTTP/2 maximum DATA payload size and the actual payload markers.",
+        "worker_observation": "Root focused and full native tests PASSED on freeze04 source only; freeze05 lint failed before native runtime. Current needless-return successor UNPERFORMED."
+      }
+    },
+    "new_typed_admission_test": {
+      "name": "native_admission_reports_full_and_closed_as_typed_refusals",
+      "cases": [
+        "The second reservation against a capacity-one pending queue returns AdmissionError::Full.",
+        "Dropping a reservation releases its slot.",
+        "Dropping NativeIncoming makes subsequent reservations return AdmissionError::Closed."
+      ]
+    },
+    "existing_native_boundary_cases_to_run": [
+      "native_partial_reads_preserve_bytes_across_websocket_message_boundaries",
+      "native_partial_writes_preserve_bytes_in_bounded_websocket_chunks",
+      "native_websocket_close_rejects_truncated_http2_bytes_and_releases_owners",
+      "native_idle_websocket_close_is_clean_and_releases_owners",
+      "pipe_partial_write_reports_only_transferred_bytes_and_preserves_tail",
+      "full_native_admission_fails_without_replacing_queued_connection",
+      "oversized_http2_frame_rejected_before_pipe_admission",
+      "tiny_http2_control_flood_rejected_at_native_boundary"
+    ]
+  },
+  "alternatives": [
+    {
+      "choice": "Keep the existing binary WebSocket-to-TunnelStream adapter and test its public admission/stream boundary.",
+      "reason": "This preserves the existing HTTP/2 and tonic wire protocol and current resource owner."
+    },
+    {
+      "rejected": "Interpret each WebSocket message as one RPC request or HTTP/2 frame.",
+      "reason": "WebSocket messages are arbitrary transport chunks; the existing RPC stack requires an ordered continuous byte stream."
+    },
+    {
+      "rejected": "Add a new envelope, public transport type, library export, Cargo registration, or private native-module test import.",
+      "reason": "Those changes exceed the frozen two-file scope and duplicate or bypass the existing adapter."
+    }
+  ],
+  "unresolved_facts": [
+    "The browser qualification remains a separate required check: execute the current registered browser fixture through the production BrowserChannel and generated-client path with split/coalesced delivery, cleanup, and every claimed RPC mode/status/trailer/deadline/half-close/cancel case.",
+    "Actual platform/device memory and browser outbound-buffer observations remain unverified by this source submission.",
+    "The historical a1 handoff's document SHA d942c11d... differs from its old-worktree decision SHA e1a0092e...; preserve both as history and use current source pins above."
+  ],
+  "verification": {
+    "worker_status": "UNPERFORMED on current needless-return successor; coordinator prior source runs recorded below",
+    "required_commands_for_root": [
+      "cargo test --offline --locked -p df-rpc-bridge --test byte_stream_contract",
+      "cargo test --offline --locked -p df-rpc-bridge --lib native_partial_reads_preserve_bytes_across_websocket_message_boundaries",
+      "cargo test --offline --locked -p df-rpc-bridge --lib native_partial_writes_preserve_bytes_in_bounded_websocket_chunks",
+      "cargo test --offline --locked -p df-rpc-bridge --lib native_websocket_close_rejects_truncated_http2_bytes_and_releases_owners",
+      "cargo test --offline --locked -p df-rpc-bridge --lib native_idle_websocket_close_is_clean_and_releases_owners",
+      "cargo test --offline --locked -p df-rpc-bridge --lib pipe_partial_write_reports_only_transferred_bytes_and_preserves_tail",
+      "cargo test --offline --locked -p df-rpc-bridge --lib full_native_admission_fails_without_replacing_queued_connection",
+      "cargo fmt --all -- --check",
+      "Affected native Clippy and WASM library build under the coordinator's bounded build gate."
+    ],
+    "browser": "UNPERFORMED; Root owns browser fixture registration and actual generated-client runtime qualification.",
+    "integration": "Prior freeze04 focused two cases and full native 36 named cases PASSED. Freeze04 and freeze05 all-targets Clippy FAILED. Current successor UNPERFORMED; Root owns further format, compile, lint, browser, and integration checks.",
+    "coordinator_runs": [
+      {
+        "run": "ROOT-a2-focused-contract-tests-01",
+        "evidence": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-a2-focused-contract-tests-01.json",
+        "source_before_repair": {
+          "bytes": 18791,
+          "sha256": "f4d9ea14536bb736343022d85fb60576dd116d140feb73d29ea7992fb9eb3933"
+        },
+        "result": "FAILED",
+        "exit_code": 101,
+        "elapsed_seconds": 54.675385833,
+        "peak_bytes": 476577792,
+        "cargo_build_finished_successfully": true,
+        "compiler_diagnostics": [],
+        "tests": {
+          "native_admission_reports_full_and_closed_as_typed_refusals": "PASSED",
+          "websocket_messages_are_only_chunks_of_the_http2_byte_stream": "FAILED at byte_stream_contract.rs:394; client h2 connection returned IO Connection reset by peer (os error 54), expected clean close"
+        },
+        "diagnostic_evidence": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-a2-first-genuine-failure-diagnostics-01-guard.json.stdout",
+        "disposition": "Retained as the first genuine compiled/runtime source-version failure; repair initiates server h2 graceful_shutdown after complete response consumption and drives accept to clean None. Assertions remain strict; no retry performed by worker."
+      },
+      {
+        "run": "ROOT-a2-focused-contract-tests-02",
+        "evidence": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-a2-focused-contract-tests-02.json",
+        "source_before_repair": {
+          "bytes": 19319,
+          "sha256": "7fba38c2873db9897b56509c64b1115e5845c65ab0659824dc489c2e3e9677ff"
+        },
+        "result": "FAILED",
+        "exit_code": 101,
+        "elapsed_seconds": 3.8856793749999996,
+        "peak_bytes": 368377856,
+        "cargo_build_finished_successfully": true,
+        "tests": {
+          "native_admission_reports_full_and_closed_as_typed_refusals": "PASSED",
+          "websocket_messages_are_only_chunks_of_the_http2_byte_stream": "FAILED at byte_stream_contract.rs:377; no emitted binary WebSocket message contained both separated body markers."
+        },
+        "disposition": "Retained as the second genuine compiled/runtime source-version failure. The generation3 source defers producer emission across h2 flushes until the final body marker; no new executable check has run."
+      },
+      {
+        "run": "ROOT-a3-focused-contract-tests-01",
+        "evidence": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-a3-focused-contract-tests-01.json",
+        "source_before_repair": {
+          "bytes": 22095,
+          "sha256": "e50beb0f587e6f84fc54a328712a9697420f49eccd2a853ef3e2b8b360a906c4"
+        },
+        "result": "FAILED",
+        "exit_code": 101,
+        "elapsed_seconds": 4.759156666,
+        "peak_bytes": 403603456,
+        "cargo_build_finished_successfully": true,
+        "tests": {
+          "native_admission_reports_full_and_closed_as_typed_refusals": "PASSED",
+          "websocket_messages_are_only_chunks_of_the_http2_byte_stream": "FAILED: owned coalescing pump inbound pipe write returned BrokenPipe at line217; joining pump observed its panic at line507."
+        },
+        "diagnostic_evidence": "artifacts/tmp/wave51-session-submission-20261006/ROOT-RPC-D01-Sol-first-source-failure-diagnostics-01-guard.json.stdout",
+        "disposition": "First genuine Sol compiled/runtime source-version failure, third genuine task runtime failure overall. The main fixture reached pump join after its assertions, but this receipt does not prove when the pump BrokenPipe occurred. The new source requires both observed payload/coalescence assertions and an Ok h2 driver completion at the moment BrokenPipe is classified as terminal."
+      },
+      {
+        "run": "ROOT-a3-focused-contract-tests-02",
+        "evidence": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-a3-focused-contract-tests-02.json",
+        "source_freeze": "ROOT-source-freeze-04.json",
+        "result": "PASSED",
+        "tests": {
+          "native_admission_reports_full_and_closed_as_typed_refusals": "PASSED",
+          "websocket_messages_are_only_chunks_of_the_http2_byte_stream": "PASSED"
+        },
+        "disposition": "Applies only to prior freeze04 source; current lint repair untested."
+      },
+      {
+        "run": "ROOT-a3-full-native-tests-01",
+        "evidence": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-a3-full-native-tests-01.json",
+        "source_freeze": "ROOT-source-freeze-04.json",
+        "result": "PASSED",
+        "named_cases": 36,
+        "disposition": "Applies only to prior freeze04 source; current lint repair untested."
+      },
+      {
+        "run": "ROOT-a3-native-alltargets-clippy-01",
+        "evidence": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-a3-native-alltargets-clippy-01.json",
+        "source_freeze": "ROOT-source-freeze-04.json",
+        "result": "FAILED",
+        "exit_code": 101,
+        "diagnostic_evidence": "artifacts/tmp/wave51-session-submission-20261006/ROOT-RPC-D01-Sol-native-lint-source-failure-diagnostics-01-guard.json.stdout",
+        "errors": [
+          "never_loop at outer select line 297",
+          "never_loop at nested accept line 302",
+          "await_holding_lock observed_messages line 455"
+        ],
+        "disposition": "Fourth genuine failed source version overall, second Sol version. The current lexical-scope and single-progression repair is unverified."
+      },
+      {
+        "run": "ROOT-a3-native-alltargets-clippy-02",
+        "evidence": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-a3-native-alltargets-clippy-02.json",
+        "source_freeze": "ROOT-source-freeze-05.json",
+        "result": "FAILED",
+        "exit_code": 101,
+        "diagnostic_evidence": "artifacts/tmp/wave51-session-submission-20261006/ROOT-RPC-D01-Sol-native-lint-source-failure-diagnostics-02-guard.json.stdout",
+        "errors": [
+          "needless_return at terminal None arm line 304",
+          "needless_return at terminal None arm line 310"
+        ],
+        "disposition": "Fifth genuine failed source version overall, third Sol version. Prior three lint errors resolved; current exact two-arm repair unverified."
+      }
+    ]
+  },
+  "candidate_source": {
+    "rust_test_path": "crates/df-rpc-bridge/tests/byte_stream_contract.rs",
+    "rust_test_bytes": 22988,
+    "rust_test_sha256": "75664dff28eac3a269080ca811a6e24f8af59c806477309af2c27a3f14957d1d"
+  },
+  "generation3_repair": {
+    "base_source_freeze": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-source-freeze-02.json",
+    "base_source_freeze_sha256": "93b83e8bb47b4f51f15bc5f1e8a14ea1ffeb6d4ed465c78afa046e1abf125ec9",
+    "base_rust_source_sha256": "7fba38c2873db9897b56509c64b1115e5845c65ab0659824dc489c2e3e9677ff",
+    "repaired_rust_source_sha256": "75664dff28eac3a269080ca811a6e24f8af59c806477309af2c27a3f14957d1d",
+    "diagnosis": "Version2 runtime failed the unchanged separated-body-marker predicate. The first generation3 source candidate attempted to hold DATA bytes inside AsyncWrite.poll_flush and report Ready; Root static review found that this violates the Tokio flush contract. This feedback is not a third compiled/runtime failure.",
+    "source_action": "The bounded DuplexStream and independently owned WebSocket pump still send actual h2 bytes with the unchanged strict coalescence predicate. The inbound pump accepts a BrokenPipe only after exact echo and coalescence assertions are complete and a pinned h2 Connection future returns Ok, published before its transport owner is dropped. Earlier BrokenPipe and every other pipe error still fail.",
+    "root_source_freeze": "Prior tested authority ROOT-source-freeze-05.json SHA e96ea477bb0e972ec38a3f096caf9321a035b671d5e261fe07308dd837bf568f; current needless-return successor freeze PENDING",
+    "new_executable_checks": "Prior freeze04 focused two cases and full native 36 cases PASSED; freeze04 all-targets Clippy FAILED three structural lints. Freeze05 all-targets Clippy FAILED two needless-return lints; no freeze05 runtime pass. Current successor checks UNPERFORMED.",
+    "static_feedback": {
+      "rejected_candidate_rust_source_sha256": "b32299934a5ee17d2569122e4ce8a9e17671f4cdd5e42f42458b2528690488a9",
+      "source_only": true,
+      "compiled_runtime_failure": false,
+      "tokio_source": "tokio-1.53.1/src/io/async_write.rs:58-67 and :89-93; DuplexStream peer-buffer flush at src/io/util/mem.rs:418-420"
+    },
+    "runtime_failure_a3_01": {
+      "source_freeze": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-source-freeze-03.json",
+      "source_freeze_sha256": "99a4e59e4c69e6b27599ece11eae3f6cfdcf9c8fb71a0a2bf044bf47ca19ef3d",
+      "compiled_runtime_failure": true,
+      "receipt": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-a3-focused-contract-tests-01.json",
+      "source_rust_sha256": "e50beb0f587e6f84fc54a328712a9697420f49eccd2a853ef3e2b8b360a906c4"
+    },
+    "lint_failure_a3_01": {
+      "source_freeze": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-source-freeze-04.json",
+      "source_freeze_sha256": "6a54e94939fdf78f4f1278fb76f871a15ab703763e987f2b53bdd69bf123acda",
+      "source_rust_sha256": "ae4b5f99beb047bc4119e4b9e8906206b797844152f7d2b861ebc840dfe9a0af",
+      "receipt": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-a3-native-alltargets-clippy-01.json",
+      "diagnostic_evidence": "artifacts/tmp/wave51-session-submission-20261006/ROOT-RPC-D01-Sol-native-lint-source-failure-diagnostics-01-guard.json.stdout",
+      "errors": [
+        "clippy::never_loop at 297: outer select loop had only terminating arms",
+        "clippy::never_loop at 302: nested accept loop had only terminating match arms",
+        "clippy::await_holding_lock at 455: observed_messages MutexGuard scope spanned teardown awaits despite explicit drop"
+      ],
+      "actual_failure": true,
+      "prior_source_native_36_cases": "PASSED, prior frozen source only"
+    },
+    "lint_repair_a3_02": "Use a single select and a single accept after graceful shutdown, with unchanged unexpected-extra-request and connection-error panics; keep observed-message/payload/coalescence assertions in a lexical mutex scope that closes before all teardown awaits. Current successor has not been formatted, compiled, linted, or runtime-tested.",
+    "lint_failure_a3_02": {
+      "source_freeze": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-source-freeze-05.json",
+      "source_freeze_sha256": "e96ea477bb0e972ec38a3f096caf9321a035b671d5e261fe07308dd837bf568f",
+      "source_rust_sha256": "a0a545b05d804114beebe62d6d0688f049865e60e6f3a5507ba10e501d8ee5be",
+      "receipt": "development/evidence/fanout-20261001/rpc-byte-stream-d01-a2/ROOT-a3-native-alltargets-clippy-02.json",
+      "diagnostic_evidence": "artifacts/tmp/wave51-session-submission-20261006/ROOT-RPC-D01-Sol-native-lint-source-failure-diagnostics-02-guard.json.stdout",
+      "errors": [
+        "clippy::needless_return at 304: terminal None => return",
+        "clippy::needless_return at 310: terminal None => return"
+      ],
+      "actual_failure": true,
+      "compiler_build_finished_successfully": false,
+      "runtime_result": "UNPERFORMED on freeze05"
+    },
+    "lint_repair_a3_03": "Change exactly the two terminal None match arms to unit values. These are at the end of the single h2 select progression, so normal function completion remains the same; unexpected extra requests and errors still panic. Current source not formatted, compiled, linted, or runtime-tested."
+  }
+}
