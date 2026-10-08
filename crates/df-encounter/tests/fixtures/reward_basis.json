@@ -1,0 +1,64 @@
+{
+  "task_id": "B-C-df-encounter-D04",
+  "original_outcome": "due rewards are not optional generated media",
+  "scope": "Design basis using actual EncounterDirector; source-addressed consequence references are not executable effects or rewards",
+  "decision": "Admitted required consequences remain ordered, source-bound staged proposals when optional media is absent. Missing or refused required source authority returns a typed refusal; absence of optional media grants no source authority.",
+  "source_decisions": [
+    {
+      "path": "planning/runtime-directors.md",
+      "sections": [
+        "Authority and composition",
+        "Pure public boundaries",
+        "Added feature projections"
+      ],
+      "basis": "Source-legal encounter proposals are pure; session commits gameplay state. Standard progression/rewards are due despite provider/media failure."
+    },
+    {
+      "path": "crates/df-encounter/src/challenge.rs",
+      "symbols": [
+        "EncounterDirector::propose",
+        "EncounterDirector::validate",
+        "ChallengeConsequence",
+        "EncounterError::SourceGap"
+      ],
+      "basis": "Required source references are admitted and cloned in caller order, with exact current basis/pins and bounded work. No checkpoint mutation or award execution."
+    }
+  ],
+  "bounded_example": {
+    "mode": "Combat",
+    "consequences": [
+      "required-consequence-one",
+      "required-consequence-two"
+    ],
+    "optional_asset_jobs": [],
+    "optional_asset_dependencies": [],
+    "admitted_asset_inventory": [],
+    "expected": "Both admitted source-addressed consequence references remain ordered; checkpoint resources and all other state remain unchanged."
+  },
+  "alternatives": [
+    {
+      "choice": "Gate required consequence references on optional generated media",
+      "disposition": "Rejected: optional presentation must not erase the source-legal basis of due consequences."
+    },
+    {
+      "choice": "Treat missing required sources as successful partial resolution",
+      "disposition": "Rejected: Denied, Unavailable and Unsupported are typed SourceGap refusals."
+    },
+    {
+      "choice": "Invent RewardGrant or mutate resources from EncounterDirector",
+      "disposition": "Rejected: shared reward shape/source behavior and durable session composition need their owning reviewed contracts."
+    }
+  ],
+  "unresolved": [
+    "Actual shared RewardGrant shape/source-qualified due rewards",
+    "Production resolution and durable due-award execution in rules/session",
+    "Provider/media runtime, independent review and Main integration are unperformed by this source example"
+  ],
+  "executable_cases": [
+    "absent_optional_media_preserves_ordered_admitted_consequences_in_all_modes",
+    "required_source_refusals_never_return_partial_success",
+    "absent_media_does_not_admit_missing_required_content_or_rules",
+    "stale_basis_and_rules_content_build_pins_refuse_before_source_callbacks",
+    "consequence_and_work_capacity_refuse_before_source_callbacks"
+  ]
+}
