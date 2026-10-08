@@ -2,16 +2,16 @@
   "decision": "PreparedOnly selects only prepared lookup; Replay selects only replay lookup; neither enters live dispatch on hit, miss, stale identity, storage failure, or rights refusal.",
   "alternatives": ["fall through to another artifact mode", "retry with live provider"],
   "observed": {
-    "prepared_hit": "prepared bytes",
-    "replay_hit": "replay bytes",
-    "prepared_miss": "typed Missing; live calls 0",
-    "replay_miss_with_prepared_entry": "typed Missing; replay reads 1; prepared reads 0; live calls 0",
-    "stale": "typed Stale; live calls 0",
-    "storage_failure": "typed Unavailable(Offline); live calls 0",
-    "rights_denied_before_read": "typed Authority(Revoked); reads 0; live calls 0",
-    "rights_revoked_after_read": "typed Authority(Revoked); reads 1; live calls 0",
-    "owner_cancelled_expired_unqualified_or_mode_drifted": "typed owner refusal; reads 0; live calls 0",
-    "live_positive_control": "explicit Live selects finite callback once"
+    "prepared_hit": {"outcome":"prepared bytes","prepared_reads":1,"replay_reads":0,"authorizations":2,"live_calls":0,"live_steps_remaining":1},
+    "replay_hit": {"outcome":"replay bytes","prepared_reads":0,"replay_reads":1,"authorizations":2,"live_calls":0,"live_steps_remaining":1},
+    "replay_miss_with_prepared_entry": {"outcome":"typed Lookup(Missing)","prepared_reads":0,"replay_reads":1,"authorizations":2,"live_calls":0,"live_steps_remaining":1},
+    "stale_basis": {"outcome":"typed Lookup(Stale)","prepared_reads":0,"replay_reads":1,"authorizations":2,"live_calls":0,"live_steps_remaining":1},
+    "storage_unavailable": {"outcome":"typed Lookup(Unavailable(Offline))","prepared_reads":1,"replay_reads":0,"authorizations":2,"live_calls":0,"live_steps_remaining":1},
+    "rights_denied_before_read": {"outcome":"typed Authority(Revoked)","prepared_reads":0,"replay_reads":0,"authorizations":1,"live_calls":0,"live_steps_remaining":1},
+    "rights_denied_after_read": {"outcome":"typed Authority(Revoked)","prepared_reads":1,"replay_reads":0,"authorizations":2,"live_calls":0,"live_steps_remaining":1},
+    "owner_unqualified": {"outcome":"typed Owner(CurrentBasisUnavailable)","prepared_reads":0,"replay_reads":0,"authorizations":0,"live_calls":0,"live_steps_remaining":1},
+    "owner_mode_drift": {"outcome":"typed Owner(IdentityMismatch(Mode))","prepared_reads":0,"replay_reads":0,"authorizations":0,"live_calls":0,"live_steps_remaining":1},
+    "live_positive_control": {"outcome":"live","prepared_reads":0,"replay_reads":0,"authorizations":0,"live_calls":1,"live_steps_remaining":0}
   },
   "unresolved": ["native provider egress admission and supplier authority are outside this contract", "all six modality runtime integrations are not established by this test"]
 }

@@ -198,6 +198,25 @@ fn map_authorized_error(
     }
 }
 
+fn case_json(
+    result: Result<Vec<u8>, ConsumerError>,
+    store: &ArtifactStore,
+    live: &FiniteLiveDispatch,
+) -> String {
+    let outcome = match result {
+        Ok(bytes) => String::from_utf8(bytes).unwrap(),
+        Err(error) => format!("typed {error:?}"),
+    };
+    format!(
+        "{{\"outcome\":\"{outcome}\",\"prepared_reads\":{},\"replay_reads\":{},\"authorizations\":{},\"live_calls\":{},\"live_steps_remaining\":{}}}",
+        store.prepared_reads.get(),
+        store.replay_reads.get(),
+        store.authorizations.get(),
+        live.calls,
+        live.steps.len()
+    )
+}
+
 fn label(value: &str) -> RevisionLabel {
     RevisionLabel::new(Some(value)).unwrap()
 }
@@ -521,26 +540,193 @@ fn cancelled_expired_unqualified_and_mode_drifted_requests_refuse_before_reads_o
 
 #[test]
 fn consumed_json_witness_records_observed_decisions_and_native_boundary_limits() {
-    let observed = r#"{
+    let (prepared_request, prepared_owner) = checked_request(ExecutionMode::PreparedOnly);
+    let prepared_store = ArtifactStore::new(
+        Some(artifact(ExecutionMode::PreparedOnly, b"prepared bytes")),
+        Some(artifact(ExecutionMode::Replay, b"replay bytes")),
+    );
+    let mut prepared_live = FiniteLiveDispatch::new([b"must-not-run".to_vec()]);
+    let prepared_hit = case_json(
+        consume(
+            &prepared_request,
+            owner(&prepared_owner),
+            &prepared_store,
+            &mut prepared_live,
+        ),
+        &prepared_store,
+        &prepared_live,
+    );
+
+    let (replay_request, replay_owner) = checked_request(ExecutionMode::Replay);
+    let replay_store = ArtifactStore::new(
+        Some(artifact(ExecutionMode::PreparedOnly, b"prepared bytes")),
+        Some(artifact(ExecutionMode::Replay, b"replay bytes")),
+    );
+    let mut replay_live = FiniteLiveDispatch::new([b"must-not-run".to_vec()]);
+    let replay_hit = case_json(
+        consume(
+            &replay_request,
+            owner(&replay_owner),
+            &replay_store,
+            &mut replay_live,
+        ),
+        &replay_store,
+        &replay_live,
+    );
+
+    let (replay_miss_request, replay_miss_owner) = checked_request(ExecutionMode::Replay);
+    let replay_miss_store = ArtifactStore::new(
+        Some(artifact(ExecutionMode::PreparedOnly, b"prepared")),
+        None,
+    );
+    let mut replay_miss_live = FiniteLiveDispatch::new([b"must-not-run".to_vec()]);
+    let replay_miss = case_json(
+        consume(
+            &replay_miss_request,
+            owner(&replay_miss_owner),
+            &replay_miss_store,
+            &mut replay_miss_live,
+        ),
+        &replay_miss_store,
+        &replay_miss_live,
+    );
+
+    let (stale_request, stale_owner) = checked_request(ExecutionMode::Replay);
+    let stale_store = ArtifactStore::new(None, Some(stale_basis_artifact(ExecutionMode::Replay)));
+    let mut stale_live = FiniteLiveDispatch::new([b"must-not-run".to_vec()]);
+    let stale_basis = case_json(
+        consume(
+            &stale_request,
+            owner(&stale_owner),
+            &stale_store,
+            &mut stale_live,
+        ),
+        &stale_store,
+        &stale_live,
+    );
+
+    let (storage_request, storage_owner) = checked_request(ExecutionMode::PreparedOnly);
+    let mut storage_store = ArtifactStore::new(
+        Some(artifact(ExecutionMode::PreparedOnly, b"prepared")),
+        None,
+    );
+    storage_store.storage_failure = true;
+    let mut storage_live = FiniteLiveDispatch::new([b"must-not-run".to_vec()]);
+    let storage_unavailable = case_json(
+        consume(
+            &storage_request,
+            owner(&storage_owner),
+            &storage_store,
+            &mut storage_live,
+        ),
+        &storage_store,
+        &storage_live,
+    );
+
+    let (rights_request, rights_owner) = checked_request(ExecutionMode::Replay);
+    let mut rights_store =
+        ArtifactStore::new(None, Some(artifact(ExecutionMode::Replay, b"replay")));
+    rights_store.deny_authorization_at = Some(1);
+    let mut rights_live = FiniteLiveDispatch::new([b"must-not-run".to_vec()]);
+    let rights_denied = case_json(
+        consume(
+            &rights_request,
+            owner(&rights_owner),
+            &rights_store,
+            &mut rights_live,
+        ),
+        &rights_store,
+        &rights_live,
+    );
+
+    let (rights_after_read_request, rights_after_read_owner) =
+        checked_request(ExecutionMode::PreparedOnly);
+    let mut rights_after_read_store = ArtifactStore::new(
+        Some(artifact(ExecutionMode::PreparedOnly, b"prepared")),
+        None,
+    );
+    rights_after_read_store.deny_authorization_at = Some(2);
+    let mut rights_after_read_live = FiniteLiveDispatch::new([b"must-not-run".to_vec()]);
+    let rights_denied_after_read = case_json(
+        consume(
+            &rights_after_read_request,
+            owner(&rights_after_read_owner),
+            &rights_after_read_store,
+            &mut rights_after_read_live,
+        ),
+        &rights_after_read_store,
+        &rights_after_read_live,
+    );
+
+    let (owner_request, _) = checked_request(ExecutionMode::PreparedOnly);
+    let owner_store = ArtifactStore::new(None, None);
+    let mut owner_live = FiniteLiveDispatch::new([b"must-not-run".to_vec()]);
+    let owner_unqualified = case_json(
+        consume(
+            &owner_request,
+            RequestOwnerState {
+                current: None,
+                elapsed: Duration::ZERO,
+                cancelled: false,
+            },
+            &owner_store,
+            &mut owner_live,
+        ),
+        &owner_store,
+        &owner_live,
+    );
+
+    let (owner_drift_request, _) = checked_request(ExecutionMode::PreparedOnly);
+    let drifted_owner_binding = binding(ExecutionMode::Replay);
+    let owner_drift_store = ArtifactStore::new(None, None);
+    let mut owner_drift_live = FiniteLiveDispatch::new([b"must-not-run".to_vec()]);
+    let owner_mode_drift = case_json(
+        consume(
+            &owner_drift_request,
+            owner(&drifted_owner_binding),
+            &owner_drift_store,
+            &mut owner_drift_live,
+        ),
+        &owner_drift_store,
+        &owner_drift_live,
+    );
+
+    let (live_request, live_owner) = checked_request(ExecutionMode::Live);
+    let live_store = ArtifactStore::new(None, None);
+    let mut live_dispatch = FiniteLiveDispatch::new([b"live".to_vec()]);
+    let live_positive = case_json(
+        consume(
+            &live_request,
+            owner(&live_owner),
+            &live_store,
+            &mut live_dispatch,
+        ),
+        &live_store,
+        &live_dispatch,
+    );
+
+    let observed = format!(
+        r#"{{
   "decision": "PreparedOnly selects only prepared lookup; Replay selects only replay lookup; neither enters live dispatch on hit, miss, stale identity, storage failure, or rights refusal.",
   "alternatives": ["fall through to another artifact mode", "retry with live provider"],
-  "observed": {
-    "prepared_hit": "prepared bytes",
-    "replay_hit": "replay bytes",
-    "prepared_miss": "typed Missing; live calls 0",
-    "replay_miss_with_prepared_entry": "typed Missing; replay reads 1; prepared reads 0; live calls 0",
-    "stale": "typed Stale; live calls 0",
-    "storage_failure": "typed Unavailable(Offline); live calls 0",
-    "rights_denied_before_read": "typed Authority(Revoked); reads 0; live calls 0",
-    "rights_revoked_after_read": "typed Authority(Revoked); reads 1; live calls 0",
-    "owner_cancelled_expired_unqualified_or_mode_drifted": "typed owner refusal; reads 0; live calls 0",
-    "live_positive_control": "explicit Live selects finite callback once"
-  },
+  "observed": {{
+    "prepared_hit": {prepared_hit},
+    "replay_hit": {replay_hit},
+    "replay_miss_with_prepared_entry": {replay_miss},
+    "stale_basis": {stale_basis},
+    "storage_unavailable": {storage_unavailable},
+    "rights_denied_before_read": {rights_denied},
+    "rights_denied_after_read": {rights_denied_after_read},
+    "owner_unqualified": {owner_unqualified},
+    "owner_mode_drift": {owner_mode_drift},
+    "live_positive_control": {live_positive}
+  }},
   "unresolved": ["native provider egress admission and supplier authority are outside this contract", "all six modality runtime integrations are not established by this test"]
-}
-"#;
+}}"#
+    );
+    println!("{observed}");
     assert_eq!(
-        observed,
+        format!("{observed}\n"),
         include_str!("fixtures/execution_mode_contract.json")
     );
 }
