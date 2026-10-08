@@ -420,9 +420,15 @@ fn foreign_session_run_epoch_member_and_future_revision_refuse_before_handler() 
                 }
             };
             let handler = Handler::new();
+            // Enumeration filters participant records before validating generated commands.
+            let enumerated = if variant == 4 {
+                CommandError::UnofferedResponse
+            } else {
+                expected
+            };
             assert_eq!(
                 enumerate(&current, &current, &handler, &[], &selected),
-                Err(admission(expected))
+                Err(admission(enumerated))
             );
             assert_eq!(
                 submit(&current, &current, &handler, &[], selected),
