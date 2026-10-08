@@ -324,6 +324,124 @@ fn a_matching_cache_cannot_replace_the_selected_durable_backing() {
     ));
 }
 
+#[cfg(unix)]
+#[test]
+fn a_matching_cache_symlink_cannot_replace_a_published_object() {
+    use std::os::unix::fs::symlink;
+
+    let (path, store, metadata, requested) = fixture();
+    let cache = root().join("cached-copy");
+    fs::write(&cache, CONTENT).unwrap();
+    fs::remove_file(object_path(&path)).unwrap();
+    symlink(&cache, object_path(&path)).unwrap();
+
+    let restarted = NativeFileStore::new(&path, 1024).unwrap();
+    let resolver = AssetResolver::new(&metadata, &requested, &0);
+    assert!(matches!(
+        resolver.open_native(
+            &context(),
+            &restarted,
+            &CALLER,
+            &Purpose::Display,
+            full_range(&requested)
+        ),
+        Err(RangeError::Store(StoreError::BackingIntegrity)),
+    ));
+    assert!(matches!(
+        store.confirm(DurableObject::from_manifest(manifest(CONTENT))),
+        Err(StoreError::BackingIntegrity),
+    ));
+    assert_eq!(fs::read(&cache).unwrap(), CONTENT);
+}
+
+#[cfg(unix)]
+#[test]
+fn fifo_backing_refuses_without_waiting_for_a_writer() {
+    use std::process::Command;
+    use std::time::{Duration, Instant};
+
+    if std::env::var_os("DF_ASSETS_FIFO_CHILD").is_none() {
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .arg("--exact")
+            .arg("fifo_backing_refuses_without_waiting_for_a_writer")
+            .env("DF_ASSETS_FIFO_CHILD", "1")
+            .spawn()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                assert!(status.success());
+                return;
+            }
+            if Instant::now() >= deadline {
+                child.kill().unwrap();
+                child.wait().unwrap();
+                panic!("opening a FIFO backing blocked");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    let (path, store, metadata, requested) = fixture();
+    let object = object_path(&path);
+    fs::remove_file(&object).unwrap();
+    assert!(
+        Command::new("mkfifo")
+            .arg(&object)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let resolver = AssetResolver::new(&metadata, &requested, &0);
+    assert!(matches!(
+        resolver.open_native(
+            &context(),
+            &store,
+            &CALLER,
+            &Purpose::Display,
+            full_range(&requested)
+        ),
+        Err(RangeError::Store(StoreError::BackingIntegrity)),
+    ));
+    assert!(matches!(
+        store.confirm(DurableObject::from_manifest(manifest(CONTENT))),
+        Err(StoreError::BackingIntegrity),
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_matching_cache_directory_cannot_replace_the_objects_directory() {
+    use std::os::unix::fs::symlink;
+
+    let (path, store, metadata, requested) = fixture();
+    let object = object_path(&path);
+    let cache = root();
+    fs::copy(&object, cache.join(object.file_name().unwrap())).unwrap();
+    fs::rename(path.join("objects"), path.join("original-objects")).unwrap();
+    symlink(&cache, path.join("objects")).unwrap();
+
+    assert!(matches!(
+        NativeFileStore::new(&path, 1024),
+        Err(StoreError::BackingIntegrity),
+    ));
+    let resolver = AssetResolver::new(&metadata, &requested, &0);
+    assert!(matches!(
+        resolver.open_native(
+            &context(),
+            &store,
+            &CALLER,
+            &Purpose::Display,
+            full_range(&requested)
+        ),
+        Err(RangeError::Store(StoreError::BackingIntegrity)),
+    ));
+    assert!(matches!(
+        store.confirm(DurableObject::from_manifest(manifest(CONTENT))),
+        Err(StoreError::BackingIntegrity),
+    ));
+}
+
 #[test]
 fn missing_published_object_is_unavailable_and_never_returns_a_stream() {
     let (path, store, metadata, requested) = fixture();

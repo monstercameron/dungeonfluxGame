@@ -30,6 +30,7 @@ impl NativeFileStore {
         fs::create_dir_all(root.join("staging"))?;
         fs::create_dir_all(root.join("objects"))?;
         fs::create_dir_all(root.join("promotion"))?;
+        require_objects_dir(&root.join("objects"))?;
         File::open(&root)?.sync_all()?;
         Ok(Self {
             root,
@@ -222,6 +223,7 @@ impl AssetStore for NativeFileStore {
             output.flush().map_err(StoreError::from)?;
             output.sync_all().map_err(StoreError::from)?;
             let destination = self.object_path(&expected.sha256);
+            require_objects_dir(&self.root.join("objects"))?;
             let path = temporary.as_ref().ok_or(StoreError::StagingConflict)?;
             match fs::hard_link(path, &destination) {
                 Ok(()) => {
@@ -262,13 +264,7 @@ impl AssetStore for NativeFileStore {
 }
 
 fn verify_file(path: &Path, expected: AssetManifest) -> Result<(), StoreError> {
-    let mut file = File::open(path).map_err(|error| {
-        if error.kind() == std::io::ErrorKind::NotFound {
-            StoreError::BackingMissing
-        } else {
-            StoreError::Io(error)
-        }
-    })?;
+    let mut file = open_backing(path)?;
     if file.metadata()?.len() != expected.byte_len {
         return Err(StoreError::BackingIntegrity);
     }
@@ -296,6 +292,48 @@ fn verify_file(path: &Path, expected: AssetManifest) -> Result<(), StoreError> {
         return Err(StoreError::BackingIntegrity);
     }
     Ok(())
+}
+
+fn open_backing(path: &Path) -> Result<File, StoreError> {
+    require_regular_backing_path(path)?;
+    let file = File::open(path).map_err(backing_open_error)?;
+    // A matching cache target must not stand in for an object in the durable root.
+    require_regular_backing_path(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(StoreError::BackingIntegrity);
+    }
+    Ok(file)
+}
+
+fn require_regular_backing_path(path: &Path) -> Result<(), StoreError> {
+    require_objects_dir(path.parent().ok_or(StoreError::BackingIntegrity)?)?;
+    if !fs::symlink_metadata(path)
+        .map_err(backing_open_error)?
+        .file_type()
+        .is_file()
+    {
+        return Err(StoreError::BackingIntegrity);
+    }
+    Ok(())
+}
+
+fn require_objects_dir(path: &Path) -> Result<(), StoreError> {
+    if !fs::symlink_metadata(path)
+        .map_err(backing_open_error)?
+        .file_type()
+        .is_dir()
+    {
+        return Err(StoreError::BackingIntegrity);
+    }
+    Ok(())
+}
+
+fn backing_open_error(error: std::io::Error) -> StoreError {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        StoreError::BackingMissing
+    } else {
+        StoreError::Io(error)
+    }
 }
 
 fn same_contents(
@@ -365,13 +403,7 @@ impl AssetReadStore for NativeFileStore {
         if object.byte_len() != manifest.byte_len || object.digest() != &manifest.sha256 {
             return Err(StoreError::BackingIntegrity);
         }
-        let mut file = File::open(self.object_path(object.digest())).map_err(|error| {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                StoreError::BackingMissing
-            } else {
-                StoreError::Io(error)
-            }
-        })?;
+        let mut file = open_backing(&self.object_path(object.digest()))?;
         if file.metadata()?.len() != manifest.byte_len {
             return Err(StoreError::BackingIntegrity);
         }
