@@ -4,8 +4,8 @@ use crate::qualification_verdict::{self, TerminalEvidence, Verdict};
 use df_protocol::transport_fixture::Sample;
 use df_rpc_bridge::{BrowserConnection, ConnectionSnapshot, RPC_MESSAGE_BYTES};
 use futures::{
-    FutureExt,
-    channel::oneshot,
+    FutureExt, SinkExt,
+    channel::{mpsc, oneshot},
     future::{Either, join_all, select},
 };
 use gloo_timers::future::TimeoutFuture;
@@ -162,6 +162,7 @@ struct StreamObservation {
     first_message_ms: f64,
     arrival_gaps_ms: Vec<f64>,
 }
+type FirstProgressGate = (oneshot::Sender<()>, oneshot::Receiver<()>);
 
 fn record_pressure_result<T, E: std::fmt::Debug>(
     result: Result<T, E>,
@@ -188,6 +189,7 @@ async fn consume(
     pause: u32,
     connection: &BrowserConnection,
     evidence: &Rc<RefCell<TerminalEvidence>>,
+    gate: FirstProgressGate,
 ) -> Result<StreamObservation, qualification_verdict::TerminalOutcome> {
     let started = Instant::now();
     let mut stream = client
@@ -205,6 +207,7 @@ async fn consume(
     let mut first_message_ms = None;
     let mut previous = None;
     let mut arrival_gaps_ms = vec![];
+    let mut first_gate = Some(gate);
     while let Some(message) = stream.message().await.map_err(|error| error.to_string())? {
         let arrived_ms = started.elapsed().as_secs_f64() * 1000.0;
         if let Some(previous) = previous {
@@ -214,6 +217,12 @@ async fn consume(
         }
         previous = Some(arrived_ms);
         require(message.sequence == messages, "pressure sequence mismatch")?;
+        let expected_bytes = if kind == "paced" { 8 * 1024 } else { 48 * 1024 };
+        require(
+            message.payload.len() == expected_bytes
+                && message.payload.iter().all(|byte| *byte == 0x5a),
+            "pressure payload mismatch",
+        )?;
         bytes += message.payload.len();
         messages += 1;
         memory_peak = memory_peak.max(memory_bytes()?);
@@ -225,11 +234,23 @@ async fn consume(
                 && snapshot.callback_items.current <= 256,
             "owned resource bound exceeded",
         )?;
+        if let Some((first_progress, resume)) = first_gate.take() {
+            first_progress
+                .send(())
+                .map_err(|_| "pressure first-progress observer dropped")?;
+            resume
+                .await
+                .map_err(|_| "pressure overlap release dropped")?;
+        }
         if pause > 0 {
             TimeoutFuture::new(pause).await;
         }
     }
     require(messages == count, "pressure stream silently lost messages")?;
+    require(
+        bytes == count as usize * if kind == "paced" { 8 * 1024 } else { 48 * 1024 },
+        "pressure payload total mismatch",
+    )?;
     require(
         stream
             .trailers()
@@ -249,7 +270,11 @@ async fn consume(
         arrival_gaps_ms,
     })
 }
-async fn small_calls(mut client: FixtureClient, count: usize) -> Result<Vec<f64>, String> {
+async fn small_calls(
+    mut client: FixtureClient,
+    count: usize,
+    mut first_gate: Option<FirstProgressGate>,
+) -> Result<Vec<f64>, String> {
     let mut latencies = vec![];
     for sequence in 0..count {
         let start = Instant::now();
@@ -259,10 +284,16 @@ async fn small_calls(mut client: FixtureClient, count: usize) -> Result<Vec<f64>
             .map_err(|error| error.to_string())?
             .into_inner();
         require(
-            output.sequence == sequence as u32,
+            output == sample(sequence as u32),
             "small RPC mismatch under pressure",
         )?;
         latencies.push(start.elapsed().as_secs_f64() * 1000.0);
+        if let Some((first_progress, resume)) = first_gate.take() {
+            first_progress
+                .send(())
+                .map_err(|_| "unary first-progress observer dropped")?;
+            resume.await.map_err(|_| "unary overlap release dropped")?;
+        }
         TimeoutFuture::new(10).await;
     }
     Ok(latencies)
@@ -365,44 +396,158 @@ async fn run(
     let cold_ms = cold_start.elapsed().as_secs_f64() * 1000.0;
     let mut client = FixtureClient::new(channel).max_decoding_message_size(RPC_MESSAGE_BYTES);
     let baseline = stats(&mut client).await?;
-    let warm = small_calls(client.clone(), 30).await?;
+    let warm = small_calls(client.clone(), 30, None).await?;
     let done = Rc::new(Cell::new(false));
     let pressure_done = done.clone();
+    let completed = Rc::new(Cell::new(0u8));
+    let (slow_progress, slow_observed) = oneshot::channel();
+    let (slow_release, slow_resume) = oneshot::channel();
+    let (paced_progress, paced_observed) = oneshot::channel();
+    let (paced_release, paced_resume) = oneshot::channel();
+    let (bulk_progress, bulk_observed) = oneshot::channel();
+    let (bulk_release, bulk_resume) = oneshot::channel();
+    let (unary_progress, unary_observed) = oneshot::channel();
+    let (unary_release, unary_resume) = oneshot::channel();
+    let pressure_started = Instant::now();
     let pressure = async {
         let result = futures::join!(
             async {
-                record_pressure_result(
-                    consume(client.clone(), "slow", 64, 20, &connection, evidence).await,
+                let result = record_pressure_result(
+                    consume(
+                        client.clone(),
+                        "slow",
+                        64,
+                        20,
+                        &connection,
+                        evidence,
+                        (slow_progress, slow_resume),
+                    )
+                    .await,
                     evidence,
-                )
+                );
+                completed.set(completed.get() | 0b0001);
+                result
             },
             async {
-                record_pressure_result(
-                    consume(client.clone(), "paced", 80, 0, &connection, evidence).await,
+                let result = record_pressure_result(
+                    consume(
+                        client.clone(),
+                        "paced",
+                        80,
+                        0,
+                        &connection,
+                        evidence,
+                        (paced_progress, paced_resume),
+                    )
+                    .await,
                     evidence,
-                )
+                );
+                completed.set(completed.get() | 0b0010);
+                result
             },
             async {
-                record_pressure_result(
-                    consume(client.clone(), "bulk", 128, 0, &connection, evidence).await,
+                let result = record_pressure_result(
+                    consume(
+                        client.clone(),
+                        "bulk",
+                        128,
+                        0,
+                        &connection,
+                        evidence,
+                        (bulk_progress, bulk_resume),
+                    )
+                    .await,
                     evidence,
-                )
+                );
+                completed.set(completed.get() | 0b0100);
+                result
             },
-            async { record_pressure_result(small_calls(client.clone(), 60).await, evidence) }
+            async {
+                let result = record_pressure_result(
+                    small_calls(client.clone(), 60, Some((unary_progress, unary_resume))).await,
+                    evidence,
+                );
+                completed.set(completed.get() | 0b1000);
+                result
+            }
         );
         pressure_done.set(true);
         result
     };
-    let ((slow, paced, bulk, latencies), frames) = futures::join!(pressure, heartbeat(done));
-    if slow.is_err() || paced.is_err() || bulk.is_err() || latencies.is_err() || frames.is_err() {
+    let bidi_early = async {
+        for (kind, observed) in [
+            ("slow", slow_observed),
+            ("paced", paced_observed),
+            ("bulk", bulk_observed),
+            ("unary", unary_observed),
+        ] {
+            observed
+                .await
+                .map_err(|_| format!("{kind} made no first progress under mixed load"))?;
+        }
+        require(
+            completed.get() == 0,
+            "mixed class completed before bidi began",
+        )?;
+        let (mut sender, receiver) = mpsc::channel(1);
+        sender
+            .send(sample(10))
+            .await
+            .map_err(|error| error.to_string())?;
+        for release in [slow_release, paced_release, bulk_release, unary_release] {
+            release
+                .send(())
+                .map_err(|_| "mixed class ended before bidi overlap")?;
+        }
+        let mut bidi_client = client.clone();
+        let mut stream = bidi_client
+            .bidi(request(receiver)?)
+            .await
+            .map_err(|error| error.to_string())?
+            .into_inner();
+        let first = stream
+            .message()
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or("bidi ended before its first response")?;
+        require(
+            first == sample(10),
+            "bidi first response changed under mixed load",
+        )?;
+        require(
+            completed.get() == 0,
+            "mixed class completed before the bidi response",
+        )?;
+        let snapshot = connection.snapshot().map_err(|error| error.to_string())?;
+        stop_on_resource_breach(&connection, &snapshot, evidence)?;
+        Ok::<_, qualification_verdict::TerminalOutcome>((
+            sender,
+            stream,
+            pressure_started.elapsed().as_secs_f64() * 1000.0,
+        ))
+    };
+    let mixed = async {
+        futures::join!(pressure, async {
+            record_pressure_result(bidi_early.await, evidence)
+        })
+    };
+    let (((slow, paced, bulk, latencies), bidi_early), frames) =
+        futures::join!(mixed, heartbeat(done));
+    if slow.is_err()
+        || paced.is_err()
+        || bulk.is_err()
+        || latencies.is_err()
+        || bidi_early.is_err()
+        || frames.is_err()
+    {
         let verdict = qualification_verdict::evaluate(None, false, true);
         evidence.borrow_mut().record_failure(
             verdict,
             format!(
-                "{}\nFAIL · unchanged simultaneous pressure workload\nSlow: {:?}; paced: {:?}; bulk: {:?}; unary: {:?}; animation: {:?}\nBuild: {}\n",
+                "{}\nFAIL · simultaneous pressure and bidi workload\nSlow: {:?}; paced: {:?}; bulk: {:?}; unary: {:?}; bidi: {:?}; animation: {:?}\nBuild: {}\n",
                 qualification_verdict::format_verdict(verdict),
                 slow.as_ref().err(), paced.as_ref().err(), bulk.as_ref().err(),
-                latencies.as_ref().err(), frames.as_ref().err(), crate::BUILD_ID,
+                latencies.as_ref().err(), bidi_early.as_ref().err(), frames.as_ref().err(), crate::BUILD_ID,
             ),
         );
         connection.close();
@@ -410,12 +555,13 @@ async fn run(
         TimeoutFuture::new(20).await;
         let closed_snapshot = connection.snapshot().map_err(|error| error.to_string())?;
         let report = format!(
-            "{}\nFAIL · unchanged simultaneous pressure workload\nSlow: {:?}; paced: {:?}; bulk: {:?}; unary: {:?}; animation: {:?}\nBuild: {}\nIncoming controls admitted: {}; outgoing controls observed: {}\nIncoming rolling frame type/stream/relative-ns observations: {:?}\nRejected incoming control: {:?}\nPressure snapshot: {:?}\nPost-close snapshot: {:?}\nThe five original malicious probes and new 101-control probe did not execute after pressure failure. G02 and control-rate repair remain unqualified.\n",
+            "{}\nFAIL · simultaneous pressure and bidi workload\nSlow: {:?}; paced: {:?}; bulk: {:?}; unary: {:?}; bidi: {:?}; animation: {:?}\nBuild: {}\nIncoming controls admitted: {}; outgoing controls observed: {}\nIncoming rolling frame type/stream/relative-ns observations: {:?}\nRejected incoming control: {:?}\nPressure snapshot: {:?}\nPost-close snapshot: {:?}\nThe five original malicious probes and new 101-control probe did not execute after pressure failure. G02 and control-rate repair remain unqualified.\n",
             qualification_verdict::format_verdict(verdict),
             slow.as_ref().err(),
             paced.as_ref().err(),
             bulk.as_ref().err(),
             latencies.as_ref().err(),
+            bidi_early.as_ref().err(),
             frames.as_ref().err(),
             crate::BUILD_ID,
             pressure_snapshot.received_control_frames,
@@ -434,7 +580,45 @@ async fn run(
     let paced = paced?;
     let bulk = bulk?;
     let latencies = latencies?;
+    let (mut bidi_sender, mut bidi_stream, bidi_first_response_ms) = bidi_early?;
     let frames = frames?;
+    require(
+        completed.get() == 0b1111,
+        "mixed classes did not all complete",
+    )?;
+    bidi_sender
+        .send(sample(11))
+        .await
+        .map_err(|error| error.to_string())?;
+    drop(bidi_sender);
+    require(
+        bidi_stream
+            .message()
+            .await
+            .map_err(|error| error.to_string())?
+            .is_some_and(|response| response == sample(11)),
+        "bidi second response changed after mixed load",
+    )?;
+    require(
+        bidi_stream
+            .message()
+            .await
+            .map_err(|error| error.to_string())?
+            .is_none(),
+        "bidi returned extra response after request half-close",
+    )?;
+    require(
+        bidi_stream
+            .trailers()
+            .await
+            .map_err(|error| error.to_string())?
+            .is_some_and(|trailers| {
+                trailers
+                    .get("fixture-terminal")
+                    .is_some_and(|value| value == "observed")
+            }),
+        "bidi terminal trailers missing",
+    )?;
     require(
         !frames.is_empty(),
         "no animation frame responsiveness observations",
@@ -493,7 +677,7 @@ async fn run(
         && snapshot.receive_credit.data_bytes > 8 * 1024 * 1024
         && snapshot.receive_credit.update_bytes > 0;
     let mut text = format!(
-        "{}\nPASS · desktop pressure streams complete with generated OK trailers\nSlow: {} bytes; paced media: {} bytes; bulk: {} bytes\nCold connection: {cold_ms:.3}ms\nWarm RPC p95/p99: {:.3}/{:.3}ms\nPressure RPC p95/p99: {:.3}/{:.3}ms\nAnimation gaps p95/p99: {:.3}/{:.3}ms; frames={}\nWASM linear memory allocated: before={memory_before}, peak={}, after={} bytes (not live heap or engine memory)\nPressure resource snapshot: {snapshot:?}\nPASS · cancellation/server owner cleanup + browser callback cleanup\nClosed snapshot: {closed:?}\nWarm samples ms: {warm:?}\nPressure samples ms: {latencies:?}\nAnimation gap samples ms: {frames:?}\n",
+        "{}\nPASS · desktop pressure streams complete with generated OK trailers\nSlow: {} bytes; paced media: {} bytes; bulk: {} bytes\nPASS · same-connection bidi echoed exact sample 10 before request half-close while all four mixed classes were active; held request input open until all four completed; exact sample 11, EOF and terminal trailer followed half-close\nBidi first response from pressure start: {bidi_first_response_ms:.3}ms\nCold connection: {cold_ms:.3}ms\nWarm RPC p95/p99: {:.3}/{:.3}ms\nPressure RPC p95/p99: {:.3}/{:.3}ms\nAnimation gaps p95/p99: {:.3}/{:.3}ms; frames={}\nWASM linear memory allocated: before={memory_before}, peak={}, after={} bytes (not live heap or engine memory)\nPressure resource snapshot: {snapshot:?}\nPASS · cancellation/server owner cleanup + browser callback cleanup\nClosed snapshot: {closed:?}\nWarm samples ms: {warm:?}\nPressure samples ms: {latencies:?}\nAnimation gap samples ms: {frames:?}\n",
         qualification_verdict::format_verdict(local_verdict(
             &snapshot,
             resource_measurements_observed,
