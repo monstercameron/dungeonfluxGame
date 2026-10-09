@@ -20,7 +20,8 @@ mod provenance;
 mod revision;
 
 pub use identity::{
-    ClientBindingId, IdentityError, MemberId, OperationId, RunId, SessionId, TextIdentityError,
+    ClientBindingId, IdentityError, MemberId, OperationId, PaidInvoiceId, PriceVersion, RunId,
+    SessionId, SubscriptionId, TextIdentityError,
 };
 pub use locale::{LocaleTag, LocaleTagError};
 pub use money::{Currency, LiabilityRate, Money, MoneyError, Usage, UsageUnit};

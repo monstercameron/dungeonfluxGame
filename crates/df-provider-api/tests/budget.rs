@@ -2,12 +2,18 @@
 //! production pure proposal; this fixture has no durable ledger or send authority.
 
 use df_commerce::{
-    SpendConsent, SpendCounter, SpendOperationObservation, SpendOperationStatus, SpendRefusal,
-    SpendRequest, SpendScope, SpendSnapshot, propose_spend,
+    Access, AllowanceGrantId, AllowancePaymentObservation, AllowanceRenewal, AllowanceState,
+    AllowanceTerms, ObservationAuthority, PaidInvoice, PaidPeriod, PaymentOutcome, SpendConsent,
+    SpendCounter, SpendOperationObservation, SpendOperationStatus, SpendRefusal, SpendRequest,
+    SpendScope, SpendSnapshot, SubscriptionObservation, SubscriptionState,
+    effective_allowance_terms, propose_allowance_downgrade, propose_allowance_renewal,
+    propose_spend,
 };
 use df_model::checkpoint::{ExecutionMode, JobId};
 use df_provider_api::{BudgetAdmission, BudgetMutation, BudgetStore};
-use df_types::{Currency, Money, OperationId, Usage, UsageUnit};
+use df_types::{
+    Currency, Money, OperationId, PaidInvoiceId, PriceVersion, SubscriptionId, Usage, UsageUnit,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Reservation {
@@ -250,6 +256,229 @@ fn admission<'a>(
         mode: ExecutionMode::Live,
         maximum_usage: Usage::new(4, UsageUnit::Token),
         maximum_supplier_liability: money(80),
+    }
+}
+
+fn pending_allowance() -> AllowanceState {
+    AllowanceState {
+        subscription: SubscriptionId::from_bytes(&[8; 16]).unwrap(),
+        revision: 7,
+        subscription_state: SubscriptionState {
+            currency: currency(),
+            revision: 3,
+            object_revision: 2,
+            access: Access::PendingInitial,
+            paid_through: 0,
+            grace_until: None,
+        },
+        current_terms: AllowanceTerms {
+            price_version: PriceVersion::from_bytes(&[9; 16]).unwrap(),
+            supplier_allowance: money(80),
+        },
+        current_grant: None,
+        scheduled_downgrade: None,
+    }
+}
+
+fn allowance_payment(
+    state: AllowanceState,
+    invoice: u8,
+    period: PaidPeriod,
+    terms: AllowanceTerms,
+) -> (AllowanceRenewal, AllowancePaymentObservation) {
+    let id = AllowanceGrantId {
+        subscription: state.subscription,
+        invoice: PaidInvoiceId::from_bytes(&[invoice; 16]).unwrap(),
+        period,
+        price_version: terms.price_version,
+    };
+    (
+        AllowanceRenewal {
+            expected_revision: state.revision,
+            grant: id,
+        },
+        AllowancePaymentObservation {
+            grant: id,
+            subscription: SubscriptionObservation {
+                authority: ObservationAuthority::VerifiedLatest,
+                expected_revision: state.subscription_state.revision,
+                object_revision: state.subscription_state.object_revision + 1,
+                outcome: PaymentOutcome::Settled(PaidInvoice {
+                    period_start: period.start,
+                    paid_through: period.end,
+                    selected_allowance: terms.supplier_allowance,
+                    allowance_already_recorded: false,
+                }),
+            },
+        },
+    )
+}
+
+#[test]
+fn paid_period_and_downgrade_candidates_feed_the_existing_budget_admission() {
+    let pending = pending_allowance();
+    let (initial, payment) = allowance_payment(
+        pending,
+        10,
+        PaidPeriod {
+            start: 90,
+            end: 200,
+        },
+        pending.current_terms,
+    );
+    let paid = propose_allowance_renewal(&pending, initial, payment, 100).unwrap();
+    let mut store = CommerceFixture::new();
+    // Synthetic native owner binds the pure candidate to this existing consumer's
+    // supplied consent. This does not qualify a durable grant transaction.
+    store.consent = SpendConsent {
+        revision: paid.next.revision,
+        maximum: paid.grant.unwrap().supplier_allowance,
+    };
+    let previous_consent = store.consent;
+    let mut first_admission = admission(&1, &previous_consent, &11);
+    first_admission.maximum_supplier_liability = money(40);
+    assert!(matches!(
+        store.reserve(first_admission),
+        BudgetMutation::Committed {
+            replayed: false,
+            ..
+        }
+    ));
+    let held = store.snapshot;
+    assert!(
+        held.counters
+            .iter()
+            .all(|counter| counter.used == money(60))
+    );
+
+    let lower = AllowanceTerms {
+        price_version: PriceVersion::from_bytes(&[12; 16]).unwrap(),
+        supplier_allowance: money(30),
+    };
+    let scheduled =
+        propose_allowance_downgrade(&paid.next, paid.next.revision, lower, 150).unwrap();
+    assert_eq!(scheduled.grant, None);
+    assert_eq!(
+        effective_allowance_terms(&scheduled.next, 199),
+        Ok(paid.next.current_terms)
+    );
+    assert_eq!(effective_allowance_terms(&scheduled.next, 200), Ok(lower));
+    let (request, payment) = allowance_payment(
+        scheduled.next,
+        13,
+        PaidPeriod {
+            start: 200,
+            end: 400,
+        },
+        lower,
+    );
+    let renewed = propose_allowance_renewal(&scheduled.next, request, payment, 200).unwrap();
+    let mut next_store = CommerceFixture::new();
+    next_store.snapshot = held;
+    next_store.requested_revision = held.revision;
+    next_store.consent = SpendConsent {
+        revision: renewed.next.revision,
+        maximum: renewed.grant.unwrap().supplier_allowance,
+    };
+    assert_eq!(next_store.snapshot, held);
+    assert!(matches!(
+        next_store.reserve(admission(&1, &previous_consent, &11)),
+        BudgetMutation::Refused(Refusal::Grant)
+    ));
+    let grant = next_store.consent;
+    let next_operation = OperationId::from_bytes(&[14; 16]).unwrap();
+    let mut above_new_terms = admission(&1, &grant, &11);
+    above_new_terms.operation = next_operation;
+    above_new_terms.maximum_supplier_liability = money(40);
+    assert!(matches!(
+        next_store.reserve(above_new_terms),
+        BudgetMutation::Refused(Refusal::Commerce(SpendRefusal::CustomerConsentExceeded))
+    ));
+    assert_eq!(next_store.snapshot, held);
+    let mut within_new_terms = admission(&1, &grant, &11);
+    within_new_terms.operation = next_operation;
+    within_new_terms.maximum_supplier_liability = money(30);
+    assert!(matches!(
+        next_store.reserve(within_new_terms),
+        BudgetMutation::Committed {
+            replayed: false,
+            ..
+        }
+    ));
+    assert!(
+        next_store
+            .snapshot
+            .counters
+            .iter()
+            .all(|counter| counter.used == money(90))
+    );
+    let after = next_store.snapshot;
+    assert!(propose_allowance_renewal(&renewed.next, request, payment, 200).is_err());
+    assert_eq!(next_store.snapshot, after);
+    assert_eq!(store.snapshot, held);
+}
+
+#[test]
+fn renewal_and_clock_expiry_cannot_release_unknown_supplier_exposure() {
+    let pending = pending_allowance();
+    let (request, payment) = allowance_payment(
+        pending,
+        10,
+        PaidPeriod {
+            start: 90,
+            end: 200,
+        },
+        pending.current_terms,
+    );
+    let paid = propose_allowance_renewal(&pending, request, payment, 100).unwrap();
+    let mut store = CommerceFixture::new();
+    store.consent = SpendConsent {
+        revision: paid.next.revision,
+        maximum: paid.grant.unwrap().supplier_allowance,
+    };
+    store.acknowledgement = Acknowledgement::Unknown;
+    let grant = store.consent;
+    assert!(matches!(
+        store.reserve(admission(&1, &grant, &11)),
+        BudgetMutation::Unknown
+    ));
+    let held = store.snapshot;
+    let original = store.receipt.unwrap();
+    let (renewal, payment) = allowance_payment(
+        paid.next,
+        13,
+        PaidPeriod {
+            start: 200,
+            end: 400,
+        },
+        paid.next.current_terms,
+    );
+    let next = propose_allowance_renewal(&paid.next, renewal, payment, 250).unwrap();
+    store.consent = SpendConsent {
+        revision: next.next.revision,
+        maximum: next.grant.unwrap().supplier_allowance,
+    };
+    let current = store.consent;
+    assert!(matches!(
+        store.reserve(admission(&1, &current, &11)),
+        BudgetMutation::Unknown
+    ));
+    for now in [400, u64::MAX] {
+        assert_eq!(
+            effective_allowance_terms(&next.next, now),
+            Ok(next.next.current_terms)
+        );
+        assert!(matches!(
+            store.claim_dispatch(&original, &operation()),
+            BudgetMutation::Unknown
+        ));
+        assert!(matches!(
+            store.reconcile(&original),
+            BudgetMutation::Unknown
+        ));
+        assert_eq!(store.snapshot, held);
+        assert_eq!(store.receipt, Some(original));
+        assert_eq!(store.observation, SpendOperationStatus::Unknown);
     }
 }
 

@@ -7,8 +7,16 @@
 //! Subscription and spend inputs have separate revisions and policy assumptions;
 //! neither candidate alone constitutes durable paid-work admission.
 
+mod allowance;
 mod spend;
 mod subscription;
+
+pub use allowance::{
+    AllowanceGrant, AllowanceGrantId, AllowancePaymentObservation, AllowanceRefusal,
+    AllowanceRenewal, AllowanceState, AllowanceTerms, AllowanceTransition, PaidPeriod,
+    ScheduledDowngrade, effective_allowance_terms, propose_allowance_downgrade,
+    propose_allowance_renewal,
+};
 
 pub use spend::{
     SpendConsent, SpendCounter, SpendOperationObservation, SpendOperationStatus, SpendProposal,

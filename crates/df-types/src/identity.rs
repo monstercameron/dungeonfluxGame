@@ -79,3 +79,6 @@ identity!(MemberId);
 identity!(ClientBindingId);
 identity!(RunId);
 identity!(OperationId);
+identity!(SubscriptionId);
+identity!(PaidInvoiceId);
+identity!(PriceVersion);
