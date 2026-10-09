@@ -1,6 +1,13 @@
 use std::{cell::Cell, time::Duration};
 
-use df_ai::lookup::{LookupError, PreparedRead, ReadResult, lookup_prepared, lookup_replay};
+use df_ai::admission::{
+    CompleteRecord, RecordAdmissionError, RecordEvent, RecordIdentity, RecordIdentityField,
+    RecordInputError, RecordLimits, RecordingPublisher, admit_complete_record,
+};
+use df_ai::lookup::{
+    AuthorizedLookupError, LookupError, PreparedRead, ReadAuthority, ReadResult,
+    lookup_authorized_prepared, lookup_authorized_replay, lookup_prepared, lookup_replay,
+};
 use df_model::checkpoint::{
     AssetKind, AssetReference, AssetRequestKey, AudienceScope, Basis, ContentDigest, ExecutionMode,
     JobId, RecordId,
@@ -10,8 +17,8 @@ use df_provider_api::{
     RequestIdentityField, RequestLimit, RequestLimits, RequestOwnerState, RequestUsage,
 };
 use df_types::{
-    MemberId, OperationId, RecoveryEpoch, RevisionLabel, RunId, SessionId, SessionRevision, Usage,
-    UsageUnit,
+    LocaleTag, MemberId, OperationId, RecoveryEpoch, RevisionLabel, RunId, SessionId,
+    SessionRevision, Usage, UsageUnit,
 };
 
 fn label(value: &str) -> RevisionLabel {
@@ -54,7 +61,7 @@ fn binding(mode: ExecutionMode) -> RequestBinding<AssetRequestKey> {
     }
 }
 
-fn owner(current: &RequestBinding<AssetRequestKey>) -> RequestOwnerState<'_, AssetRequestKey> {
+fn owner<Semantic>(current: &RequestBinding<Semantic>) -> RequestOwnerState<'_, Semantic> {
     RequestOwnerState {
         current: Some(current),
         elapsed: Duration::ZERO,
@@ -711,4 +718,590 @@ fn bounded_request_admission_precedes_prepared_and_replay_recording_reads() {
             assert_eq!(store.basis, current.identity);
         }
     }
+}
+
+// The fixture uses the production-formed key at the real AI ports. It is a bounded
+// in-memory publication owner, not a native durable RecordingStore or provider.
+type RecordingKey = (AssetRequestKey, LocaleTag);
+type RecordingInput = Result<RecordEvent<RecordingKey, RequestIdentity>, RecordInputError>;
+
+const DONE_DIGEST: [u8; 32] = [
+    164, 195, 237, 4, 169, 90, 61, 161, 74, 157, 35, 92, 131, 216, 104, 190, 215, 192, 244, 92,
+    247, 243, 250, 167, 81, 238, 143, 80, 89, 141, 34, 17,
+];
+
+fn locale_binding(mode: ExecutionMode, locale: &str) -> RequestBinding<RecordingKey> {
+    binding(mode).with_recording_locale(LocaleTag::parse(locale).unwrap())
+}
+
+fn record_identity(
+    current: &RequestBinding<RecordingKey>,
+) -> RecordIdentity<RecordingKey, RequestIdentity> {
+    RecordIdentity {
+        key: current.semantic_basis.clone(),
+        basis: current.identity,
+        operation: current.identity.operation,
+    }
+}
+
+fn completion(current: &RequestBinding<RecordingKey>) -> RecordingInput {
+    Ok(RecordEvent::Complete {
+        identity: record_identity(current),
+        byte_length: 4,
+        sha256: DONE_DIGEST,
+    })
+}
+
+fn complete_events(current: &RequestBinding<RecordingKey>) -> Vec<RecordingInput> {
+    vec![
+        Ok(RecordEvent::Chunk(b"done".to_vec())),
+        completion(current),
+    ]
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RecordingFailure {
+    Denied,
+    Storage,
+    Publication,
+}
+
+struct LocaleRecording {
+    current: RequestBinding<RecordingKey>,
+    entry: Option<(RecordingKey, RequestIdentity, Vec<u8>)>,
+    publications: usize,
+    prepared_reads: Cell<usize>,
+    replay_reads: Cell<usize>,
+    authorizations: Cell<usize>,
+    revoked: Cell<bool>,
+    revoke_on_read: bool,
+    storage_failure: bool,
+    publication_failure: bool,
+}
+
+impl LocaleRecording {
+    fn new(mode: ExecutionMode) -> Self {
+        Self {
+            current: locale_binding(mode, "en-US"),
+            entry: None,
+            publications: 0,
+            prepared_reads: Cell::new(0),
+            replay_reads: Cell::new(0),
+            authorizations: Cell::new(0),
+            revoked: Cell::new(false),
+            revoke_on_read: false,
+            storage_failure: false,
+            publication_failure: false,
+        }
+    }
+
+    fn authorize(
+        &self,
+        key: &RecordingKey,
+        basis: &RequestIdentity,
+    ) -> Result<(), RecordingFailure> {
+        self.authorizations.set(self.authorizations.get() + 1);
+        if self.revoked.get()
+            || key != &self.current.semantic_basis
+            || basis != &self.current.identity
+        {
+            return Err(RecordingFailure::Denied);
+        }
+        Ok(())
+    }
+
+    fn read(&self) -> ReadResult<'_, RecordingKey, RequestIdentity, Vec<u8>, RecordingFailure> {
+        if self.revoke_on_read {
+            self.revoked.set(true);
+        }
+        if self.storage_failure {
+            return Err(RecordingFailure::Storage);
+        }
+        Ok(self
+            .entry
+            .as_ref()
+            .map(|(key, basis, bytes)| (key, basis, bytes)))
+    }
+
+    fn publish(
+        &mut self,
+        events: Vec<RecordingInput>,
+    ) -> Result<Vec<u8>, RecordAdmissionError<RecordingFailure>> {
+        let expected = record_identity(&self.current);
+        admit_complete_record(self, expected, RecordLimits::new(4, 4, 2).unwrap(), events)
+    }
+}
+
+impl RecordingPublisher for LocaleRecording {
+    type Key = RecordingKey;
+    type Basis = RequestIdentity;
+    type Artifact = Vec<u8>;
+    type Error = RecordingFailure;
+
+    fn publish_complete(
+        &mut self,
+        record: CompleteRecord<Self::Key, Self::Basis>,
+    ) -> Result<Self::Artifact, Self::Error> {
+        self.publications += 1;
+        self.authorize(&record.identity().key, &record.identity().basis)?;
+        if record.identity().operation != self.current.identity.operation {
+            return Err(RecordingFailure::Denied);
+        }
+        if self.publication_failure {
+            return Err(RecordingFailure::Publication);
+        }
+        let (identity, bytes, digest) = record.into_parts();
+        assert_eq!(digest, DONE_DIGEST);
+        self.entry = Some((identity.key, identity.basis, bytes.clone()));
+        Ok(bytes)
+    }
+}
+
+impl PreparedRead for LocaleRecording {
+    type Key = RecordingKey;
+    type Basis = RequestIdentity;
+    type Artifact = Vec<u8>;
+    type Failure = RecordingFailure;
+
+    fn read_prepared(
+        &self,
+        _: &Self::Key,
+    ) -> ReadResult<'_, Self::Key, Self::Basis, Self::Artifact, Self::Failure> {
+        self.prepared_reads.set(self.prepared_reads.get() + 1);
+        self.read()
+    }
+
+    fn read_replay(
+        &self,
+        _: &Self::Key,
+    ) -> ReadResult<'_, Self::Key, Self::Basis, Self::Artifact, Self::Failure> {
+        self.replay_reads.set(self.replay_reads.get() + 1);
+        self.read()
+    }
+}
+
+impl ReadAuthority for LocaleRecording {
+    type AuthorizationFailure = RecordingFailure;
+
+    fn authorize_prepared(
+        &self,
+        key: &Self::Key,
+        basis: &Self::Basis,
+    ) -> Result<(), Self::AuthorizationFailure> {
+        self.authorize(key, basis)
+    }
+
+    fn authorize_replay(
+        &self,
+        key: &Self::Key,
+        basis: &Self::Basis,
+    ) -> Result<(), Self::AuthorizationFailure> {
+        self.authorize(key, basis)
+    }
+}
+
+#[test]
+fn production_recording_key_preserves_the_complete_binding_and_canonical_locale() {
+    for mode in [
+        ExecutionMode::Live,
+        ExecutionMode::PreparedOnly,
+        ExecutionMode::Replay,
+    ] {
+        let original = binding(mode);
+        let expected_key = original.semantic_basis.clone();
+        let identity = original.identity;
+        let deadline = original.deadline;
+        let formed = original.with_recording_locale(LocaleTag::parse("EN-us").unwrap());
+        assert_eq!(
+            formed.semantic_basis,
+            (expected_key, LocaleTag::parse("en-US").unwrap())
+        );
+        assert_eq!(formed.identity, identity);
+        assert_eq!(formed.mode, mode);
+        assert_eq!(formed.deadline, deadline);
+        assert_eq!(format!("{formed:?}"), "RequestBinding { .. }");
+    }
+    assert!(LocaleTag::parse("").is_err());
+    assert!(LocaleTag::parse("en_US").is_err());
+}
+
+#[test]
+fn formed_key_reaches_checked_admission_complete_publication_and_both_authorized_read_ports() {
+    for mode in [ExecutionMode::PreparedOnly, ExecutionMode::Replay] {
+        let mut store = LocaleRecording::new(mode);
+        let request = CheckedRequest::new(
+            locale_binding(mode, "EN-us"),
+            b"data",
+            work(),
+            limits(),
+            owner(&store.current),
+        )
+        .unwrap();
+        request.validate_current(owner(&store.current)).unwrap();
+        let admitted = request.binding();
+        let events = vec![
+            Ok(RecordEvent::Chunk(b"do".to_vec())),
+            Ok(RecordEvent::Chunk(b"ne".to_vec())),
+            completion(admitted),
+        ];
+        assert_eq!(
+            admit_complete_record(
+                &mut store,
+                record_identity(admitted),
+                RecordLimits::new(4, 2, 2).unwrap(),
+                events
+            ),
+            Ok(b"done".to_vec())
+        );
+        assert_eq!(store.publications, 1);
+        let stored = store.entry.as_ref().unwrap();
+        assert_eq!(stored.0, admitted.semantic_basis);
+        assert_eq!(stored.1, admitted.identity);
+        store.authorizations.set(0);
+        let result = match mode {
+            ExecutionMode::PreparedOnly => {
+                lookup_authorized_prepared(&store, &admitted.semantic_basis, &admitted.identity)
+            }
+            ExecutionMode::Replay => {
+                lookup_authorized_replay(&store, &admitted.semantic_basis, &admitted.identity)
+            }
+            ExecutionMode::Live => unreachable!(),
+        };
+        assert_eq!(result.unwrap(), b"done");
+        assert_eq!(store.authorizations.get(), 2);
+        assert_eq!(
+            store.prepared_reads.get(),
+            usize::from(mode == ExecutionMode::PreparedOnly)
+        );
+        assert_eq!(
+            store.replay_reads.get(),
+            usize::from(mode == ExecutionMode::Replay)
+        );
+        assert_eq!(format!("{request:?}"), "CheckedRequest { .. }");
+    }
+}
+
+fn changed_recording_binding(mode: ExecutionMode, component: &str) -> RequestBinding<RecordingKey> {
+    let mut asset = binding(mode);
+    match component {
+        "schema" => asset.semantic_basis.schema = 2,
+        "source" => asset.semantic_basis.source = ContentDigest([12; 32]),
+        "context" => asset.semantic_basis.moment = RecordId::from_bytes(&[12; 16]).unwrap(),
+        "identity" => asset.semantic_basis.identity = label("identity-2"),
+        "style" => asset.semantic_basis.style = label("style-2"),
+        "voice" => asset.semantic_basis.voice = None,
+        "provider" => asset.semantic_basis.provider = label("provider-2"),
+        "model" => asset.semantic_basis.model = label("model-2"),
+        "format" => asset.semantic_basis.format = label("format-2"),
+        "reference" => asset.semantic_basis.references[0].digest = ContentDigest([12; 32]),
+        "audience" => asset.semantic_basis.audience = AudienceScope::Host,
+        "parameters" => asset.semantic_basis.parameters = label("parameters-2"),
+        "locale" | "language" => {}
+        _ => unreachable!(),
+    }
+    asset.with_recording_locale(
+        LocaleTag::parse(if component == "locale" {
+            "en-GB"
+        } else if component == "language" {
+            "fr"
+        } else {
+            "en-US"
+        })
+        .unwrap(),
+    )
+}
+
+#[test]
+fn every_recording_key_dimension_is_revalidated_and_stale_at_actual_recording_reads() {
+    for component in [
+        "schema",
+        "source",
+        "context",
+        "identity",
+        "style",
+        "voice",
+        "provider",
+        "model",
+        "format",
+        "reference",
+        "audience",
+        "parameters",
+        "locale",
+        "language",
+    ] {
+        for mode in [ExecutionMode::PreparedOnly, ExecutionMode::Replay] {
+            let mut store = LocaleRecording::new(mode);
+            assert_eq!(
+                store.publish(complete_events(&store.current)),
+                Ok(b"done".to_vec())
+            );
+            let request = CheckedRequest::new(
+                locale_binding(mode, "en-US"),
+                b"data",
+                work(),
+                limits(),
+                owner(&store.current),
+            )
+            .unwrap();
+            let changed = changed_recording_binding(mode, component);
+            assert_eq!(
+                CheckedRequest::new(changed, b"data", work(), limits(), owner(&store.current))
+                    .unwrap_err(),
+                RequestError::SemanticBasisMismatch,
+                "{component}"
+            );
+            assert_eq!(store.prepared_reads.get() + store.replay_reads.get(), 0);
+            // The owner now admits the changed identity, but the stored entry is old.
+            store.current = changed_recording_binding(mode, component);
+            assert_eq!(
+                request.validate_current(owner(&store.current)),
+                Err(RequestError::SemanticBasisMismatch),
+                "{component}"
+            );
+            let result = match mode {
+                ExecutionMode::PreparedOnly => lookup_authorized_prepared(
+                    &store,
+                    &store.current.semantic_basis,
+                    &store.current.identity,
+                ),
+                ExecutionMode::Replay => lookup_authorized_replay(
+                    &store,
+                    &store.current.semantic_basis,
+                    &store.current.identity,
+                ),
+                ExecutionMode::Live => unreachable!(),
+            };
+            assert_eq!(
+                result,
+                Err(AuthorizedLookupError::Lookup(LookupError::Stale)),
+                "{component}"
+            );
+            assert_eq!(store.prepared_reads.get() + store.replay_reads.get(), 1);
+            assert_eq!(store.publications, 1);
+            assert_eq!(store.entry.as_ref().unwrap().2, b"done");
+        }
+    }
+}
+
+#[test]
+fn partial_failed_or_mismatched_recording_never_replaces_a_complete_entry() {
+    for failure in [
+        "missing",
+        "cancelled",
+        "failed",
+        "key",
+        "basis",
+        "operation",
+        "length",
+        "digest",
+        "trailing",
+    ] {
+        let mut store = LocaleRecording::new(ExecutionMode::Replay);
+        assert_eq!(
+            store.publish(complete_events(&store.current)),
+            Ok(b"done".to_vec())
+        );
+        let before = store.entry.clone();
+        store.publications = 0;
+        let mut identity = record_identity(&store.current);
+        let mut length = 4;
+        let mut digest = DONE_DIGEST;
+        match failure {
+            "key" => identity.key.1 = LocaleTag::parse("fr").unwrap(),
+            "basis" => identity.basis.generation += 1,
+            "operation" => identity.operation = OperationId::from_bytes(&[12; 16]).unwrap(),
+            "length" => length = 3,
+            "digest" => digest = [0; 32],
+            _ => {}
+        }
+        let mut events = vec![Ok(RecordEvent::Chunk(b"done".to_vec()))];
+        let expected = match failure {
+            "missing" => RecordAdmissionError::MissingCompletion,
+            "cancelled" => {
+                events.push(Err(RecordInputError::Cancelled));
+                RecordAdmissionError::Input(RecordInputError::Cancelled)
+            }
+            "failed" => {
+                events.push(Err(RecordInputError::Failed));
+                RecordAdmissionError::Input(RecordInputError::Failed)
+            }
+            "key" => RecordAdmissionError::IdentityMismatch(RecordIdentityField::Key),
+            "basis" => RecordAdmissionError::IdentityMismatch(RecordIdentityField::Basis),
+            "operation" => RecordAdmissionError::IdentityMismatch(RecordIdentityField::Operation),
+            "length" => RecordAdmissionError::LengthMismatch,
+            "digest" => RecordAdmissionError::DigestMismatch,
+            "trailing" => RecordAdmissionError::TrailingEvent,
+            _ => unreachable!(),
+        };
+        if !matches!(failure, "missing" | "cancelled" | "failed") {
+            events.push(Ok(RecordEvent::Complete {
+                identity,
+                byte_length: length,
+                sha256: digest,
+            }));
+        }
+        if failure == "trailing" {
+            events.push(Ok(RecordEvent::Chunk(Vec::new())));
+        }
+        assert_eq!(store.publish(events), Err(expected), "{failure}");
+        assert_eq!(store.publications, 0, "{failure}");
+        assert_eq!(store.entry, before, "{failure}");
+    }
+}
+
+#[test]
+fn refused_publication_revalidates_authority_and_preserves_the_prior_complete_entry() {
+    for revoked in [false, true] {
+        let mut store = LocaleRecording::new(ExecutionMode::Replay);
+        assert_eq!(
+            store.publish(complete_events(&store.current)),
+            Ok(b"done".to_vec())
+        );
+        let before = store.entry.clone();
+        store.publications = 0;
+        store.revoked.set(revoked);
+        store.publication_failure = !revoked;
+        let expected = if revoked {
+            RecordingFailure::Denied
+        } else {
+            RecordingFailure::Publication
+        };
+        assert_eq!(
+            store.publish(complete_events(&store.current)),
+            Err(RecordAdmissionError::Publication(expected))
+        );
+        assert_eq!(store.publications, 1);
+        assert_eq!(store.entry, before);
+    }
+}
+
+#[test]
+fn authorized_recorded_reads_reject_revocation_before_storage_and_after_storage() {
+    for mode in [ExecutionMode::PreparedOnly, ExecutionMode::Replay] {
+        for after_read in [false, true] {
+            let mut store = LocaleRecording::new(mode);
+            assert_eq!(
+                store.publish(complete_events(&store.current)),
+                Ok(b"done".to_vec())
+            );
+            store.authorizations.set(0);
+            store.revoked.set(!after_read);
+            store.revoke_on_read = after_read;
+            let result = match mode {
+                ExecutionMode::PreparedOnly => lookup_authorized_prepared(
+                    &store,
+                    &store.current.semantic_basis,
+                    &store.current.identity,
+                ),
+                ExecutionMode::Replay => lookup_authorized_replay(
+                    &store,
+                    &store.current.semantic_basis,
+                    &store.current.identity,
+                ),
+                ExecutionMode::Live => unreachable!(),
+            };
+            assert_eq!(
+                result,
+                Err(AuthorizedLookupError::Authority(RecordingFailure::Denied))
+            );
+            assert_eq!(
+                store.prepared_reads.get() + store.replay_reads.get(),
+                usize::from(after_read)
+            );
+            assert_eq!(store.authorizations.get(), if after_read { 2 } else { 1 });
+            assert_eq!(store.entry.as_ref().unwrap().2, b"done");
+            assert_eq!(store.publications, 1);
+        }
+    }
+}
+
+#[test]
+fn replay_missing_or_storage_failure_never_queries_prepared_fallback() {
+    for failed in [false, true] {
+        let mut store = LocaleRecording::new(ExecutionMode::Replay);
+        store.storage_failure = failed;
+        let request = CheckedRequest::new(
+            locale_binding(ExecutionMode::Replay, "en-US"),
+            b"data",
+            work(),
+            limits(),
+            owner(&store.current),
+        )
+        .unwrap();
+        request.validate_current(owner(&store.current)).unwrap();
+        let admitted = request.binding();
+        let result = lookup_authorized_replay(&store, &admitted.semantic_basis, &admitted.identity);
+        let expected = if failed {
+            LookupError::Unavailable(RecordingFailure::Storage)
+        } else {
+            LookupError::Missing
+        };
+        assert_eq!(result, Err(AuthorizedLookupError::Lookup(expected)));
+        assert_eq!(store.replay_reads.get(), 1);
+        assert_eq!(store.prepared_reads.get(), 0);
+        assert_eq!(store.authorizations.get(), 2);
+        assert_eq!(store.publications, 0);
+        assert!(store.entry.is_none());
+    }
+}
+
+#[test]
+fn formed_recording_binding_does_not_waive_current_owner_or_checked_identity() {
+    let current = locale_binding(ExecutionMode::Replay, "en-US");
+    for invalid_generation in [true, false] {
+        let mut candidate = binding(current.mode);
+        if invalid_generation {
+            candidate.identity.generation = 0;
+        } else {
+            candidate.deadline = Duration::ZERO;
+        }
+        let candidate = candidate.with_recording_locale(LocaleTag::parse("en-US").unwrap());
+        assert_eq!(
+            CheckedRequest::new(candidate, b"data", work(), limits(), owner(&current)).unwrap_err(),
+            if invalid_generation {
+                RequestError::InvalidGeneration
+            } else {
+                RequestError::InvalidDeadline
+            }
+        );
+    }
+    assert_eq!(
+        CheckedRequest::new(
+            locale_binding(current.mode, "en-US"),
+            b"data",
+            work(),
+            limits(),
+            RequestOwnerState {
+                current: None,
+                elapsed: Duration::ZERO,
+                cancelled: false
+            }
+        )
+        .unwrap_err(),
+        RequestError::CurrentBasisUnavailable
+    );
+    let request = CheckedRequest::new(
+        locale_binding(current.mode, "en-US"),
+        b"data",
+        work(),
+        limits(),
+        owner(&current),
+    )
+    .unwrap();
+    assert_eq!(
+        request.validate_current(RequestOwnerState {
+            current: Some(&current),
+            elapsed: Duration::ZERO,
+            cancelled: true
+        }),
+        Err(RequestError::Cancelled)
+    );
+    assert_eq!(
+        request.validate_current(RequestOwnerState {
+            current: Some(&current),
+            elapsed: current.deadline,
+            cancelled: false
+        }),
+        Err(RequestError::DeadlineExceeded)
+    );
 }

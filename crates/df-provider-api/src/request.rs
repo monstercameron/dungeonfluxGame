@@ -1,7 +1,7 @@
 use std::{fmt, time::Duration};
 
-use df_model::checkpoint::{Basis, ExecutionMode, JobId};
-use df_types::{OperationId, Usage};
+use df_model::checkpoint::{AssetRequestKey, Basis, ExecutionMode, JobId};
+use df_types::{LocaleTag, OperationId, Usage};
 
 /// Caller-selected work bounds, without default capacity or spend admission.
 /// The byte bound is positive. Zero other bounds disable that dimension rather
@@ -104,6 +104,26 @@ pub struct RequestBinding<Semantic> {
     pub semantic_basis: Semantic,
     pub mode: ExecutionMode,
     pub deadline: Duration,
+}
+
+impl RequestBinding<AssetRequestKey> {
+    /// Forms a recording/cache identity from the complete asset key and its locale.
+    ///
+    /// The caller supplies the checked locale of the admitted output. The canonical
+    /// asset key is preserved in full; locale is mandatory and has no default.
+    /// This binds identity, not rights, publication authority or execution readiness.
+    /// Checked admission and current-owner revalidation still apply to the result.
+    pub fn with_recording_locale(
+        self,
+        locale: LocaleTag,
+    ) -> RequestBinding<(AssetRequestKey, LocaleTag)> {
+        RequestBinding {
+            identity: self.identity,
+            semantic_basis: (self.semantic_basis, locale),
+            mode: self.mode,
+            deadline: self.deadline,
+        }
+    }
 }
 
 impl<Semantic> fmt::Debug for RequestBinding<Semantic> {
