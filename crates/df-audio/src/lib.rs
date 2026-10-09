@@ -7,14 +7,25 @@
 //! and explicitly dispose this owner before unmounting. Queue callbacks report
 //! resource lifetime facts; they never attest that a speaker was audible.
 
+#[cfg(not(target_arch = "wasm32"))]
+mod native;
 mod pcm;
+mod presentation;
 mod queue;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use native::{AudioQueue, PcmView};
+pub use presentation::{
+    PcmSource, PlaybackBasis, PlaybackCue, PlaybackDestination, PlaybackOutput,
+};
+#[cfg(target_arch = "wasm32")]
+pub use queue::{PresentationPcmView as PcmView, PresentationQueue as AudioQueue};
 
 pub use pcm::{PcmBuffer, PcmFormat, PcmRefusal};
 pub use queue::{
-    AudioQueue, AudioReceipt, BufferCompletion, BufferTicket, Cancellation, EnqueueRefusal,
-    MissingPlaybackPrerequisite, PcmView, QueueError, QueueLimits, QueueSnapshot, QueueState,
-    REQUIRED_PLAYBACK_PREREQUISITES, Replacement,
+    AudioReceipt, BufferCompletion, BufferTicket, Cancellation, EnqueueRefusal,
+    MissingPlaybackPrerequisite, PresentationPcmView, PresentationQueue, QueueError, QueueLimits,
+    QueueSnapshot, QueueState, REQUIRED_PLAYBACK_PREREQUISITES, Replacement,
 };
 
 pub mod browser_playback;

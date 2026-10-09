@@ -17,7 +17,9 @@ pub use range::{
     ByteRange, ChunkOutcome, MAX_CHUNK_BYTES, RangeError, open_range,
 };
 
+#[cfg(not(target_arch = "wasm32"))]
 mod resolution;
+#[cfg(not(target_arch = "wasm32"))]
 pub use resolution::AssetResolver;
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -2,9 +2,8 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
 
+use crate::{PcmSource, PlaybackBasis, PlaybackCue, PlaybackOutput};
 use df_assets::AssetManifest;
-use df_media::speech::{SpeechIdentity, SpeechStopped};
-use df_model::checkpoint::{AssetKind, AssetReference, AudioDestination, AudioOutputLease, Basis};
 use df_types::ClientBindingId;
 
 use crate::pcm::MAX_SAMPLE_BYTES;
@@ -92,11 +91,19 @@ pub struct QueueSnapshot {
 pub struct AudioReceipt {
     owner: Rc<()>,
     instance: Rc<()>,
-    identity: SpeechIdentity,
+    identity: PlaybackCue,
 }
 
 impl AudioReceipt {
-    pub fn identity(&self) -> SpeechIdentity {
+    #[cfg(target_arch = "wasm32")]
+    pub fn identity(&self) -> PlaybackCue {
+        self.identity
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn identity(&self) -> df_media::speech::SpeechIdentity {
+        crate::native::speech_identity(self.identity)
+    }
+    pub fn presentation_identity(&self) -> PlaybackCue {
         self.identity
     }
 }
@@ -107,12 +114,20 @@ impl AudioReceipt {
 pub struct BufferTicket {
     owner: Rc<()>,
     instance: Rc<()>,
-    identity: SpeechIdentity,
+    identity: PlaybackCue,
     sequence: u64,
 }
 
 impl BufferTicket {
-    pub fn identity(&self) -> SpeechIdentity {
+    #[cfg(target_arch = "wasm32")]
+    pub fn identity(&self) -> PlaybackCue {
+        self.identity
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn identity(&self) -> df_media::speech::SpeechIdentity {
+        crate::native::speech_identity(self.identity)
+    }
+    pub fn presentation_identity(&self) -> PlaybackCue {
         self.identity
     }
     pub fn sequence(&self) -> u64 {
@@ -149,9 +164,9 @@ impl fmt::Debug for EnqueueRefusal {
 }
 
 /// Borrowed samples remain owned and accounted by the queue until exact acknowledgement.
-pub struct PcmView<'a> {
-    pub identity: SpeechIdentity,
-    pub asset: &'a AssetReference,
+pub struct PresentationPcmView<'a> {
+    pub identity: PlaybackCue,
+    pub asset: &'a PcmSource,
     pub sequence: u64,
     pub offset_frames: u64,
     pub buffer: &'a PcmBuffer,
@@ -172,7 +187,7 @@ enum CueState {
 
 struct Cue {
     receipt: AudioReceipt,
-    asset: AssetReference,
+    asset: PcmSource,
     format: PcmFormat,
     next_sequence: u64,
     next_offset: u64,
@@ -187,7 +202,7 @@ struct QueuedBuffer {
 }
 struct Dispatch {
     ticket: BufferTicket,
-    asset: AssetReference,
+    asset: PcmSource,
     queued: QueuedBuffer,
     retiring: bool,
 }
@@ -200,10 +215,10 @@ struct Dispatch {
 /// remain an explicit bounded waiting condition, never fabricated silence or completion.
 /// Supplied frame offsets are preserved; no wall-clock or arrival-time offset is used.
 /// Source manifests are compared, not verified or granted rights by this queue.
-pub struct AudioQueue {
+pub struct PresentationQueue {
     owner: Rc<()>,
-    lease: AudioOutputLease,
-    basis: Basis,
+    lease: PlaybackOutput,
+    basis: PlaybackBasis,
     limits: QueueLimits,
     cue: Option<Cue>,
     queued: VecDeque<QueuedBuffer>,
@@ -212,34 +227,29 @@ pub struct AudioQueue {
     disposed: bool,
 }
 
-impl AudioQueue {
+pub(crate) fn validate_limits(limits: QueueLimits) -> Result<(), QueueError> {
+    if limits.retained_buffers == 0
+        || limits.retained_buffers > 256
+        || limits.sample_bytes == 0
+        || limits.sample_bytes > MAX_SAMPLE_BYTES
+        || limits.cue_chunks == 0
+        || limits.cue_chunks > 4096
+        || limits.cue_frames == 0
+    {
+        return Err(QueueError::InvalidLimits);
+    }
+    Ok(())
+}
+
+impl PresentationQueue {
     pub fn new(
         binding: ClientBindingId,
-        lease: AudioOutputLease,
-        basis: Basis,
+        lease: PlaybackOutput,
+        basis: PlaybackBasis,
         limits: QueueLimits,
     ) -> Result<Self, QueueError> {
-        if limits.retained_buffers == 0
-            || limits.retained_buffers > 256
-            || limits.sample_bytes == 0
-            || limits.sample_bytes > MAX_SAMPLE_BYTES
-            || limits.cue_chunks == 0
-            || limits.cue_chunks > 4096
-            || limits.cue_frames == 0
-        {
-            return Err(QueueError::InvalidLimits);
-        }
-        let output_binding = match lease.destination {
-            AudioDestination::PublicRoom(binding) => binding,
-            AudioDestination::PrivateListener { binding, .. } => binding,
-        };
-        if lease.generation == 0 || output_binding != binding {
-            return Err(QueueError::InvalidLease);
-        }
-        // The retained lease is bounded even if a caller supplies a sparsely filled Vec.
-        if let df_model::checkpoint::AudienceScope::Members(members) = &lease.audience
-            && members.capacity() > 256
-        {
+        validate_limits(limits)?;
+        if lease.binding() != binding {
             return Err(QueueError::InvalidLease);
         }
         let mut queued = VecDeque::new();
@@ -267,28 +277,22 @@ impl AudioQueue {
     /// Replacement returns an exact old stop request and retains only the newest cue.
     pub fn replace(
         &mut self,
-        lease: &AudioOutputLease,
-        basis: Basis,
-        identity: SpeechIdentity,
-        asset: AssetReference,
+        lease: &PlaybackOutput,
+        basis: PlaybackBasis,
+        identity: PlaybackCue,
+        asset: PcmSource,
         format: PcmFormat,
         first_frame: u64,
     ) -> Result<Replacement, QueueError> {
-        self.check_lease(lease)?;
-        if !lease.device_unlocked {
+        self.check_output(lease)?;
+        if !lease.device_unlocked() {
             return Err(QueueError::Locked);
         }
-        if basis.session != self.basis.session
-            || basis.run != self.basis.run
-            || basis.revision < self.basis.revision
-            || identity.basis != basis
-        {
-            return Err(QueueError::WrongBasis);
-        }
-        if identity.generation == 0 {
+        self.check_basis(basis, identity.basis())?;
+        if identity.generation() == 0 {
             return Err(QueueError::InvalidGeneration);
         }
-        if asset.kind != AssetKind::Audio || asset.byte_length == 0 {
+        if asset.manifest().byte_len == 0 {
             return Err(QueueError::WrongAsset);
         }
         if let Some(cue) = &self.cue {
@@ -296,7 +300,7 @@ impl AudioQueue {
             if current == identity {
                 return Err(QueueError::DuplicateCue);
             }
-            if current.job == identity.job && identity.generation <= current.generation {
+            if current.job() == identity.job() && identity.generation() <= current.generation() {
                 return Err(QueueError::StaleGeneration);
             }
         }
@@ -324,7 +328,7 @@ impl AudioQueue {
     pub fn enqueue(
         &mut self,
         receipt: &AudioReceipt,
-        lease: &AudioOutputLease,
+        lease: &PlaybackOutput,
         manifest: AssetManifest,
         sequence: u64,
         offset_frames: u64,
@@ -356,7 +360,7 @@ impl AudioQueue {
     fn validate_enqueue(
         &self,
         receipt: &AudioReceipt,
-        lease: &AudioOutputLease,
+        lease: &PlaybackOutput,
         manifest: AssetManifest,
         sequence: u64,
         offset_frames: u64,
@@ -373,7 +377,9 @@ impl AudioQueue {
         {
             return Err(QueueError::WaitingForStop);
         }
-        if manifest.byte_len != cue.asset.byte_length || manifest.sha256 != cue.asset.digest.0 {
+        if manifest.byte_len != cue.asset.manifest().byte_len
+            || manifest.sha256 != cue.asset.manifest().sha256
+        {
             return Err(QueueError::WrongAsset);
         }
         if buffer.format() != cue.format {
@@ -415,7 +421,7 @@ impl AudioQueue {
     pub fn begin(
         &mut self,
         receipt: &AudioReceipt,
-        lease: &AudioOutputLease,
+        lease: &PlaybackOutput,
     ) -> Result<Option<BufferTicket>, QueueError> {
         let cue = self.check(receipt, lease)?;
         if cue.state == CueState::Cancelled {
@@ -448,12 +454,12 @@ impl AudioQueue {
     }
 
     /// Repeated reads remain borrowed and counted. No destructive take or PCM clone is offered.
-    pub fn dispatched(&self, ticket: &BufferTicket) -> Result<PcmView<'_>, QueueError> {
+    pub fn dispatched(&self, ticket: &BufferTicket) -> Result<PresentationPcmView<'_>, QueueError> {
         let dispatch = self.check_callback(ticket)?;
         if dispatch.retiring {
             return Err(QueueError::WaitingForStop);
         }
-        Ok(PcmView {
+        Ok(PresentationPcmView {
             identity: dispatch.ticket.identity,
             asset: &dispatch.asset,
             sequence: dispatch.queued.sequence,
@@ -467,7 +473,7 @@ impl AudioQueue {
     pub fn close(
         &mut self,
         receipt: &AudioReceipt,
-        lease: &AudioOutputLease,
+        lease: &PlaybackOutput,
         chunk_count: u64,
         end_frame: u64,
     ) -> Result<QueueState, QueueError> {
@@ -520,7 +526,7 @@ impl AudioQueue {
     pub fn cancel(
         &mut self,
         receipt: &AudioReceipt,
-        lease: &AudioOutputLease,
+        lease: &PlaybackOutput,
     ) -> Result<Cancellation, QueueError> {
         self.check(receipt, lease)?;
         if let Some(cue) = self.cue.as_mut() {
@@ -529,18 +535,18 @@ impl AudioQueue {
         Ok(self.retire())
     }
 
-    /// Connects Media SpeechStopped facts to their original audio admission receipt.
+    /// Applies an already-permitted local stop label to its original admission receipt.
     /// The event owner retains the receipt returned by replace; selecting a newer
     /// current receipt would let a delayed same-identity stop cancel replacement work.
-    /// Media cancellation does not already stop downstream playback.
+    /// Native media stop records are projected at the native adapter, not retained here.
     pub fn cancel_media(
         &mut self,
         receipt: &AudioReceipt,
-        lease: &AudioOutputLease,
-        stopped: &SpeechStopped,
+        lease: &PlaybackOutput,
+        stopped: &PlaybackCue,
     ) -> Result<Cancellation, QueueError> {
         self.check(receipt, lease)?;
-        if stopped.identity != receipt.identity {
+        if *stopped != receipt.identity {
             return Err(QueueError::StaleReceipt);
         }
         self.cancel(receipt, lease)
@@ -605,7 +611,31 @@ impl AudioQueue {
         }
     }
 
-    fn check_lease(&self, lease: &AudioOutputLease) -> Result<(), QueueError> {
+    pub(crate) fn check_basis(
+        &self,
+        basis: PlaybackBasis,
+        identity_basis: PlaybackBasis,
+    ) -> Result<(), QueueError> {
+        if basis.session() != self.basis.session()
+            || basis.run() != self.basis.run()
+            || basis.revision() < self.basis.revision()
+            || identity_basis != basis
+        {
+            return Err(QueueError::WrongBasis);
+        }
+        Ok(())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn check_receipt(
+        &self,
+        receipt: &AudioReceipt,
+        lease: &PlaybackOutput,
+    ) -> Result<(), QueueError> {
+        self.check(receipt, lease).map(|_| ())
+    }
+
+    pub(crate) fn check_output(&self, lease: &PlaybackOutput) -> Result<(), QueueError> {
         if self.disposed {
             return Err(QueueError::Disposed);
         }
@@ -615,8 +645,8 @@ impl AudioQueue {
         Ok(())
     }
 
-    fn check(&self, receipt: &AudioReceipt, lease: &AudioOutputLease) -> Result<&Cue, QueueError> {
-        self.check_lease(lease)?;
+    fn check(&self, receipt: &AudioReceipt, lease: &PlaybackOutput) -> Result<&Cue, QueueError> {
+        self.check_output(lease)?;
         if !Rc::ptr_eq(&self.owner, &receipt.owner) {
             return Err(QueueError::ForeignOwner);
         }

@@ -1,7 +1,11 @@
 use df_assets::AssetManifest;
 use df_audio::{AudioQueue, PcmBuffer, PcmFormat, QueueLimits};
+#[cfg(target_arch = "wasm32")]
+use df_audio::{PcmSource, PlaybackBasis, PlaybackCue, PlaybackDestination, PlaybackOutput};
 use df_client::cache::{AssetCache, CacheKey, CacheLease, CacheLimits, CacheScope};
+#[cfg(not(target_arch = "wasm32"))]
 use df_media::speech::SpeechIdentity;
+#[cfg(not(target_arch = "wasm32"))]
 use df_model::checkpoint::{
     AssetKind, AssetReference, AudienceScope, AudioDestination, AudioOutputLease, Basis,
     ContentDigest, JobId, RecordId,
@@ -12,6 +16,36 @@ use df_types::{
 
 pub const FRAMES: u64 = 24_000;
 
+#[cfg(target_arch = "wasm32")]
+pub fn basis() -> PlaybackBasis {
+    PlaybackBasis::new(
+        SessionId::from_bytes(&[1; 16]).unwrap(),
+        RunId::from_bytes(&[2; 16]).unwrap(),
+        SessionRevision::new(RecoveryEpoch::new(1).unwrap(), 7),
+    )
+}
+
+pub fn binding() -> ClientBindingId {
+    ClientBindingId::from_bytes(&[3; 16]).unwrap()
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn lease() -> PlaybackOutput {
+    PlaybackOutput::new([4; 16], binding(), 9, PlaybackDestination::PublicRoom, true).unwrap()
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn identity(generation: u64) -> PlaybackCue {
+    PlaybackCue::new(
+        basis(),
+        [5; 16],
+        OperationId::from_bytes(&[6; 16]).unwrap(),
+        generation,
+    )
+    .unwrap()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub fn basis() -> Basis {
     Basis {
         session: SessionId::from_bytes(&[1; 16]).unwrap(),
@@ -20,10 +54,7 @@ pub fn basis() -> Basis {
     }
 }
 
-pub fn binding() -> ClientBindingId {
-    ClientBindingId::from_bytes(&[3; 16]).unwrap()
-}
-
+#[cfg(not(target_arch = "wasm32"))]
 pub fn lease() -> AudioOutputLease {
     AudioOutputLease {
         id: RecordId::from_bytes(&[4; 16]).unwrap(),
@@ -34,6 +65,7 @@ pub fn lease() -> AudioOutputLease {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn identity(generation: u64) -> SpeechIdentity {
     SpeechIdentity {
         basis: basis(),
@@ -63,6 +95,9 @@ pub fn queue() -> AudioQueue {
 pub struct LocalPcm {
     pub cache: AssetCache,
     pub source: CacheLease,
+    #[cfg(target_arch = "wasm32")]
+    pub reference: PcmSource,
+    #[cfg(not(target_arch = "wasm32"))]
     pub reference: AssetReference,
     pub manifest: AssetManifest,
     pub buffer: Option<PcmBuffer>,
@@ -93,26 +128,41 @@ pub fn local_pcm(channels: u16) -> LocalPcm {
         byte_len: bytes.len() as u64,
         sha256: digest,
     };
+    let source_key = RevisionLabel::new(Some(if channels == 1 {
+        "local-pcm-mono"
+    } else {
+        "local-pcm-stereo"
+    }))
+    .unwrap();
+    #[cfg(target_arch = "wasm32")]
+    let reference = PcmSource::new(source_key.clone(), manifest).unwrap();
+    #[cfg(not(target_arch = "wasm32"))]
     let reference = AssetReference {
-        key: RevisionLabel::new(Some(if channels == 1 {
-            "local-pcm-mono"
-        } else {
-            "local-pcm-stereo"
-        }))
-        .unwrap(),
+        key: source_key.clone(),
         digest: ContentDigest(digest),
         byte_length: manifest.byte_len,
         kind: AssetKind::Audio,
     };
     let key = CacheKey {
-        version: reference.key.clone(),
+        version: source_key,
         bytes: manifest,
     };
+    #[cfg(target_arch = "wasm32")]
+    let scope = CacheScope {
+        session: basis().session(),
+        run: basis().run(),
+        binding: binding(),
+    };
+    #[cfg(not(target_arch = "wasm32"))]
     let scope = CacheScope {
         session: basis().session,
         run: basis().run,
         binding: binding(),
     };
+    #[cfg(target_arch = "wasm32")]
+    let revision = basis().revision();
+    #[cfg(not(target_arch = "wasm32"))]
+    let revision = basis().revision;
     let mut cache = AssetCache::new(
         scope,
         CacheLimits {
@@ -124,7 +174,7 @@ pub fn local_pcm(channels: u16) -> LocalPcm {
     )
     .unwrap();
     cache
-        .apply_current(scope, basis().revision, std::slice::from_ref(&key))
+        .apply_current(scope, revision, std::slice::from_ref(&key))
         .unwrap();
     let fetch = cache.fetch(&key).unwrap();
     cache.complete(&fetch, bytes).unwrap();
