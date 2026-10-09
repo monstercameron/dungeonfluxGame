@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{cell::Cell, time::Duration};
 
 use df_ai::lookup::{LookupError, PreparedRead, ReadResult, lookup_prepared, lookup_replay};
 use df_model::checkpoint::{
@@ -517,6 +517,8 @@ struct RecordingFixture {
     key: AssetRequestKey,
     basis: RequestIdentity,
     complete_bytes: [u8; 4],
+    prepared_reads: Cell<usize>,
+    replay_reads: Cell<usize>,
 }
 
 #[test]
@@ -567,6 +569,7 @@ impl PreparedRead for RecordingFixture {
         &self,
         _: &Self::Key,
     ) -> ReadResult<'_, Self::Key, Self::Basis, Self::Artifact, Self::Failure> {
+        self.prepared_reads.set(self.prepared_reads.get() + 1);
         Ok(Some((&self.key, &self.basis, &self.complete_bytes)))
     }
 
@@ -574,6 +577,7 @@ impl PreparedRead for RecordingFixture {
         &self,
         _: &Self::Key,
     ) -> ReadResult<'_, Self::Key, Self::Basis, Self::Artifact, Self::Failure> {
+        self.replay_reads.set(self.replay_reads.get() + 1);
         Ok(Some((&self.key, &self.basis, &self.complete_bytes)))
     }
 }
@@ -587,6 +591,8 @@ fn real_prepared_and_replay_lookup_consumers_reuse_the_request_key_and_basis() {
             key: recorded.semantic_basis,
             basis: recorded.identity,
             complete_bytes: *b"done",
+            prepared_reads: Cell::new(0),
+            replay_reads: Cell::new(0),
         };
         let request =
             CheckedRequest::new(binding(mode), b"data", work(), limits(), owner(&current)).unwrap();
@@ -614,5 +620,95 @@ fn real_prepared_and_replay_lookup_consumers_reuse_the_request_key_and_basis() {
             ExecutionMode::Live => panic!("fixture covers only admitted recorded modes"),
         };
         assert_eq!(stale, Err(LookupError::Stale));
+    }
+}
+
+#[test]
+fn bounded_request_admission_precedes_prepared_and_replay_recording_reads() {
+    for mode in [ExecutionMode::PreparedOnly, ExecutionMode::Replay] {
+        for (payload, usage, expected) in [
+            (&b"data"[..], work(), Ok(*b"done")),
+            (
+                &b"12345"[..],
+                work(),
+                Err(RequestError::LimitExceeded(RequestLimit::Bytes)),
+            ),
+            (
+                &b"data"[..],
+                RequestUsage::new(4, Duration::from_nanos(5), Usage::new(2, UsageUnit::Token)),
+                Err(RequestError::LimitExceeded(RequestLimit::Tokens)),
+            ),
+            (
+                &b"data"[..],
+                RequestUsage::new(3, Duration::from_nanos(6), Usage::new(2, UsageUnit::Token)),
+                Err(RequestError::LimitExceeded(RequestLimit::Duration)),
+            ),
+            (
+                &b"data"[..],
+                RequestUsage::new(3, Duration::from_nanos(5), Usage::new(3, UsageUnit::Token)),
+                Err(RequestError::LimitExceeded(RequestLimit::Units)),
+            ),
+            (
+                &b"data"[..],
+                RequestUsage::new(3, Duration::from_nanos(5), Usage::new(2, UsageUnit::Byte)),
+                Err(RequestError::UnitMismatch),
+            ),
+        ] {
+            let current = binding(mode);
+            let recorded = binding(mode);
+            let store = RecordingFixture {
+                key: recorded.semantic_basis,
+                basis: recorded.identity,
+                complete_bytes: *b"done",
+                prepared_reads: Cell::new(0),
+                replay_reads: Cell::new(0),
+            };
+            let input = payload.to_vec();
+            let result: Result<[u8; 4], RequestError> = (|| {
+                let request =
+                    CheckedRequest::new(binding(mode), &input, usage, limits(), owner(&current))?;
+                request.validate_current(owner(&current))?;
+                assert_eq!(request.payload(), input);
+                assert_eq!(request.usage(), usage);
+                assert_eq!(request.binding().identity, current.identity);
+                assert_eq!(request.binding().semantic_basis, current.semantic_basis);
+                assert_eq!(request.binding().mode, mode);
+                let admitted = request.binding();
+                let bytes = match admitted.mode {
+                    ExecutionMode::PreparedOnly => {
+                        lookup_prepared(&store, &admitted.semantic_basis, &admitted.identity)
+                    }
+                    ExecutionMode::Replay => {
+                        lookup_replay(&store, &admitted.semantic_basis, &admitted.identity)
+                    }
+                    ExecutionMode::Live => panic!("fixture covers only admitted recorded modes"),
+                }
+                .expect("current complete recording matches the admitted request");
+                Ok(*bytes)
+            })();
+
+            assert_eq!(result, expected, "{mode:?}");
+            let accepted_reads = usize::from(expected.is_ok());
+            assert_eq!(
+                store.prepared_reads.get(),
+                if mode == ExecutionMode::PreparedOnly {
+                    accepted_reads
+                } else {
+                    0
+                },
+            );
+            assert_eq!(
+                store.replay_reads.get(),
+                if mode == ExecutionMode::Replay {
+                    accepted_reads
+                } else {
+                    0
+                },
+            );
+            assert_eq!(input, payload);
+            assert_eq!(store.complete_bytes, *b"done");
+            assert_eq!(store.key, current.semantic_basis);
+            assert_eq!(store.basis, current.identity);
+        }
     }
 }
