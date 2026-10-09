@@ -15,3 +15,5 @@ opentelemetry-proto = { version = "=0.31.0", default-features = false, features 
 opentelemetry_sdk = { version = "=0.31.0", default-features = false, features = ["trace", "logs"] }
 opentelemetry = { version = "=0.31.0", default-features = false, features = ["trace", "logs"] }
 opentelemetry-proto = { version = "=0.31.0", default-features = false, features = ["trace"] }
+[dev-dependencies]
+opentelemetry-proto = { version = "=0.31.0", default-features = false, features = ["metrics"] }
