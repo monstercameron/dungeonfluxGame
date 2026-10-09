@@ -8,6 +8,7 @@
 //! neither candidate alone constitutes durable paid-work admission.
 
 mod allowance;
+mod credit;
 mod spend;
 mod subscription;
 
@@ -16,6 +17,12 @@ pub use allowance::{
     AllowanceRenewal, AllowanceState, AllowanceTerms, AllowanceTransition, PaidPeriod,
     ScheduledDowngrade, effective_allowance_terms, propose_allowance_downgrade,
     propose_allowance_renewal,
+};
+
+pub use credit::{
+    CreditAdjustment, CreditEvent, CreditObservation, CreditReceipt, CreditRefusal, CreditState,
+    CreditTransition, OriginalCharge, RefundObligation, RefundOutcome, RefundStatus,
+    propose_credit_adjustment,
 };
 
 pub use spend::{
