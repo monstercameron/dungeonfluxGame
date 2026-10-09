@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+browser-callback-overflow-fixture = []
+
 [dependencies]
 web-time = "=1.1.0"
 bytes.workspace = true

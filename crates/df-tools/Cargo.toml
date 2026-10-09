@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 public-scene-delivery-fixture = []
+browser-callback-overflow-fixture = ["df-rpc-bridge/browser-callback-overflow-fixture"]
 
 [[bin]]
 name = "df-transport-fixture"

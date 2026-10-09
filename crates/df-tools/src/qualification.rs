@@ -17,6 +17,8 @@ use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use web_sys::{Document, HtmlButtonElement};
 use web_time::Instant;
 
+mod callback_progress;
+
 fn stop_on_resource_breach(
     connection: &BrowserConnection,
     snapshot: &ConnectionSnapshot,
@@ -90,15 +92,32 @@ async fn frame() -> Result<f64, String> {
         .await
         .map_err(|_| "animation frame owner dropped".to_owned())
 }
-async fn heartbeat(done: Rc<Cell<bool>>) -> Result<Vec<f64>, String> {
-    let mut previous = frame().await?;
-    let mut gaps = vec![];
-    while !done.get() {
-        let current = frame().await?;
-        gaps.push(current - previous);
-        previous = current;
+async fn heartbeat(
+    connection: &BrowserConnection,
+    done: Rc<Cell<bool>>,
+    completed: Rc<Cell<u8>>,
+    observations: &Rc<RefCell<callback_progress::CallbackProgress>>,
+) -> Result<(), String> {
+    loop {
+        let time_ms = frame().await?;
+        let snapshot = connection.snapshot().map_err(|error| error.to_string())?;
+        observations
+            .borrow_mut()
+            .record(callback_progress::FramePoint {
+                time_ms,
+                callback_bytes: snapshot.callback_bytes.total,
+                callback_items: snapshot.callback_items.total,
+                decode_yields: snapshot.decode_yields,
+                completed_classes: completed.get(),
+            })
+            .map_err(|error| error.to_string())?;
+        if done.get() {
+            return observations
+                .borrow()
+                .qualify()
+                .map_err(|error| error.to_string());
+        }
     }
-    Ok(gaps)
 }
 fn percentile(samples: &[f64], percentile: usize) -> f64 {
     let mut sorted = samples.to_vec();
@@ -383,6 +402,8 @@ async fn probe(
 async fn run(
     document: &Document,
     evidence: &Rc<RefCell<TerminalEvidence>>,
+    observations: &Rc<RefCell<callback_progress::CallbackProgress>>,
+    measured: &Rc<RefCell<Option<callback_progress::PressureReport>>>,
 ) -> Result<(), qualification_verdict::TerminalOutcome> {
     display(
         document,
@@ -531,8 +552,11 @@ async fn run(
             record_pressure_result(bidi_early.await, evidence)
         })
     };
-    let (((slow, paced, bulk, latencies), bidi_early), frames) =
-        futures::join!(mixed, heartbeat(done));
+    let (((slow, paced, bulk, latencies), bidi_early), frames) = futures::join!(
+        mixed,
+        heartbeat(&connection, done, completed.clone(), observations)
+    );
+    let observation_report = observations.borrow().report();
     if slow.is_err()
         || paced.is_err()
         || bulk.is_err()
@@ -572,6 +596,11 @@ async fn run(
             closed_snapshot,
         );
         evidence.borrow_mut().update_report(report.clone());
+        *measured.borrow_mut() = Some(callback_progress::PressureReport {
+            text: report.clone(),
+            retained_in_failure: true,
+        });
+        let report = format!("{report}\n{observation_report}");
         display(document, &report);
         save_report("qualification", &report).await?;
         return Err(qualification_verdict::TerminalOutcome::retain_current_report(verdict));
@@ -581,7 +610,8 @@ async fn run(
     let bulk = bulk?;
     let latencies = latencies?;
     let (mut bidi_sender, mut bidi_stream, bidi_first_response_ms) = bidi_early?;
-    let frames = frames?;
+    frames?;
+    let frames = observations.borrow().gaps();
     require(
         completed.get() == 0b1111,
         "mixed classes did not all complete",
@@ -677,7 +707,7 @@ async fn run(
         && snapshot.receive_credit.data_bytes > 8 * 1024 * 1024
         && snapshot.receive_credit.update_bytes > 0;
     let mut text = format!(
-        "{}\nPASS · desktop pressure streams complete with generated OK trailers\nSlow: {} bytes; paced media: {} bytes; bulk: {} bytes\nPASS · same-connection bidi echoed exact sample 10 before request half-close while all four mixed classes were active; held request input open until all four completed; exact sample 11, EOF and terminal trailer followed half-close\nBidi first response from pressure start: {bidi_first_response_ms:.3}ms\nCold connection: {cold_ms:.3}ms\nWarm RPC p95/p99: {:.3}/{:.3}ms\nPressure RPC p95/p99: {:.3}/{:.3}ms\nAnimation gaps p95/p99: {:.3}/{:.3}ms; frames={}\nWASM linear memory allocated: before={memory_before}, peak={}, after={} bytes (not live heap or engine memory)\nPressure resource snapshot: {snapshot:?}\nPASS · cancellation/server owner cleanup + browser callback cleanup\nClosed snapshot: {closed:?}\nWarm samples ms: {warm:?}\nPressure samples ms: {latencies:?}\nAnimation gap samples ms: {frames:?}\n",
+        "{}\nPASS · desktop pressure streams complete with generated OK trailers\nSlow: {} bytes; paced media: {} bytes; bulk: {} bytes\nPASS · same-connection bidi echoed exact sample 10 before request half-close while all four mixed classes were active; held request input open until all four completed; exact sample 11, EOF and terminal trailer followed half-close\nBidi first response from pressure start: {bidi_first_response_ms:.3}ms\nCold connection: {cold_ms:.3}ms\nWarm RPC p95/p99: {:.3}/{:.3}ms\nPressure RPC p95/p99: {:.3}/{:.3}ms\nSampled adjacent rAF gaps p95/p99: {:.3}/{:.3}ms; frames={}\nWASM linear memory allocated: before={memory_before}, peak={}, after={} bytes (not live heap or engine memory)\nPressure resource snapshot: {snapshot:?}\nPASS · cancellation/server owner cleanup + browser callback cleanup\nClosed snapshot: {closed:?}\nWarm samples ms: {warm:?}\nPressure samples ms: {latencies:?}\nSampled adjacent rAF gap samples ms: {frames:?}\n",
         qualification_verdict::format_verdict(local_verdict(
             &snapshot,
             resource_measurements_observed,
@@ -704,7 +734,11 @@ async fn run(
         percentile(&paced.arrival_gaps_ms, 99),
         paced.arrival_gaps_ms
     ));
-    display(document, &text);
+    *measured.borrow_mut() = Some(callback_progress::PressureReport {
+        text: text.clone(),
+        retained_in_failure: false,
+    });
+    display(document, &format!("{text}\n{observation_report}"));
     for kind in [
         "websocket",
         "frame",
@@ -717,7 +751,112 @@ async fn run(
         text.push_str(&format!(
             "PASS · malicious {kind} controlled rejection: {result:?}\n"
         ));
-        display(document, &text);
+        *measured.borrow_mut() = Some(callback_progress::PressureReport {
+            text: text.clone(),
+            retained_in_failure: false,
+        });
+        display(document, &format!("{text}\n{observation_report}"));
+    }
+    #[cfg(all(debug_assertions, feature = "browser-callback-overflow-fixture"))]
+    {
+        let pending_report_start = text.len();
+        text.push_str("INCONCLUSIVE · callback overflow observation pending. Overflow socket snapshot and cleanup: UNPERFORMED until the bounded observer returns; earlier closed snapshot belongs only to the pressure connection.\n");
+        *measured.borrow_mut() = Some(callback_progress::PressureReport {
+            text: text.clone(),
+            retained_in_failure: false,
+        });
+        display(document, &format!("{text}\n{observation_report}"));
+        let url = tunnel_url("/malicious/callback-overflow")
+            .map_err(|error| incomplete_observation(&error))?;
+        let (result, before, closed) = df_rpc_bridge::observe_callback_overflow_fixture(&url).await;
+        let complete_receipts = before.as_ref().is_some_and(|snapshot| {
+            snapshot.websocket_receive.total == 5 * df_rpc_bridge::MESSAGE_BYTES
+                && snapshot.websocket_receive_items.total == 5
+        });
+        let overflow_observed = before.as_ref().is_some_and(|snapshot| {
+            snapshot.rejected
+                && complete_receipts
+                && snapshot.websocket_receive.peak == df_rpc_bridge::MESSAGE_BYTES
+                && snapshot.websocket_receive_items.peak == 1
+                && snapshot.callback_bytes.total == df_rpc_bridge::RECEIVE_BYTES
+                && snapshot.callback_bytes.peak == df_rpc_bridge::RECEIVE_BYTES
+                && snapshot.callback_items.total == 4
+                && snapshot.callback_items.peak == 4
+                && snapshot.browser_callback_vec_capacity.total == df_rpc_bridge::RECEIVE_BYTES
+                && snapshot.callback_bytes.current == 0
+                && snapshot.callback_items.current == 0
+                && snapshot.browser_callback_vec_capacity.current == 0
+                && snapshot.websocket_receive.current == 0
+                && snapshot.websocket_receive_items.current == 0
+                && snapshot.received_frames == 0
+                && snapshot.decode_yields == 0
+        });
+        let owner_cleanup_observed = closed.as_ref().is_ok_and(|snapshot| {
+            snapshot.closed
+                && snapshot.callback_bytes.current == 0
+                && snapshot.callback_items.current == 0
+                && snapshot.browser_callback_vec_capacity.current == 0
+                && snapshot.websocket_receive.current == 0
+                && snapshot.websocket_receive_items.current == 0
+        });
+        let resource_breach = before
+            .iter()
+            .chain(closed.as_ref().ok())
+            .map(|snapshot| qualification_verdict::evaluate(Some(snapshot), false, false))
+            .find(|verdict| verdict.stop_owned_run);
+        let qualified = result.is_ok() && overflow_observed && owner_cleanup_observed;
+        let missing_observation = !complete_receipts || closed.is_err();
+        let disposition = if resource_breach.is_some() {
+            "FAIL"
+        } else if missing_observation {
+            "INCONCLUSIVE"
+        } else if qualified {
+            "PASS"
+        } else {
+            "FAIL"
+        };
+        text.truncate(pending_report_start);
+        text.push_str(&format!(
+            "{disposition} · callback queue overflow witness. Expected: engine callbacks=5 × 256KiB; accepted Rust queue=4 × 256KiB; fifth refused before copy; incoming reads unpolled.\nObservation result: {result:?}\nLast pre-close callback snapshot: {before:?}\nCallback overflow post-close snapshot: {closed:?}\n"
+        ));
+        // Keep the typed disposition and actual partial snapshots before publication.
+        *measured.borrow_mut() = Some(callback_progress::PressureReport {
+            text: text.clone(),
+            retained_in_failure: resource_breach.is_some(),
+        });
+        display(document, &format!("{text}\n{observation_report}"));
+        if let Some(verdict) = resource_breach {
+            let failure_report =
+                format!("{}\n{text}", qualification_verdict::format_verdict(verdict));
+            evidence
+                .borrow_mut()
+                .record_failure(verdict, failure_report);
+            return Err(qualification_verdict::TerminalOutcome::from_verdict(
+                verdict,
+                "Measured callback overflow resource breach; owned socket already dropped.",
+            ));
+        }
+        if missing_observation {
+            let deadline = result
+                .as_ref()
+                .is_err_and(|error| error.kind() == std::io::ErrorKind::TimedOut);
+            return Err(incomplete_observation(if deadline {
+                "Callback overflow deadline expired without the complete actual witness."
+            } else {
+                "Callback overflow delivery or cleanup metrics are incomplete."
+            }));
+        }
+        if !qualified {
+            return Err(qualification_verdict::TerminalOutcome::from_verdict(
+                qualification_verdict::Verdict {
+                    observed_subcase: qualification_verdict::Outcome::Fail,
+                    full_g02: qualification_verdict::Outcome::Inconclusive,
+                    stop_owned_run: false,
+                    block_dependents: true,
+                },
+                "Complete actual callback overflow witness or owner cleanup mismatched.",
+            ));
+        }
     }
     let user_agent = web_sys::window()
         .ok_or("window unavailable")?
@@ -725,8 +864,12 @@ async fn run(
         .user_agent()
         .map_err(|_| "user agent unavailable")?;
     text.push_str(&format!("Engine identity: {user_agent}\nBuild: {}\nG02 INCONCLUSIVE · required physical iOS/Android, network matrix, whole-process CPU/memory and browser pre-callback allocations remain unqualified. Local latency observations have no approved production budget.\n", crate::BUILD_ID));
-    display(document, &text);
-    save_report("qualification", &text).await?;
+    *measured.borrow_mut() = Some(callback_progress::PressureReport {
+        text: text.clone(),
+        retained_in_failure: false,
+    });
+    display(document, &format!("{text}\n{observation_report}"));
+    save_report("qualification", &format!("{text}\n{observation_report}")).await?;
     Ok(())
 }
 async fn run_callback_capacity(
@@ -1309,8 +1452,11 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
         let active = active.clone();
         wasm_bindgen_futures::spawn_local(async move {
             let evidence = Rc::new(RefCell::new(TerminalEvidence::default()));
+            let observations =
+                Rc::new(RefCell::new(callback_progress::CallbackProgress::default()));
+            let measured = Rc::new(RefCell::new(None));
             let outcome = select(
-                run(&document, &evidence).boxed_local(),
+                run(&document, &evidence, &observations, &measured).boxed_local(),
                 TimeoutFuture::new(qualification_verdict::OWNED_RUN_DEADLINE_MS).boxed_local(),
             )
             .await;
@@ -1323,15 +1469,41 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
                     ))
                 }
             };
-            if let Err(error) = result
-                && let qualification_verdict::TerminalPresentation::Replace(report) =
+            if let Err(error) = result {
+                let terminal = evidence.borrow().resolve(error);
+                if let qualification_verdict::TerminalPresentation::Replace(mut report) =
                     qualification_verdict::present_terminal_outcome(
-                        &evidence.borrow().resolve(error),
+                        &terminal,
                         crate::BUILD_ID,
                         qualification_verdict::TerminalContext::Qualification,
                     )
-            {
-                display(&document, &report);
+                {
+                    report = callback_progress::terminal_report(
+                        report,
+                        measured.borrow().as_ref(),
+                        &observations.borrow(),
+                    );
+                    display(&document, &report);
+                    match select(
+                        save_report("qualification", &report).boxed_local(),
+                        TimeoutFuture::new(1000).boxed_local(),
+                    )
+                    .await
+                    {
+                        Either::Left((Ok(()), _)) => {}
+                        Either::Left((Err(error), _)) => display(
+                            &document,
+                            &format!("{report}\nLater report publication failed: {error}\n"),
+                        ),
+                        Either::Right(((), pending)) => {
+                            drop(pending);
+                            display(
+                                &document,
+                                &format!("{report}\nLater report publication timed out.\n"),
+                            );
+                        }
+                    }
+                }
             }
             button.set_disabled(false);
             active.set(false);
@@ -1479,6 +1651,9 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
 }
 
 pub(super) async fn save_report(kind: &str, text: &str) -> Result<(), String> {
+    if kind == "qualification" && text.len() > 64 * 1024 {
+        return Err("qualification report exceeds its64KiB publication bound; full page evidence was retained, not truncated".to_owned());
+    }
     let options = web_sys::RequestInit::new();
     options.set_method("POST");
     options.set_body(&JsValue::from_str(text));

@@ -762,6 +762,36 @@ async fn malicious(
         .max_frame_size(MESSAGE_BYTES)
         .on_upgrade(move |mut socket| async move {
             let _permit = permit;
+            #[cfg(all(debug_assertions, feature = "browser-callback-overflow-fixture"))]
+            if kind == "callback-overflow" {
+                let Ok(Some(Ok(axum::extract::ws::Message::Binary(preface)))) =
+                    tokio::time::timeout(std::time::Duration::from_secs(1), socket.next()).await
+                else {
+                    return;
+                };
+                if preface.as_ref() != b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" {
+                    return;
+                }
+                // Exactly five independent engine callbacks. No SETTINGS prefix:
+                // the private fixture adapter never polls the incoming byte stream.
+                let payload = bytes::Bytes::from(vec![0; MESSAGE_BYTES]);
+                let sent = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                    for _ in 0..5 {
+                        socket
+                            .send(axum::extract::ws::Message::Binary(payload.clone()))
+                            .await?;
+                    }
+                    Ok::<(), axum::Error>(())
+                })
+                .await;
+                if sent.is_ok_and(|result| result.is_ok()) {
+                    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                        while socket.next().await.is_some() {}
+                    })
+                    .await;
+                }
+                return;
+            }
             // Wait for the real h2 client's preface before emitting valid SETTINGS followed by abuse.
             if tokio::time::timeout(std::time::Duration::from_secs(1), socket.next())
                 .await
