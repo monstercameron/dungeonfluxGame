@@ -5,6 +5,7 @@ use std::mem::size_of;
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 
 use df_model::checkpoint::{AcceptedDecision, Basis, Checkpoint, GameInput};
+use df_model::transition::TransitionResult;
 use df_observe::OperationContext;
 use df_types::{OperationId, SessionId};
 
@@ -196,6 +197,22 @@ pub trait SessionEngine<S: OperationScope> {
         operation: &S,
         input: &GameInput,
     ) -> Result<Checkpoint, RepositoryError>;
+    /// Existing engines may return a detached checkpoint; new owners preserve the explicit
+    /// current-operation pending disposition. This remains staging, never commit authority.
+    fn decide_transition(
+        &mut self,
+        current: &Checkpoint,
+        operation: &S,
+        input: &GameInput,
+    ) -> TransitionResult<RepositoryError> {
+        match self.decide(current, operation, input) {
+            Ok(candidate) => TransitionResult::classify(current, candidate, operation.operation())
+                .unwrap_or(TransitionResult::Rejected(
+                    RepositoryError::InvalidCandidate,
+                )),
+            Err(error) => TransitionResult::Rejected(error),
+        }
+    }
     fn validate_recovery(&mut self, checkpoint: &Checkpoint) -> Result<(), RepositoryError>;
 }
 
@@ -534,9 +551,20 @@ where
         if self.checkpoint.basis().revision.next_sequence().is_err() {
             return SubmissionOutcome::Refused(RepositoryError::SequenceExhausted);
         }
-        let candidate = match self.engine.decide(&self.checkpoint, operation, input) {
-            Ok(candidate) => candidate,
-            Err(error) => return SubmissionOutcome::Refused(error),
+        let transition = self
+            .engine
+            .decide_transition(&self.checkpoint, operation, input);
+        if transition
+            .validate(&self.checkpoint, operation.operation())
+            .is_err()
+        {
+            return SubmissionOutcome::Refused(RepositoryError::InvalidCandidate);
+        }
+        let candidate = match transition {
+            TransitionResult::Accepted(candidate) | TransitionResult::Pending { candidate, .. } => {
+                candidate
+            }
+            TransitionResult::Rejected(error) => return SubmissionOutcome::Refused(error),
         };
         if let Err(error) = validate_candidate(&self.checkpoint, &candidate, operation.operation())
         {

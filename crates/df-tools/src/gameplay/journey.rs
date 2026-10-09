@@ -1391,8 +1391,18 @@ fn stage_authored_threads(
     .map_err(bad)?;
     match staged {
         DirectorStaging::Staged(staged) => Ok((*staged).into_candidate()),
-        // The local slice has no scheduled/pending continuation producer. Refusal leaves the
-        // current checkpoint and pending prerequisites untouched; nothing reaches session commit.
+        // This source-owned event may suspend at its own exact window. Preserve that staged
+        // candidate for the session's transition classifier; an unrelated prior window cannot
+        // turn this operation into pending. The director did not run downstream narrative work.
+        DirectorStaging::RulesPending(pending)
+            if pending
+                .iter()
+                .filter(|resolution| resolution.window.causal_fact == source_id)
+                .count()
+                == 1 =>
+        {
+            Ok(candidate)
+        }
         DirectorStaging::RulesPending(_)
         | DirectorStaging::WorldPending(_)
         | DirectorStaging::MissingEnvironmentalProducer => Err(RepositoryError::InvalidCandidate),
@@ -2745,6 +2755,77 @@ mod tests {
     }
 
     #[test]
+    fn source_bound_pending_stops_thread_composition_and_reaches_journey_transition_consumer() {
+        let current = prepared_story();
+        let member = MemberId::from_bytes(&MEMBERS[0]).unwrap();
+        let command = input(&current, member, 5, "begin-story", vec![]);
+        let completed =
+            stage_with_supplier(&current, &command, &mut |_| panic!("opening cannot draw"))
+                .unwrap();
+        let source = completed.state().facts.last().unwrap();
+        let decision = completed.state().decisions.last().unwrap();
+        assert_eq!(decision.operation, source.operation);
+        assert!(decision.effects.is_empty());
+        let mut staged = completed.state().clone();
+        // Retain the registered source decision and its authored opening state, before the
+        // director applies the dependent thread consequence.
+        staged.narrative = narrative_transition::select(&current, &command)
+            .unwrap()
+            .state()
+            .narrative
+            .clone();
+        assert!(!staged.narrative.accepted_facts.contains(&source.id));
+        staged.pending.push(PendingResolution {
+            id: ResolutionId::from_bytes(&[0xb3; 16]).unwrap(),
+            basis: completed.basis(),
+            continuation: model::label("opening-source-continuation").unwrap(),
+            window: ResolutionWindow {
+                id: WindowId::from_bytes(&[0xb4; 16]).unwrap(),
+                phase: TriggerPhase::BeforeConsequence,
+                causal_fact: source.id,
+                source: rule().unwrap(),
+                timer: None,
+            },
+            next: PendingInput::Choice {
+                remaining: vec![OfferedResponse {
+                    participant: member,
+                    offer: model::label("opening-source-offer").unwrap(),
+                    options: vec![model::label("opening-source-option").unwrap()],
+                    source: rule().unwrap(),
+                }],
+            },
+            choices: vec![],
+            draw_ordinals: vec![],
+            spent: vec![],
+            rulings: vec![],
+        });
+        let staged = model::checkpoint(completed.basis(), staged).unwrap();
+        let suspended = stage_authored_threads(staged.clone(), source.id).unwrap();
+        assert_eq!(suspended, staged);
+        assert!(suspended.state().intents.is_empty());
+        assert!(
+            !suspended
+                .state()
+                .narrative
+                .accepted_facts
+                .contains(&source.id)
+        );
+        let result = model::staged_transition(&current, suspended, source.operation);
+        assert!(matches!(
+            result,
+            df_model::transition::TransitionResult::Pending {
+                resolution,
+                window,
+                next: PendingInput::Choice { remaining },
+                ..
+            } if resolution == ResolutionId::from_bytes(&[0xb3; 16]).unwrap()
+                && window == WindowId::from_bytes(&[0xb4; 16]).unwrap()
+                && remaining.len() == 1
+        ));
+        assert_eq!(current, prepared_story());
+    }
+
+    #[test]
     fn registered_narrative_tracks_private_packet_and_ignores_unmapped_events() {
         let ready = prepared_story();
         assert!(ready.state().narrative.accepted_facts.is_empty());
@@ -2791,6 +2872,46 @@ mod tests {
         assert_eq!(
             stage_authored_threads(private.clone(), source.id),
             Err(RepositoryError::InvalidCandidate)
+        );
+        let mut suspended = private.state().clone();
+        suspended.pending.push(PendingResolution {
+            id: ResolutionId::from_bytes(&[0xb1; 16]).unwrap(),
+            basis: private.basis(),
+            continuation: model::label("private-note-continuation").unwrap(),
+            window: ResolutionWindow {
+                id: WindowId::from_bytes(&[0xb2; 16]).unwrap(),
+                phase: TriggerPhase::BeforeConsequence,
+                causal_fact: source.id,
+                source: rule().unwrap(),
+                timer: None,
+            },
+            next: PendingInput::Choice {
+                remaining: vec![OfferedResponse {
+                    participant: member,
+                    offer: model::label("private-note-offer").unwrap(),
+                    options: vec![model::label("private-note-option").unwrap()],
+                    source: rule().unwrap(),
+                }],
+            },
+            choices: vec![],
+            draw_ordinals: vec![],
+            spent: vec![],
+            rulings: vec![],
+        });
+        let suspended = model::checkpoint(private.basis(), suspended).unwrap();
+        assert_eq!(
+            stage_authored_threads(suspended.clone(), source.id),
+            Ok(suspended.clone())
+        );
+        // This private note already applied source effects. Adding a window afterward cannot
+        // turn completed mechanics into a pending continuation.
+        assert_eq!(
+            df_model::transition::TransitionResult::<RepositoryError>::classify(
+                &current,
+                suspended,
+                source.operation,
+            ),
+            Err(df_model::transition::TransitionError::PendingEffects)
         );
         assert!(
             stage_with_supplier(&private, &command, &mut |_| panic!(

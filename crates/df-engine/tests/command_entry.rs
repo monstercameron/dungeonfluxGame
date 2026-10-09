@@ -5,6 +5,7 @@ use df_content::catalog::{CatalogEntry, CatalogLimits, CatalogSnapshot};
 use df_engine::command_entry::*;
 use df_model::checkpoint::*;
 use df_model::commands::{CommandError, CommandLimits};
+use df_model::transition::TransitionResult;
 use df_rules::{DispatchError, DispatchRegistry, HandlerRegistration, InvocationError};
 use fixture_model::*;
 use std::cell::Cell;
@@ -128,6 +129,148 @@ fn registered<H: RulesCommandHandler>(
         selector,
         source,
     )
+}
+
+fn registered_transition<H: RulesCommandHandler>(
+    input: &GameInput,
+    current: &Checkpoint,
+    registry: &DispatchRegistry<'_, H>,
+    selector: &df_types::RevisionLabel,
+    source: &RuleReference,
+) -> TransitionResult<CommandRejection<H::Rejection>> {
+    let pins = pins();
+    let rules = [rule()];
+    let contents = [content()];
+    let resources = resource_constraints();
+    decide_registered_transition(
+        RulesCommandInput {
+            command: input,
+            supplied_draws: &[],
+        },
+        current,
+        CommandEntryContext {
+            current_basis: current.basis(),
+            admitted_pins: &pins,
+            inventory: ReferenceInventory {
+                rules: &rules,
+                content: &contents,
+                resources: &resources,
+                assets: &[],
+            },
+            limits: bounds(),
+        },
+        registry,
+        selector,
+        source,
+    )
+}
+
+fn pending_candidate() -> Checkpoint {
+    let mut candidate = accepted().state().clone();
+    let mut next = basis();
+    next.revision = next.revision.next_sequence().unwrap();
+    let fact = FactId::from_bytes(&[81; 16]).unwrap();
+    candidate.facts.push(GameFact {
+        id: fact,
+        revision: next.revision,
+        operation: operation(),
+        ordinal: 0,
+        cause: None,
+        audience: AudienceScope::Shared,
+        value: FactValue::ContentEvent {
+            definition: content(),
+            subjects: vec![],
+        },
+    });
+    candidate.decisions[0].facts.push(fact);
+    candidate.pending.push(PendingResolution {
+        id: ResolutionId::from_bytes(&[82; 16]).unwrap(),
+        basis: next,
+        continuation: label("source-continuation"),
+        window: ResolutionWindow {
+            id: WindowId::from_bytes(&[83; 16]).unwrap(),
+            phase: TriggerPhase::BeforeConsequence,
+            causal_fact: fact,
+            source: rule(),
+            timer: None,
+        },
+        next: PendingInput::Choice {
+            remaining: vec![OfferedResponse {
+                participant: member(3),
+                offer: label("source-offer"),
+                options: vec![label("source-option")],
+                source: rule(),
+            }],
+        },
+        choices: vec![],
+        draw_ordinals: vec![],
+        spent: vec![],
+        rulings: vec![],
+    });
+    Checkpoint::new(
+        CHECKPOINT_SCHEMA,
+        next,
+        pins(),
+        candidate,
+        ReferenceInventory {
+            rules: &[rule()],
+            content: &[content()],
+            resources: &resource_constraints(),
+            assets: &[],
+        },
+        fixture_model::limits(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn registered_source_distinguishes_accepted_pending_and_refusal_without_mutating_current() {
+    let current = checkpoint(state()).unwrap();
+    let original = current.clone();
+    let source = rule();
+    let selector = label("transition-selector");
+    let contract_pins = pins();
+    for (candidate, expect_pending) in [(accepted(), false), (pending_candidate(), true)] {
+        let handler = SuppliedHandler {
+            candidate,
+            ..handler()
+        };
+        let entries = [CatalogEntry::new(&source, b"source")];
+        let registrations = [HandlerRegistration::new(&selector, &source, &handler)];
+        let registry =
+            DispatchRegistry::from_catalog(catalog(&contract_pins, &entries), &registrations, 1)
+                .unwrap();
+        let result = registered_transition(&action(), &current, &registry, &selector, &source);
+        assert_eq!(
+            matches!(
+                &result,
+                TransitionResult::Pending {
+                    resolution,
+                    window,
+                    next: PendingInput::Choice { remaining },
+                    ..
+                } if *resolution == ResolutionId::from_bytes(&[82; 16]).unwrap()
+                    && *window == WindowId::from_bytes(&[83; 16]).unwrap()
+                    && remaining.len() == 1
+            ),
+            expect_pending
+        );
+        assert_eq!(handler.calls.get(), 1);
+    }
+    let mut refused = handler();
+    refused.refuse = true;
+    let entries = [CatalogEntry::new(&source, b"source")];
+    let registrations = [HandlerRegistration::new(&selector, &source, &refused)];
+    let registry =
+        DispatchRegistry::from_catalog(catalog(&contract_pins, &entries), &registrations, 1)
+            .unwrap();
+    assert_eq!(
+        registered_transition(&action(), &current, &registry, &selector, &source),
+        TransitionResult::Rejected(CommandRejection::Invocation(InvocationError::Handler(
+            Refusal::Unsupported
+        )))
+    );
+    assert_eq!(current, original);
 }
 #[test]
 fn rejected_action_preserves_input_checkpoint_and_never_invokes_handler() {

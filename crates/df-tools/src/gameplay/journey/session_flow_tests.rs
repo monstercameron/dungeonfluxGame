@@ -1,5 +1,6 @@
 use super::*;
 use crate::gameplay::{actor, courier_ai};
+use df_model::transition::TransitionResult;
 use df_observe::OperationContext;
 use df_persistence::local_demo_scope::{DISPLAY, LocalDemoRole};
 use df_session::inbox::{ActorInput, AdmissionSequence, Reducer};
@@ -397,6 +398,53 @@ fn assert_private_answer(current: &Checkpoint, asked: bool) {
                 .any(|bytes| bytes == courier_ai::RESPONSE.as_bytes())
         );
     }
+}
+
+#[test]
+fn local_journey_engine_exposes_staged_acceptance_and_bound_refusal() {
+    let current = initial().unwrap();
+    let database = Rc::new(RefCell::new(Database {
+        checkpoint: current.clone(),
+        ledger: vec![],
+        refuse_commit: false,
+        damage: 1,
+        decisions: 0,
+        commits: 0,
+        publications: 0,
+        wakes: 0,
+        samples: 0,
+    }));
+    let scope = Scope::command(tests::input(
+        &current,
+        bootstrap_member().unwrap(),
+        1,
+        "join-room",
+        vec![],
+    ));
+    let mut engine = Engine(Rc::clone(&database));
+    let result = engine.decide_transition(&current, &scope, &scope.input);
+    assert!(matches!(result, TransitionResult::Accepted(_)));
+    assert_eq!(current, database.borrow().checkpoint);
+    assert_eq!(database.borrow().commits, 0);
+    let mut foreign = scope.clone();
+    foreign.operation = OperationId::from_bytes(&[0xf1; 16]).unwrap();
+    assert_eq!(
+        engine.decide_transition(&current, &foreign, &scope.input),
+        TransitionResult::Rejected(RepositoryError::InvalidCandidate)
+    );
+    let mut mismatched = scope.clone();
+    mismatched.input = tests::input(
+        &current,
+        bootstrap_member().unwrap(),
+        2,
+        "join-room",
+        vec![],
+    );
+    assert_eq!(
+        engine.decide_transition(&current, &mismatched, &scope.input),
+        TransitionResult::Rejected(RepositoryError::InputBinding)
+    );
+    assert_eq!(database.borrow().commits, 0);
 }
 
 #[test]
