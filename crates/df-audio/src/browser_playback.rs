@@ -136,9 +136,8 @@ mod browser {
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
 
+    use crate::{PcmSource, PlaybackBasis, PlaybackCue, PlaybackOutput};
     use df_assets::AssetManifest;
-    use df_media::speech::{SpeechIdentity, SpeechStopped};
-    use df_model::checkpoint::{AssetReference, AudioOutputLease, Basis};
     use wasm_bindgen::{JsCast, closure::Closure};
     use wasm_bindgen_futures::JsFuture;
     use web_sys::{
@@ -215,8 +214,8 @@ mod browser {
     pub struct BrowserPlayback {
         context: AudioContext,
         queue: AudioQueue,
-        output: AudioOutputLease,
-        current_output: Rc<RefCell<Option<AudioOutputLease>>>,
+        output: PlaybackOutput,
+        current_output: Rc<RefCell<Option<PlaybackOutput>>>,
         limits: PlaybackLimits,
         timeline: Option<PlaybackTimeline>,
         receipt: Option<AudioReceipt>,
@@ -235,7 +234,7 @@ mod browser {
     impl BrowserPlayback {
         pub fn new(
             queue: AudioQueue,
-            output: AudioOutputLease,
+            output: PlaybackOutput,
             limits: PlaybackLimits,
         ) -> Result<Self, PlaybackError> {
             if queue.snapshot().state != QueueState::Idle {
@@ -250,7 +249,7 @@ mod browser {
             Ok(Self {
                 context,
                 queue,
-                current_output: Rc::new(RefCell::new(Some(output.clone()))),
+                current_output: Rc::new(RefCell::new(Some(output))),
                 output,
                 limits,
                 timeline: None,
@@ -270,7 +269,7 @@ mod browser {
 
         /// Call synchronously inside a real user gesture. A running browser context
         /// alone is not substituted for the explicit local unlock operation.
-        pub fn request_unlock(&mut self, lease: &AudioOutputLease) -> Result<(), PlaybackError> {
+        pub fn request_unlock(&mut self, lease: &PlaybackOutput) -> Result<(), PlaybackError> {
             self.check_scope(lease)?;
             if self.unlock.is_some() {
                 return Err(PlaybackError::UnlockPending);
@@ -309,10 +308,10 @@ mod browser {
 
         pub fn replace(
             &mut self,
-            lease: &AudioOutputLease,
-            basis: Basis,
-            identity: SpeechIdentity,
-            asset: AssetReference,
+            lease: &PlaybackOutput,
+            basis: PlaybackBasis,
+            identity: PlaybackCue,
+            asset: PcmSource,
             format: PcmFormat,
             start: PlaybackStart,
         ) -> Result<PlaybackReplacement, PlaybackError> {
@@ -346,7 +345,7 @@ mod browser {
         pub fn enqueue(
             &mut self,
             receipt: &AudioReceipt,
-            lease: &AudioOutputLease,
+            lease: &PlaybackOutput,
             manifest: AssetManifest,
             sequence: u64,
             offset_frames: u64,
@@ -382,7 +381,7 @@ mod browser {
         pub fn close(
             &mut self,
             receipt: &AudioReceipt,
-            lease: &AudioOutputLease,
+            lease: &PlaybackOutput,
             chunk_count: u64,
             end_frame: u64,
         ) -> Result<QueueState, PlaybackError> {
@@ -393,7 +392,7 @@ mod browser {
         /// Apply one actual callback and then schedule at most one current buffer.
         /// The shell owns pump cadence; duplicate/stale source flags cannot release
         /// a newer dispatch because each source owns a distinct flag and exact ticket.
-        pub fn pump(&mut self, lease: &AudioOutputLease) -> Result<(), PlaybackError> {
+        pub fn pump(&mut self, lease: &PlaybackOutput) -> Result<(), PlaybackError> {
             self.check_scope(lease)?;
             self.collect_ended()?;
             self.check_ready(lease)?;
@@ -489,7 +488,7 @@ mod browser {
             let terminal = Rc::new(Cell::new(Terminal::Pending));
             let ended_flag = Rc::clone(&terminal);
             let current = Rc::clone(&self.current_output);
-            let admitted_output = self.output.clone();
+            let admitted_output = self.output;
             let ended = Closure::wrap(Box::new(move |_event: Event| {
                 let current = current.borrow();
                 ended_flag.set(if current.as_ref() == Some(&admitted_output) {
@@ -582,7 +581,7 @@ mod browser {
         pub fn cancel(
             &mut self,
             receipt: &AudioReceipt,
-            lease: &AudioOutputLease,
+            lease: &PlaybackOutput,
         ) -> Result<(), PlaybackError> {
             self.check_scope(lease)?;
             self.queue.cancel(receipt, lease)?;
@@ -594,8 +593,8 @@ mod browser {
         pub fn cancel_media(
             &mut self,
             receipt: &AudioReceipt,
-            lease: &AudioOutputLease,
-            stopped: &SpeechStopped,
+            lease: &PlaybackOutput,
+            stopped: &PlaybackCue,
         ) -> Result<(), PlaybackError> {
             self.check_scope(lease)?;
             self.queue.cancel_media(receipt, lease, stopped)?;
@@ -703,7 +702,7 @@ mod browser {
             }
         }
 
-        fn check_scope(&self, lease: &AudioOutputLease) -> Result<(), PlaybackError> {
+        fn check_scope(&self, lease: &PlaybackOutput) -> Result<(), PlaybackError> {
             if self.disposed {
                 return Err(PlaybackError::Closed);
             }
@@ -713,7 +712,7 @@ mod browser {
             Ok(())
         }
 
-        fn check_ready(&self, lease: &AudioOutputLease) -> Result<(), PlaybackError> {
+        fn check_ready(&self, lease: &PlaybackOutput) -> Result<(), PlaybackError> {
             self.check_scope(lease)?;
             if self.unlock.is_some() {
                 return Err(PlaybackError::UnlockPending);

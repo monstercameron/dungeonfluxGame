@@ -7,16 +7,12 @@ mod browser {
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
 
+    use df_audio::PlaybackCue;
     use df_audio::browser_playback::{
         BrowserPlayback, PlaybackError, PlaybackLimits, PlaybackSnapshot, PlaybackStart,
         PlaybackState,
     };
     use df_audio::{AudioReceipt, QueueError, QueueState};
-    use df_media::schedule::ScheduleLimits;
-    use df_media::speech::{
-        SpeechIdentity, SpeechLimits, SpeechScheduler, SpeechStopReason, SpeechStopped,
-    };
-    use df_model::checkpoint::JobId;
     use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
     use web_sys::{Element, Event};
 
@@ -181,6 +177,7 @@ mod browser {
         root: Element,
         status: Element,
         buttons: Vec<ButtonListener>,
+        probe_results: Vec<String>,
     }
 
     thread_local! {
@@ -199,35 +196,6 @@ mod browser {
 
     fn restore(fixture: Fixture) {
         FIXTURE.with(|cell| *cell.borrow_mut() = Some(fixture));
-    }
-
-    fn media_stopped(identity: SpeechIdentity) -> Result<SpeechStopped, JsValue> {
-        // Actual local media dispatch/stop facts. The opaque command is not a
-        // speech codec; the verified square-tone PCM fixture remains independent.
-        let mut producer = SpeechScheduler::new(
-            identity.basis,
-            ScheduleLimits {
-                queue_items: 1,
-                queue_bytes: 1,
-                speech_items: 1,
-                speech_bytes: 1,
-                execution_slots: 1,
-                speech_slots: 1,
-            },
-            SpeechLimits {
-                maximum_chunks: 1,
-                maximum_bytes: 1,
-            },
-        )
-        .map_err(error)?;
-        producer.admit(identity, Box::from([9_u8])).map_err(error)?;
-        let dispatch = producer
-            .begin()
-            .map_err(error)?
-            .ok_or_else(|| JsValue::from_str("media dispatch absent"))?;
-        producer
-            .stop(&dispatch, SpeechStopReason::Cancelled)
-            .map_err(error)
     }
 
     fn unchanged_resources(before: PlaybackSnapshot, after: PlaybackSnapshot) -> bool {
@@ -258,8 +226,9 @@ mod browser {
 
         fn render(&self, outcome: &str) {
             self.status.set_text_content(Some(&format!(
-                "{outcome}\n{:?}\nLocal PCM tone only. Audible observation is an independent gate.",
+                "{outcome}\n{:?}\n{}\nLocal PCM tone only. Audible observation is an independent gate.",
                 self.playback.snapshot(),
+                self.probe_results.join("\n"),
             )));
         }
 
@@ -357,12 +326,12 @@ mod browser {
                 "revoke" => {
                     if let Some(source) = &mut self.source {
                         let scope = df_client::cache::CacheScope {
-                            session: browser_pcm::basis().session,
-                            run: browser_pcm::basis().run,
+                            session: browser_pcm::basis().session(),
+                            run: browser_pcm::basis().run(),
                             binding: browser_pcm::binding(),
                         };
                         let revision = browser_pcm::basis()
-                            .revision
+                            .revision()
                             .next_sequence()
                             .map_err(|_| PlaybackError::BrowserOperation)?;
                         source
@@ -375,6 +344,76 @@ mod browser {
                 "dispose" => self.playback.dispose(),
                 _ => Err(PlaybackError::BrowserOperation),
             }
+        }
+    }
+
+    fn ui_step(label: &str, result: Result<(), JsValue>, status: &Element) -> Result<(), JsValue> {
+        let line: String = format!("{label}: {result:?}").chars().take(512).collect();
+        FIXTURE.with(|cell| {
+            if let Some(fixture) = cell.borrow_mut().as_mut() {
+                if fixture.probe_results.len() == 32 {
+                    fixture.probe_results.remove(0);
+                }
+                fixture.probe_results.push(line.clone());
+                fixture.render("Actual fixture operation result");
+            } else {
+                status.set_text_content(Some(&line));
+            }
+        });
+        result
+    }
+
+    fn ui_action(action: &str) -> Result<(), JsValue> {
+        FIXTURE.with(|cell| {
+            cell.borrow_mut()
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("fixture busy or absent"))?
+                .action(action)
+                .map_err(error)
+        })
+    }
+
+    fn ui_probe(action: &str, status: &Element) -> Result<(), JsValue> {
+        match action {
+            "assert-locked" => fixture_assert_refused_before_unlock(),
+            "probe-cancel" => {
+                ui_step("Play mono PCM", ui_action("mono"), status)?;
+                fixture_assert_cancel_retains_until_terminal()
+            }
+            "probe-replace" => {
+                ui_step("Play mono PCM", ui_action("mono"), status)?;
+                ui_step(
+                    "Assert replacement waits for old end",
+                    fixture_assert_replacement_waits_for_old_end(),
+                    status,
+                )?;
+                fixture_assert_old_decode_refused()
+            }
+            "probe-stop" => {
+                ui_step(
+                    "Assert media stop receipt refusals",
+                    fixture_assert_media_stop_receipt_refusals(),
+                    status,
+                )?;
+                fixture_assert_current_media_stop_retains_until_terminal()
+            }
+            "assert-stop-settled" => fixture_assert_current_media_stop_settled(),
+            "probe-stop-fault" => fixture_assert_replacement_stop_failure_receipt_visible(),
+            "assert-replacement-recovered" => fixture_assert_replacement_stop_failure_recovered(),
+            "assert-drained" => fixture_assert_drained_after_actual_end(),
+            "restore-stop-fault" => fixture_restore_stop_fault(),
+            "unmount-closed" => {
+                let parent = status
+                    .parent_node()
+                    .and_then(|root| root.parent_node())
+                    .ok_or_else(|| JsValue::from_str("fixture parent absent"))?;
+                fixture_unmount_closed()?;
+                // Keep the literal final operation result visible after the
+                // original export removes every listener and the fixture root.
+                parent.append_child(status)?;
+                Ok(())
+            }
+            _ => Err(JsValue::from_str("unknown fixture control")),
         }
     }
 
@@ -393,7 +432,7 @@ mod browser {
         root.append_child(&title)?;
         let instructions = document.create_element("p")?;
         instructions.set_text_content(Some(
-            "Click Unlock audio, then await fixture_wait_unlock. Play mono/stereo, then Pump after actual ended. Replace while active, Pump to collect old end, then Pump again to admit new PCM. Dispose and await fixture_wait_closed before unmounting. No speech provider is used.",
+            "Assert refusal before unlocking. Click Unlock audio, then Await unlock settled. Probe controls run the existing typed assertions; settlement and drain controls require genuine ended events. Dispose context, Await closed, then Unmount closed fixture. No speech provider is used.",
         ));
         root.append_child(&instructions)?;
         let status = document.create_element("pre")?;
@@ -419,6 +458,7 @@ mod browser {
             root: root.clone(),
             status,
             buttons: Vec::new(),
+            probe_results: Vec::new(),
         };
         for (action, label) in [
             ("unlock", "Unlock audio"),
@@ -448,6 +488,56 @@ mod browser {
                 on_click: callback,
             });
         }
+
+        for (action, label) in [
+            ("assert-locked", "Assert refused before unlock"),
+            ("await-unlock", "Await unlock settled"),
+            ("probe-cancel", "Probe mono cancel retention"),
+            ("probe-replace", "Probe replacement and stale decode"),
+            ("probe-stop", "Probe receipt refusals and current stop"),
+            ("assert-stop-settled", "Assert current media stop settled"),
+            ("probe-stop-fault", "Probe replacement stop failure"),
+            (
+                "assert-replacement-recovered",
+                "Assert replacement stop failure recovered",
+            ),
+            ("assert-drained", "Assert drained after actual end"),
+            ("restore-stop-fault", "Restore stop fault"),
+            ("await-closed", "Await closed"),
+            ("unmount-closed", "Unmount closed fixture"),
+        ] {
+            let button = document.create_element("button")?;
+            button.set_text_content(Some(label));
+            button.set_attribute("data-action", action)?;
+            let status = fixture.status.clone();
+            let callback = Closure::wrap(Box::new(move |_event: Event| {
+                if action == "await-unlock" || action == "await-closed" {
+                    let status = status.clone();
+                    // The existing awaited export takes the whole fixture owner
+                    // until the genuine promise settles; other controls cannot
+                    // mutate FIXTURE while it is absent. No synthetic event or
+                    // timer substitutes for unlock/close completion.
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let result = if action == "await-unlock" {
+                            fixture_wait_unlock().await
+                        } else {
+                            fixture_wait_closed().await
+                        };
+                        let _ = ui_step(label, result, &status);
+                    });
+                } else {
+                    let result = ui_probe(action, &status);
+                    let _ = ui_step(label, result, &status);
+                }
+            }) as Box<dyn FnMut(Event)>);
+            button.add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())?;
+            root.append_child(&button)?;
+            fixture.buttons.push(ButtonListener {
+                element: button,
+                on_click: callback,
+            });
+        }
+
         body.append_child(&root)?;
         fixture.render("Mounted, unlock required");
         restore(fixture);
@@ -589,7 +679,7 @@ mod browser {
                 .receipt
                 .clone()
                 .ok_or_else(|| JsValue::from_str("original receipt absent"))?;
-            let delayed = media_stopped(original.identity())?;
+            let delayed = original.identity();
             let source = fixture
                 .source
                 .as_ref()
@@ -600,8 +690,11 @@ mod browser {
                 .as_ref()
                 .ok_or_else(|| JsValue::from_str("local PCM buffer absent"))?
                 .format();
-            let mut middle = original.identity();
-            middle.job = JobId::from_bytes(&[8; 16]).map_err(error)?;
+            let original_identity = original.identity();
+            let middle = PlaybackCue::new(
+                original_identity.basis(), [8; 16],
+                original_identity.operation(), original_identity.generation(),
+            ).map_err(error)?;
             // A and B have no dispatched samples. This synchronous replacement
             // needs no timer or invented ended event; fresh A owns the real source.
             let middle_replacement = fixture
@@ -728,7 +821,7 @@ mod browser {
                 return Err(error((before, after)));
             }
             fixture.render(
-                "Media stop refused stale/foreign receipts; current real PCM and tail unchanged",
+                "Local projected stop refused stale/foreign receipts; current real PCM and tail unchanged",
             );
             Ok(())
         })
@@ -754,7 +847,7 @@ mod browser {
                 .receipt
                 .clone()
                 .ok_or_else(|| JsValue::from_str("current receipt absent"))?;
-            let stopped = media_stopped(current.identity())?;
+            let stopped = current.identity();
             fixture
                 .playback
                 .cancel_media(&current, &browser_pcm::lease(), &stopped)
@@ -774,7 +867,7 @@ mod browser {
             }
             fixture.media_stop_before = Some(before);
             fixture.render(
-                "Current media stop accepted; real source and PCM retained for actual ended",
+                "Current projected stop accepted; real source and PCM retained for actual ended",
             );
             Ok(())
         })
@@ -899,7 +992,7 @@ mod browser {
                 || !fixture.source.as_ref().is_some_and(|source| source.buffer.is_some()) {
                 return Err(error(admission));
             }
-            let delayed = media_stopped(original.identity())?;
+            let delayed = original.identity();
             let refused = fixture.playback.cancel_media(&original, &browser_pcm::lease(), &delayed);
             if refused != Err(PlaybackError::Queue(QueueError::StaleReceipt)) {
                 return Err(error(refused));

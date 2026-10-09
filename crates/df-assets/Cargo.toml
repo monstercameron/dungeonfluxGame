@@ -9,4 +9,6 @@ df-types = { path = "../df-types" }
 df-observe = { path = "../df-observe" }
 sha2 = { version = "=0.10.9", default-features = false, features = ["std"] }
 
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 df-model = { path = "../df-model" }

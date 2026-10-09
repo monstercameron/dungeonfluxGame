@@ -6,9 +6,11 @@ license.workspace = true
 
 [dependencies]
 df-assets = { path = "../df-assets" }
+df-types = { path = "../df-types" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 df-media = { path = "../df-media" }
 df-model = { path = "../df-model" }
-df-types = { path = "../df-types" }
 
 [dev-dependencies]
 df-client = { path = "../df-client" }
