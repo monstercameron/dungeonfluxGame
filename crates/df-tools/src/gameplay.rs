@@ -17,6 +17,9 @@ mod recovery_qualification;
 mod rest_qualification;
 mod restart_qualification;
 mod room;
+mod startup_configuration;
+#[cfg(test)]
+mod startup_contract;
 #[cfg(test)]
 mod tempo_clock;
 mod wire;
@@ -296,35 +299,17 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let asset_root = std::env::args()
         .nth(3)
         .ok_or("fixed gameplay asset directory required")?;
-    let glue_bytes = bounded_asset(
-        std::path::Path::new(&web_root).join("df_tools.js"),
-        1024 * 1024,
+    let startup_configuration::StartupAssets {
+        glue: glue_bytes,
+        wasm: wasm_bytes,
+        art: art_bytes,
+        campfire: campfire_bytes,
+        portrait: portrait_bytes,
+        inn: inn_bytes,
+    } = startup_configuration::load_assets(
+        std::path::Path::new(&web_root),
+        std::path::Path::new(&asset_root),
     )?;
-    let wasm_bytes = bounded_asset(
-        std::path::Path::new(&web_root).join("df_tools_bg.wasm"),
-        32 * 1024 * 1024,
-    )?;
-    let art_bytes = bounded_asset(
-        std::path::Path::new(&asset_root).join("scenes/mara-harbor-v4.png"),
-        16 * 1024 * 1024,
-    )?;
-    let campfire_bytes = bounded_asset(
-        std::path::Path::new(&asset_root).join("../concept-art/scene-campfire-under-stars.webp"),
-        4 * 1024 * 1024,
-    )?;
-    let portrait_bytes = bounded_asset(
-        std::path::Path::new(&asset_root).join("../concept-art/vell-avatar.webp"),
-        1024 * 1024,
-    )?;
-    let inn_bytes = match bounded_asset(
-        std::path::Path::new(&asset_root)
-            .join("../concept-art/scene-tavern-barkeep-talk-rain.webp"),
-        4 * 1024 * 1024,
-    ) {
-        Ok(bytes) => Some(bytes),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
-        Err(error) => return Err(error.into()),
-    };
     let npc_phase = courier_npc_qualification::phase();
     let npc_budget = npc_phase
         .map(courier_npc_qualification::call_budget)
@@ -1040,24 +1025,5 @@ async fn join_grant_driver(
 }
 
 fn database_config() -> Result<tokio_postgres::Config, io::Error> {
-    let name = match std::env::var("DF_GAMEPLAY_DEMO_DATABASE") {
-        Ok(value) => value,
-        Err(std::env::VarError::NotPresent) => "df_gameplay_demo_20261004_r03".to_owned(),
-        Err(_) => return Err(io::Error::other("local demonstration database invalid")),
-    };
-    if name.len() > 63
-        || !name.starts_with("df_gameplay_demo_")
-        || !name
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
-    {
-        return Err(io::Error::other("local demonstration database invalid"));
-    }
-    let mut configuration = tokio_postgres::Config::new();
-    configuration
-        .host("127.0.0.1")
-        .port(55517)
-        .user("df_gameplay_demo_admin_20261004")
-        .dbname(&name);
-    Ok(configuration)
+    startup_configuration::database_config(std::env::var("DF_GAMEPLAY_DEMO_DATABASE"))
 }
