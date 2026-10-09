@@ -357,7 +357,10 @@ async fn byte_shape(
     if headers.get("origin").and_then(|value| value.to_str().ok()) != Some(state.origin.as_ref()) {
         return axum::http::StatusCode::FORBIDDEN.into_response();
     }
-    if !matches!(mode.as_str(), "split" | "coalesced" | "text" | "loss") {
+    if !matches!(
+        mode.as_str(),
+        "split" | "coalesced" | "text" | "loss" | "pending-loss"
+    ) {
         return axum::http::StatusCode::NOT_FOUND.into_response();
     }
     let Ok(permit) = state.connections.clone().try_acquire_owned() else {
@@ -499,10 +502,18 @@ async fn byte_shape(
                         .map_err(io::Error::other)?;
                 }
             };
-            let result = if mode == "loss" {
+            let result = if matches!(mode.as_str(), "loss" | "pending-loss") {
                 let wait_for_dispatch = async {
                     tokio::time::timeout(std::time::Duration::from_secs(2), async {
-                        while statistics.active.load(Ordering::Relaxed) == 0 {
+                        loop {
+                            let observed = if mode == "pending-loss" {
+                                statistics.completed.load(Ordering::Relaxed)
+                            } else {
+                                statistics.active.load(Ordering::Relaxed)
+                            };
+                            if observed != 0 {
+                                break;
+                            }
                             tokio::time::sleep(std::time::Duration::from_millis(1)).await;
                         }
                     })
@@ -515,14 +526,20 @@ async fn byte_shape(
                     result = send => result,
                     result = wait_for_dispatch => result,
                 };
-                witness.domain_calls = statistics.active.load(Ordering::Relaxed);
+                // Pending loss records the actual completed trigger; ordinary loss keeps
+                // its existing preterminal active-call witness.
+                witness.domain_calls = if mode == "pending-loss" {
+                    statistics.completed.load(Ordering::Relaxed)
+                } else {
+                    statistics.active.load(Ordering::Relaxed)
+                };
                 result
             } else {
                 tokio::select! { result = receive => result, result = send => result }
             };
             witness.failed = result.is_err() || witness.frames == 0;
             witness.closed = true;
-            if mode != "loss" {
+            if !matches!(mode.as_str(), "loss" | "pending-loss") {
                 witness.domain_calls = statistics.completed.load(Ordering::Relaxed)
                     + statistics.cancelled.load(Ordering::Relaxed);
             }
@@ -1556,6 +1573,97 @@ mod tests {
         .await
         .unwrap();
     }
+
+    #[tokio::test]
+    async fn pending_loss_waits_for_completed_trigger_with_retained_pending_bidi() {
+        use std::future::Future;
+        tokio::time::timeout(std::time::Duration::from_secs(6), async {
+            let (admission, _incoming) =
+                NativeIncoming::bounded(NonZeroUsize::new(1).unwrap()).unwrap();
+            let (address, state, mut tasks) = incoming_listener(admission).await;
+            let mut client = generated_client_over_websocket(
+                address,
+                state.origin.clone(),
+                "/byte-shape/pending-loss/5",
+                &mut tasks,
+            )
+            .await;
+            let sample = |sequence| Sample {
+                sequence,
+                behavior: Behavior::Echo as i32,
+                ..Sample::default()
+            };
+            let (pending, observed_pending) = futures::channel::oneshot::channel();
+            let mut pending = Some(pending);
+            let mut first = Some(sample(77));
+            let input = futures::stream::poll_fn(move |_| {
+                if let Some(first) = first.take() {
+                    return std::task::Poll::Ready(Some(first));
+                }
+                if let Some(pending) = pending.take() {
+                    let _ = pending.send(());
+                }
+                std::task::Poll::Pending
+            });
+            let mut response = client.bidi(Request::new(input)).await.unwrap().into_inner();
+            assert_eq!(response.message().await.unwrap(), Some(sample(77)));
+            observed_pending.await.unwrap();
+            let mut reader = Box::pin(response.message());
+            assert!(
+                futures::future::poll_fn(|context| {
+                    std::task::Poll::Ready(reader.as_mut().poll(context).is_pending())
+                })
+                .await
+            );
+            assert!(
+                state
+                    .shapes
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(|witness| witness.id != 5),
+                "pending peer closed before a native RPC completed"
+            );
+            let mut trigger = client.clone();
+            // Its handler completion arms peer loss; its response may be lost.
+            let _ = trigger.unary(Request::new(sample(78))).await;
+            let terminal = reader.await.expect_err("peer loss fabricated normal End");
+            assert!(terminal.metadata().get("fixture-terminal").is_none());
+            tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                loop {
+                    let witness = state
+                        .shapes
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .find(|witness| witness.id == 5)
+                        .cloned();
+                    if let Some(witness) = witness.filter(|witness| witness.closed) {
+                        assert_eq!(witness.mode, "pending-loss");
+                        assert_eq!(witness.domain_calls, 1);
+                        assert!(!witness.failed);
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                }
+            })
+            .await
+            .unwrap();
+            drop(response);
+            drop(client);
+            drop(trigger);
+            let proxy = tasks.0.pop().expect("owned pending-loss proxy missing");
+            tokio::time::timeout(std::time::Duration::from_secs(2), proxy)
+                .await
+                .expect("pending-loss proxy close bound")
+                .expect("pending-loss proxy join")
+                .expect_err("peer loss must terminate its actual proxy");
+            tasks.stop().await;
+        })
+        .await
+        .unwrap();
+    }
+
     #[tokio::test]
     async fn forced_websocket_loss_after_generated_wait_has_no_domain_terminal_or_replay() {
         tokio::time::timeout(std::time::Duration::from_secs(6), async {
