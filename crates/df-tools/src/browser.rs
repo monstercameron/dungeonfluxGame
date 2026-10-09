@@ -612,6 +612,160 @@ async fn owned_close_checks(document: &Document, lines: &mut String) -> Result<(
         lines,
         "PASS · Owned call Drop: response_pending=true input_pending=true input_drop=1 current_unary=preserved",
     );
+
+    let owner_drop_id = js_sys::Date::now() as u64;
+    let (connection, channel) = BrowserConnection::connect(&tunnel_url(&format!(
+        "/byte-shape/coalesced/{owner_drop_id}"
+    ))?)
+    .await
+    .map_err(|error| error.to_string())?;
+    let mut client = FixtureClient::new(channel)
+        .max_decoding_message_size(RPC_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MESSAGE_BYTES * 2);
+    let (input, pending, dropped, count) = pending_input(76);
+    let mut response = client
+        .bidi(request(input)?)
+        .await
+        .map_err(|error| error.to_string())?
+        .into_inner();
+    require(
+        close_bound(response.message(), "owner Drop first echo")
+            .await?
+            .map_err(|error| error.to_string())?
+            == Some(sample(76)),
+        "owner Drop first echo mismatch",
+    )?;
+    close_bound(pending, "owner Drop pending input")
+        .await?
+        .map_err(|_| "owner Drop pending witness lost")?;
+    let mut reader = response.message().boxed_local();
+    require(
+        futures::future::poll_fn(|context| Poll::Ready(reader.as_mut().poll(context).is_pending()))
+            .await,
+        "retained reader was not Pending before owner Drop",
+    )?;
+    require(
+        count.load(Ordering::SeqCst) == 0,
+        "input dropped before owner Drop",
+    )?;
+    drop(connection);
+    // No response poll or Drop may supply the cancellation being witnessed here.
+    observed_input_drop(dropped, &count).await?;
+    let terminal = close_bound(reader, "owner Drop retained reader termination")
+        .await?
+        .err()
+        .ok_or("owner Drop fabricated normal End")?;
+    require(
+        terminal.metadata().get("fixture-terminal").is_none(),
+        "owner Drop fabricated authoritative domain trailers",
+    )?;
+    let witness = shape_report(owner_drop_id).await?;
+    require(
+        witness.contains("mode=coalesced")
+            && witness.contains("closed=true")
+            && witness.contains("failed=false")
+            && witness.contains(&format!("build={}", crate::BUILD_ID)),
+        "owner Drop lacked the actual owned peer terminal witness",
+    )?;
+    append_close(
+        document,
+        lines,
+        &format!(
+            "PASS · Owned connection Drop: input_pending=true reader_pending=true input_drop_before_response_poll=1 retained_reader_terminal=error peer_closed=true {witness}"
+        ),
+    );
+    drop(response);
+    drop(client);
+
+    let natural_end_id = owner_drop_id + 1;
+    let (connection, channel) = BrowserConnection::connect(&tunnel_url(&format!(
+        "/byte-shape/pending-loss/{natural_end_id}"
+    ))?)
+    .await
+    .map_err(|error| error.to_string())?;
+    let mut client = FixtureClient::new(channel)
+        .max_decoding_message_size(RPC_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MESSAGE_BYTES * 2);
+    let (input, pending, dropped, count) = pending_input(77);
+    let mut response = client
+        .bidi(request(input)?)
+        .await
+        .map_err(|error| error.to_string())?
+        .into_inner();
+    require(
+        close_bound(response.message(), "natural end first echo")
+            .await?
+            .map_err(|error| error.to_string())?
+            == Some(sample(77)),
+        "natural end first echo mismatch",
+    )?;
+    close_bound(pending, "natural end pending input")
+        .await?
+        .map_err(|_| "natural end pending witness lost")?;
+    let mut reader = response.message().boxed_local();
+    require(
+        futures::future::poll_fn(|context| Poll::Ready(reader.as_mut().poll(context).is_pending()))
+            .await,
+        "retained reader was not Pending before natural end trigger",
+    )?;
+    require(
+        count.load(Ordering::SeqCst) == 0,
+        "input dropped before natural end trigger",
+    )?;
+    let mut trigger_client = client.clone();
+    let trigger = trigger_client.unary(request(sample(78))?).boxed_local();
+    let input_drop = observed_input_drop(dropped, &count).boxed_local();
+    // The completed native handler arms peer loss; its reply can be lost legitimately.
+    // Drive that real RPC without polling the retained response or cancelling its owner.
+    match select(
+        input_drop,
+        close_bound(trigger, "natural end native trigger").boxed_local(),
+    )
+    .await
+    {
+        Either::Left((observed, trigger)) => {
+            observed?;
+            drop(trigger);
+        }
+        Either::Right((trigger_result, observed)) => {
+            let _ = trigger_result?;
+            observed.await?;
+        }
+    }
+    let terminal = close_bound(reader, "natural end retained reader termination")
+        .await?
+        .err()
+        .ok_or("natural driver end fabricated normal End")?;
+    require(
+        terminal.metadata().get("fixture-terminal").is_none(),
+        "natural driver end fabricated authoritative domain trailers",
+    )?;
+    let snapshot = closed_browser(&connection).await?;
+    require(
+        snapshot.websocket_receive.current == 0 && snapshot.websocket_receive_items.current == 0,
+        "natural driver end retained callback receipt owners",
+    )?;
+    let witness = shape_report(natural_end_id).await?;
+    require(
+        witness.contains("mode=pending-loss")
+            && witness.contains("domain_calls=1")
+            && witness.contains("closed=true")
+            && witness.contains("failed=false")
+            && witness.contains(&format!("build={}", crate::BUILD_ID)),
+        "natural driver end lacked its actual completed native trigger and peer cleanup",
+    )?;
+    append_close(
+        document,
+        lines,
+        &format!(
+            "PASS · Natural driver end: input_pending=true reader_pending=true input_drop_before_response_poll=1 retained_reader_terminal=error explicit_close=false callback_owners=0 completed_native_trigger=1 {witness}"
+        ),
+    );
+    drop(response);
+    drop(client);
+    drop(trigger_client);
+    drop(connection);
+
     Ok(())
 }
 
