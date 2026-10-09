@@ -299,10 +299,14 @@ fn same_timebase(expiry: LogicalTime, now: LogicalTime) -> bool {
 fn validate_dependencies<RightsBasis>(
     candidates: &[PredictiveCandidate<RightsBasis>],
 ) -> Result<(), PredictiveError> {
+    // Bound every node before a traversal can copy a later node's prerequisites.
+    if candidates
+        .iter()
+        .any(|candidate| candidate.prerequisites.len() > MAXIMUM_INPUT_CANDIDATES)
+    {
+        return Err(PredictiveError::Capacity);
+    }
     for candidate in candidates {
-        if candidate.prerequisites.len() > MAXIMUM_INPUT_CANDIDATES {
-            return Err(PredictiveError::Capacity);
-        }
         for (index, prerequisite) in candidate.prerequisites.iter().enumerate() {
             if *prerequisite == candidate.demand.id
                 || candidate
@@ -320,6 +324,8 @@ fn validate_dependencies<RightsBasis>(
                 return Err(PredictiveError::MissingDependency);
             }
         }
+    }
+    for candidate in candidates {
         let mut pending = candidate.prerequisites.clone();
         let mut visited = Vec::new();
         while let Some(id) = pending.pop() {
@@ -580,6 +586,27 @@ mod tests {
             ),
             Err(PredictiveError::DependencyCycle)
         ));
+    }
+
+    #[test]
+    fn later_oversized_prerequisites_refuse_before_early_root_traversal() {
+        let audience = AudienceScope::Shared;
+        let rights = 9;
+        for repeated in [id(1), id(9)] {
+            let mut first = candidate(1, DemandPriority::Optional);
+            first.prerequisites = vec![id(2)];
+            let mut later = candidate(2, DemandPriority::Optional);
+            later.prerequisites = vec![repeated; MAXIMUM_INPUT_CANDIDATES + 1];
+            assert!(matches!(
+                PredictivePlan::new(
+                    context(&audience, &rights, 10),
+                    &policy(),
+                    vec![first, later],
+                    schedule()
+                ),
+                Err(PredictiveError::Capacity)
+            ));
+        }
     }
 
     #[test]
