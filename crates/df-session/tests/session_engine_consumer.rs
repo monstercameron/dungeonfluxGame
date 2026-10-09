@@ -8,6 +8,7 @@ use df_content::catalog::{CatalogEntry, CatalogLimits, CatalogSnapshot};
 use df_engine::command_entry::*;
 use df_model::checkpoint::*;
 use df_model::commands::CommandLimits;
+use df_model::transition::TransitionResult;
 use df_observe::OperationContext;
 use df_rules::{DispatchRegistry, HandlerRegistration};
 use df_session::inbox::{ActorInput, bounded_inbox};
@@ -23,6 +24,7 @@ struct Observed {
     receipt: Option<DecisionReceipt>,
     events: Vec<&'static str>,
     fail_commit: bool,
+    indeterminate_commit: bool,
 }
 struct SuppliedHandler {
     pins: CheckpointPins,
@@ -91,6 +93,63 @@ impl<H: RulesCommandHandler> SessionEngine<Scope> for RegistrySessionEngine<'_, 
             self.source,
         )
         .map_err(|_| RepositoryError::InvalidCandidate)
+    }
+    fn decide_transition(
+        &mut self,
+        current: &Checkpoint,
+        operation: &Scope,
+        input: &GameInput,
+    ) -> TransitionResult<RepositoryError> {
+        if let Err(error) = operation.validate_input(input) {
+            return TransitionResult::Rejected(error);
+        }
+        let rules = [rule()];
+        let contents = [content()];
+        let resources = resource_constraints();
+        match decide_registered_transition(
+            RulesCommandInput {
+                command: input,
+                supplied_draws: &[],
+            },
+            current,
+            CommandEntryContext {
+                current_basis: current.basis(),
+                admitted_pins: self.pins,
+                inventory: ReferenceInventory {
+                    rules: &rules,
+                    content: &contents,
+                    resources: &resources,
+                    assets: &[],
+                },
+                limits: CommandEntryLimits {
+                    command: CommandLimits {
+                        maximum_records: 8,
+                        maximum_text_bytes: 32,
+                        maximum_retained_bytes: 8192,
+                    },
+                    maximum_staged_bytes: 1024 * 1024,
+                },
+            },
+            self.registry,
+            self.selector,
+            self.source,
+        ) {
+            TransitionResult::Accepted(candidate) => TransitionResult::Accepted(candidate),
+            TransitionResult::Pending {
+                candidate,
+                resolution,
+                window,
+                next,
+            } => TransitionResult::Pending {
+                candidate,
+                resolution,
+                window,
+                next,
+            },
+            TransitionResult::Rejected(_) => {
+                TransitionResult::Rejected(RepositoryError::InvalidCandidate)
+            }
+        }
     }
     fn validate_recovery(&mut self, checkpoint: &Checkpoint) -> Result<(), RepositoryError> {
         checkpoint
@@ -221,7 +280,11 @@ impl SessionRepository for Repository {
         let receipt = DecisionReceipt::new(candidate.basis(), decision.clone(), 64 * 1024)?;
         observed.durable = candidate.clone();
         observed.receipt = Some(receipt.clone());
-        Ok(CommitOutcome::Confirmed(receipt))
+        if observed.indeterminate_commit {
+            Ok(CommitOutcome::Indeterminate)
+        } else {
+            Ok(CommitOutcome::Confirmed(receipt))
+        }
     }
     fn load_current(
         &mut self,
@@ -255,25 +318,93 @@ fn context() -> OperationContext {
         build: "engine-session-fixture".to_owned(),
     }
 }
+fn pending_candidate() -> Checkpoint {
+    let mut next = basis();
+    next.revision = next.revision.next_sequence().unwrap();
+    let mut staged = state();
+    let fact = FactId::from_bytes(&[81; 16]).unwrap();
+    staged.facts.push(GameFact {
+        id: fact,
+        revision: next.revision,
+        operation: operation(),
+        ordinal: 0,
+        cause: None,
+        audience: AudienceScope::Shared,
+        value: FactValue::ContentEvent {
+            definition: content(),
+            subjects: vec![],
+        },
+    });
+    staged.decisions.push(AcceptedDecision {
+        operation: operation(),
+        revision: next.revision,
+        facts: vec![fact],
+        draws: vec![],
+        effects: vec![],
+        source_policy: label("fixture-suspension"),
+        semantic_output: None,
+    });
+    staged.pending.push(PendingResolution {
+        id: ResolutionId::from_bytes(&[82; 16]).unwrap(),
+        basis: next,
+        continuation: label("fixture-continuation"),
+        window: ResolutionWindow {
+            id: WindowId::from_bytes(&[83; 16]).unwrap(),
+            phase: TriggerPhase::BeforeConsequence,
+            causal_fact: fact,
+            source: rule(),
+            timer: None,
+        },
+        next: PendingInput::Choice {
+            remaining: vec![OfferedResponse {
+                participant: member(3),
+                offer: label("fixture-offer"),
+                options: vec![label("fixture-option")],
+                source: rule(),
+            }],
+        },
+        choices: vec![],
+        draw_ordinals: vec![],
+        spent: vec![],
+        rulings: vec![],
+    });
+    Checkpoint::new(
+        CHECKPOINT_SCHEMA,
+        next,
+        pins(),
+        staged,
+        ReferenceInventory {
+            rules: &[rule()],
+            content: &[content()],
+            resources: &resource_constraints(),
+            assets: &[],
+        },
+        limits(),
+    )
+    .unwrap()
+}
 // One fixture owns registry/catalog bytes, serialized owner and real bounded inbox lifetime.
 fn exercise(
     input: GameInput,
+    candidate: Checkpoint,
     unknown_selector: bool,
     fail_commit: bool,
+    indeterminate_commit: bool,
     retry: bool,
+    drop_waiter: bool,
 ) -> (Vec<SubmissionOutcome>, Checkpoint, Vec<&'static str>) {
     let initial = checkpoint(state()).unwrap();
     let pins = pins();
     let source = rule();
     let selector = label("qualified-test-selector");
     let missing = label("unknown-selector");
-    let candidate = accepted_from(state());
-    assert_eq!(candidate, accepted());
+    assert_eq!(candidate.basis().revision, accepted().basis().revision);
     let observed = Rc::new(RefCell::new(Observed {
         durable: initial.clone(),
         receipt: None,
         events: vec![],
         fail_commit,
+        indeterminate_commit,
     }));
     let handler = SuppliedHandler {
         pins: pins.clone(),
@@ -316,6 +447,7 @@ fn exercise(
     .unwrap();
     let (sender, actor) = bounded_inbox();
     let (item, receiver) = OwnedInput::new(context(), scope(), input.clone());
+    let receiver = (!drop_waiter).then_some(receiver);
     sender
         .try_submit(item)
         .unwrap_or_else(|_| panic!("fixture admission"));
@@ -331,7 +463,10 @@ fn exercise(
     sender.stop().unwrap();
     let outcome = actor.run(&mut owner).unwrap();
     assert_eq!(outcome.reduced_inputs, if retry { 2 } else { 1 });
-    let mut receipts = vec![receiver.try_recv().unwrap()];
+    let mut receipts = receiver
+        .into_iter()
+        .map(|receiver| receiver.try_recv().unwrap())
+        .collect::<Vec<_>>();
     if let Some(receiver) = retry_receiver {
         receipts.push(receiver.try_recv().unwrap());
     }
@@ -350,7 +485,8 @@ fn canonical_staged_checkpoint_is_committed_before_publication_and_retry_never_r
         scope.capture_uncertainty_key(size_of::<ScopeKey>() - 1),
         Err(RepositoryError::Capacity)
     ));
-    let (receipts, current, events) = exercise(action(), false, false, true);
+    let (receipts, current, events) =
+        exercise(action(), accepted(), false, false, false, true, false);
     let SubmissionOutcome::Confirmed(first) = &receipts[0] else {
         panic!("fixture confirmed")
     };
@@ -365,6 +501,58 @@ fn canonical_staged_checkpoint_is_committed_before_publication_and_retry_never_r
     );
 }
 #[test]
+fn registered_pending_suspension_commits_exact_window_before_receipt_and_retry() {
+    let candidate = pending_candidate();
+    let expected = candidate.clone();
+    let (receipts, current, events) =
+        exercise(action(), candidate, false, false, false, true, false);
+    assert!(matches!(
+        receipts.as_slice(),
+        [SubmissionOutcome::Confirmed(first), SubmissionOutcome::Confirmed(second)] if first == second
+    ));
+    assert_eq!(current, expected);
+    let pending = &current.state().pending[0];
+    assert_eq!(pending.id, ResolutionId::from_bytes(&[82; 16]).unwrap());
+    assert_eq!(pending.window.id, WindowId::from_bytes(&[83; 16]).unwrap());
+    assert!(matches!(&pending.next, PendingInput::Choice { remaining } if remaining.len() == 1));
+    assert!(current.state().intents.is_empty());
+    assert_eq!(
+        events,
+        vec!["lookup", "handler", "commit", "publish", "wake", "lookup"]
+    );
+}
+#[test]
+fn dropped_pending_waiter_does_not_cancel_admitted_commit_or_publication() {
+    let candidate = pending_candidate();
+    let expected = candidate.clone();
+    let (receipts, current, events) =
+        exercise(action(), candidate, false, false, false, false, true);
+    assert!(receipts.is_empty());
+    assert_eq!(current, expected);
+    assert_eq!(current.state().pending.len(), 1);
+    assert_eq!(
+        events,
+        vec!["lookup", "handler", "commit", "publish", "wake"]
+    );
+}
+#[test]
+fn indeterminate_pending_commit_requires_exact_lookup_without_duplicate_staging() {
+    let candidate = pending_candidate();
+    let expected = candidate.clone();
+    let (receipts, current, events) =
+        exercise(action(), candidate, false, false, true, true, false);
+    assert!(matches!(
+        receipts.as_slice(),
+        [
+            SubmissionOutcome::LookupRequired,
+            SubmissionOutcome::Confirmed(_)
+        ]
+    ));
+    assert_eq!(current, expected);
+    assert_eq!(current.state().pending.len(), 1);
+    assert_eq!(events, vec!["lookup", "handler", "commit", "lookup"]);
+}
+#[test]
 fn invalid_action_and_missing_registered_source_never_commit_or_publish() {
     let mut invalid = action();
     let GameInput::Game(command) = &mut invalid else {
@@ -375,7 +563,8 @@ fn invalid_action_and_missing_registered_source_never_commit_or_publish() {
     };
     action.entry = label("unadmitted-action");
     for (input, unknown) in [(invalid, false), (fixture_model::action(), true)] {
-        let (receipts, current, events) = exercise(input, unknown, false, false);
+        let (receipts, current, events) =
+            exercise(input, accepted(), unknown, false, false, false, false);
         assert_eq!(
             receipts,
             vec![SubmissionOutcome::Refused(
@@ -388,7 +577,8 @@ fn invalid_action_and_missing_registered_source_never_commit_or_publish() {
 }
 #[test]
 fn known_commit_failure_keeps_the_original_checkpoint_and_never_publishes_staged_result() {
-    let (receipts, current, events) = exercise(action(), false, true, false);
+    let (receipts, current, events) =
+        exercise(action(), accepted(), false, true, false, false, false);
     assert_eq!(
         receipts,
         vec![SubmissionOutcome::Refused(RepositoryError::Unavailable)]

@@ -5,9 +5,10 @@ use df_model::checkpoint::{
     RuleReference,
 };
 use df_model::commands::{CommandError, CommandLimits, validate_client_command};
+use df_model::transition::{TransitionError, TransitionResult};
 use df_rules::{DispatchRegistry, InvocationError, stage_handler};
 pub use df_rules::{RulesCommandHandler, RulesCommandInput};
-use df_types::RevisionLabel;
+use df_types::{OperationId, RevisionLabel};
 
 /// Explicit bounds; the native session freezes production values under its load/device gate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -29,6 +30,15 @@ pub enum CommandRejection<R> {
     Checkpoint(CheckpointError),
     Structural(CommandError),
     Invocation(InvocationError<R>),
+    Transition(TransitionError),
+}
+
+fn command_operation(input: &GameInput) -> Option<OperationId> {
+    match input {
+        GameInput::Game(command) => Some(command.operation),
+        GameInput::Host(command) => Some(command.operation),
+        GameInput::Job(_) | GameInput::Timer(_) | GameInput::Presentation(_) => None,
+    }
 }
 
 fn admit_command<R>(
@@ -99,4 +109,29 @@ pub fn decide_registered_command<H: RulesCommandHandler>(
     registry
         .stage(pins, selector, source, input, checkpoint, maximum_bytes)
         .map_err(CommandRejection::Invocation)
+}
+
+/// Retain accepted, current-operation pending and rejected outcomes of the real registered
+/// handler. A source-bound decision's new causal fact identifies its exact pending window;
+/// unrelated historical pending rows cannot change this operation's disposition.
+pub fn decide_registered_transition<H: RulesCommandHandler>(
+    input: RulesCommandInput<'_>,
+    checkpoint: &Checkpoint,
+    context: CommandEntryContext<'_>,
+    registry: &DispatchRegistry<'_, H>,
+    selector: &RevisionLabel,
+    source: &RuleReference,
+) -> TransitionResult<CommandRejection<H::Rejection>> {
+    let Some(operation) = command_operation(input.command) else {
+        return TransitionResult::Rejected(CommandRejection::Structural(
+            CommandError::InternalInput,
+        ));
+    };
+    match decide_registered_command(input, checkpoint, context, registry, selector, source) {
+        Ok(candidate) => TransitionResult::classify(checkpoint, candidate, operation)
+            .unwrap_or_else(|error| {
+                TransitionResult::Rejected(CommandRejection::Transition(error))
+            }),
+        Err(error) => TransitionResult::Rejected(error),
+    }
 }

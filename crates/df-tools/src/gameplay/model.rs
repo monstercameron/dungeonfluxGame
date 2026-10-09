@@ -697,12 +697,41 @@ impl SessionEngine<NativeScope<LocalDemoAuthority>> for HarborEngine {
         scope.validate_input(input)?;
         self.decide_admitted(current, input, scope.operation())
     }
+    fn decide_transition(
+        &mut self,
+        current: &Checkpoint,
+        scope: &NativeScope<LocalDemoAuthority>,
+        input: &GameInput,
+    ) -> df_model::transition::TransitionResult<RepositoryError> {
+        use df_model::transition::TransitionResult;
+        use df_session::submission::OperationScope;
+        if let Err(error) = scope.validate_input(input) {
+            return TransitionResult::Rejected(error);
+        }
+        match self.decide_admitted(current, input, scope.operation()) {
+            Ok(candidate) => staged_transition(current, candidate, scope.operation()),
+            Err(error) => TransitionResult::Rejected(error),
+        }
+    }
     fn validate_recovery(&mut self, current: &Checkpoint) -> Result<(), RepositoryError> {
         current
             .validate_resume(current.basis(), &pins()?)
             .map(|_| ())
             .map_err(invalid)
     }
+}
+
+/// The journey source returns a detached checkpoint; this same classifier is used before the
+/// serialized session owner commits either an accepted decision or a suspended continuation.
+pub(super) fn staged_transition(
+    current: &Checkpoint,
+    candidate: Checkpoint,
+    operation: df_types::OperationId,
+) -> df_model::transition::TransitionResult<RepositoryError> {
+    use df_model::transition::TransitionResult;
+    TransitionResult::classify(current, candidate, operation).unwrap_or(TransitionResult::Rejected(
+        RepositoryError::InvalidCandidate,
+    ))
 }
 
 #[cfg(test)]
