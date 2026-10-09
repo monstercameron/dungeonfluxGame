@@ -8,6 +8,12 @@ pub const CONCURRENT_STREAMS: u32 = 8;
 
 #[cfg(target_arch = "wasm32")]
 mod browser;
+#[cfg(all(
+    target_arch = "wasm32",
+    debug_assertions,
+    feature = "browser-callback-overflow-fixture"
+))]
+pub use browser::observe_callback_overflow_fixture;
 #[cfg(target_arch = "wasm32")]
 pub use browser::{BrowserChannel, BrowserConnection};
 #[cfg(not(target_arch = "wasm32"))]

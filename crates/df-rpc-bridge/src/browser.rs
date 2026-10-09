@@ -214,6 +214,62 @@ impl Drop for WebSocketIo {
         self.metrics.close();
     }
 }
+
+/// Fixture-only observation through the real callback adapter, without an h2 reader.
+/// Owns the private socket for at most three seconds; never exposes unpolled I/O.
+#[cfg(all(debug_assertions, feature = "browser-callback-overflow-fixture"))]
+pub async fn observe_callback_overflow_fixture(
+    url: &str,
+) -> (
+    io::Result<()>,
+    Option<ConnectionSnapshot>,
+    io::Result<ConnectionSnapshot>,
+) {
+    use futures::future::{Either, select};
+    use gloo_timers::future::TimeoutFuture;
+    use tokio::io::AsyncWriteExt;
+
+    let metrics = Arc::new(ConnectionMetrics::new(true));
+    let observed = Rc::new(RefCell::new(None));
+    let work = async {
+        let mut socket = WebSocketIo::connect(url, metrics.clone()).await?;
+        // Release the existing finite producer with a real HTTP/2 client preface.
+        // Incoming reads remain unpolled: only actual callback queue bounds can reject.
+        socket
+            .write_all(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
+            .await?;
+        loop {
+            let snapshot = metrics.snapshot()?;
+            let rejected = snapshot.rejected;
+            *observed.borrow_mut() = Some(snapshot);
+            if rejected {
+                return Ok(());
+            }
+            if socket.state.borrow().failed || socket.state.borrow().closed {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "callback fixture closed before queue rejection",
+                ));
+            }
+            TimeoutFuture::new(5).await;
+        }
+    };
+    let result = match select(work.boxed_local(), TimeoutFuture::new(3000).boxed_local()).await {
+        Either::Left((result, _)) => result,
+        Either::Right(((), pending)) => {
+            drop(pending);
+            Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "callback fixture observation exceeded 3000ms",
+            ))
+        }
+    };
+    // Completion/cancellation drops the socket and detaches all four callbacks.
+    TimeoutFuture::new(20).await;
+    let before_close = observed.borrow_mut().take();
+    (result, before_close, metrics.snapshot())
+}
+
 impl AsyncRead for WebSocketIo {
     fn poll_read(
         mut self: Pin<&mut Self>,

@@ -1,0 +1,83 @@
+{
+  "task": "B-C-df-rpc-bridge-I02",
+  "kind": "deterministic_native_observation_verdict_cases",
+  "browser_authority": false,
+  "actual_browser_required": true,
+  "normal": {
+    "points": [
+      [
+        10,
+        100,
+        1,
+        0,
+        0
+      ],
+      [
+        30,
+        900,
+        3,
+        2,
+        1
+      ],
+      [
+        50,
+        1500,
+        5,
+        3,
+        15
+      ]
+    ],
+    "expected_overlap_intervals": 1,
+    "expected_gaps_ms": [
+      20
+    ],
+    "gap_scope": "Actual preceding adjacent rAF gaps at retained timeline points; exact adjacent witness is retained separately."
+  },
+  "failure_cases": [
+    "empty/single frame",
+    "constant historical counters",
+    "callback and decode progress in different intervals",
+    "only bytes or only items advanced",
+    "post-completion progress",
+    "nonfinite/negative/equal/backwards timestamp",
+    "counter regression",
+    "unknown/regressing completed classes",
+    "128 retained samples + explicit rejected129th",
+    "sticky invalid point",
+    "partial observations retained on error/deadline",
+    "late-page timestamp precision",
+    "30-second120/144/240Hz timeline bound",
+    "large sampled endpoint delta without adjacent witness",
+    "invalid unretained frame",
+    "maximum-width report bound"
+  ],
+  "browser_procedure": {
+    "surface": "#qualify",
+    "report": "#qualification",
+    "endpoint": "/fixture-report/qualification",
+    "required": "New source-bound native+WASM build; actual rAF/callback/decode overlap under mixed RPC load, controlled malicious rejection and cleanup; screenshot/browser/build identity. Native test success is insufficient.",
+    "callback_overflow_fixture": {
+      "feature": "browser-callback-overflow-fixture + debug_assertions",
+      "server": "/malicious/callback-overflow",
+      "engine_callbacks": 5,
+      "bytes_each": 262144,
+      "accepted_copies": 4,
+      "queue_limit_bytes": 1048576,
+      "reject_before_fifth_copy": true,
+      "incoming_reads": "unpolled private WebSocketIo; no h2 parser/frame/control-rate rejection",
+      "proof": "actual websocket_receive total1310720/items5; actual callback queue/copy total1048576/items4; zero decodedframes; actual rejection; exact post-drop closed/currentqueue/currentVec/currentenginerefs zero",
+      "native_is_insufficient": true,
+      "failure": "Retain actual before/closed snapshots and error on timeout,missing metric or mismatch; no PASS inferred from supplied constants.",
+      "terminal_disposition": "Typed missing/deadline delivery or metrics => INCONCLUSIVE; complete witnessed mismatch => FAIL; existing measured resource breach/first-failure precedence across both snapshots. Pending outer cancellation explicitly retains overflow snapshot/cleanup UNPERFORMED."
+    }
+  },
+  "scope": "Private observer directly called by existing Rust/WASM pressure consumer. No new transport/protocol/latency policy.",
+  "observation": {
+    "timeline_cadence_ms": 250,
+    "retained_timeline_limit": 128,
+    "validate_every_delivered_frame": true,
+    "exact_adjacent_witness_required": true,
+    "publication_limit_bytes": 65536,
+    "oversize": "Explicit failure; no required fields silently truncated."
+  }
+}
