@@ -1,0 +1,8 @@
+{
+  "contract_version": 1,
+  "browser_qualification": "UNPERFORMED_BY_NATIVE_FIXTURE",
+  "native_cases": [
+    {"case":"local_drop","reader_pending":false,"reader_woken":false,"pump":"Ok","closed":true,"rejected":false,"pipe_owners":0,"pipe_to_grpc_current":0,"pipe_to_websocket_current":0,"websocket_receive_current":0},
+    {"case":"local_shutdown","reader_pending":true,"reader_woken":true,"pump":"Ok","closed":true,"rejected":false,"pipe_owners":0,"pipe_to_grpc_current":0,"pipe_to_websocket_current":0,"websocket_receive_current":0}
+  ]
+}

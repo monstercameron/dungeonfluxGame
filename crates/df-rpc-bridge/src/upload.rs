@@ -1,10 +1,43 @@
 use futures::channel::oneshot;
+#[cfg(any(target_arch = "wasm32", test))]
+use futures::{FutureExt, future::Shared};
+#[cfg(any(target_arch = "wasm32", test))]
+use std::cell::RefCell;
 use std::{
     future::Future,
     pin::Pin,
     task::{Context, Poll},
 };
 use tonic::Status;
+
+#[cfg(any(target_arch = "wasm32", test))]
+pub(super) type ConnectionClosed = Shared<oneshot::Receiver<()>>;
+
+/// One connection-owned signal reaches uploads even while application input is pending.
+#[cfg(any(target_arch = "wasm32", test))]
+pub(super) struct ConnectionCancellation {
+    sender: RefCell<Option<oneshot::Sender<()>>>,
+    closed: ConnectionClosed,
+}
+#[cfg(any(target_arch = "wasm32", test))]
+impl ConnectionCancellation {
+    pub(super) fn new() -> Self {
+        let (sender, receiver) = oneshot::channel();
+        Self {
+            sender: RefCell::new(Some(sender)),
+            closed: receiver.shared(),
+        }
+    }
+    pub(super) fn subscribe(&self) -> ConnectionClosed {
+        self.closed.clone()
+    }
+    pub(super) fn cancel(&self) {
+        let sender = self.sender.borrow_mut().take();
+        if let Some(sender) = sender {
+            let _ = sender.send(());
+        }
+    }
+}
 
 pub(super) enum UploadResult {
     Completed,
@@ -49,7 +82,7 @@ impl UploadCompletion {
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
-    use super::{UploadCompletion, UploadResult};
+    use super::{ConnectionCancellation, UploadCompletion, UploadResult};
     use bytes::{Buf, BufMut, Bytes};
     use futures::{
         FutureExt,
@@ -62,6 +95,7 @@ mod tests {
     use std::{
         error::Error,
         fmt,
+        future::Future,
         pin::Pin,
         sync::{
             Arc,
@@ -95,6 +129,70 @@ mod tests {
         futures::executor::block_on(poll_fn(|context| {
             completion.poll_completion(context, owner_cancelled)
         }))
+    }
+
+    #[test]
+    fn connection_close_wakes_all_pending_upload_listeners_once() {
+        let cancellation = ConnectionCancellation::new();
+        let mut first = cancellation.subscribe();
+        let mut second = cancellation.subscribe();
+        let counter = Arc::new(WakeCounter(AtomicUsize::new(0)));
+        let wake = waker(counter.clone());
+        let mut context = Context::from_waker(&wake);
+        assert!(Pin::new(&mut first).poll(&mut context).is_pending());
+        assert!(Pin::new(&mut second).poll(&mut context).is_pending());
+        cancellation.cancel();
+        assert!(counter.0.load(Ordering::SeqCst) > 0);
+        assert!(matches!(
+            Pin::new(&mut first).poll(&mut context),
+            Poll::Ready(Ok(()))
+        ));
+        assert!(matches!(
+            Pin::new(&mut second).poll(&mut context),
+            Poll::Ready(Ok(()))
+        ));
+        let wakes = counter.0.load(Ordering::SeqCst);
+        cancellation.cancel();
+        assert_eq!(counter.0.load(Ordering::SeqCst), wakes);
+        let mut late = cancellation.subscribe();
+        assert!(matches!(
+            Pin::new(&mut late).poll(&mut context),
+            Poll::Ready(Ok(()))
+        ));
+    }
+
+    #[test]
+    fn old_connection_close_cannot_cancel_fresh_upload_listener() {
+        let old = ConnectionCancellation::new();
+        let fresh = ConnectionCancellation::new();
+        old.cancel();
+        let mut listener = fresh.subscribe();
+        let counter = Arc::new(WakeCounter(AtomicUsize::new(0)));
+        let wake = waker(counter.clone());
+        let mut context = Context::from_waker(&wake);
+        assert!(Pin::new(&mut listener).poll(&mut context).is_pending());
+        assert_eq!(counter.0.load(Ordering::SeqCst), 0);
+        fresh.cancel();
+        assert!(matches!(
+            Pin::new(&mut listener).poll(&mut context),
+            Poll::Ready(Ok(()))
+        ));
+    }
+
+    #[test]
+    fn lost_connection_signal_owner_wakes_pending_listener() {
+        let cancellation = ConnectionCancellation::new();
+        let mut listener = cancellation.subscribe();
+        let counter = Arc::new(WakeCounter(AtomicUsize::new(0)));
+        let wake = waker(counter.clone());
+        let mut context = Context::from_waker(&wake);
+        assert!(Pin::new(&mut listener).poll(&mut context).is_pending());
+        drop(cancellation);
+        assert!(counter.0.load(Ordering::SeqCst) > 0);
+        assert!(matches!(
+            Pin::new(&mut listener).poll(&mut context),
+            Poll::Ready(Err(_))
+        ));
     }
 
     #[test]

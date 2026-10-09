@@ -4,12 +4,23 @@ use df_protocol::transport_fixture::{
 };
 use df_rpc_bridge::{BrowserChannel, BrowserConnection, ConnectionSnapshot, RPC_MESSAGE_BYTES};
 use futures::{
-    FutureExt, SinkExt,
-    channel::mpsc,
+    FutureExt, SinkExt, Stream,
+    channel::{mpsc, oneshot},
     future::{Either, select},
 };
 use gloo_timers::future::TimeoutFuture;
-use std::{cell::Cell, error::Error, rc::Rc};
+use std::{
+    cell::Cell,
+    error::Error,
+    future::Future,
+    pin::Pin,
+    rc::Rc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    task::{Context, Poll},
+};
 use tonic::{Code, Request, Status};
 use wasm_bindgen::{JsCast, prelude::*};
 use web_sys::{Document, HtmlButtonElement};
@@ -377,6 +388,233 @@ async fn closed_browser(connection: &BrowserConnection) -> Result<ConnectionSnap
     }
     Err("browser connection owners did not close within 500ms".to_owned())
 }
+struct PendingInput {
+    first: Option<Sample>,
+    pending: Option<oneshot::Sender<()>>,
+    dropped: Option<oneshot::Sender<()>>,
+    drop_count: Arc<AtomicUsize>,
+}
+impl Stream for PendingInput {
+    type Item = Sample;
+    fn poll_next(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Sample>> {
+        if let Some(first) = self.first.take() {
+            return Poll::Ready(Some(first));
+        }
+        if let Some(pending) = self.pending.take() {
+            let _ = pending.send(());
+        }
+        Poll::Pending
+    }
+}
+impl Drop for PendingInput {
+    fn drop(&mut self) {
+        self.drop_count.fetch_add(1, Ordering::SeqCst);
+        if let Some(dropped) = self.dropped.take() {
+            let _ = dropped.send(());
+        }
+    }
+}
+fn pending_input(
+    sequence: u32,
+) -> (
+    PendingInput,
+    oneshot::Receiver<()>,
+    oneshot::Receiver<()>,
+    Arc<AtomicUsize>,
+) {
+    let (pending, observed_pending) = oneshot::channel();
+    let (dropped, observed_drop) = oneshot::channel();
+    let drop_count = Arc::new(AtomicUsize::new(0));
+    (
+        PendingInput {
+            first: Some(sample(sequence)),
+            pending: Some(pending),
+            dropped: Some(dropped),
+            drop_count: drop_count.clone(),
+        },
+        observed_pending,
+        observed_drop,
+        drop_count,
+    )
+}
+async fn close_bound<T>(future: impl Future<Output = T>, label: &str) -> Result<T, String> {
+    match select(future.boxed_local(), TimeoutFuture::new(500).boxed_local()).await {
+        Either::Left((result, _)) => Ok(result),
+        Either::Right(((), pending)) => {
+            drop(pending);
+            Err(format!("{label} exceeded owned 500ms observation bound"))
+        }
+    }
+}
+async fn observed_input_drop(
+    dropped: oneshot::Receiver<()>,
+    count: &AtomicUsize,
+) -> Result<(), String> {
+    close_bound(dropped, "pending input Drop")
+        .await?
+        .map_err(|_| "pending input Drop witness lost")?;
+    require(
+        count.load(Ordering::SeqCst) == 1,
+        "pending input was not dropped exactly once",
+    )
+}
+async fn owned_close_checks(document: &Document, lines: &mut String) -> Result<(), String> {
+    let (connection, channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut client = FixtureClient::new(channel)
+        .max_decoding_message_size(RPC_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MESSAGE_BYTES * 2);
+    let (input, pending, dropped, count) = pending_input(71);
+    let mut response = client
+        .bidi(request(input)?)
+        .await
+        .map_err(|error| error.to_string())?
+        .into_inner();
+    require(
+        close_bound(response.message(), "first bidi echo")
+            .await?
+            .map_err(|error| error.to_string())?
+            == Some(sample(71)),
+        "owned close bidi first echo mismatch",
+    )?;
+    close_bound(pending, "actual pending input poll")
+        .await?
+        .map_err(|_| "pending input poll witness lost")?;
+    let mut reader = response.message().boxed_local();
+    let pending_reader =
+        futures::future::poll_fn(|context| Poll::Ready(reader.as_mut().poll(context).is_pending()))
+            .await;
+    require(
+        pending_reader,
+        "response reader was not Pending before close",
+    )?;
+    require(
+        count.load(Ordering::SeqCst) == 0,
+        "input dropped before close",
+    )?;
+    connection.close();
+    connection.close();
+    let terminal = close_bound(reader, "retained response reader termination")
+        .await?
+        .err()
+        .ok_or("closed retained reader fabricated normal End")?;
+    require(
+        terminal.metadata().get("fixture-terminal").is_none(),
+        "connection cancellation fabricated authoritative domain trailers",
+    )?;
+    // Keep the generated response alive until the independently pending input is gone.
+    observed_input_drop(dropped, &count).await?;
+    let snapshot = closed_browser(&connection).await?;
+    require(
+        snapshot.websocket_receive.current == 0 && snapshot.websocket_receive_items.current == 0,
+        "closed connection retained callback receipt owners",
+    )?;
+    append_close(
+        document,
+        lines,
+        "PASS · Owned close: input_pending=true reader_pending=true repeated_close=true input_drop_before_response_drop=1 reader_terminal=error callback_owners=0",
+    );
+    drop(response);
+    drop(client);
+
+    let (connection, channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut client = FixtureClient::new(channel)
+        .max_decoding_message_size(RPC_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MESSAGE_BYTES * 2);
+    let (input, pending, dropped, count) = pending_input(72);
+    let mut response = client
+        .bidi(request(input)?)
+        .await
+        .map_err(|error| error.to_string())?
+        .into_inner();
+    require(
+        close_bound(response.message(), "response Drop first echo")
+            .await?
+            .map_err(|error| error.to_string())?
+            == Some(sample(72)),
+        "response Drop first echo mismatch",
+    )?;
+    close_bound(pending, "response Drop pending input")
+        .await?
+        .map_err(|_| "response Drop pending witness lost")?;
+    drop(response);
+    observed_input_drop(dropped, &count).await?;
+    require(
+        client
+            .unary(request(sample(73))?)
+            .await
+            .map_err(|error| error.to_string())?
+            .into_inner()
+            == sample(73),
+        "per-response cancellation affected current connection",
+    )?;
+    require(
+        !connection
+            .snapshot()
+            .map_err(|error| error.to_string())?
+            .closed,
+        "response Drop closed unrelated connection owner",
+    )?;
+    connection.close();
+    closed_browser(&connection).await?;
+    append_close(
+        document,
+        lines,
+        "PASS · Owned response Drop: input_pending=true input_drop=1 current_unary=preserved",
+    );
+
+    let (connection, channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut client = FixtureClient::new(channel)
+        .max_decoding_message_size(RPC_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MESSAGE_BYTES * 2);
+    let (input, pending, dropped, count) = pending_input(74);
+    let mut call = client.client_stream(request(input)?).boxed_local();
+    let pending_call =
+        futures::future::poll_fn(|context| Poll::Ready(call.as_mut().poll(context).is_pending()))
+            .await;
+    require(
+        pending_call,
+        "client-stream call did not block before response headers",
+    )?;
+    match select(
+        call,
+        close_bound(pending, "pre-response pending input").boxed_local(),
+    )
+    .await
+    {
+        Either::Left((_result, _)) => {
+            return Err("client-stream call completed before pending input witness".to_owned());
+        }
+        Either::Right((observed, call)) => {
+            observed?.map_err(|_| "pre-response input witness lost")?;
+            drop(call);
+        }
+    }
+    observed_input_drop(dropped, &count).await?;
+    require(
+        client
+            .unary(request(sample(75))?)
+            .await
+            .map_err(|error| error.to_string())?
+            .into_inner()
+            == sample(75),
+        "cancelled pre-response call affected current connection",
+    )?;
+    connection.close();
+    closed_browser(&connection).await?;
+    append_close(
+        document,
+        lines,
+        "PASS · Owned call Drop: response_pending=true input_pending=true input_drop=1 current_unary=preserved",
+    );
+    Ok(())
+}
+
 async fn run_close_reconnect(document: Document) -> Result<(), String> {
     let mut lines = String::new();
     append_close(
@@ -399,6 +637,8 @@ async fn run_close_reconnect(document: Document) -> Result<(), String> {
         &mut lines,
         "PASS · Idle close released browser callback owners",
     );
+
+    owned_close_checks(&document, &mut lines).await?;
 
     let (drained, channel) = BrowserConnection::connect(&tunnel_url("/tunnel")?)
         .await

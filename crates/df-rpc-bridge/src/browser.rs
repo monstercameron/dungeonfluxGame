@@ -2,7 +2,7 @@ use crate::{
     CONCURRENT_STREAMS, ConnectionMetrics, ConnectionSnapshot, FRAME_BYTES, MESSAGE_BYTES,
     RECEIVE_BYTES,
     resources::ReceiveCredit,
-    upload::{UploadCompletion, UploadResult},
+    upload::{ConnectionCancellation, ConnectionClosed, UploadCompletion, UploadResult},
 };
 use bytes::Bytes;
 use futures::{
@@ -340,6 +340,12 @@ impl Drop for AbortOnDrop {
 pub struct BrowserConnection {
     driver: AbortOnDrop,
     metrics: Arc<ConnectionMetrics>,
+    cancellation: Rc<ConnectionCancellation>,
+}
+impl Drop for BrowserConnection {
+    fn drop(&mut self) {
+        self.close();
+    }
 }
 impl BrowserConnection {
     /// Connect one HTTP/2 session with bounded frame, header, DATA credit and concurrency.
@@ -359,6 +365,8 @@ impl BrowserConnection {
             .map_err(io::Error::other)?;
         let (abort, registration) = AbortHandle::new_pair();
         let driver_metrics = metrics.clone();
+        let cancellation = Rc::new(ConnectionCancellation::new());
+        let driver_cancellation = cancellation.clone();
         let context = df_observe::OperationContext {
             trace_parent: String::new(),
             build: option_env!("DF_FIXTURE_BUILD")
@@ -368,6 +376,7 @@ impl BrowserConnection {
         let mut span = df_observe::begin(&context, "bridge.driver");
         wasm_bindgen_futures::spawn_local(async move {
             let result = Abortable::new(connection, registration).await;
+            driver_cancellation.cancel();
             let status = match &result {
                 Ok(Ok(())) => "closed",
                 Ok(Err(_)) => "failed",
@@ -383,10 +392,12 @@ impl BrowserConnection {
             Self {
                 driver: AbortOnDrop(abort),
                 metrics: metrics.clone(),
+                cancellation: cancellation.clone(),
             },
             BrowserChannel {
                 sender,
                 credit: ReceiveCredit::new(metrics),
+                closed: cancellation.subscribe(),
             },
         ))
     }
@@ -396,6 +407,7 @@ impl BrowserConnection {
     }
     /// Explicit cancellation is idempotent and owned by the fixture run.
     pub fn close(&self) {
+        self.cancellation.cancel();
         self.driver.0.abort();
     }
 }
@@ -405,6 +417,7 @@ impl BrowserConnection {
 pub struct BrowserChannel {
     sender: h2::client::SendRequest<Bytes>,
     credit: ReceiveCredit,
+    closed: ConnectionClosed,
 }
 impl Service<http::Request<tonic::body::Body>> for BrowserChannel {
     type Response = http::Response<ReceiveBody>;
@@ -415,6 +428,7 @@ impl Service<http::Request<tonic::body::Body>> for BrowserChannel {
     }
     fn call(&mut self, request: http::Request<tonic::body::Body>) -> Self::Future {
         let credit = self.credit.clone();
+        let closed = self.closed.clone();
         let (mut parts, body) = request.into_parts();
         let path = parts
             .uri
@@ -472,10 +486,24 @@ impl Service<http::Request<tonic::body::Body>> for BrowserChannel {
                         .map_err(transport_status)?;
                     Ok::<(), tonic::Status>(())
                 };
-                let result = match Abortable::new(upload, registration).await {
-                    Ok(Ok(())) => UploadResult::Completed,
-                    Ok(Err(status)) => UploadResult::Failed(status),
-                    Err(_) => UploadResult::Cancelled,
+                let result = {
+                    let mut upload = Box::pin(Abortable::new(upload, registration));
+                    let mut closed = closed;
+                    poll_fn(|context| {
+                        // A ready original result wins over simultaneous connection closure.
+                        if let Poll::Ready(result) = upload.as_mut().poll(context) {
+                            return Poll::Ready(match result {
+                                Ok(Ok(())) => UploadResult::Completed,
+                                Ok(Err(status)) => UploadResult::Failed(status),
+                                Err(_) => UploadResult::Cancelled,
+                            });
+                        }
+                        if Pin::new(&mut closed).poll(context).is_ready() {
+                            return Poll::Ready(UploadResult::Cancelled);
+                        }
+                        Poll::Pending
+                    })
+                    .await
                 };
                 let failed = matches!(result, UploadResult::Failed(_));
                 // Publish the original failure before reset can wake the response future.
@@ -566,12 +594,14 @@ impl Body for ReceiveBody {
             let previous_frame = std::mem::take(&mut self.previous_frame);
             let Some(id) = self.id else {
                 self.finished = true;
+                self.upload_guard.0.abort();
                 return Poll::Ready(Some(Err(transport_status(
                     h2::Reason::INTERNAL_ERROR.into(),
                 ))));
             };
             if let Err(error) = self.credit.consumed(id, previous_frame) {
                 self.finished = true;
+                self.upload_guard.0.abort();
                 let _ = self.finish();
                 return Poll::Ready(Some(Err(transport_status(error))));
             }
@@ -582,6 +612,7 @@ impl Body for ReceiveBody {
                 }
                 Poll::Ready(Some(Err(error))) => {
                     self.finished = true;
+                    self.upload_guard.0.abort();
                     return Poll::Ready(Some(Err(transport_status(
                         self.finish().err().unwrap_or(error),
                     ))));
@@ -590,12 +621,14 @@ impl Body for ReceiveBody {
                     self.data_finished = true;
                     if let Err(error) = self.finish() {
                         self.finished = true;
+                        self.upload_guard.0.abort();
                         return Poll::Ready(Some(Err(transport_status(error))));
                     }
                 }
                 Poll::Pending => {
                     if let Err(error) = self.credit.pending(id) {
                         self.finished = true;
+                        self.upload_guard.0.abort();
                         let _ = self.finish();
                         return Poll::Ready(Some(Err(transport_status(error))));
                     }
@@ -614,6 +647,7 @@ impl Body for ReceiveBody {
                 }
                 Poll::Ready(Err(error)) => {
                     self.finished = true;
+                    self.upload_guard.0.abort();
                     return Poll::Ready(Some(Err(transport_status(error))));
                 }
                 Poll::Pending => return Poll::Pending,
