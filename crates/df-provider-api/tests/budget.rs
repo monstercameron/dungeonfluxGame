@@ -12,7 +12,8 @@ use df_commerce::{
 use df_model::checkpoint::{ExecutionMode, JobId};
 use df_provider_api::{BudgetAdmission, BudgetMutation, BudgetStore};
 use df_types::{
-    Currency, Money, OperationId, PaidInvoiceId, PriceVersion, SubscriptionId, Usage, UsageUnit,
+    Currency, LiabilityRate, Money, MoneyError, OperationId, PaidInvoiceId, PriceVersion,
+    SubscriptionId, Usage, UsageUnit,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -667,4 +668,159 @@ fn stale_grant_nonlive_mode_and_known_failure_have_distinct_no_commit_outcomes()
     ));
     assert_eq!(store.snapshot.revision, 10);
     assert!(store.receipt.is_some());
+}
+
+fn quoted_amounts() -> (Usage, Money, Money) {
+    // Synthetic declared units and rate; neither amount is a verified invoice.
+    let rate = LiabilityRate::new(currency(), UsageUnit::Token, 159, 8).unwrap();
+    let expected_usage = Usage::new(2, UsageUnit::Token);
+    let maximum_usage = Usage::new(4, UsageUnit::Token);
+    let expected_invoice = rate.liability(expected_usage).unwrap();
+    let buffered_maximum = rate.liability(maximum_usage).unwrap();
+    assert_eq!(expected_invoice, money(40));
+    assert_eq!(buffered_maximum, money(80));
+    assert_ne!(expected_invoice, buffered_maximum);
+    (maximum_usage, expected_invoice, buffered_maximum)
+}
+
+#[test]
+fn quoted_buffered_maximum_is_reserved_instead_of_expected_invoice() {
+    let (maximum_usage, expected_invoice, buffered_maximum) = quoted_amounts();
+    let mut store = CommerceFixture::new();
+    let before = store.snapshot;
+    let scope = 1;
+    let quote = 11;
+    let grant = store.consent;
+    let mut candidate = admission(&scope, &grant, &quote);
+    candidate.maximum_usage = maximum_usage;
+    candidate.maximum_supplier_liability = buffered_maximum;
+    let reserved = match store.reserve(candidate) {
+        BudgetMutation::Committed {
+            result,
+            replayed: false,
+        } => result,
+        _ => panic!("funded buffered maximum must be admitted"),
+    };
+
+    assert_eq!(reserved.maximum_supplier_liability, buffered_maximum);
+    assert_ne!(reserved.maximum_supplier_liability, expected_invoice);
+    assert_eq!(reserved.maximum_usage, maximum_usage);
+    assert_eq!(reserved.quote, quote);
+    assert_eq!(reserved.job, job());
+    assert_eq!(reserved.operation, operation());
+    assert_eq!(reserved.mode, ExecutionMode::Live);
+    for (prior, current) in before.counters.iter().zip(store.snapshot.counters) {
+        assert_eq!(
+            current.used,
+            prior.used.checked_add(buffered_maximum).unwrap()
+        );
+        assert_eq!(current.used, money(100));
+        assert_ne!(
+            current.used,
+            prior.used.checked_add(expected_invoice).unwrap()
+        );
+        assert_eq!(current.limit, prior.limit);
+    }
+    let held = store.snapshot;
+    let mut retry = admission(&scope, &grant, &quote);
+    retry.maximum_usage = maximum_usage;
+    retry.maximum_supplier_liability = buffered_maximum;
+    assert!(matches!(
+        store.reserve(retry),
+        BudgetMutation::Committed { result, replayed: true } if result == reserved
+    ));
+    assert_eq!(store.snapshot, held);
+    assert_eq!(store.receipt, Some(reserved));
+    assert_eq!(store.observation, SpendOperationStatus::Recorded);
+}
+
+#[test]
+fn forecast_fit_does_not_admit_an_unfunded_buffered_maximum() {
+    let (maximum_usage, expected_invoice, buffered_maximum) = quoted_amounts();
+    let scopes = [
+        SpendScope::PlatformDay,
+        SpendScope::PlatformMonth,
+        SpendScope::SupplierAccount,
+        SpendScope::TenantPayer,
+        SpendScope::Campaign,
+        SpendScope::Job,
+    ];
+    for blocked in 0..=scopes.len() {
+        let mut store = CommerceFixture::new();
+        let expected_refusal = if blocked == 0 {
+            store.consent.maximum = money(60);
+            SpendRefusal::CustomerConsentExceeded
+        } else {
+            store.snapshot.counters[blocked - 1].limit = money(99);
+            SpendRefusal::BudgetExceeded(scopes[blocked - 1])
+        };
+        let before = store.snapshot;
+        let before_receipt = store.receipt;
+        let before_observation = store.observation;
+        let grant = store.consent;
+        let forecast_candidate = propose_spend(
+            &before,
+            grant,
+            SpendRequest {
+                operation: operation(),
+                expected_revision: store.requested_revision,
+                expected_consent_revision: grant.revision,
+                maximum_supplier_liability: expected_invoice,
+            },
+            SpendOperationObservation {
+                operation: operation(),
+                status: before_observation,
+            },
+        )
+        .expect("the forecast alone fits, so this control detects estimate substitution");
+        assert_eq!(
+            forecast_candidate.maximum_supplier_liability,
+            expected_invoice
+        );
+        assert!(
+            forecast_candidate
+                .next
+                .counters
+                .iter()
+                .all(|counter| counter.used == money(60))
+        );
+
+        let mut candidate = admission(&1, &grant, &11);
+        candidate.maximum_usage = maximum_usage;
+        candidate.maximum_supplier_liability = buffered_maximum;
+        assert!(matches!(
+            store.reserve(candidate),
+            BudgetMutation::Refused(Refusal::Commerce(reason)) if reason == expected_refusal
+        ));
+        assert_eq!(store.snapshot, before);
+        assert_eq!(store.receipt, before_receipt);
+        assert_eq!(store.observation, before_observation);
+    }
+}
+
+#[test]
+fn incompatible_maximum_currency_cannot_fall_back_to_the_expected_invoice() {
+    let (maximum_usage, expected_invoice, _) = quoted_amounts();
+    let mut store = CommerceFixture::new();
+    let before = store.snapshot;
+    let before_receipt = store.receipt;
+    let before_observation = store.observation;
+    let grant = store.consent;
+    let foreign_rate =
+        LiabilityRate::new(Currency::parse("EUR").unwrap(), UsageUnit::Token, 159, 8).unwrap();
+    let foreign_maximum = foreign_rate.liability(maximum_usage).unwrap();
+    assert_eq!(foreign_maximum.micros(), 80);
+    assert_eq!(expected_invoice, money(40));
+    let mut candidate = admission(&1, &grant, &11);
+    candidate.maximum_usage = maximum_usage;
+    candidate.maximum_supplier_liability = foreign_maximum;
+    assert!(matches!(
+        store.reserve(candidate),
+        BudgetMutation::Refused(Refusal::Commerce(SpendRefusal::Money(
+            MoneyError::CurrencyMismatch
+        )))
+    ));
+    assert_eq!(store.snapshot, before);
+    assert_eq!(store.receipt, before_receipt);
+    assert_eq!(store.observation, before_observation);
 }
