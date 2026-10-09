@@ -2,9 +2,12 @@
 //! Modality schemas, current access, spend admission and provider readiness have separate owners.
 
 mod budget;
+mod modality;
 mod request;
 
 pub use budget::{BudgetAdmission, BudgetMutation, BudgetStore};
+
+pub use modality::{CheckedModalityRequest, RequestBasis, RequestModality};
 
 pub use request::{
     CheckedRequest, InvalidRequestLimits, RequestBinding, RequestError, RequestIdentity,
