@@ -10,6 +10,71 @@ use qualification_verdict::{
     PAYLOAD_ENVELOPE_BYTES, Verdict, evaluate,
 };
 
+#[test]
+fn first_measured_failure_survives_publication_cleanup_and_deadline_errors() {
+    use qualification_verdict::{
+        TerminalContext, TerminalEvidence, TerminalOutcome, TerminalPresentation,
+    };
+
+    let mut breached = base_snapshot();
+    breached.callback_bytes.peak = CALLBACK_BYTES_LIMIT + 1;
+    let verdict = evaluate(Some(&breached), false, false);
+    for (context, later_failure) in [
+        (TerminalContext::Qualification, "report POST failed"),
+        (
+            TerminalContext::ConnectionCredit,
+            "explicit close cleanup failed",
+        ),
+        (
+            TerminalContext::ConnectionCredit,
+            "replacement connection failed",
+        ),
+        (TerminalContext::CallbackCapacity, "owned deadline reached"),
+    ] {
+        let mut evidence = TerminalEvidence::default();
+        evidence.record_failure(verdict, "measured pressure snapshot; Build: contract-build");
+        evidence
+            .update_report("measured pressure snapshot; Build: contract-build; cleanup sampled");
+        let terminal = evidence.resolve(TerminalOutcome::from(later_failure));
+        assert_eq!(terminal.verdict(), verdict);
+        assert!(terminal.verdict().stop_owned_run);
+        let TerminalPresentation::Replace(report) =
+            qualification_verdict::present_terminal_outcome(&terminal, "contract-build", context)
+        else {
+            panic!("known failure must remain visible");
+        };
+        assert!(report.contains("measured pressure snapshot"));
+        assert!(report.contains("cleanup sampled"));
+        assert!(report.contains(later_failure));
+        assert!(report.contains("Later failure:"));
+    }
+
+    let mut evidence = TerminalEvidence::default();
+    evidence.record_failure(verdict, "first measured breach");
+    evidence.record_failure(verdict, "later observation cannot replace first breach");
+    let terminal = evidence.resolve(TerminalOutcome::inconclusive("cleanup timed out"));
+    let TerminalPresentation::Replace(report) = qualification_verdict::present_terminal_outcome(
+        &terminal,
+        "contract-build",
+        TerminalContext::ConnectionCredit,
+    ) else {
+        panic!("known failure must remain visible");
+    };
+    assert!(report.contains("first measured breach"));
+    assert!(!report.contains("later observation cannot replace first breach"));
+    assert_eq!(terminal.verdict().full_g02.as_str(), "FAIL");
+
+    let retained = evidence.resolve(TerminalOutcome::retain_current_report(verdict));
+    assert!(matches!(
+        qualification_verdict::present_terminal_outcome(
+            &retained,
+            "contract-build",
+            TerminalContext::Qualification,
+        ),
+        TerminalPresentation::KeepCurrent
+    ));
+}
+
 fn base_snapshot() -> ConnectionSnapshot {
     ConnectionMetrics::new(true)
         .snapshot()

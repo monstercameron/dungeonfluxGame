@@ -1,6 +1,6 @@
 //! Synthetic pressure only. Reports measurements without approving physical-device G02.
 use crate::browser::{FixtureClient, request, require, sample, tunnel_url};
-use crate::qualification_verdict::{self, Verdict};
+use crate::qualification_verdict::{self, TerminalEvidence, Verdict};
 use df_protocol::transport_fixture::Sample;
 use df_rpc_bridge::{BrowserConnection, ConnectionSnapshot, RPC_MESSAGE_BYTES};
 use futures::{
@@ -9,7 +9,10 @@ use futures::{
     future::{Either, join_all, select},
 };
 use gloo_timers::future::TimeoutFuture;
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use web_sys::{Document, HtmlButtonElement};
 use web_time::Instant;
@@ -17,9 +20,18 @@ use web_time::Instant;
 fn stop_on_resource_breach(
     connection: &BrowserConnection,
     snapshot: &ConnectionSnapshot,
+    evidence: &Rc<RefCell<TerminalEvidence>>,
 ) -> Result<(), qualification_verdict::TerminalOutcome> {
     let verdict = qualification_verdict::evaluate(Some(snapshot), false, false);
     if verdict.stop_owned_run {
+        evidence.borrow_mut().record_failure(
+            verdict,
+            format!(
+                "{}\nFAIL · measured resource bound exceeded; owned browser connection closed immediately.\nSnapshot: {snapshot:?}\nBuild: {}\n",
+                qualification_verdict::format_verdict(verdict),
+                crate::BUILD_ID,
+            ),
+        );
         connection.close();
         return Err(qualification_verdict::TerminalOutcome::from_verdict(
             verdict,
@@ -150,12 +162,32 @@ struct StreamObservation {
     first_message_ms: f64,
     arrival_gaps_ms: Vec<f64>,
 }
+
+fn record_pressure_result<T, E: std::fmt::Debug>(
+    result: Result<T, E>,
+    evidence: &Rc<RefCell<TerminalEvidence>>,
+) -> Result<T, E> {
+    if let Err(error) = &result {
+        let verdict = qualification_verdict::evaluate(None, false, true);
+        evidence.borrow_mut().record_failure(
+            verdict,
+            format!(
+                "{}\nFAIL · unchanged simultaneous pressure workload\nFirst observed error: {error:?}\nBuild: {}\n",
+                qualification_verdict::format_verdict(verdict),
+                crate::BUILD_ID,
+            ),
+        );
+    }
+    result
+}
+
 async fn consume(
     mut client: FixtureClient,
     kind: &str,
     count: u32,
     pause: u32,
     connection: &BrowserConnection,
+    evidence: &Rc<RefCell<TerminalEvidence>>,
 ) -> Result<StreamObservation, qualification_verdict::TerminalOutcome> {
     let started = Instant::now();
     let mut stream = client
@@ -186,7 +218,7 @@ async fn consume(
         messages += 1;
         memory_peak = memory_peak.max(memory_bytes()?);
         let snapshot = connection.snapshot().map_err(|error| error.to_string())?;
-        stop_on_resource_breach(connection, &snapshot)?;
+        stop_on_resource_breach(connection, &snapshot, evidence)?;
         require(
             snapshot.envelope_within_limit()
                 && snapshot.callback_bytes.current <= 1024 * 1024
@@ -317,7 +349,10 @@ async fn probe(
     )?;
     Ok((snapshot, closed, status, elapsed_ms))
 }
-async fn run(document: &Document) -> Result<(), qualification_verdict::TerminalOutcome> {
+async fn run(
+    document: &Document,
+    evidence: &Rc<RefCell<TerminalEvidence>>,
+) -> Result<(), qualification_verdict::TerminalOutcome> {
     display(
         document,
         "RUNNING · simultaneous slow consumer / paced synthetic media / bulk / small RPC",
@@ -335,21 +370,45 @@ async fn run(document: &Document) -> Result<(), qualification_verdict::TerminalO
     let pressure_done = done.clone();
     let pressure = async {
         let result = futures::join!(
-            consume(client.clone(), "slow", 64, 20, &connection),
-            consume(client.clone(), "paced", 80, 0, &connection),
-            consume(client.clone(), "bulk", 128, 0, &connection),
-            small_calls(client.clone(), 60)
+            async {
+                record_pressure_result(
+                    consume(client.clone(), "slow", 64, 20, &connection, evidence).await,
+                    evidence,
+                )
+            },
+            async {
+                record_pressure_result(
+                    consume(client.clone(), "paced", 80, 0, &connection, evidence).await,
+                    evidence,
+                )
+            },
+            async {
+                record_pressure_result(
+                    consume(client.clone(), "bulk", 128, 0, &connection, evidence).await,
+                    evidence,
+                )
+            },
+            async { record_pressure_result(small_calls(client.clone(), 60).await, evidence) }
         );
         pressure_done.set(true);
         result
     };
     let ((slow, paced, bulk, latencies), frames) = futures::join!(pressure, heartbeat(done));
     if slow.is_err() || paced.is_err() || bulk.is_err() || latencies.is_err() || frames.is_err() {
+        let verdict = qualification_verdict::evaluate(None, false, true);
+        evidence.borrow_mut().record_failure(
+            verdict,
+            format!(
+                "{}\nFAIL · unchanged simultaneous pressure workload\nSlow: {:?}; paced: {:?}; bulk: {:?}; unary: {:?}; animation: {:?}\nBuild: {}\n",
+                qualification_verdict::format_verdict(verdict),
+                slow.as_ref().err(), paced.as_ref().err(), bulk.as_ref().err(),
+                latencies.as_ref().err(), frames.as_ref().err(), crate::BUILD_ID,
+            ),
+        );
         connection.close();
         let pressure_snapshot = connection.snapshot().map_err(|error| error.to_string())?;
         TimeoutFuture::new(20).await;
         let closed_snapshot = connection.snapshot().map_err(|error| error.to_string())?;
-        let verdict = qualification_verdict::evaluate(Some(&pressure_snapshot), false, true);
         let report = format!(
             "{}\nFAIL · unchanged simultaneous pressure workload\nSlow: {:?}; paced: {:?}; bulk: {:?}; unary: {:?}; animation: {:?}\nBuild: {}\nIncoming controls admitted: {}; outgoing controls observed: {}\nIncoming rolling frame type/stream/relative-ns observations: {:?}\nRejected incoming control: {:?}\nPressure snapshot: {:?}\nPost-close snapshot: {:?}\nThe five original malicious probes and new 101-control probe did not execute after pressure failure. G02 and control-rate repair remain unqualified.\n",
             qualification_verdict::format_verdict(verdict),
@@ -366,6 +425,7 @@ async fn run(document: &Document) -> Result<(), qualification_verdict::TerminalO
             pressure_snapshot,
             closed_snapshot,
         );
+        evidence.borrow_mut().update_report(report.clone());
         display(document, &report);
         save_report("qualification", &report).await?;
         return Err(qualification_verdict::TerminalOutcome::retain_current_report(verdict));
@@ -380,7 +440,7 @@ async fn run(document: &Document) -> Result<(), qualification_verdict::TerminalO
         "no animation frame responsiveness observations",
     )?;
     let snapshot = connection.snapshot().map_err(|error| error.to_string())?;
-    stop_on_resource_breach(&connection, &snapshot)?;
+    stop_on_resource_breach(&connection, &snapshot, evidence)?;
     require(
         snapshot.receive_credit.data_bytes > 8 * 1024 * 1024
             && snapshot.receive_credit.update_bytes > 0
@@ -487,6 +547,7 @@ async fn run(document: &Document) -> Result<(), qualification_verdict::TerminalO
 }
 async fn run_callback_capacity(
     document: &Document,
+    evidence: &Rc<RefCell<TerminalEvidence>>,
 ) -> Result<(), qualification_verdict::TerminalOutcome> {
     display_callback_capacity(
         document,
@@ -497,7 +558,7 @@ async fn run_callback_capacity(
         .await
         .map_err(|error| error.to_string())?;
     let initial = connection.snapshot().map_err(|error| error.to_string())?;
-    stop_on_resource_breach(&connection, &initial)?;
+    stop_on_resource_breach(&connection, &initial, evidence)?;
     let mut slow_client =
         FixtureClient::new(channel.clone()).max_decoding_message_size(RPC_MESSAGE_BYTES);
     let mut unary_client = FixtureClient::new(channel).max_decoding_message_size(RPC_MESSAGE_BYTES);
@@ -526,7 +587,7 @@ async fn run_callback_capacity(
             )?;
             payload_bytes += message.payload.len();
             let progress = connection.snapshot().map_err(|error| error.to_string())?;
-            stop_on_resource_breach(&connection, &progress)?;
+            stop_on_resource_breach(&connection, &progress, evidence)?;
             display_callback_capacity(
                 document,
                 &format!(
@@ -585,7 +646,7 @@ async fn run_callback_capacity(
     let payload_bytes = slow_result?;
     unary_result?;
     let peak = connection.snapshot().map_err(|error| error.to_string())?;
-    stop_on_resource_breach(&connection, &peak)?;
+    stop_on_resource_breach(&connection, &peak, evidence)?;
     connection.close();
     TimeoutFuture::new(20).await;
     let closed = connection.snapshot().map_err(|error| error.to_string())?;
@@ -674,6 +735,7 @@ async fn observe_connection_credit(
     connection: &BrowserConnection,
     channel: df_rpc_bridge::BrowserChannel,
     report: &mut String,
+    evidence: &Rc<RefCell<TerminalEvidence>>,
 ) -> Result<(String, Verdict), qualification_verdict::TerminalOutcome> {
     let started = Instant::now();
     let baseline = credit_point(connection, started)?;
@@ -707,7 +769,7 @@ async fn observe_connection_credit(
     }
     for (index, point) in held.iter().enumerate() {
         report.push_str(&credit_line(&format!("Held sample {index}"), point));
-        stop_on_resource_breach(connection, &point.snapshot)?;
+        stop_on_resource_breach(connection, &point.snapshot, evidence)?;
         require(
             point.snapshot.envelope_within_limit()
                 && point.snapshot.callback_bytes.current <= 1024 * 1024
@@ -798,7 +860,7 @@ async fn observe_connection_credit(
     )?;
     let unary_ms = unary_result?;
     let resumed_point = credit_point(connection, started)?;
-    stop_on_resource_breach(connection, &resumed_point.snapshot)?;
+    stop_on_resource_breach(connection, &resumed_point.snapshot, evidence)?;
     report.push_str(&credit_line("Resumed", &resumed_point));
     require(
         resumed_point.snapshot.envelope_within_limit()
@@ -962,6 +1024,7 @@ async fn observe_browser_connection_drop() -> Result<String, String> {
 async fn run_connection_credit(
     document: &Document,
     generation: u64,
+    evidence: &Rc<RefCell<TerminalEvidence>>,
 ) -> Result<(), qualification_verdict::TerminalOutcome> {
     let running_report = "RUNNING · connection-credit observation admitted";
     save_credit_report(generation, 0, running_report).await?;
@@ -972,7 +1035,23 @@ async fn run_connection_credit(
     let closed_channel = channel.clone();
     let mut observations = String::new();
     let outcome =
-        observe_connection_credit(document, &connection, channel, &mut observations).await;
+        observe_connection_credit(document, &connection, channel, &mut observations, evidence)
+            .await;
+    if let Err(error) = &outcome {
+        let verdict = error.verdict();
+        if verdict.full_g02 == qualification_verdict::Outcome::Fail {
+            let measured_report = format!(
+                "{}\n{}\n{}Build: {}\n",
+                qualification_verdict::format_verdict(verdict),
+                error.detail(),
+                observations,
+                crate::BUILD_ID,
+            );
+            let mut evidence = evidence.borrow_mut();
+            evidence.record_failure(verdict, measured_report.clone());
+            evidence.update_report(measured_report);
+        }
+    }
     connection.close();
     TimeoutFuture::new(20).await;
     let closed = connection.snapshot().map_err(|error| error.to_string());
@@ -1015,6 +1094,7 @@ async fn run_connection_credit(
         qualification_verdict::format_verdict(verdict),
         crate::BUILD_ID,
     );
+    evidence.borrow_mut().update_report(report.clone());
     save_credit_report(generation, 1, &report).await?;
     require_stale_credit_report_rejected(generation, &report).await?;
     display_connection_credit(document, &report);
@@ -1044,8 +1124,9 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
         let button = callback_button.clone();
         let active = active.clone();
         wasm_bindgen_futures::spawn_local(async move {
+            let evidence = Rc::new(RefCell::new(TerminalEvidence::default()));
             let outcome = select(
-                run(&document).boxed_local(),
+                run(&document, &evidence).boxed_local(),
                 TimeoutFuture::new(qualification_verdict::OWNED_RUN_DEADLINE_MS).boxed_local(),
             )
             .await;
@@ -1061,7 +1142,7 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
             if let Err(error) = result
                 && let qualification_verdict::TerminalPresentation::Replace(report) =
                     qualification_verdict::present_terminal_outcome(
-                        &error,
+                        &evidence.borrow().resolve(error),
                         crate::BUILD_ID,
                         qualification_verdict::TerminalContext::Qualification,
                     )
@@ -1091,8 +1172,9 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
         let button = callback_button.clone();
         let active = capacity_active.clone();
         wasm_bindgen_futures::spawn_local(async move {
+            let evidence = Rc::new(RefCell::new(TerminalEvidence::default()));
             let outcome = select(
-                run_callback_capacity(&document).boxed_local(),
+                run_callback_capacity(&document, &evidence).boxed_local(),
                 TimeoutFuture::new(qualification_verdict::OWNED_RUN_DEADLINE_MS).boxed_local(),
             )
             .await;
@@ -1106,14 +1188,20 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
                 }
             };
             if let Err(error) = result {
+                let terminal = evidence.borrow().resolve(error);
                 match qualification_verdict::present_terminal_outcome(
-                    &error,
+                    &terminal,
                     crate::BUILD_ID,
                     qualification_verdict::TerminalContext::CallbackCapacity,
                 ) {
                     qualification_verdict::TerminalPresentation::Replace(report) => {
                         display_callback_capacity(&document, &report);
-                        let _ = save_report("callback-capacity", &report).await;
+                        if let Err(error) = save_report("callback-capacity", &report).await {
+                            display_callback_capacity(
+                                &document,
+                                &format!("{report}\nLater report publication failed: {error}\n"),
+                            );
+                        }
                     }
                     qualification_verdict::TerminalPresentation::KeepCurrent => {}
                 }
@@ -1149,8 +1237,9 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
         let button = callback_button.clone();
         let active = credit_active.clone();
         wasm_bindgen_futures::spawn_local(async move {
+            let evidence = Rc::new(RefCell::new(TerminalEvidence::default()));
             let outcome = select(
-                run_connection_credit(&document, generation).boxed_local(),
+                run_connection_credit(&document, generation, &evidence).boxed_local(),
                 TimeoutFuture::new(qualification_verdict::CREDIT_REPORT_DEADLINE_MS).boxed_local(),
             )
             .await;
@@ -1164,18 +1253,33 @@ pub(super) fn install(document: &Document, active: Rc<Cell<bool>>) -> Result<(),
                 }
             };
             if let Err(error) = result {
+                let terminal = evidence.borrow().resolve(error);
                 match qualification_verdict::present_terminal_outcome(
-                    &error,
+                    &terminal,
                     crate::BUILD_ID,
                     qualification_verdict::TerminalContext::ConnectionCredit,
                 ) {
                     qualification_verdict::TerminalPresentation::Replace(report) => {
                         display_connection_credit(&document, &report);
-                        let _ = select(
+                        match select(
                             save_credit_report(generation, 2, &report).boxed_local(),
                             TimeoutFuture::new(1000).boxed_local(),
                         )
-                        .await;
+                        .await
+                        {
+                            Either::Left((Ok(()), _)) => {}
+                            Either::Left((Err(error), _)) => display_connection_credit(
+                                &document,
+                                &format!("{report}\nLater report publication failed: {error}\n"),
+                            ),
+                            Either::Right(((), pending)) => {
+                                drop(pending);
+                                display_connection_credit(
+                                    &document,
+                                    &format!("{report}\nLater report publication timed out.\n"),
+                                );
+                            }
+                        }
                     }
                     qualification_verdict::TerminalPresentation::KeepCurrent => {}
                 }

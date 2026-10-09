@@ -42,6 +42,45 @@ pub(crate) struct TerminalOutcome {
     verdict: Verdict,
     detail: String,
     disposition: TerminalDisposition,
+    measured_report: Option<String>,
+}
+
+#[derive(Default)]
+pub(crate) struct TerminalEvidence {
+    first_failure: Option<(Verdict, String)>,
+}
+
+impl TerminalEvidence {
+    pub(crate) fn record_failure(&mut self, verdict: Verdict, report: impl Into<String>) {
+        if verdict.full_g02 == Outcome::Fail && self.first_failure.is_none() {
+            self.first_failure = Some((verdict, report.into()));
+        }
+    }
+
+    pub(crate) fn update_report(&mut self, report: impl Into<String>) {
+        if let Some((_, current_report)) = &mut self.first_failure {
+            let report = report.into();
+            if *current_report != report {
+                current_report.push_str("\nLater measured report:\n");
+                current_report.push_str(&report);
+            }
+        }
+    }
+
+    pub(crate) fn resolve(&self, outcome: TerminalOutcome) -> TerminalOutcome {
+        if outcome.disposition == TerminalDisposition::KeepCurrentReport {
+            return outcome;
+        }
+        match &self.first_failure {
+            Some((verdict, report)) => TerminalOutcome {
+                verdict: *verdict,
+                detail: outcome.detail,
+                disposition: TerminalDisposition::ReplaceCurrentReport,
+                measured_report: Some(report.clone()),
+            },
+            None => outcome,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -77,6 +116,7 @@ impl TerminalOutcome {
             verdict,
             detail: detail.into(),
             disposition: TerminalDisposition::ReplaceCurrentReport,
+            measured_report: None,
         }
     }
 
@@ -89,6 +129,7 @@ impl TerminalOutcome {
             verdict,
             detail: String::new(),
             disposition: TerminalDisposition::KeepCurrentReport,
+            measured_report: None,
         }
     }
 
@@ -128,12 +169,22 @@ pub(crate) fn present_terminal_outcome(
 ) -> TerminalPresentation {
     match outcome.disposition {
         TerminalDisposition::KeepCurrentReport => TerminalPresentation::KeepCurrent,
-        TerminalDisposition::ReplaceCurrentReport => TerminalPresentation::Replace(format!(
-            "{}\n{}\nBuild: {build}\n{}\n",
-            format_verdict(outcome.verdict),
-            outcome.detail,
-            context.description(),
-        )),
+        TerminalDisposition::ReplaceCurrentReport => {
+            if let Some(report) = &outcome.measured_report {
+                TerminalPresentation::Replace(format!(
+                    "{report}\nLater failure: {}\n{}\n",
+                    outcome.detail,
+                    context.description(),
+                ))
+            } else {
+                TerminalPresentation::Replace(format!(
+                    "{}\n{}\nBuild: {build}\n{}\n",
+                    format_verdict(outcome.verdict),
+                    outcome.detail,
+                    context.description(),
+                ))
+            }
+        }
     }
 }
 
