@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+df-auth = { path = "../df-auth" }
 df-model = { path = "../df-model" }
 df-types = { path = "../df-types" }
 
