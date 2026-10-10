@@ -182,7 +182,17 @@ fn validate_game(
             Ok(())
         }
         GameCommand::SubmitCharacterDraft { draft } => {
-            if draft.member != input.member || draft.phase == CreationPhase::Accepted {
+            if draft.member != input.member
+                || draft.phase == CreationPhase::Accepted
+                || checkpoint
+                    .state()
+                    .continuity
+                    .creation
+                    .iter()
+                    .any(|current| {
+                        current.entity == draft.entity && current.phase == CreationPhase::Accepted
+                    })
+            {
                 return Err(CommandError::InvalidDraft);
             }
             entity(draft.entity)?;

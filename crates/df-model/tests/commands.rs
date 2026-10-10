@@ -395,6 +395,55 @@ fn draft() -> GameInput {
 }
 
 #[test]
+fn incomplete_character_draft_remains_editable_and_accepted_character_cannot_be_resubmitted() {
+    let current = checkpoint(state()).unwrap();
+    let before = current.clone();
+    let mut incomplete = draft();
+    let GameInput::Game(input) = &mut incomplete else {
+        unreachable!()
+    };
+    let GameCommand::SubmitCharacterDraft { draft } = &mut input.command else {
+        unreachable!()
+    };
+    draft.ancestry = None;
+    draft.background = None;
+    draft.classes.clear();
+    draft.choices.clear();
+    draft.phase = CreationPhase::Selecting;
+
+    assert_eq!(admit(&incomplete, &current), Ok(()));
+    let mut edited = incomplete.clone();
+    let GameInput::Game(input) = &mut edited else {
+        unreachable!()
+    };
+    let GameCommand::SubmitCharacterDraft { draft } = &mut input.command else {
+        unreachable!()
+    };
+    draft.background = Some(content());
+    draft.classes.push(content());
+    draft.phase = CreationPhase::AwaitingValidation;
+    assert_eq!(admit(&edited, &current), Ok(()));
+    assert_eq!(current, before);
+
+    let mut accepted_state = state();
+    accepted_state.continuity.creation.push(CharacterDraft {
+        entity: entity(4),
+        member: member(3),
+        ancestry: None,
+        background: None,
+        classes: vec![],
+        choices: vec![],
+        phase: CreationPhase::Accepted,
+    });
+    let accepted = checkpoint(accepted_state).unwrap();
+    let accepted_before = accepted.clone();
+    let edited_before = edited.clone();
+    assert_eq!(admit(&edited, &accepted), Err(CommandError::InvalidDraft));
+    assert_eq!(edited, edited_before);
+    assert_eq!(accepted, accepted_before);
+}
+
+#[test]
 fn accepts_each_closed_command_family_without_producing_state_or_draws() {
     for kind in 0..4 {
         let current = waiting(kind);
