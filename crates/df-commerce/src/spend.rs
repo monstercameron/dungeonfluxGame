@@ -1,4 +1,6 @@
-use df_types::{Currency, Money, MoneyError, OperationId};
+use df_types::{Currency, LiabilityRate, Money, MoneyError, OperationId, Usage};
+
+use crate::ObservationAuthority;
 
 /// Canonical counter order for caller-bound current periods in one currency.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -162,6 +164,175 @@ pub fn propose_spend(
         consent_revision: consent.revision,
         consented_maximum: consent.maximum,
         maximum_supplier_liability: maximum,
+        next,
+    })
+}
+
+/// Supplied durable status of the exact reservation. The native owner binds the
+/// operation to tenant, supplier, quote and accepted intent before using it here.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SpendReservationStatus {
+    Dispatching,
+    UnknownLiability,
+    SettledKnown,
+    UnsentCanceled,
+    Released,
+}
+
+/// Caller-bound reservation, not a second ledger or proof of a provider send.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SpendReservation {
+    pub operation: OperationId,
+    pub maximum_supplier_liability: Money,
+    pub status: SpendReservationStatus,
+}
+
+/// Unknown usage retains the full reservation until same-key reconciliation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SpendSettlementOutcome {
+    Unknown,
+    Known {
+        actual_usage: Usage,
+        billed_waste: Money,
+        liability_rate: LiabilityRate,
+    },
+}
+
+/// The native owner verifies invoice/usage, rate and operation provenance before
+/// supplying this observation. This assertion is not a verification mechanism.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SpendSettlementObservation {
+    pub authority: ObservationAuthority,
+    pub operation: OperationId,
+    pub expected_revision: u64,
+    pub outcome: SpendSettlementOutcome,
+}
+
+/// Refusal leaves all caller-owned state and the full reservation unchanged.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SpendSettlementRefusal {
+    Unverified,
+    NeedsAuthoritativeRefresh,
+    StaleRevision,
+    WrongOperation,
+    AlreadySettled,
+    NotDispatched,
+    UnknownLiability,
+    Money(MoneyError),
+    ReservationExceedsExposure(SpendScope),
+    RevisionOverflow,
+}
+
+impl From<MoneyError> for SpendSettlementRefusal {
+    fn from(error: MoneyError) -> Self {
+        Self::Money(error)
+    }
+}
+
+/// Candidate only. A native transaction rechecks operation/revision uniqueness,
+/// appends exact ledger and incident entries, and marks the reservation final once.
+/// Customer exposure never rises above its consented maximum on supplier overrun.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SpendSettlementProposal {
+    pub operation: OperationId,
+    pub before_revision: u64,
+    pub maximum_supplier_liability: Money,
+    pub actual_supplier_liability: Money,
+    pub known_unused_release: Money,
+    pub platform_loss: Money,
+    pub supplier_admissions_blocked: bool,
+    pub next: SpendSnapshot,
+}
+
+/// Settles verified actual usage plus billed waste against one held maximum.
+/// Known unused exposure releases from all six counters. Overrun is an explicit
+/// platform loss: platform and supplier counters record it, customer counters do
+/// not grow, and the native owner must block affected supplier admissions.
+pub fn propose_spend_settlement(
+    snapshot: &SpendSnapshot,
+    reservation: SpendReservation,
+    observation: SpendSettlementObservation,
+) -> Result<SpendSettlementProposal, SpendSettlementRefusal> {
+    match observation.authority {
+        ObservationAuthority::Unverified => return Err(SpendSettlementRefusal::Unverified),
+        ObservationAuthority::WebhookOnly => {
+            return Err(SpendSettlementRefusal::NeedsAuthoritativeRefresh);
+        }
+        ObservationAuthority::VerifiedLatest => {}
+    }
+    if observation.expected_revision != snapshot.revision {
+        return Err(SpendSettlementRefusal::StaleRevision);
+    }
+    if observation.operation != reservation.operation {
+        return Err(SpendSettlementRefusal::WrongOperation);
+    }
+    match reservation.status {
+        SpendReservationStatus::SettledKnown => {
+            return Err(SpendSettlementRefusal::AlreadySettled);
+        }
+        SpendReservationStatus::UnsentCanceled | SpendReservationStatus::Released => {
+            return Err(SpendSettlementRefusal::NotDispatched);
+        }
+        SpendReservationStatus::Dispatching | SpendReservationStatus::UnknownLiability => {}
+    }
+    let SpendSettlementOutcome::Known {
+        actual_usage,
+        billed_waste,
+        liability_rate,
+    } = observation.outcome
+    else {
+        return Err(SpendSettlementRefusal::UnknownLiability);
+    };
+    let maximum = reservation.maximum_supplier_liability;
+    if maximum.currency() != snapshot.currency
+        || billed_waste.currency() != snapshot.currency
+        || liability_rate.currency() != snapshot.currency
+        || snapshot.counters.iter().any(|counter| {
+            counter.used.currency() != snapshot.currency
+                || counter.limit.currency() != snapshot.currency
+        })
+    {
+        return Err(MoneyError::CurrencyMismatch.into());
+    }
+    let actual = liability_rate
+        .liability(actual_usage)?
+        .checked_add(billed_waste)?;
+    let mut next = *snapshot;
+    next.revision = snapshot
+        .revision
+        .checked_add(1)
+        .ok_or(SpendSettlementRefusal::RevisionOverflow)?;
+    let unused = if actual.micros() <= maximum.micros() {
+        maximum.checked_sub(actual)?
+    } else {
+        Money::new(snapshot.currency, 0)
+    };
+    let platform_loss = if actual.micros() > maximum.micros() {
+        actual.checked_sub(maximum)?
+    } else {
+        Money::new(snapshot.currency, 0)
+    };
+    for (index, (scope, counter)) in SPEND_SCOPES
+        .into_iter()
+        .zip(next.counters.iter_mut())
+        .enumerate()
+    {
+        if counter.used.micros() < maximum.micros() {
+            return Err(SpendSettlementRefusal::ReservationExceedsExposure(scope));
+        }
+        counter.used = counter.used.checked_sub(unused)?;
+        if index < 3 {
+            counter.used = counter.used.checked_add(platform_loss)?;
+        }
+    }
+    Ok(SpendSettlementProposal {
+        operation: reservation.operation,
+        before_revision: snapshot.revision,
+        maximum_supplier_liability: maximum,
+        actual_supplier_liability: actual,
+        known_unused_release: unused,
+        platform_loss,
+        supplier_admissions_blocked: platform_loss.micros() > 0,
         next,
     })
 }

@@ -9,6 +9,7 @@
 
 mod allowance;
 mod credit;
+mod ports;
 mod spend;
 mod subscription;
 
@@ -25,9 +26,18 @@ pub use credit::{
     propose_credit_adjustment,
 };
 
+pub use ports::{
+    CommerceCommit, CommerceCommitOutcome, CommerceMutation, CommerceReadOutcome,
+    CommerceRepository, CommerceScope, GatewayMutation, GatewayObservation, GatewayOperation,
+    GatewayOperationKind, GatewayOperationOutcome, GatewayPaymentObservation,
+    GatewayReconciliation, PaymentGateway,
+};
+
 pub use spend::{
     SpendConsent, SpendCounter, SpendOperationObservation, SpendOperationStatus, SpendProposal,
-    SpendRefusal, SpendRequest, SpendScope, SpendSnapshot, propose_spend,
+    SpendRefusal, SpendRequest, SpendReservation, SpendReservationStatus, SpendScope,
+    SpendSettlementObservation, SpendSettlementOutcome, SpendSettlementProposal,
+    SpendSettlementRefusal, SpendSnapshot, propose_spend, propose_spend_settlement,
 };
 pub use subscription::{
     Access, ObservationAuthority, PaidInvoice, PaymentOutcome, SubscriptionObservation,
