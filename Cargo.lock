@@ -575,6 +575,7 @@ dependencies = [
 name = "df-session"
 version = "0.1.0"
 dependencies = [
+ "df-auth",
  "df-content",
  "df-engine",
  "df-model",
