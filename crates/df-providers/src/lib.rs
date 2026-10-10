@@ -4,6 +4,7 @@
 //! account access, current capacity, rights, or permission to dispatch provider work.
 
 mod http_contract;
+mod output_fetch;
 mod reconciliation;
 mod registry;
 
@@ -22,4 +23,10 @@ pub use registry::{
     BillingUnit, CandidateRoute, CandidateRouteId, Capability, DispatchBlock, EvidenceReference,
     Gate, GateStatus, LicenseEvidence, PublishedRate, RoundingRule, UnsupportedCapability,
     assess_dispatch_gates, candidate_for, candidate_routes,
+};
+
+pub use output_fetch::{
+    DecodedImageFacts, DecoderPolicy, DecoderRequirements, DnsInspection, FetchResponseFacts,
+    OutputFetchPlan, OutputFetchRefusal, decode_output, fetch_output, inspect_decoded_image,
+    inspect_dns_answers, inspect_fetch_response, prepare_output_fetch_plan,
 };
