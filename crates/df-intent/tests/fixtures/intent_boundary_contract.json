@@ -1,0 +1,209 @@
+{
+  "acceptance_status": "Authored contract and executable fixture. Producer, independent runtime and integration outcomes belong to retained attempt evidence; this ledger does not self-approve.",
+  "actual_producer_consumer_hooks": [
+    {
+      "consumer": "df-tools gameplay/dialogue.rs raw_dialogue + exact final-confirmation ticket selection; native submit path owns receipts",
+      "order": "classification never silently submits; partial confirmation refuses; selected current exact offer/op is checked before native submit; retry lookup precedes fresh offer validation",
+      "ownership": "Native owns authenticated member, input text, ticket and cancellation; pure borrowed text does not cross retained logs.",
+      "producer": "df_intent::dialogue::{classify_dialogue,confirm_final_input}"
+    },
+    {
+      "consumer": "df-engine semantic_candidate::stage_semantic_response and plan_staging::stage_plan_head",
+      "order": "current basis/pins + independent actor/op + current source/response before registry prepare; exact draw slice unchanged; detached checkpoint only",
+      "ownership": "Engine/native owns call inputs and staged checkpoint; Session owns durable commit/publication; rule handler owns mechanics.",
+      "producer": "df_intent::candidate::{validate_semantic_candidate,prepare_semantic_candidate}"
+    },
+    {
+      "consumer": "df-engine plan_staging::stage_plan_head",
+      "order": "only first current response staged; ordered original tail returned for future current revalidation; retained op lookup before continuation",
+      "ownership": "PlanAdmission borrows caller inputs/current; drop releases no committed state and creates no hidden queue/job/stream.",
+      "producer": "df_intent::plan::validate_plan_steps"
+    },
+    {
+      "consumer": "df-tools gameplay/journey/affordance.rs offered + validate",
+      "order": "actual world lookup produces current exact set; one canonical target selected; ambiguity asks IDs, unsupported/ruling refuse before action/draw",
+      "ownership": "Caller owns immutable set; clarification output bounded owned IDs only; no secret/raw names or inferred mechanics.",
+      "producer": "df_intent::targets::resolve_target"
+    }
+  ],
+  "authority": "Pure meaning/advisory action proposal only; no language or private fixture grants mechanics, permission, dice, clock, transport or durability authority. Preserve Original as contract refinement without new production implementation.",
+  "canonical_current_values": {
+    "IntentDisposition": "df_model::intent::IntentDisposition eight existing variants",
+    "RawInputRef": "df_model::intent::RawInputRef; canonical input OperationId, MemberId, Basis, full CheckpointPins, InputFinality; no raw utterance retained",
+    "candidate": "Borrowed canonical GameInput/CommandInput plus independently captured CandidateOwner and current ReferenceInventory",
+    "plan": "df_intent::plan::PlanAdmission is borrowed current head/unapproved tail only; never label it ActionPlan or OperationId a PlanStepId",
+    "target": "df_model::affordance::{AffordanceSet,TargetSelection,TargetResolution}, current source-bound IDs"
+  },
+  "criterion_mapping": [
+    {
+      "Original_index": 0,
+      "proof": "Focused evaluator case + current child/API pins + ledger; no duplicate schema/rules.",
+      "scope": "Freeze every named current/planned shape, ownership, request/result/error/time/order/replay and exact current hooks in the new JSON ledger; one actual public-API composed fixture validates admitted current boundaries, bounds/refusals and no mutation. Persistent types/facade gaps explicitly unresolved."
+    },
+    {
+      "Original_index": 1,
+      "proof": "Four producer checks; one focused evaluator case; returned bounded Vec/checkpoint and borrowed slices described by ledger.",
+      "scope": "No Cargo/lib change/new edge; native and WASM normal Cargo graph query plus scoped no-run compile, exact typed failures and borrowed/owned cleanup fixture. All current public APIs synchronous; no declared stream/resource handle/executor/provider/deadline ownership is fabricated."
+    },
+    {
+      "Original_index": 2,
+      "proof": "Composed current public APIs + unchanged actual native/Engine hook pins; dependent browser/Postgres/service recovery remain explicitly unperformed, not internal crate completion evidence.",
+      "scope": "Interaction normal/failure/rights/privacy/recovery means no private speech becomes action, final/current authenticated owner checks, source-safe target ambiguity, partial progress preserved, typed bounds/rejections, prior operation lookup; mechanics/durability remain separate actual owners."
+    }
+  ],
+  "current_request_result_errors": [
+    {
+      "errors": [
+        "Capacity",
+        "EmptyInput",
+        "MemberMismatch",
+        "Snapshot"
+      ],
+      "operation": "classify_dialogue",
+      "ownership": "caller owns text/reference/checkpoint; no stream, task, clock, provider or raw text retained",
+      "request": "borrowed text, DiscourseContext, RawInputRef, Checkpoint, authenticated MemberId, DialogueLimits",
+      "result": "Result<IntentDisposition,DialogueError>; text never Action"
+    },
+    {
+      "errors": [
+        "MemberMismatch",
+        "Snapshot",
+        "PartialInput"
+      ],
+      "operation": "confirm_final_input",
+      "ownership": "native additionally authenticates current capabilities and exact retained input/offer ticket; no candidate or receipt produced",
+      "request": "RawInputRef, Checkpoint, authenticated MemberId",
+      "result": "Result<IntentDisposition,DialogueError>; advisory Action after Final only"
+    },
+    {
+      "errors": [
+        "UnsupportedVariant",
+        "Snapshot",
+        "MemberMismatch",
+        "OperationMismatch",
+        "Command",
+        "Rules"
+      ],
+      "operation": "validate_semantic_candidate / prepare_semantic_candidate",
+      "ownership": "only SelectChoice/SelectReaction/SubmitRoll supported; no command codec/intent DTO/action schema added",
+      "request": "canonical GameInput + independent CandidateOwner + immutable current inventory/command bounds; preparation additionally registered current source handler and native draw slice",
+      "result": "borrowed CommandInput / owned detached staged Checkpoint"
+    },
+    {
+      "errors": [
+        "EmptyPlan",
+        "Capacity",
+        "UnsupportedStep",
+        "MemberMismatch",
+        "ScopeMismatch",
+        "DuplicateOperation",
+        "LookupRequired",
+        "Candidate"
+      ],
+      "operation": "validate_plan_steps",
+      "ownership": "no stable PlanStepId, persisted ActionPlan, async queue, timer or cancellation receipt; caller drops proposal, prior accepted progress untouched",
+      "request": "borrowed ordered GameInputs + current Checkpoint + native owner + inventory + step/retained byte/comparison/command bounds",
+      "result": "borrowed PlanAdmission {current head, original unapproved tail, current basis/pins}"
+    },
+    {
+      "errors": [
+        "Snapshot",
+        "Capacity",
+        "AllocationCapacity",
+        "InvalidAffordance",
+        "AmbiguousSource",
+        "ConflictingTargetPolicy"
+      ],
+      "operation": "resolve_target",
+      "ownership": "native/world owner supplies exact current records; no name inference, general geometry/mechanics or secret serialization",
+      "request": "current source-bound AffordanceSet + canonical TargetSelection + current inventory + record/candidate/output byte limits",
+      "result": "Selected borrowed Affordance / bounded owned NeedsClarification IDs / UnsupportedTarget / NeedsRuling"
+    }
+  ],
+  "existing_Done_prerequisites": [
+    {
+      "id": "B-C-df-intent-D01",
+      "objective": "Define IntentCandidate and compound step schemas; expected: bounded typed actions preserve actor and source basis.",
+      "preserved_current_brief_sha256": "5f4f7b7898807a86ec936fe29dd8148467859db112d310b50f392ef19458c60c",
+      "status": "done",
+      "title": "Define IntentCandidate and compound step schemas"
+    },
+    {
+      "id": "B-C-df-intent-D02",
+      "objective": "Define questions jokes meta speech and uncertain outcomes; expected: no unintended action from casual dialogue.",
+      "preserved_current_brief_sha256": "1e77d2b136cf6af07a93430b7c5b43d5e242f852ff24cff1b53053d9bb9dfb6c",
+      "status": "done",
+      "title": "Define questions jokes meta speech and uncertain outcomes"
+    },
+    {
+      "id": "B-C-df-intent-D03",
+      "objective": "Define affordance lookup and target ambiguity contract; expected: unsupported targets are explicit.",
+      "preserved_current_brief_sha256": "98750e83f3880ab10670303755f30ccbeed879e07adeb38fb3d5893a8b290fd3",
+      "status": "done",
+      "title": "Define affordance lookup and target ambiguity contract"
+    },
+    {
+      "id": "B-C-df-intent-D04",
+      "objective": "Define partial progress and step cancellation; expected: accepted prior actions cannot be rolled back casually.",
+      "preserved_current_brief_sha256": "ba18da916d402cff325a7925ebf2d44fe61ad6594a09ef2a999af0c9fd349116",
+      "status": "done",
+      "title": "Define partial progress and step cancellation"
+    }
+  ],
+  "focused_fixture": {
+    "commit": "Prepared checkpoint and already-accepted fixture inputs are not durable Session execution.",
+    "declared_bounds": {
+      "command_bytes": 8192,
+      "command_records": 32,
+      "handler_checkpoint_bytes": 1000000,
+      "handler_comparisons": 1000000,
+      "handler_dependencies": 8,
+      "plan_bytes": 8192,
+      "plan_comparisons": 1024,
+      "plan_steps": 3,
+      "target_candidates": 16,
+      "target_output_bytes": 16384,
+      "target_records": 128,
+      "text_bytes": 64
+    },
+    "mechanics": "Synthetic source-clause registration is fixture-only; no D&D mechanics or publication qualification inferred.",
+    "name": "intent_boundary_preserves_classification_provenance_and_uncommitted_tail",
+    "retained_work_lookup": "Canonical DurableIntent for tail operation32, generation17, Pending/SentUnknown/Completed/Failed/Cancelled, all typed LookupRequired before preparation; original steps and current accepted state unchanged.",
+    "target_stale_provenance": "AffordanceSet older same-epoch basis -> Snapshot(StaleBasis); changed full source handler digest -> Snapshot(RulesMismatch), against unchanged current target checkpoint; restored current provenance retains prior selection/ambiguity/source-refusal cases.",
+    "uses": [
+      "Existing support/candidate_fixture.rs canonical model constructors",
+      "Existing private src/partial_progress.rs canonical already-accepted checkpoint fixture",
+      "Existing D01 registered handler fixture pattern; records only native supplied ActualDraw"
+    ]
+  },
+  "nonclaims": [
+    "No new persisted type/public DTO/schema/facade/graph edge or production feature implementation.",
+    "No universal intent classifier, automatic action authorizer, D&D mechanics, semantic provider, real ASR/browser/permission service test.",
+    "No live Postgres commit/cancel receipt/job retry/unknown-commit qualification, no integrated player-facing feature approval.",
+    "No previously retained metadata FAIL is a Source attempt or a skipped check; metadata receipts remain intact."
+  ],
+  "persistent_production_gaps": [
+    {
+      "current": "No IntentProposal, IntentBasis, ActionPlan or PlanStep occurrence in current df-model/src Rust files; D01 JSON explicitly leaves persistent plan owner/types/executor as future production gate.",
+      "name": "Persistent proposal/basis/plan/step signatures",
+      "owner": "df-model canonical persistent shapes; df-types stable identities; df-content versioned policy; G03 freeze",
+      "required": "Owner-supplied exact fields/IDs/serialization/compatibility/versioned continuation and cancel/partial-outcome policy, then concrete session/Engine consumer admission. No alias from GameInput/PlanAdmission/OperationId."
+    },
+    {
+      "current": "Current public functions are classify_dialogue/confirm_final_input, validate_semantic_candidate/prepare_semantic_candidate, validate_plan_steps and resolve_target; no public IntentEngine facade or validated-semantic text output producer.",
+      "name": "IntentEngine classify/validate planned facade",
+      "owner": "df-intent after canonical G03 inputs; native composition supplies independently validated semantic candidate",
+      "required": "Do not invent InputEnvelope/IntentBasis facade or LLM authority. Ledger freezes actual function signatures and names planned facade unresolved."
+    },
+    {
+      "current": "Current Engine stages supported semantic response/head; existing partial-progress tests use already-accepted canonical checkpoints, not live Postgres commits or persisted ActionPlan.",
+      "name": "General compound execution and durable continuation",
+      "owner": "df-session durable fence/receipt and df-engine registered director composition",
+      "required": "Canonical per-step continuation, operation lookup, resource/time revalidation, durable acceptance/recovery and caller connection remain production qualification, not proved by this private fixture."
+    }
+  ],
+  "scope": "Whole Original design refinement through current canonical pure APIs, not implementation of the planned facade/persistent model.",
+  "source_input_revision": "bb8100ab9a1648f6768c24867fd5298324381ae5",
+  "task_id": "C-df-intent-BOUNDARY",
+  "time_order_replay": "No hidden wall clock/randomness/I/O. Native authenticates and binds current input/source/capability; exact current owner is distinct from older same-epoch client observations. Plan is ordered, head only; tail revalidates current state. Retained operation demands native receipt lookup before resumed work; ambiguous durable outcome stays Session-owned lookup, never pure reroll/reissue."
+}
