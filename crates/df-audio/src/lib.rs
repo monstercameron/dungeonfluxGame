@@ -8,11 +8,18 @@
 //! resource lifetime facts; they never attest that a speaker was audible.
 
 #[cfg(not(target_arch = "wasm32"))]
+mod capture;
+#[cfg(not(target_arch = "wasm32"))]
 mod native;
 mod pcm;
 mod presentation;
 mod queue;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub use capture::{
+    CaptureAcquisition, CaptureChunk, CaptureError, CaptureLimits, CaptureRecording,
+    CaptureSession, CaptureSnapshot, CaptureState, ChunkRefusal,
+};
 #[cfg(not(target_arch = "wasm32"))]
 pub use native::{AudioQueue, PcmView};
 pub use presentation::{
