@@ -2,7 +2,7 @@ use crate::{
     ArgumentKind, ArgumentValue, Catalog, FormatError, FormattedMessage, Lookup, MessageError,
     MessagePart, TextKey,
 };
-use df_types::LocaleTag;
+use df_types::{LocaleTag, RevisionLabel, RevisionLabelError};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// One borrowed translation to admit against a source key's declared slots.
@@ -39,6 +39,12 @@ pub struct VersionedFormattedMessage<'a, V> {
 /// Atomic loading refusals identifying inventory or declarations, never supplied text.
 #[derive(Debug, Eq, PartialEq)]
 pub enum CatalogLoadError {
+    InvalidRevision(RevisionLabelError),
+    RevisionInventoryMismatch,
+    MixedRevision {
+        locale: LocaleTag,
+        key: TextKey,
+    },
     EmptyManifest,
     DuplicateLocale {
         locale: LocaleTag,
@@ -66,6 +72,53 @@ pub enum CatalogLoadError {
         key: TextKey,
         error: MessageError,
     },
+}
+
+impl VersionedCatalog<RevisionLabel> {
+    /// Loads one source-labelled immutable catalog using the canonical revision parser.
+    ///
+    /// `entry_revisions` must have exactly one source revision per entry, in the same
+    /// order. Every revision must match the source set before completeness or message
+    /// admission can publish it. Caller-admitted source identity/rights remain caller-owned;
+    /// revision spelling and equality do not authenticate an artifact or its issuer.
+    /// Work and storage remain bounded by the supplied inventory, as for `load`.
+    pub fn load_revision(
+        revision: Option<&str>,
+        locales: &[LocaleTag],
+        declarations: &BTreeMap<TextKey, BTreeMap<String, ArgumentKind>>,
+        entries: &[CatalogEntry<'_>],
+        entry_revisions: &[RevisionLabel],
+    ) -> Result<Self, CatalogLoadError> {
+        let revision = RevisionLabel::new(revision).map_err(CatalogLoadError::InvalidRevision)?;
+        if entries.len() != entry_revisions.len() {
+            return Err(CatalogLoadError::RevisionInventoryMismatch);
+        }
+        for (entry, entry_revision) in entries.iter().zip(entry_revisions) {
+            if entry_revision != &revision {
+                return Err(CatalogLoadError::MixedRevision {
+                    locale: entry.locale.clone(),
+                    key: entry.key.clone(),
+                });
+            }
+        }
+        Self::load(revision, locales, declarations, entries)
+    }
+
+    /// Replaces revision, labels and declarations together only after full admission.
+    /// Missing/invalid/mixed source revisions and all catalog refusals preserve the old set.
+    pub fn reload_revision(
+        &mut self,
+        revision: Option<&str>,
+        locales: &[LocaleTag],
+        declarations: &BTreeMap<TextKey, BTreeMap<String, ArgumentKind>>,
+        entries: &[CatalogEntry<'_>],
+        entry_revisions: &[RevisionLabel],
+    ) -> Result<(), CatalogLoadError> {
+        let replacement =
+            Self::load_revision(revision, locales, declarations, entries, entry_revisions)?;
+        *self = replacement;
+        Ok(())
+    }
 }
 
 impl<V> VersionedCatalog<V> {

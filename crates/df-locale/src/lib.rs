@@ -2,6 +2,7 @@
 //!
 //! Callers supply each output's ordered preferences, supported locales, and default.
 //! Parsing belongs to `df_types::LocaleTag`; formatting preserves plain text and exact values.
+//! Source revision admission uses `VersionedCatalog<df_types::RevisionLabel>::load_revision`.
 
 mod catalog;
 mod format;
