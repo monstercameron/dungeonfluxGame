@@ -1,5 +1,6 @@
 use df_audio::{
-    CaptureAcquisition, CaptureChunk, CaptureError, CaptureLimits, CaptureSession, CaptureState,
+    CaptureAcquisition, CaptureChunk, CaptureError, CaptureGestureObservation, CaptureLimits,
+    CaptureSession, CaptureState,
 };
 use df_model::checkpoint::{CaptureLease, RecordId};
 use df_types::{ClientBindingId, MemberId, RevisionLabel};
@@ -36,6 +37,99 @@ fn session() -> CaptureSession {
     .expect("valid capture lease")
 }
 
+fn select_lease_codec(capture: &mut CaptureSession, lease: &CaptureLease) {
+    capture
+        .select_codec(std::slice::from_ref(&lease.format))
+        .expect("the adapter reported the lease format");
+}
+
+#[test]
+fn capture_codec_and_capability_selection_report_explicit_outcomes() {
+    let mut capture = session();
+    let lease = lease();
+    let observed = CaptureGestureObservation::SynchronousApiInvocationObserved;
+    let unsupported_format =
+        RevisionLabel::new(Some("pcm_f32le_48k_mono")).expect("valid test format");
+
+    assert_eq!(
+        capture.start(
+            &lease,
+            lease.binding,
+            lease.generation,
+            CaptureGestureObservation::Missing,
+            CaptureAcquisition::Opened
+        ),
+        Err(CaptureError::UserGestureRequired)
+    );
+    for (acquisition, expected) in [
+        (CaptureAcquisition::Pending, CaptureError::Pending),
+        (
+            CaptureAcquisition::PermissionDenied,
+            CaptureError::PermissionDenied,
+        ),
+        (CaptureAcquisition::Unsupported, CaptureError::Unsupported),
+        (
+            CaptureAcquisition::OperationFailed,
+            CaptureError::OperationFailed,
+        ),
+    ] {
+        assert_eq!(
+            capture.start(
+                &lease,
+                lease.binding,
+                lease.generation,
+                observed,
+                acquisition
+            ),
+            Err(expected)
+        );
+    }
+    assert_eq!(
+        capture.start(
+            &lease,
+            lease.binding,
+            lease.generation,
+            observed,
+            CaptureAcquisition::Opened
+        ),
+        Err(CaptureError::UnsupportedFormat)
+    );
+    capture
+        .select_codec(&[unsupported_format.clone(), lease.format.clone()])
+        .expect("the exact lease codec is selected");
+    assert_eq!(
+        capture.select_codec(&[unsupported_format]),
+        Err(CaptureError::UnsupportedFormat)
+    );
+    assert_eq!(
+        capture.start(
+            &lease,
+            lease.binding,
+            lease.generation,
+            observed,
+            CaptureAcquisition::Opened
+        ),
+        Err(CaptureError::UnsupportedFormat)
+    );
+    assert_eq!(
+        capture.select_codec(&[]),
+        Err(CaptureError::UnsupportedFormat)
+    );
+    capture
+        .select_codec(std::slice::from_ref(&lease.format))
+        .expect("the adapter reported the exact lease format");
+    capture
+        .start(
+            &lease,
+            lease.binding,
+            lease.generation,
+            observed,
+            CaptureAcquisition::Opened,
+        )
+        .expect("matching codec and adapter open are both required");
+    assert_eq!(capture.snapshot().state, CaptureState::Capturing);
+}
+
 #[test]
 fn capture_start_requires_the_exact_current_lease_and_gesture() {
     let mut capture = session();
@@ -47,13 +141,19 @@ fn capture_start_requires_the_exact_current_lease_and_gesture() {
             &stale_lease,
             lease.binding,
             stale_lease.generation,
-            true,
+            CaptureGestureObservation::SynchronousApiInvocationObserved,
             CaptureAcquisition::Opened
         ),
         Err(CaptureError::StaleLease)
     );
     assert_eq!(
-        capture.start(&lease, lease.binding, 8, true, CaptureAcquisition::Opened),
+        capture.start(
+            &lease,
+            lease.binding,
+            8,
+            CaptureGestureObservation::SynchronousApiInvocationObserved,
+            CaptureAcquisition::Opened
+        ),
         Err(CaptureError::StaleLease)
     );
     assert_eq!(
@@ -61,7 +161,7 @@ fn capture_start_requires_the_exact_current_lease_and_gesture() {
             &lease,
             lease.binding,
             lease.generation,
-            false,
+            CaptureGestureObservation::Missing,
             CaptureAcquisition::Opened
         ),
         Err(CaptureError::UserGestureRequired)
@@ -71,7 +171,7 @@ fn capture_start_requires_the_exact_current_lease_and_gesture() {
             &lease,
             lease.binding,
             lease.generation,
-            true,
+            CaptureGestureObservation::SynchronousApiInvocationObserved,
             CaptureAcquisition::Unsupported
         ),
         Err(CaptureError::Unsupported)
@@ -81,7 +181,7 @@ fn capture_start_requires_the_exact_current_lease_and_gesture() {
             &lease,
             lease.binding,
             lease.generation,
-            true,
+            CaptureGestureObservation::SynchronousApiInvocationObserved,
             CaptureAcquisition::Pending
         ),
         Err(CaptureError::Pending)
@@ -91,7 +191,7 @@ fn capture_start_requires_the_exact_current_lease_and_gesture() {
             &lease,
             lease.binding,
             lease.generation,
-            true,
+            CaptureGestureObservation::SynchronousApiInvocationObserved,
             CaptureAcquisition::PermissionDenied
         ),
         Err(CaptureError::PermissionDenied)
@@ -103,12 +203,13 @@ fn capture_start_requires_the_exact_current_lease_and_gesture() {
 fn capture_chunks_preserve_sequence_offset_format_and_bounded_bytes() {
     let mut capture = session();
     let lease = lease();
+    select_lease_codec(&mut capture, &lease);
     capture
         .start(
             &lease,
             lease.binding,
             lease.generation,
-            true,
+            CaptureGestureObservation::SynchronousApiInvocationObserved,
             CaptureAcquisition::Opened,
         )
         .expect("adapter reported an opened stream");
@@ -160,12 +261,13 @@ fn capture_chunks_preserve_sequence_offset_format_and_bounded_bytes() {
 fn cancellation_disposal_and_capacity_keep_ownership_explicit() {
     let mut capture = session();
     let lease = lease();
+    select_lease_codec(&mut capture, &lease);
     capture
         .start(
             &lease,
             lease.binding,
             lease.generation,
-            true,
+            CaptureGestureObservation::SynchronousApiInvocationObserved,
             CaptureAcquisition::Opened,
         )
         .expect("adapter reported an opened stream");
@@ -208,7 +310,7 @@ fn cancellation_disposal_and_capacity_keep_ownership_explicit() {
             &lease,
             lease.binding,
             lease.generation,
-            true,
+            CaptureGestureObservation::SynchronousApiInvocationObserved,
             CaptureAcquisition::Opened
         ),
         Err(CaptureError::InvalidState)
@@ -219,12 +321,13 @@ fn cancellation_disposal_and_capacity_keep_ownership_explicit() {
 fn capture_bounds_retained_vec_capacity_not_only_initialized_bytes() {
     let mut capture = session();
     let lease = lease();
+    select_lease_codec(&mut capture, &lease);
     capture
         .start(
             &lease,
             lease.binding,
             lease.generation,
-            true,
+            CaptureGestureObservation::SynchronousApiInvocationObserved,
             CaptureAcquisition::Opened,
         )
         .expect("adapter reported an opened stream");
