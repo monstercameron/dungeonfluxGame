@@ -511,6 +511,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-providers"
+version = "0.1.0"
+
+[[package]]
 name = "df-render"
 version = "0.1.0"
 dependencies = [
