@@ -214,3 +214,49 @@ fn cancellation_disposal_and_capacity_keep_ownership_explicit() {
         Err(CaptureError::InvalidState)
     );
 }
+
+#[test]
+fn capture_bounds_retained_vec_capacity_not_only_initialized_bytes() {
+    let mut capture = session();
+    let lease = lease();
+    capture
+        .start(
+            &lease,
+            lease.binding,
+            lease.generation,
+            true,
+            CaptureAcquisition::Opened,
+        )
+        .expect("adapter reported an opened stream");
+
+    let mut bounded = Vec::with_capacity(4);
+    bounded.push(1);
+    capture
+        .chunk(
+            &lease,
+            lease.binding,
+            lease.generation,
+            CaptureChunk::new(0, 0, bounded),
+        )
+        .expect("allocation at the per-chunk limit is retained");
+    assert_eq!(capture.snapshot().retained_bytes, 4);
+
+    let mut oversized = Vec::with_capacity(64);
+    oversized.push(2);
+    let refusal = capture
+        .chunk(
+            &lease,
+            lease.binding,
+            lease.generation,
+            CaptureChunk::new(1, 1, oversized),
+        )
+        .expect_err("a short chunk with oversized backing storage is refused");
+    assert_eq!(refusal.error, CaptureError::ChunkTooLarge);
+    assert_eq!(refusal.chunk.bytes(), &[2]);
+    assert_eq!(capture.snapshot().retained_bytes, 4);
+
+    capture
+        .cancel(&lease, lease.binding, lease.generation)
+        .expect("cancel releases the retained allocation accounting");
+    assert_eq!(capture.snapshot().retained_bytes, 0);
+}

@@ -278,7 +278,11 @@ impl CaptureSession {
                 chunk,
             });
         }
-        if chunk.bytes.len() > self.limits.maximum_chunk_bytes {
+        // The session retains the Vec allocation as well as its initialized bytes.
+        // Bound the allocation before storing it so a tiny logical chunk cannot
+        // smuggle an oversized backing buffer into the session.
+        let chunk_capacity = chunk.bytes.capacity();
+        if chunk_capacity > self.limits.maximum_chunk_bytes {
             return Err(ChunkRefusal {
                 error: CaptureError::ChunkTooLarge,
                 chunk,
@@ -299,7 +303,7 @@ impl CaptureSession {
                 chunk,
             });
         }
-        let Some(retained_bytes) = self.retained_bytes.checked_add(chunk.bytes.len()) else {
+        let Some(retained_bytes) = self.retained_bytes.checked_add(chunk_capacity) else {
             return Err(ChunkRefusal {
                 error: CaptureError::CounterOverflow,
                 chunk,
