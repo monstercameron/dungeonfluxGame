@@ -1,8 +1,16 @@
+#[path = "../../df-session/tests/support/fixture_model.rs"]
+mod fixture_model;
 mod support;
 
-use df_model::checkpoint::{AudienceScope, ContentDigest, ExecutionMode, LogicalTime};
+use df_model::checkpoint::{
+    AcceptedDecision, AssetDemand, AssetKind, AssetReference, AssetRequestKey, AudienceScope,
+    Basis, Checkpoint, CheckpointPins, ContentDigest, DemandPriority, ExecutionMode, FactValue,
+    GameFact, LogicalTime, NarrativeMoment, PerformanceHint, PresentationDemand,
+    ReferenceInventory, ShotPlan,
+};
 use df_presentation::moment_selection::{
-    MomentAlternative, MomentDisposition, MomentError, select_moment_plan,
+    MomentAlternative, MomentContext, MomentDisposition, MomentError, MomentLimits,
+    PermittedMoment, select_committed_moment_plan, select_moment_plan,
 };
 use support::{Fixture, entity, fact, label, limits, now, record};
 
@@ -24,6 +32,252 @@ fn selected_records_are_borrowed_exactly_without_changing_inputs() {
     assert!(std::ptr::eq(selected.selected.unwrap(), &alternatives[0]));
     assert_eq!(fixture.shots, original_shots);
     assert_eq!(fixture.demands, original_demands);
+}
+
+#[test]
+fn selected_visual_and_performance_descriptors_keep_the_approved_source_references() {
+    let mut fixture = Fixture::new();
+    let shot_definition = fixture.content[0].clone();
+    let performance_definition = fixture.content[0].clone();
+    let voice = fixture.assets[0].clone();
+    fixture.shots[0].definition = shot_definition.clone();
+    fixture.shots[0].performance.definition = performance_definition.clone();
+    fixture.shots[0].performance.voice = Some(voice.clone());
+    let original_shot = fixture.shots[0].clone();
+    let original_moment = fixture.moment.clone();
+    let alternatives = [fixture.alternative()];
+
+    let result = select_moment_plan(
+        fixture.context(),
+        now(),
+        Some(fixture.permitted()),
+        &alternatives,
+        limits(),
+    )
+    .unwrap();
+
+    let selected = result.selected.unwrap();
+    assert_eq!(selected.context.moment, &original_moment);
+    assert!(std::ptr::eq(&selected.shots[0], &fixture.shots[0]));
+    assert_eq!(selected.shots[0], original_shot);
+    assert_eq!(selected.shots[0].definition, shot_definition);
+    assert_eq!(selected.shots[0].references, fixture.assets[..1]);
+    assert_eq!(
+        selected.shots[0].performance.definition,
+        performance_definition
+    );
+    assert_eq!(selected.shots[0].performance.voice.as_ref(), Some(&voice));
+    assert_eq!(
+        selected.shots[0].performance.emphasis_facts,
+        original_moment.facts
+    );
+}
+
+#[test]
+fn committed_projection_accepts_checkpoint_records_and_refuses_uncommitted_shots() {
+    let basis: Basis = fixture_model::basis();
+    let pins: CheckpointPins = fixture_model::pins();
+    let content = fixture_model::content();
+    let moment_id = record(70);
+    let fact_id = fact(71);
+    let still = AssetReference {
+        key: label("committed-still"),
+        digest: ContentDigest([72; 32]),
+        byte_length: 4,
+        kind: AssetKind::Image,
+    };
+    let voice = AssetReference {
+        key: label("committed-voice"),
+        digest: ContentDigest([73; 32]),
+        byte_length: 5,
+        kind: AssetKind::Audio,
+    };
+    let assets = [still.clone(), voice.clone()];
+    let mut state = fixture_model::state();
+    state.mode = ExecutionMode::PreparedOnly;
+    let operation = fixture_model::operation();
+    state.facts.push(GameFact {
+        id: fact_id,
+        revision: basis.revision,
+        operation,
+        ordinal: 0,
+        cause: None,
+        audience: AudienceScope::Shared,
+        value: FactValue::ContentEvent {
+            definition: content.clone(),
+            subjects: vec![entity(4)],
+        },
+    });
+    state.decisions.push(AcceptedDecision {
+        operation,
+        revision: basis.revision,
+        facts: vec![fact_id],
+        draws: vec![],
+        effects: vec![],
+        source_policy: label("committed-source-policy"),
+        semantic_output: None,
+    });
+    let moment = NarrativeMoment {
+        id: moment_id,
+        location: entity(4),
+        characters: vec![entity(4)],
+        facts: vec![fact_id],
+        attributed_claims: vec![],
+        audience: AudienceScope::Shared,
+        semantic_focus: content.clone(),
+        identity_revision: label("committed-identity"),
+    };
+    let presentation = PresentationDemand {
+        id: record(74),
+        definition: content.clone(),
+        audience: AudienceScope::Shared,
+        causal_facts: vec![fact_id],
+        source_revision: basis.revision,
+    };
+    let shot = ShotPlan {
+        id: record(75),
+        moment: moment_id,
+        subjects: moment.characters.clone(),
+        audience: moment.audience.clone(),
+        duration_ticks: 5,
+        definition: content.clone(),
+        references: vec![still.clone()],
+        performance: PerformanceHint {
+            definition: content.clone(),
+            voice: Some(voice.clone()),
+            emphasis_facts: vec![fact_id],
+        },
+    };
+    let demand = AssetDemand {
+        id: record(76),
+        basis,
+        key: AssetRequestKey {
+            schema: df_model::checkpoint::CHECKPOINT_SCHEMA,
+            source: pins.content.content_digest,
+            moment: moment_id,
+            identity: moment.identity_revision.clone(),
+            style: label("committed-style"),
+            voice: Some(voice.key.clone()),
+            provider: label("prepared-only"),
+            model: label("fixture-model"),
+            format: label("still-format"),
+            references: vec![still],
+            audience: AudienceScope::Shared,
+            parameters: label("committed-parameters"),
+        },
+        priority: DemandPriority::InteractionCritical,
+        mode: ExecutionMode::PreparedOnly,
+        expires: LogicalTime {
+            ticks: 100,
+            ticks_per_second: 10,
+        },
+        budget_reservation: label("no-live-spend"),
+        maximum_bytes: 16,
+        policy: content.clone(),
+    };
+    state.continuity.moments.push(moment);
+    state.presentation.push(presentation);
+    state.continuity.shots.push(shot);
+    state.continuity.demands.push(demand);
+    let rules = [fixture_model::rule()];
+    let content_inventory = [content.clone()];
+    let resources = fixture_model::resource_constraints();
+    let checkpoint = Checkpoint::new(
+        df_model::checkpoint::CHECKPOINT_SCHEMA,
+        basis,
+        pins,
+        state,
+        ReferenceInventory {
+            rules: &rules,
+            content: &content_inventory,
+            resources: &resources,
+            assets: &assets,
+        },
+        fixture_model::limits(),
+    )
+    .unwrap();
+    let current = MomentContext {
+        basis: checkpoint.basis(),
+        pins: checkpoint.pins(),
+        mode: checkpoint.state().mode,
+        moment: &checkpoint.state().continuity.moments[0],
+        presentation: &checkpoint.state().presentation[0],
+    };
+    let facts = [fact_id];
+    let claims = [];
+    let entities = [entity(4)];
+    let permitted = PermittedMoment {
+        context: current,
+        facts: &facts,
+        attributed_claims: &claims,
+        entities: &entities,
+        content: &content_inventory,
+        assets: &assets,
+    };
+    let alternative = MomentAlternative {
+        context: current,
+        shots: &checkpoint.state().continuity.shots,
+        demands: &checkpoint.state().continuity.demands,
+    };
+    let alternatives = [alternative];
+    let selected = select_committed_moment_plan(
+        &checkpoint,
+        current,
+        LogicalTime {
+            ticks: 90,
+            ticks_per_second: 10,
+        },
+        Some(permitted),
+        &alternatives,
+        MomentLimits {
+            maximum_alternatives: 8,
+            maximum_items: 1024,
+            maximum_shots: 8,
+            maximum_demands: 8,
+            maximum_duration_ticks: 100,
+            maximum_reference_bytes: 1024,
+            maximum_demand_bytes: 1024,
+        },
+    )
+    .unwrap();
+    assert_eq!(selected.disposition, MomentDisposition::Selected);
+    assert!(std::ptr::eq(selected.selected.unwrap(), &alternatives[0]));
+    assert_eq!(selected.selected.unwrap().context.moment.facts, facts);
+    assert_eq!(
+        selected.selected.unwrap().shots[0].performance.voice,
+        Some(voice)
+    );
+
+    let mut uncommitted_shot = checkpoint.state().continuity.shots[0].clone();
+    uncommitted_shot.id = record(77);
+    let uncommitted_shots = [uncommitted_shot];
+    let uncommitted = [MomentAlternative {
+        context: current,
+        shots: &uncommitted_shots,
+        demands: &checkpoint.state().continuity.demands,
+    }];
+    assert!(matches!(
+        select_committed_moment_plan(
+            &checkpoint,
+            current,
+            LogicalTime {
+                ticks: 90,
+                ticks_per_second: 10,
+            },
+            Some(permitted),
+            &uncommitted,
+            MomentLimits {
+                maximum_alternatives: 8,
+                maximum_items: 1024,
+                maximum_shots: 8,
+                maximum_demands: 8,
+                maximum_duration_ticks: 100,
+                maximum_reference_bytes: 1024,
+                maximum_demand_bytes: 1024,
+            },
+        ),
+        Err(MomentError::InvalidCurrentContext)
+    ));
 }
 
 #[test]
