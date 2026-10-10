@@ -26,8 +26,12 @@ fn key(version: &str, bytes: &[u8]) -> CacheKey {
 }
 
 fn cache(max_bytes: usize, max_pending: usize) -> AssetCache {
+    cache_in_scope(scope(3), max_bytes, max_pending)
+}
+
+fn cache_in_scope(scope: CacheScope, max_bytes: usize, max_pending: usize) -> AssetCache {
     AssetCache::new(
-        scope(3),
+        scope,
         CacheLimits {
             max_assets: 3,
             max_pending,
@@ -718,4 +722,95 @@ fn unfetched_current_version_manifest_conflict_cannot_discard_its_pending_token(
     cache
         .apply_current(scope(3), revision(1, 2), std::slice::from_ref(&original))
         .unwrap();
+}
+
+#[test]
+fn private_bytes_and_fetch_ownership_stay_in_their_cache_scope() {
+    let asset = key("private-v1", b"same private bytes");
+    let first_scope = scope(3);
+    let second_scope = scope(4);
+    let mut first = cache_in_scope(first_scope, 64, 1);
+    let mut second = cache_in_scope(second_scope, 64, 1);
+    first
+        .apply_current(first_scope, revision(1, 1), std::slice::from_ref(&asset))
+        .unwrap();
+    second
+        .apply_current(second_scope, revision(1, 1), std::slice::from_ref(&asset))
+        .unwrap();
+
+    let first_fetch = first.fetch(&asset).unwrap();
+    assert_eq!(
+        second.complete(&first_fetch, b"same private bytes".to_vec()),
+        Err(CacheError::StaleFetch)
+    );
+    assert_eq!(first.pending_count(), 1);
+    assert_eq!(second.pending_count(), 0);
+    first
+        .complete(&first_fetch, b"same private bytes".to_vec())
+        .unwrap();
+    assert_eq!(
+        first.get(&asset).unwrap(),
+        Some(b"same private bytes".as_slice())
+    );
+    assert_eq!(second.get(&asset).unwrap(), None);
+
+    let second_fetch = second.fetch(&asset).unwrap();
+    assert_eq!(first.cancel(&second_fetch), Err(CacheError::StaleFetch));
+    assert_eq!(second.pending_count(), 1);
+    second
+        .complete(&second_fetch, b"same private bytes".to_vec())
+        .unwrap();
+
+    first.release(&asset).unwrap();
+    assert_eq!(first.get(&asset).unwrap(), None);
+    assert_eq!(
+        second.get(&asset).unwrap(),
+        Some(b"same private bytes".as_slice())
+    );
+}
+
+#[test]
+fn release_only_fences_its_key_and_allows_a_fresh_fetch() {
+    let first_asset = key("first", b"first bytes");
+    let second_asset = key("second", b"second bytes");
+    let mut cache = cache(64, 2);
+    cache
+        .apply_current(
+            scope(3),
+            revision(1, 1),
+            &[first_asset.clone(), second_asset.clone()],
+        )
+        .unwrap();
+    publish(&mut cache, &first_asset, b"first bytes");
+    publish(&mut cache, &second_asset, b"second bytes");
+    let stale_fetch = cache.fetch(&first_asset).unwrap();
+    let retained_fetch = cache.fetch(&second_asset).unwrap();
+
+    cache.release(&first_asset).unwrap();
+    assert_eq!(cache.get(&first_asset).unwrap(), None);
+    assert_eq!(
+        cache.get(&second_asset).unwrap(),
+        Some(b"second bytes".as_slice())
+    );
+    assert_eq!(cache.pending_count(), 1);
+    assert_eq!(
+        cache.complete(&stale_fetch, b"first bytes".to_vec()),
+        Err(CacheError::StaleFetch)
+    );
+    cache
+        .complete(&retained_fetch, b"second bytes".to_vec())
+        .unwrap();
+
+    let fresh_fetch = cache.fetch(&first_asset).unwrap();
+    cache
+        .complete(&fresh_fetch, b"first bytes".to_vec())
+        .unwrap();
+    assert_eq!(
+        cache.get(&first_asset).unwrap(),
+        Some(b"first bytes".as_slice())
+    );
+    assert_eq!(
+        cache.get(&second_asset).unwrap(),
+        Some(b"second bytes".as_slice())
+    );
 }

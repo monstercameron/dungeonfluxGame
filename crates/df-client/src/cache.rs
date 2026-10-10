@@ -53,6 +53,7 @@ pub enum CacheError {
 #[derive(Clone, Debug)]
 pub struct FetchToken {
     identity: Rc<()>,
+    scope: CacheScope,
     key: CacheKey,
 }
 
@@ -284,6 +285,7 @@ impl AssetCache {
         }
         let token = FetchToken {
             identity: Rc::new(()),
+            scope: self.scope,
             key: key.clone(),
         };
         self.pending.push(token.clone());
@@ -296,6 +298,9 @@ impl AssetCache {
     pub fn complete(&mut self, token: &FetchToken, bytes: Vec<u8>) -> Result<(), CacheError> {
         if self.closed {
             return Err(CacheError::Closed);
+        }
+        if token.scope != self.scope {
+            return Err(CacheError::StaleFetch);
         }
         let index = self
             .pending
@@ -341,6 +346,9 @@ impl AssetCache {
         if self.closed {
             return Err(CacheError::Closed);
         }
+        if token.scope != self.scope {
+            return Err(CacheError::StaleFetch);
+        }
         let index = self
             .pending
             .iter()
@@ -350,7 +358,8 @@ impl AssetCache {
         Ok(())
     }
 
-    /// Discards one resident resource and its in-flight work without changing server access.
+    /// Discards this cache's matching resource and fetches without changing server access.
+    /// Another cache with the same key retains its own bytes and fetch ownership.
     pub fn release(&mut self, key: &CacheKey) -> Result<(), CacheError> {
         if self.closed {
             return Err(CacheError::Closed);
