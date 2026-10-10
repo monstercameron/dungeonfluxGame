@@ -4,3 +4,4 @@
 
 pub(crate) mod composition_registry;
 pub(crate) mod deployment;
+pub(crate) mod shutdown_policy;
