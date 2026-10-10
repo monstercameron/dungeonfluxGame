@@ -97,18 +97,24 @@ pub fn authorize_membership<A: MembershipAuthority>(
     request: MembershipRequest<'_, A>,
     now: u64,
 ) -> Result<MembershipCapability<A>, MembershipError<A::Error>> {
-    // Borrow the same exact requested identities for lookup and validation. The
-    // authority's returned identities must not silently replace the request.
-    let record = authority
-        .read_current(MembershipRequest {
-            principal: request.principal,
-            tenant: request.tenant,
-            campaign: request.campaign,
-            role: request.role,
-        })
-        .map_err(MembershipError::Source)?
-        .ok_or(MembershipError::Missing)?;
-    check_record(&record, &request, now)?;
+    let record = read_checked_record(authority, request, now)?;
+    Ok(MembershipCapability { record })
+}
+
+/// Refreshes a checked snapshot from the latest authoritative access revision.
+///
+/// The returned capability owns a newly read snapshot; the supplied capability is
+/// unchanged and remains stale when its revision no longer matches current authority.
+/// The authority must report the exact same scope and role as active and unexpired;
+/// request fields cannot reactivate or widen access. Inactive, missing, mismatched,
+/// failed, and expired records remain denied.
+pub fn renew_membership<A: MembershipAuthority>(
+    authority: &mut A,
+    capability: &MembershipCapability<A>,
+    now: u64,
+) -> Result<MembershipCapability<A>, MembershipError<A::Error>> {
+    let request = capability.request();
+    let record = read_checked_record(authority, request, now)?;
     Ok(MembershipCapability { record })
 }
 
@@ -122,6 +128,20 @@ pub fn revalidate_membership<A: MembershipAuthority>(
     now: u64,
 ) -> Result<(), MembershipError<A::Error>> {
     let request = capability.request();
+    let record = read_checked_record(authority, request, now)?;
+    if record.revision != capability.record.revision {
+        return Err(MembershipError::StaleRevision);
+    }
+    Ok(())
+}
+
+fn read_checked_record<A: MembershipAuthority>(
+    authority: &mut A,
+    request: MembershipRequest<'_, A>,
+    now: u64,
+) -> Result<MembershipRecord<A>, MembershipError<A::Error>> {
+    // Lookup and validation use the same supplied identities. Authority-returned
+    // identities cannot silently replace the request's scope or role.
     let record = authority
         .read_current(MembershipRequest {
             principal: request.principal,
@@ -132,10 +152,7 @@ pub fn revalidate_membership<A: MembershipAuthority>(
         .map_err(MembershipError::Source)?
         .ok_or(MembershipError::Missing)?;
     check_record(&record, &request, now)?;
-    if record.revision != capability.record.revision {
-        return Err(MembershipError::StaleRevision);
-    }
-    Ok(())
+    Ok(record)
 }
 
 fn check_record<A: MembershipAuthority>(
