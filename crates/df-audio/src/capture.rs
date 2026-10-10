@@ -7,6 +7,8 @@
 use df_model::checkpoint::{CaptureLease, WindowId};
 use df_types::{ClientBindingId, MemberId};
 
+use crate::capabilities::select_capture_codec;
+
 const MAX_CAPTURE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_CAPTURE_CHUNKS: u64 = 65_536;
 
@@ -24,6 +26,10 @@ pub enum CaptureError {
     PermissionDenied,
     /// This target or adapter does not implement microphone acquisition.
     Unsupported,
+    /// The platform adapter reported an acquisition operation failure.
+    OperationFailed,
+    /// The adapter did not report the exact format required by the capture lease.
+    UnsupportedFormat,
     /// The requested lifecycle operation is invalid in the current state.
     InvalidState,
     /// A configured resource limit is zero, inconsistent, or too large.
@@ -49,6 +55,18 @@ pub enum CaptureAcquisition {
     Opened,
     PermissionDenied,
     Unsupported,
+    OperationFailed,
+}
+
+/// Gesture state observed by an adapter that invokes a gesture-gated API.
+///
+/// This value is policy input only. `SynchronousApiInvocationObserved` must
+/// describe an actual synchronous API call made by the adapter; passing this
+/// variant does not make that call, grant permission, or qualify a device.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CaptureGestureObservation {
+    Missing,
+    SynchronousApiInvocationObserved,
 }
 
 /// Terminal and active states for one capture lease owner.
@@ -167,14 +185,16 @@ impl Drop for CaptureRecording {
 
 /// Owns chunks for one canonical capture lease and one client binding generation.
 ///
-/// `start` records the outcome supplied by a platform adapter. `Opened` is an
-/// observation, not a permission grant; this crate has no microphone acquisition
-/// implementation. Every later operation must present the same current lease.
+/// `select_codec` compares adapter-reported formats with the canonical lease format;
+/// it does not establish device support. `start` records the platform adapter's actual
+/// acquisition result. This crate has no microphone acquisition implementation, and
+/// every later operation must present the same current lease.
 pub struct CaptureSession {
     lease: CaptureLease,
     binding: ClientBindingId,
     generation: u64,
     limits: CaptureLimits,
+    selected_format: Option<df_types::RevisionLabel>,
     state: CaptureState,
     next_sequence: u64,
     next_offset_frames: Option<u64>,
@@ -221,6 +241,7 @@ impl CaptureSession {
             binding: current_binding,
             generation: current_generation,
             limits,
+            selected_format: None,
             state: CaptureState::Ready,
             next_sequence: 0,
             next_offset_frames: None,
@@ -229,27 +250,48 @@ impl CaptureSession {
         })
     }
 
-    /// Records the platform adapter's start result after the user gesture callback.
+    /// Selects only the exact codec named by this lease from adapter-reported formats.
+    /// A mismatch is explicit; this method performs no device probe or fallback and
+    /// does not qualify that a microphone can open or deliver audio.
+    pub fn select_codec(
+        &mut self,
+        adapter_formats: &[df_types::RevisionLabel],
+    ) -> Result<(), CaptureError> {
+        if self.state != CaptureState::Ready {
+            return Err(CaptureError::InvalidState);
+        }
+        self.selected_format = None;
+        let selected_format = select_capture_codec(&self.lease.format, adapter_formats)?;
+        self.selected_format = Some(selected_format.clone());
+        Ok(())
+    }
+
+    /// Records gesture and acquisition observations supplied by the platform adapter.
+    /// These observations do not themselves invoke an API or qualify a device.
     pub fn start(
         &mut self,
         current_lease: &CaptureLease,
         current_binding: ClientBindingId,
         current_generation: u64,
-        user_gesture: bool,
+        gesture: CaptureGestureObservation,
         acquisition: CaptureAcquisition,
     ) -> Result<(), CaptureError> {
         self.check_current(current_lease, current_binding, current_generation)?;
         if self.state != CaptureState::Ready {
             return Err(CaptureError::InvalidState);
         }
-        if !user_gesture {
+        if gesture == CaptureGestureObservation::Missing {
             return Err(CaptureError::UserGestureRequired);
         }
         match acquisition {
             CaptureAcquisition::Pending => Err(CaptureError::Pending),
             CaptureAcquisition::PermissionDenied => Err(CaptureError::PermissionDenied),
             CaptureAcquisition::Unsupported => Err(CaptureError::Unsupported),
+            CaptureAcquisition::OperationFailed => Err(CaptureError::OperationFailed),
             CaptureAcquisition::Opened => {
+                if self.selected_format.as_ref() != Some(&self.lease.format) {
+                    return Err(CaptureError::UnsupportedFormat);
+                }
                 self.state = CaptureState::Capturing;
                 Ok(())
             }
