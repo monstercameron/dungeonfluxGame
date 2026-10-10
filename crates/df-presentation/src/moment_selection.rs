@@ -73,6 +73,12 @@ pub struct MomentRejections {
     pub expired: usize,
 }
 
+/// A source-preserving projection of one permitted alternative.
+///
+/// `selected` borrows the canonical moment, shot, and demand records supplied by the caller.
+/// Shot definitions, references, voice, and emphasized fact IDs remain descriptors for their
+/// owning content/media consumers; this result does not resolve text, authorize bytes, or
+/// promise playback.
 pub struct MomentSelection<'a> {
     pub disposition: MomentDisposition,
     pub selected: Option<&'a MomentAlternative<'a>>,
