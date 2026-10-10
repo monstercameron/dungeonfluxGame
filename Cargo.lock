@@ -472,6 +472,7 @@ dependencies = [
  "df-assets",
  "df-client",
  "df-display",
+ "df-protocol",
  "df-types",
  "df-ui",
  "wasm-bindgen",

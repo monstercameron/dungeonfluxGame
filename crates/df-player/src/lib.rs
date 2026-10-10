@@ -1,4 +1,6 @@
 //! Player-role presentation mounts for already permitted views.
+mod gameplay_view;
+pub use gameplay_view::{GameplayViewError, PlayerGameplayProjection};
 mod character_creation;
 pub use character_creation::PlayerCharacterConnection;
 #[cfg(target_arch = "wasm32")]
