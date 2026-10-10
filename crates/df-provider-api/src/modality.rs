@@ -7,8 +7,9 @@
 
 use std::fmt;
 
+use df_model::checkpoint::AssetReference;
 use df_model::checkpoint::ContentDigest;
-use df_types::RevisionLabel;
+use df_types::{LocaleTag, RevisionLabel};
 
 use crate::{
     CheckedRequest, RequestBinding, RequestError, RequestLimits, RequestOwnerState, RequestUsage,
@@ -53,6 +54,271 @@ impl<Semantic> fmt::Debug for RequestBasis<Semantic> {
 /// This type does not qualify modality payloads or initiate provider work.
 pub struct CheckedModalityRequest<Semantic> {
     checked: CheckedRequest<RequestBasis<Semantic>>,
+}
+
+/// Typed rejection at the six-family boundary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModalityRequestError {
+    WrongModality,
+    Request(RequestError),
+}
+
+/// Text-generation context and the caller-owned output schema.
+/// The context and schema stay typed and bounded by the owner; this API does not
+/// validate prompt semantics or implement the output format.
+#[derive(Clone, Eq, PartialEq)]
+pub struct TextSemantics<Context, OutputSchema> {
+    pub locale: LocaleTag,
+    pub context: Context,
+    pub output_schema: OutputSchema,
+}
+
+/// Speech-recognition input profile and partial/final transcript profile.
+/// The owner selects a supported locale and audio/transcript schemas.
+#[derive(Clone, Eq, PartialEq)]
+pub struct SttSemantics<AudioFormat, TranscriptProfile> {
+    pub locale: LocaleTag,
+    pub audio_format: AudioFormat,
+    pub transcript_profile: TranscriptProfile,
+}
+
+/// Speech synthesis text, voice, encoded output, PCM and timebase profiles.
+/// The typed profile preserves ordering metadata without prescribing a codec.
+#[derive(Clone, Eq, PartialEq)]
+pub struct TtsSemantics<Text, Voice, OutputFormat, PcmFormat, Timebase> {
+    pub locale: LocaleTag,
+    pub text: Text,
+    pub voice: Voice,
+    pub output_format: OutputFormat,
+    pub pcm_format: PcmFormat,
+    pub timebase: Timebase,
+}
+
+/// Image prompt, caller-owned output profile, and optional canonical references.
+/// Reference values retain the canonical asset identity; readiness stays native-owned.
+#[derive(Clone, Eq, PartialEq)]
+pub struct ImageSemantics<Prompt, OutputProfile> {
+    pub locale: Option<LocaleTag>,
+    pub prompt: Prompt,
+    pub output_profile: OutputProfile,
+    pub references: Vec<AssetReference>,
+}
+
+/// Video prompt, output profile, and typed caller-owned reference frames.
+/// Frame schema remains owned by the supplying caller until it is frozen upstream.
+#[derive(Clone, Eq, PartialEq)]
+pub struct VideoSemantics<Prompt, OutputProfile, ReferenceFrame> {
+    pub locale: Option<LocaleTag>,
+    pub prompt: Prompt,
+    pub output_profile: OutputProfile,
+    pub reference_frames: Vec<ReferenceFrame>,
+}
+
+/// Sound intent, output profile and loop metadata.
+/// Sound/music/ambience details and loop policy remain caller-owned typed values.
+#[derive(Clone, Eq, PartialEq)]
+pub struct SoundSemantics<Intent, OutputProfile, LoopMetadata> {
+    pub locale: Option<LocaleTag>,
+    pub intent: Intent,
+    pub output_profile: OutputProfile,
+    pub loop_metadata: LoopMetadata,
+}
+
+/// One family-specific request retaining the canonical checked envelope.
+/// Construction validates the declared family before delegating bounds, identity,
+/// mode, deadline and cancellation to the existing checked-request policy.
+pub struct TextRequest<Context, OutputSchema> {
+    checked: CheckedModalityRequest<TextSemantics<Context, OutputSchema>>,
+}
+
+pub struct SttRequest<AudioFormat, TranscriptProfile> {
+    checked: CheckedModalityRequest<SttSemantics<AudioFormat, TranscriptProfile>>,
+}
+
+pub struct TtsRequest<Text, Voice, OutputFormat, PcmFormat, Timebase> {
+    checked: CheckedModalityRequest<TtsSemantics<Text, Voice, OutputFormat, PcmFormat, Timebase>>,
+}
+
+pub struct ImageRequest<Prompt, OutputProfile> {
+    checked: CheckedModalityRequest<ImageSemantics<Prompt, OutputProfile>>,
+}
+
+pub struct VideoRequest<Prompt, OutputProfile, ReferenceFrame> {
+    checked: CheckedModalityRequest<VideoSemantics<Prompt, OutputProfile, ReferenceFrame>>,
+}
+
+pub struct SoundRequest<Intent, OutputProfile, LoopMetadata> {
+    checked: CheckedModalityRequest<SoundSemantics<Intent, OutputProfile, LoopMetadata>>,
+}
+
+fn checked_for<Semantic: Eq>(
+    expected: RequestModality,
+    binding: RequestBinding<RequestBasis<Semantic>>,
+    payload: &[u8],
+    usage: RequestUsage,
+    limits: RequestLimits,
+    owner: RequestOwnerState<'_, RequestBasis<Semantic>>,
+) -> Result<CheckedModalityRequest<Semantic>, ModalityRequestError> {
+    if binding.semantic_basis.modality != expected {
+        return Err(ModalityRequestError::WrongModality);
+    }
+    CheckedModalityRequest::new(binding, payload, usage, limits, owner)
+        .map_err(ModalityRequestError::Request)
+}
+
+impl<Context: Eq, OutputSchema: Eq> TextRequest<Context, OutputSchema> {
+    pub fn new(
+        binding: RequestBinding<RequestBasis<TextSemantics<Context, OutputSchema>>>,
+        payload: &[u8],
+        usage: RequestUsage,
+        limits: RequestLimits,
+        owner: RequestOwnerState<'_, RequestBasis<TextSemantics<Context, OutputSchema>>>,
+    ) -> Result<Self, ModalityRequestError> {
+        let checked = checked_for(
+            RequestModality::Text,
+            binding,
+            payload,
+            usage,
+            limits,
+            owner,
+        )?;
+        Ok(Self { checked })
+    }
+
+    pub fn checked(&self) -> &CheckedModalityRequest<TextSemantics<Context, OutputSchema>> {
+        &self.checked
+    }
+}
+
+impl<AudioFormat: Eq, TranscriptProfile: Eq> SttRequest<AudioFormat, TranscriptProfile> {
+    pub fn new(
+        binding: RequestBinding<RequestBasis<SttSemantics<AudioFormat, TranscriptProfile>>>,
+        payload: &[u8],
+        usage: RequestUsage,
+        limits: RequestLimits,
+        owner: RequestOwnerState<'_, RequestBasis<SttSemantics<AudioFormat, TranscriptProfile>>>,
+    ) -> Result<Self, ModalityRequestError> {
+        let checked = checked_for(RequestModality::Stt, binding, payload, usage, limits, owner)?;
+        Ok(Self { checked })
+    }
+
+    pub fn checked(&self) -> &CheckedModalityRequest<SttSemantics<AudioFormat, TranscriptProfile>> {
+        &self.checked
+    }
+}
+
+impl<Text: Eq, Voice: Eq, OutputFormat: Eq, PcmFormat: Eq, Timebase: Eq>
+    TtsRequest<Text, Voice, OutputFormat, PcmFormat, Timebase>
+{
+    pub fn new(
+        binding: RequestBinding<
+            RequestBasis<TtsSemantics<Text, Voice, OutputFormat, PcmFormat, Timebase>>,
+        >,
+        payload: &[u8],
+        usage: RequestUsage,
+        limits: RequestLimits,
+        owner: RequestOwnerState<
+            '_,
+            RequestBasis<TtsSemantics<Text, Voice, OutputFormat, PcmFormat, Timebase>>,
+        >,
+    ) -> Result<Self, ModalityRequestError> {
+        let checked = checked_for(RequestModality::Tts, binding, payload, usage, limits, owner)?;
+        Ok(Self { checked })
+    }
+
+    pub fn checked(
+        &self,
+    ) -> &CheckedModalityRequest<TtsSemantics<Text, Voice, OutputFormat, PcmFormat, Timebase>> {
+        &self.checked
+    }
+}
+
+impl<Prompt: Eq, OutputProfile: Eq> ImageRequest<Prompt, OutputProfile> {
+    pub fn new(
+        binding: RequestBinding<RequestBasis<ImageSemantics<Prompt, OutputProfile>>>,
+        payload: &[u8],
+        usage: RequestUsage,
+        limits: RequestLimits,
+        owner: RequestOwnerState<'_, RequestBasis<ImageSemantics<Prompt, OutputProfile>>>,
+    ) -> Result<Self, ModalityRequestError> {
+        let checked = checked_for(
+            RequestModality::Image,
+            binding,
+            payload,
+            usage,
+            limits,
+            owner,
+        )?;
+        Ok(Self { checked })
+    }
+
+    pub fn checked(&self) -> &CheckedModalityRequest<ImageSemantics<Prompt, OutputProfile>> {
+        &self.checked
+    }
+}
+
+impl<Prompt: Eq, OutputProfile: Eq, ReferenceFrame: Eq>
+    VideoRequest<Prompt, OutputProfile, ReferenceFrame>
+{
+    pub fn new(
+        binding: RequestBinding<
+            RequestBasis<VideoSemantics<Prompt, OutputProfile, ReferenceFrame>>,
+        >,
+        payload: &[u8],
+        usage: RequestUsage,
+        limits: RequestLimits,
+        owner: RequestOwnerState<
+            '_,
+            RequestBasis<VideoSemantics<Prompt, OutputProfile, ReferenceFrame>>,
+        >,
+    ) -> Result<Self, ModalityRequestError> {
+        let checked = checked_for(
+            RequestModality::Video,
+            binding,
+            payload,
+            usage,
+            limits,
+            owner,
+        )?;
+        Ok(Self { checked })
+    }
+
+    pub fn checked(
+        &self,
+    ) -> &CheckedModalityRequest<VideoSemantics<Prompt, OutputProfile, ReferenceFrame>> {
+        &self.checked
+    }
+}
+
+impl<Intent: Eq, OutputProfile: Eq, LoopMetadata: Eq>
+    SoundRequest<Intent, OutputProfile, LoopMetadata>
+{
+    pub fn new(
+        binding: RequestBinding<RequestBasis<SoundSemantics<Intent, OutputProfile, LoopMetadata>>>,
+        payload: &[u8],
+        usage: RequestUsage,
+        limits: RequestLimits,
+        owner: RequestOwnerState<
+            '_,
+            RequestBasis<SoundSemantics<Intent, OutputProfile, LoopMetadata>>,
+        >,
+    ) -> Result<Self, ModalityRequestError> {
+        let checked = checked_for(
+            RequestModality::Sound,
+            binding,
+            payload,
+            usage,
+            limits,
+            owner,
+        )?;
+        Ok(Self { checked })
+    }
+
+    pub fn checked(
+        &self,
+    ) -> &CheckedModalityRequest<SoundSemantics<Intent, OutputProfile, LoopMetadata>> {
+        &self.checked
+    }
 }
 
 impl<Semantic> fmt::Debug for CheckedModalityRequest<Semantic> {
