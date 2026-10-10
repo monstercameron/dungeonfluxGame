@@ -7,15 +7,76 @@
 //! timeout, missing response, absent status, 404, cancellation, or incomplete
 //! stream therefore cannot establish that submission was absent or safe to
 //! repeat. This module classifies facts only; it never sends, retries, refunds,
-//! or verifies billing.
+//! or verifies billing. Source pages observed 2026-10-10:
+//! - <https://elevenlabs.io/docs/api-reference/text-to-speech/stream>
+//! - <https://elevenlabs.io/docs/api-reference/introduction/>
+//! - <https://fal.ai/docs/documentation/model-apis/inference/queue>
+//! - <https://fal.ai/models/fal-ai/flux/schnell/api>
+//! These pages document request/status/result fields; they do not establish
+//! duplicate-safe submission or negative absence/billing proof.
+
+use std::fmt;
 
 use df_provider_api::{
     BudgetMutation, CheckedRequest, ProviderAttemptObservation, ProviderBillingClass,
     ProviderFailureClass, ProviderOutcomeDecision, ProviderOutcomeError, ProviderResultClass,
     ProviderRetryPolicy, RequestOwnerState, classify_provider_outcome,
 };
+use df_types::OperationId;
 
-use crate::{CandidateRouteId, ElevenLabsAudioObservation, FalQueueObservation, ProviderRequestId};
+use crate::{
+    CandidateRouteId, ElevenLabsAudioObservation, FalQueueObservation, ProviderImageMetadata,
+    ProviderRequestId, validate_fal_images,
+};
+
+/// Application identity and captured supplier identity for one stored attempt.
+/// These are separate fields: a supplier request ID is never an OperationId.
+#[derive(Clone, Eq, PartialEq)]
+pub struct ProviderAttemptIdentity {
+    operation: OperationId,
+    route: CandidateRouteId,
+    supplier_request_id: Option<ProviderRequestId>,
+}
+
+impl ProviderAttemptIdentity {
+    pub fn new(
+        operation: OperationId,
+        route: CandidateRouteId,
+        supplier_request_id: Option<ProviderRequestId>,
+    ) -> Self {
+        Self {
+            operation,
+            route,
+            supplier_request_id,
+        }
+    }
+
+    pub const fn operation(&self) -> OperationId {
+        self.operation
+    }
+
+    pub const fn route(&self) -> CandidateRouteId {
+        self.route
+    }
+
+    pub fn supplier_request_id(&self) -> Option<&ProviderRequestId> {
+        self.supplier_request_id.as_ref()
+    }
+}
+
+impl fmt::Debug for ProviderAttemptIdentity {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProviderAttemptIdentity")
+            .field("operation", &self.operation)
+            .field("route", &self.route)
+            .field(
+                "supplier_request_id",
+                &self.supplier_request_id.as_ref().map(|_| "[REDACTED]"),
+            )
+            .finish()
+    }
+}
 
 /// Documented status lookup capability, independent of submit idempotency.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -44,17 +105,19 @@ impl ReconciliationCapability {
     }
 }
 
-/// Read-only supplier evidence presented to the application attempt boundary.
+/// Read-only supplier evidence presented for the stored provider attempt.
 pub enum ReconciliationInput<'a> {
-    /// Submit response was lost, absent, or otherwise unusable.
-    MissingSubmitResponse,
-    /// A clean, validated ElevenLabs stream response; its optional request ID
-    /// remains metadata because this route has no documented status lookup.
+    /// Submit, status, or result response was lost, absent, partial, cancelled, or unusable.
+    UnknownSupplierOutcome,
+    /// Clean, validated ElevenLabs stream response. Its optional request ID is
+    /// checked against the ID on the same attempt when the supplier returned it.
     ElevenLabsStream(&'a ElevenLabsAudioObservation),
-    /// FAL status for the caller's previously captured request ID, if one exists.
-    FalStatus {
-        expected_request_id: Option<&'a ProviderRequestId>,
+    /// FAL status for the request ID stored on the exact attempt.
+    FalStatus(&'a FalQueueObservation),
+    /// FAL result facts after positive same-ID completion and image validation.
+    FalResult {
         observation: &'a FalQueueObservation,
+        images: &'a [ProviderImageMetadata],
     },
 }
 
@@ -72,13 +135,17 @@ pub const fn reconciliation_capability(route: CandidateRouteId) -> Reconciliatio
 
 /// Applies supplier result facts through the canonical provider outcome policy.
 ///
-/// `billing` and `settlement` must come from the caller's verified same-attempt
-/// authority; supplier status, inference time, response headers, and invoice
-/// absence cannot establish them. Missing/ambiguous supplier facts map to an
-/// incomplete result, so even conclusive billing cannot turn absence into a
-/// retry/fallback candidate. This function performs no I/O or mutation.
+/// The stored attempt binds the caller's `OperationId`, selected route, and
+/// captured supplier request ID. The canonical classifier receives that stored
+/// operation, so a different operation is refused by the shared policy. FAL
+/// completion requires validated same-ID result images; status alone is
+/// insufficient. `billing` and `settlement` must come from the caller's verified
+/// same-attempt authority; supplier status, inference time, response headers,
+/// and invoice absence cannot establish them. This function performs no I/O or
+/// mutation.
 pub fn reconcile_provider_attempt<Semantic: Eq, Receipt, Refusal, Failure>(
     request: &CheckedRequest<Semantic>,
+    attempt_identity: &ProviderAttemptIdentity,
     owner: RequestOwnerState<'_, Semantic>,
     supplier: ReconciliationInput<'_>,
     billing: ProviderBillingClass,
@@ -86,35 +153,74 @@ pub fn reconcile_provider_attempt<Semantic: Eq, Receipt, Refusal, Failure>(
     policy: ProviderRetryPolicy,
 ) -> Result<ProviderOutcomeDecision, ProviderOutcomeError> {
     let result = match supplier {
-        ReconciliationInput::MissingSubmitResponse => ProviderResultClass::Incomplete,
-        ReconciliationInput::ElevenLabsStream(_) => ProviderResultClass::Complete,
-        ReconciliationInput::FalStatus {
-            expected_request_id: Some(expected),
-            observation: FalQueueObservation::Pending(observed),
-        } if expected == observed => ProviderResultClass::Incomplete,
-        ReconciliationInput::FalStatus {
-            expected_request_id: Some(expected),
-            observation:
-                FalQueueObservation::Completed {
-                    request_id: observed,
-                    ..
-                },
-        } if expected == observed => ProviderResultClass::Complete,
-        ReconciliationInput::FalStatus {
-            expected_request_id: Some(expected),
-            observation:
-                FalQueueObservation::Failed {
-                    request_id: observed,
-                    ..
-                },
-        } if expected == observed => ProviderResultClass::Failed(ProviderFailureClass::Unknown),
-        ReconciliationInput::FalStatus { .. } => ProviderResultClass::Incomplete,
+        ReconciliationInput::UnknownSupplierOutcome => ProviderResultClass::Incomplete,
+        ReconciliationInput::ElevenLabsStream(audio)
+            if attempt_identity.route == CandidateRouteId::ElevenFlashV25Tts
+                && eleven_request_matches_attempt(attempt_identity, audio) =>
+        {
+            ProviderResultClass::Complete
+        }
+        ReconciliationInput::ElevenLabsStream(_) => ProviderResultClass::Incomplete,
+        ReconciliationInput::FalStatus(observation)
+            if attempt_identity.route == CandidateRouteId::FalFluxSchnellDisposableImage
+                && fal_status_matches_attempt(attempt_identity, observation)
+                && matches!(observation, FalQueueObservation::Failed { .. }) =>
+        {
+            ProviderResultClass::Failed(ProviderFailureClass::Unknown)
+        }
+        ReconciliationInput::FalStatus(_) => ProviderResultClass::Incomplete,
+        ReconciliationInput::FalResult {
+            observation,
+            images,
+        } if attempt_identity.route == CandidateRouteId::FalFluxSchnellDisposableImage
+            && attempt_identity
+                .supplier_request_id
+                .as_ref()
+                .is_some_and(|expected| {
+                    validate_fal_images(observation, expected, images).is_ok()
+                }) =>
+        {
+            ProviderResultClass::Complete
+        }
+        ReconciliationInput::FalResult { .. } => ProviderResultClass::Incomplete,
     };
 
     let attempt = ProviderAttemptObservation {
-        operation: request.binding().identity.operation,
+        operation: attempt_identity.operation,
         result,
         billing,
     };
     classify_provider_outcome(request, owner, attempt, settlement, policy)
+}
+
+fn fal_status_matches_attempt(
+    attempt: &ProviderAttemptIdentity,
+    observation: &FalQueueObservation,
+) -> bool {
+    let Some(expected) = attempt.supplier_request_id.as_ref() else {
+        return false;
+    };
+    match observation {
+        FalQueueObservation::Pending(observed)
+        | FalQueueObservation::Completed {
+            request_id: observed,
+            ..
+        }
+        | FalQueueObservation::Failed {
+            request_id: observed,
+            ..
+        }
+        | FalQueueObservation::Unknown(observed) => expected == observed,
+    }
+}
+
+fn eleven_request_matches_attempt(
+    attempt: &ProviderAttemptIdentity,
+    audio: &ElevenLabsAudioObservation,
+) -> bool {
+    match (audio.request_id(), attempt.supplier_request_id.as_ref()) {
+        (Some(observed), Some(expected)) => observed == expected.as_str(),
+        (None, None) => true,
+        _ => false,
+    }
 }

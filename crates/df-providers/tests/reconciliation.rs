@@ -5,19 +5,20 @@ use df_model::checkpoint::{
 };
 use df_provider_api::{
     BudgetMutation, CheckedRequest, ProviderBillingClass, ProviderLiabilityDisposition,
-    ProviderNextAction, ProviderResultClass, ProviderRetryPolicy, RequestBinding, RequestIdentity,
-    RequestLimits, RequestOwnerState, RequestUsage,
+    ProviderNextAction, ProviderOutcomeError, ProviderResultClass, ProviderRetryPolicy,
+    RequestBinding, RequestIdentity, RequestLimits, RequestOwnerState, RequestUsage,
 };
 use df_providers::{
-    CandidateRouteId, FalQueueObservation, ProviderRequestId, ReconciliationInput,
-    ReconciliationLookup, classify_fal_status_response, reconcile_provider_attempt,
-    reconciliation_capability,
+    CandidateRouteId, FalQueueObservation, ProviderAttemptIdentity, ProviderImageMetadata,
+    ProviderRequestId, ReconciliationInput, ReconciliationLookup, classify_fal_status_response,
+    reconcile_provider_attempt, reconciliation_capability, validate_elevenlabs_audio,
 };
-use df_types::{OperationId, RecoveryEpoch, RevisionLabel, RunId, SessionId, SessionRevision};
-use df_types::{Usage, UsageUnit};
+use df_types::{
+    OperationId, RecoveryEpoch, RevisionLabel, RunId, SessionId, SessionRevision, Usage, UsageUnit,
+};
 
-fn operation() -> OperationId {
-    OperationId::from_bytes(&[6; 16]).unwrap()
+fn operation(value: u8) -> OperationId {
+    OperationId::from_bytes(&[value; 16]).unwrap()
 }
 
 fn binding() -> RequestBinding<AssetRequestKey> {
@@ -29,7 +30,7 @@ fn binding() -> RequestBinding<AssetRequestKey> {
                 revision: SessionRevision::new(RecoveryEpoch::new(3).unwrap(), 4),
             },
             job: JobId::from_bytes(&[5; 16]).unwrap(),
-            operation: operation(),
+            operation: operation(6),
             generation: 7,
         },
         semantic_basis: AssetRequestKey {
@@ -91,98 +92,306 @@ fn retry_policy() -> ProviderRetryPolicy {
     }
 }
 
-#[test]
-fn missing_submit_response_preserves_unknown_liability_without_resend() {
-    let fixture = fixture();
-    let decision = reconcile_provider_attempt(
-        &fixture.request,
-        owner(&fixture.current),
-        ReconciliationInput::MissingSubmitResponse,
-        ProviderBillingClass::MissingOrAmbiguous,
-        &BudgetMutation::<(), (), ()>::Unknown,
-        retry_policy(),
+fn fal_attempt(request_id: ProviderRequestId) -> ProviderAttemptIdentity {
+    ProviderAttemptIdentity::new(
+        operation(6),
+        CandidateRouteId::FalFluxSchnellDisposableImage,
+        Some(request_id),
     )
-    .unwrap();
-
-    assert_eq!(decision.result, ProviderResultClass::Incomplete);
-    assert_eq!(
-        decision.liability,
-        ProviderLiabilityDisposition::RetainWorstCase
-    );
-    assert_eq!(decision.next, ProviderNextAction::ReconcileSameOperation);
 }
 
-#[test]
-fn same_id_fal_completion_is_output_evidence_not_billing_or_idempotency_proof() {
-    let fixture = fixture();
-    let expected = ProviderRequestId::new("fal-request-7").unwrap();
-    let observation = classify_fal_status_response(
+fn completed_fal(request_id: &ProviderRequestId) -> FalQueueObservation {
+    classify_fal_status_response(
         200,
-        &expected,
-        Some("fal-request-7"),
+        request_id,
+        Some(request_id.as_str()),
         Some("COMPLETED"),
         None,
         None,
         Some(1.25),
     )
-    .unwrap();
-    assert_eq!(observation.inference_time_seconds(), Some(1.25));
-    let decision = reconcile_provider_attempt(
-        &fixture.request,
-        owner(&fixture.current),
-        ReconciliationInput::FalStatus {
-            expected_request_id: Some(&expected),
-            observation: &observation,
-        },
-        ProviderBillingClass::MissingOrAmbiguous,
-        &BudgetMutation::<(), (), ()>::Unknown,
-        retry_policy(),
-    )
-    .unwrap();
+    .unwrap()
+}
 
-    assert_eq!(decision.result, ProviderResultClass::Complete);
-    assert_eq!(
-        decision.liability,
-        ProviderLiabilityDisposition::RetainWorstCase
-    );
-    assert_eq!(decision.next, ProviderNextAction::ReconcileSameOperation);
+fn fal_image() -> ProviderImageMetadata {
+    ProviderImageMetadata {
+        url: "https://v3.fal.media/files/fixture.jpg".to_owned(),
+        content_type: "image/jpeg".to_owned(),
+        width: 1024,
+        height: 768,
+    }
 }
 
 #[test]
-fn absent_mismatched_and_not_found_fal_observations_remain_incomplete() {
-    let expected = ProviderRequestId::new("expected-1").unwrap();
-    let other = ProviderRequestId::new("other-2").unwrap();
-    let mismatch = FalQueueObservation::Completed {
-        request_id: other,
-        inference_time: Some(0.5),
-    };
+fn absent_submit_response_and_not_found_preserve_unknown_liability() {
+    let fixture = fixture();
+    let request_id = ProviderRequestId::new("fal-request-7").unwrap();
     let not_found =
-        classify_fal_status_response(404, &expected, None, None, None, None, None).unwrap();
-    for (expected_id, observation) in [
-        (Some(&expected), &mismatch),
-        (Some(&expected), &not_found),
-        (None, &mismatch),
+        classify_fal_status_response(404, &request_id, None, None, None, None, None).unwrap();
+    let pending = classify_fal_status_response(
+        200,
+        &request_id,
+        Some(request_id.as_str()),
+        Some("IN_QUEUE"),
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    for supplier in [
+        ReconciliationInput::UnknownSupplierOutcome,
+        ReconciliationInput::FalStatus(&not_found),
+        ReconciliationInput::FalStatus(&pending),
     ] {
-        let fixture = fixture();
         let decision = reconcile_provider_attempt(
             &fixture.request,
+            &fal_attempt(request_id.clone()),
             owner(&fixture.current),
-            ReconciliationInput::FalStatus {
-                expected_request_id: expected_id,
-                observation,
-            },
+            supplier,
             ProviderBillingClass::MissingOrAmbiguous,
             &BudgetMutation::<(), (), ()>::Unknown,
             retry_policy(),
         )
         .unwrap();
         assert_eq!(decision.result, ProviderResultClass::Incomplete);
+        assert_eq!(
+            decision.liability,
+            ProviderLiabilityDisposition::RetainWorstCase
+        );
         assert_eq!(decision.next, ProviderNextAction::ReconcileSameOperation);
     }
 }
 
 #[test]
-fn route_lookup_does_not_claim_submit_idempotency() {
+fn operation_and_fal_request_identity_are_bound_to_the_stored_attempt() {
+    let fixture = fixture();
+    let expected = ProviderRequestId::new("fal-request-7").unwrap();
+    let other = ProviderRequestId::new("other-request-8").unwrap();
+    let mismatch = completed_fal(&other);
+    let decision = reconcile_provider_attempt(
+        &fixture.request,
+        &fal_attempt(expected.clone()),
+        owner(&fixture.current),
+        ReconciliationInput::FalStatus(&mismatch),
+        ProviderBillingClass::MissingOrAmbiguous,
+        &BudgetMutation::<(), (), ()>::Unknown,
+        retry_policy(),
+    )
+    .unwrap();
+    assert_eq!(decision.result, ProviderResultClass::Incomplete);
+
+    let matching = completed_fal(&expected);
+    let wrong_route = ProviderAttemptIdentity::new(
+        operation(6),
+        CandidateRouteId::ElevenFlashV25Tts,
+        Some(ProviderRequestId::new("fal-request-7").unwrap()),
+    );
+    let wrong_route_decision = reconcile_provider_attempt(
+        &fixture.request,
+        &wrong_route,
+        owner(&fixture.current),
+        ReconciliationInput::FalStatus(&matching),
+        ProviderBillingClass::MissingOrAmbiguous,
+        &BudgetMutation::<(), (), ()>::Unknown,
+        retry_policy(),
+    )
+    .unwrap();
+    assert_eq!(wrong_route_decision.result, ProviderResultClass::Incomplete);
+
+    let cross_operation = ProviderAttemptIdentity::new(
+        operation(99),
+        CandidateRouteId::FalFluxSchnellDisposableImage,
+        Some(expected),
+    );
+    assert_eq!(
+        reconcile_provider_attempt(
+            &fixture.request,
+            &cross_operation,
+            owner(&fixture.current),
+            ReconciliationInput::UnknownSupplierOutcome,
+            ProviderBillingClass::MissingOrAmbiguous,
+            &BudgetMutation::<(), (), ()>::Unknown,
+            retry_policy(),
+        ),
+        Err(ProviderOutcomeError::OperationMismatch)
+    );
+}
+
+#[test]
+fn eleven_complete_stream_is_output_evidence_but_partial_or_unbound_id_is_unknown() {
+    let fixture = fixture();
+    let stream_id = ProviderRequestId::new("eleven-request-9").unwrap();
+    let audio = validate_elevenlabs_audio(
+        200,
+        "audio/mpeg",
+        true,
+        512,
+        Some(stream_id.as_str()),
+        None,
+        Some("250"),
+    )
+    .unwrap();
+    let attempt = ProviderAttemptIdentity::new(
+        operation(6),
+        CandidateRouteId::ElevenFlashV25Tts,
+        Some(stream_id.clone()),
+    );
+    let complete = reconcile_provider_attempt(
+        &fixture.request,
+        &attempt,
+        owner(&fixture.current),
+        ReconciliationInput::ElevenLabsStream(&audio),
+        ProviderBillingClass::MissingOrAmbiguous,
+        &BudgetMutation::<(), (), ()>::Unknown,
+        retry_policy(),
+    )
+    .unwrap();
+    assert_eq!(complete.result, ProviderResultClass::Complete);
+    assert_eq!(
+        complete.liability,
+        ProviderLiabilityDisposition::RetainWorstCase
+    );
+    assert_eq!(complete.next, ProviderNextAction::ReconcileSameOperation);
+
+    let unbound =
+        ProviderAttemptIdentity::new(operation(6), CandidateRouteId::ElevenFlashV25Tts, None);
+    let unbound_decision = reconcile_provider_attempt(
+        &fixture.request,
+        &unbound,
+        owner(&fixture.current),
+        ReconciliationInput::ElevenLabsStream(&audio),
+        ProviderBillingClass::MissingOrAmbiguous,
+        &BudgetMutation::<(), (), ()>::Unknown,
+        retry_policy(),
+    )
+    .unwrap();
+    assert_eq!(unbound_decision.result, ProviderResultClass::Incomplete);
+
+    assert!(validate_elevenlabs_audio(200, "audio/mpeg", false, 512, None, None, None).is_err());
+}
+
+#[test]
+fn fal_completed_status_alone_is_not_complete_output() {
+    let fixture = fixture();
+    let request_id = ProviderRequestId::new("fal-request-7").unwrap();
+    let status = completed_fal(&request_id);
+    let decision = reconcile_provider_attempt(
+        &fixture.request,
+        &fal_attempt(request_id.clone()),
+        owner(&fixture.current),
+        ReconciliationInput::FalStatus(&status),
+        ProviderBillingClass::MissingOrAmbiguous,
+        &BudgetMutation::<(), (), ()>::Unknown,
+        retry_policy(),
+    )
+    .unwrap();
+    assert_eq!(decision.result, ProviderResultClass::Incomplete);
+    assert_eq!(
+        decision.liability,
+        ProviderLiabilityDisposition::RetainWorstCase
+    );
+
+    let invalid_images = [ProviderImageMetadata {
+        content_type: "text/html".to_owned(),
+        ..fal_image()
+    }];
+    let invalid_result = reconcile_provider_attempt(
+        &fixture.request,
+        &fal_attempt(request_id),
+        owner(&fixture.current),
+        ReconciliationInput::FalResult {
+            observation: &status,
+            images: &invalid_images,
+        },
+        ProviderBillingClass::MissingOrAmbiguous,
+        &BudgetMutation::<(), (), ()>::Unknown,
+        retry_policy(),
+    )
+    .unwrap();
+    assert_eq!(invalid_result.result, ProviderResultClass::Incomplete);
+}
+
+#[test]
+fn fal_validated_same_id_result_is_complete_but_needs_verified_settlement() {
+    let fixture = fixture();
+    let request_id = ProviderRequestId::new("fal-request-7").unwrap();
+    let status = completed_fal(&request_id);
+    let images = [fal_image()];
+    let attempt = fal_attempt(request_id);
+
+    let pending_settlement = reconcile_provider_attempt(
+        &fixture.request,
+        &attempt,
+        owner(&fixture.current),
+        ReconciliationInput::FalResult {
+            observation: &status,
+            images: &images,
+        },
+        ProviderBillingClass::VerifiedUnused,
+        &BudgetMutation::<(), (), ()>::Unknown,
+        retry_policy(),
+    )
+    .unwrap();
+    assert_eq!(pending_settlement.result, ProviderResultClass::Complete);
+    assert_eq!(
+        pending_settlement.liability,
+        ProviderLiabilityDisposition::RetainWorstCase
+    );
+    assert_eq!(
+        pending_settlement.next,
+        ProviderNextAction::ReconcileSameOperation
+    );
+
+    let committed_settlement = reconcile_provider_attempt(
+        &fixture.request,
+        &attempt,
+        owner(&fixture.current),
+        ReconciliationInput::FalResult {
+            observation: &status,
+            images: &images,
+        },
+        ProviderBillingClass::VerifiedUnused,
+        &BudgetMutation::<(), (), ()>::Committed {
+            result: (),
+            replayed: false,
+        },
+        retry_policy(),
+    )
+    .unwrap();
+    assert_eq!(
+        committed_settlement.liability,
+        ProviderLiabilityDisposition::KnownUnused
+    );
+    assert_eq!(committed_settlement.next, ProviderNextAction::Complete);
+
+    let committed_without_billing = reconcile_provider_attempt(
+        &fixture.request,
+        &attempt,
+        owner(&fixture.current),
+        ReconciliationInput::FalResult {
+            observation: &status,
+            images: &images,
+        },
+        ProviderBillingClass::MissingOrAmbiguous,
+        &BudgetMutation::<(), (), ()>::Committed {
+            result: (),
+            replayed: false,
+        },
+        retry_policy(),
+    )
+    .unwrap();
+    assert_eq!(
+        committed_without_billing.liability,
+        ProviderLiabilityDisposition::RetainWorstCase
+    );
+    assert_eq!(
+        committed_without_billing.next,
+        ProviderNextAction::ReconcileSameOperation
+    );
+}
+
+#[test]
+fn routes_do_not_claim_submission_idempotency() {
     let eleven = reconciliation_capability(CandidateRouteId::ElevenFlashV25Tts);
     let fal = reconciliation_capability(CandidateRouteId::FalFluxSchnellDisposableImage);
     assert_eq!(eleven.lookup(), ReconciliationLookup::ResponseMetadataOnly);

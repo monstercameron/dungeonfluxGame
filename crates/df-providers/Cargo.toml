@@ -6,7 +6,7 @@ license.workspace = true
 
 [dependencies]
 df-provider-api = { path = "../df-provider-api" }
+df-types = { path = "../df-types" }
 
 [dev-dependencies]
 df-model = { path = "../df-model" }
-df-types = { path = "../df-types" }

@@ -15,7 +15,7 @@ pub use http_contract::{
     validate_fal_images,
 };
 pub use reconciliation::{
-    ReconciliationCapability, ReconciliationInput, ReconciliationLookup,
+    ProviderAttemptIdentity, ReconciliationCapability, ReconciliationInput, ReconciliationLookup,
     reconcile_provider_attempt, reconciliation_capability,
 };
 pub use registry::{
