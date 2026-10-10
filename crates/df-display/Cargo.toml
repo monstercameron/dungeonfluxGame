@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 df-client = { path = "../df-client" }
+df-protocol = { path = "../df-protocol" }
 df-types = { path = "../df-types" }
 df-ui = { path = "../df-ui" }
 

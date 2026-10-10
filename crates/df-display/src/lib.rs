@@ -1,5 +1,12 @@
 //! Shared-display presentation mounts for public views only.
 mod character_creation;
+mod public_projection;
+pub use public_projection::{
+    DisplayCaption, DisplayCombatOutcome, DisplayPartyMember, DisplayPhase, DisplayProjectionError,
+    DisplayScene, DisplaySceneKind, PublicCombatProjection, PublicDisplayProjection,
+    project_display_view,
+};
+
 #[cfg(target_arch = "wasm32")]
 pub use character_creation::DisplayCharacterScreen;
 

@@ -333,6 +333,7 @@ name = "df-display"
 version = "0.1.0"
 dependencies = [
  "df-client",
+ "df-protocol",
  "df-types",
  "df-ui",
  "wasm-bindgen",
