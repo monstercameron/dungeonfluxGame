@@ -301,3 +301,21 @@ fn targeted_and_untargeted_policies_cannot_be_silently_combined() {
         Err(AffordanceLookupError::ConflictingTargetPolicy)
     );
 }
+
+#[test]
+fn invalid_nonmatching_source_refuses_the_whole_lookup_without_partial_output() {
+    let current = entities();
+    let before = current.clone();
+    let mut entries = records(&current);
+    let mut unrelated = entries[0].clone();
+    unrelated.actor = entity(5);
+    unrelated.source.clause = label("unadmitted-physical-heuristic");
+    entries.push(unrelated);
+    let saved = entries.clone();
+    assert_eq!(
+        invoke(&current, &entries, bounds(), &[rule()]),
+        Err(AffordanceLookupError::UnknownSource)
+    );
+    assert_eq!(current, before);
+    assert_eq!(entries, saved);
+}
