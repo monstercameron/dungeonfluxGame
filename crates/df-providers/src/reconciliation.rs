@@ -12,8 +12,8 @@
 //! - <https://elevenlabs.io/docs/api-reference/introduction/>
 //! - <https://fal.ai/docs/documentation/model-apis/inference/queue>
 //! - <https://fal.ai/models/fal-ai/flux/schnell/api>
-//! These pages document request/status/result fields; they do not establish
-//! duplicate-safe submission or negative absence/billing proof.
+//!   These pages document request/status/result fields; they do not establish
+//!   duplicate-safe submission or negative absence/billing proof.
 
 use std::fmt;
 
