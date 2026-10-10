@@ -9,9 +9,10 @@ use df_provider_api::{
     RequestBinding, RequestIdentity, RequestLimits, RequestOwnerState, RequestUsage,
 };
 use df_providers::{
-    CandidateRouteId, FalQueueObservation, ProviderAttemptIdentity, ProviderImageMetadata,
-    ProviderRequestId, ReconciliationInput, ReconciliationLookup, classify_fal_status_response,
-    reconcile_provider_attempt, reconciliation_capability, validate_elevenlabs_audio,
+    CandidateRouteId, FalQueueObservation, ProviderAttemptIdentity, ProviderFailureClass,
+    ProviderImageMetadata, ProviderRequestId, ReconciliationInput, ReconciliationLookup,
+    classify_fal_status_response, reconcile_provider_attempt, reconciliation_capability,
+    validate_elevenlabs_audio,
 };
 use df_types::{
     OperationId, RecoveryEpoch, RevisionLabel, RunId, SessionId, SessionRevision, Usage, UsageUnit,
@@ -163,6 +164,61 @@ fn absent_submit_response_and_not_found_preserve_unknown_liability() {
 }
 
 #[test]
+fn classified_http_failure_cancellation_and_deadline_preserve_unknown_liability() {
+    let fixture = fixture();
+    let attempt = fal_attempt(ProviderRequestId::new("fal-request-7").unwrap());
+    let cases = [
+        (
+            ProviderFailureClass::Unknown,
+            owner(&fixture.current),
+            ProviderResultClass::Failed(ProviderFailureClass::Unknown),
+            false,
+        ),
+        (
+            ProviderFailureClass::Cancelled,
+            RequestOwnerState {
+                current: Some(&fixture.current),
+                elapsed: Duration::ZERO,
+                cancelled: true,
+            },
+            ProviderResultClass::Failed(ProviderFailureClass::Cancelled),
+            true,
+        ),
+        (
+            ProviderFailureClass::Deadline,
+            RequestOwnerState {
+                current: Some(&fixture.current),
+                elapsed: Duration::from_secs(2),
+                cancelled: false,
+            },
+            ProviderResultClass::Failed(ProviderFailureClass::Deadline),
+            true,
+        ),
+    ];
+
+    for (failure, owner, expected_result, owner_rejected) in cases {
+        let decision = reconcile_provider_attempt(
+            &fixture.request,
+            &attempt,
+            owner,
+            ReconciliationInput::ClassifiedFailure(failure),
+            ProviderBillingClass::MissingOrAmbiguous,
+            &BudgetMutation::<(), (), ()>::Unknown,
+            retry_policy(),
+        )
+        .unwrap();
+
+        assert_eq!(decision.result, expected_result);
+        assert_eq!(
+            decision.liability,
+            ProviderLiabilityDisposition::RetainWorstCase
+        );
+        assert_eq!(decision.next, ProviderNextAction::ReconcileSameOperation);
+        assert_eq!(decision.current_request.is_err(), owner_rejected);
+    }
+}
+
+#[test]
 fn operation_and_fal_request_identity_are_bound_to_the_stored_attempt() {
     let fixture = fixture();
     let expected = ProviderRequestId::new("fal-request-7").unwrap();
@@ -208,7 +264,7 @@ fn operation_and_fal_request_identity_are_bound_to_the_stored_attempt() {
             &fixture.request,
             &cross_operation,
             owner(&fixture.current),
-            ReconciliationInput::UnknownSupplierOutcome,
+            ReconciliationInput::ClassifiedFailure(ProviderFailureClass::Unknown),
             ProviderBillingClass::MissingOrAmbiguous,
             &BudgetMutation::<(), (), ()>::Unknown,
             retry_policy(),

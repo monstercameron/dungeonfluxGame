@@ -8,6 +8,7 @@ mod output_fetch;
 mod reconciliation;
 mod registry;
 
+pub use df_provider_api::ProviderFailureClass;
 pub use http_contract::{
     ElevenLabsAudioObservation, FalQueueObservation, FalSubmitObservation, HttpMethod, HttpRequest,
     HttpRequestError, ProviderImageMetadata, ProviderRequestId, classify_fal_status,

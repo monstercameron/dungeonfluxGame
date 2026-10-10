@@ -109,6 +109,9 @@ impl ReconciliationCapability {
 pub enum ReconciliationInput<'a> {
     /// Submit, status, or result response was lost, absent, partial, cancelled, or unusable.
     UnknownSupplierOutcome,
+    /// A native attempt owner classified a terminal failure. HTTP status and
+    /// timeout observations must use `Unknown` unless stronger facts are proven.
+    ClassifiedFailure(ProviderFailureClass),
     /// Clean, validated ElevenLabs stream response. Its optional request ID is
     /// checked against the ID on the same attempt when the supplier returned it.
     ElevenLabsStream(&'a ElevenLabsAudioObservation),
@@ -154,6 +157,7 @@ pub fn reconcile_provider_attempt<Semantic: Eq, Receipt, Refusal, Failure>(
 ) -> Result<ProviderOutcomeDecision, ProviderOutcomeError> {
     let result = match supplier {
         ReconciliationInput::UnknownSupplierOutcome => ProviderResultClass::Incomplete,
+        ReconciliationInput::ClassifiedFailure(failure) => ProviderResultClass::Failed(failure),
         ReconciliationInput::ElevenLabsStream(audio)
             if attempt_identity.route == CandidateRouteId::ElevenFlashV25Tts
                 && eleven_request_matches_attempt(attempt_identity, audio) =>
