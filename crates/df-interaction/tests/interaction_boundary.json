@@ -1,0 +1,272 @@
+{
+  "behavior_cases": [
+    "One actual public consumer fixture drives recorded accepted fact/witness/NpcState and seven-axis relationship through production ReactionPolicy/react; exact proposed replacement and accepted lineage remain private and immutable.",
+    "The same canonical checkpoint and actual source owners drive ConversationPermission/admit_conversation/project_conversation and existing SpeechActPlan/Knowledge projection; literal speaker, current participants/topic/window and explicit SecretPolicy are bound.",
+    "A source-denied/stale/unknown/nonwitnessed reaction is typed failure or NoReaction; no fallback authorizes mechanical rules, changes truth or commits a proposal.",
+    "Missing source owner, wrong speaker/recipient/topic, expired/stale/revoked permission and nonexplicit/unauthorized secret selections refuse; permitted text is identical across irrelevant hidden-state/replay variants.",
+    "Source-approved speech deceit/false belief stays attributed; canonical holder/outcome/slots and evidence remain unchanged, with no durable lore, player promise, disclosure grant or raw secret added.",
+    "Obligation and relationship ownership contracts reference existing canonical source/provenance operations; candidate proposals never apply themselves, and input checkpoints survive cancellation/drop/retry unchanged.",
+    "Read-only producer/consumer hooks are pinned to Engine relationship_staging/obligation_fulfillment and AI expression; operation/result/error/resource ownership is frozen in crate-owned JSON and asserted by the Rust fixture.",
+    "Normal and wasm-target cargo tree closure is df-interaction\u2192df-knowledge/df-model/df-types only; no new dependency, graph cycle, server/client/provider/database/runtime edge."
+  ],
+  "canonical_fixture_lineage": {
+    "obligation_agreement": "Separate accepted ContentEvent fact13 ordinal3, source obligation-agreement, exact ordered subjects [entity3, entity4], same operation/revision/source_policy and accepted decision facts; obligation-agreement is admitted in the content inventory.",
+    "private_claim": "Fact12 ordinal2 remains in the same accepted decision.",
+    "reaction": "Accepted help-event fact6 ordinal0 and fact7 ordinal1/cause6, witness8 and decision source_policy accepted-policy-v1 remain unchanged.",
+    "validation": "Canonical Checkpoint::new validates the source, exact parties, accepted decision, inventory and timebase before any proposal behavior."
+  },
+  "consumer_hooks": [
+    {
+      "commit_owner": "df-session",
+      "operations": "react; propose_relationship_change; staged RelationshipTransition",
+      "path": "crates/df-engine/src/relationship_staging.rs",
+      "status": "EXISTING_READ_ONLY"
+    },
+    {
+      "commit_owner": "df-session",
+      "operations": "propose_debt_transition; ObligationFulfillmentHandler::stage",
+      "path": "crates/df-engine/src/obligation_fulfillment.rs",
+      "status": "EXISTING_READ_ONLY"
+    },
+    {
+      "operations": "PreparedExpression::validate_current; expression request preparation/qualification",
+      "path": "crates/df-ai/src/expression.rs",
+      "publication_owner": "native supplier/commit before release; this fixture makes no provider call",
+      "status": "EXISTING_READ_ONLY"
+    },
+    {
+      "execution_owner": "independent frontier evaluator; author --no-run only",
+      "operations": "whole_original_interaction_boundary_keeps_proposals_private_and_current",
+      "path": "crates/df-interaction/tests/interaction_boundary.rs",
+      "status": "FOCUSED_PUBLIC_CONSUMER_FIXTURE"
+    }
+  ],
+  "decision": {
+    "authority": "Source owners admit existing pinned policy and current scope independently of client flags/trace IDs. df-knowledge filters claim/evidence/SecretPolicy audience; df-engine owns detached candidates and df-session sole accepted PostgreSQL commit. Expression input is listener-safe and must revalidate before later native egress/publication.",
+    "canonical_values": "df-model checkpoint NpcState/Relationship/ConversationState/SecretPolicy/Obligation plus actual df-interaction ReactionRequest/Policy/Outcome/Proposal, relationship/debt generics, ConversationPermission/Plan/Context and SpeechProposal/ActPlan/ExpressionContext. Existing model IDs and pin/time/audience units only.",
+    "criterion_mapping": [
+      {
+        "coverage": "Actual fixture+ledger freeze canonical producer/current request/result/error/ownership shapes and pinned consumers, with missing planned aliases explicit. Immutable bounded pure proposed outputs and exact checkpoint/time/source admission are exercised.",
+        "criterion": 1,
+        "original": "NpcState, Relationship, ConversationState, TopicGraph, SecretPolicy, Obligation, InteractionProposal; Pure contract authority: Motivated NPC/object/faction reactions. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit."
+      },
+      {
+        "coverage": "One focused fixture checks typed failure/drop/retry immutability and public projection privacy; dependency cargo tree native+wasm closes only existing pure crates, no new edge/cycle/server browser import.",
+        "criterion": 2,
+        "original": "No new graph edge/cycle/server transitively in WASM; typed failure and owned cleanup fixtures specified."
+      },
+      {
+        "coverage": "Fixture includes normal source-approved reaction+literal permitted expression and missing/stale/expired/revoked/ignorance/wrong-recipient/implicit/unauthorized secret refusal, replay/hidden-state noninterference; actual production authority/recovery gaps remain explicit.",
+        "criterion": 3,
+        "original": "Apply governing service normal/failure/rights/privacy/recovery criteria from planning/interaction-engine.md."
+      }
+    ],
+    "decision": "Refine whole Original through one crate-owned Rust/JSON public-boundary fixture using existing canonical reaction, relationship, obligation, conversation and speech contracts; no production type/schema/authority implementation or new graph edge. JSON is the Original verification-required single producer/consumer ledger and is asserted from the Rust fixture, not a second authority.",
+    "nonclaims": [
+      "Planned InteractionEngine::react/plan, InteractionProposal and TopicGraph names have no canonical concrete types; do not add aliases or claim those future types implemented. Current production free functions and typed results are the contract under review.",
+      "Complete dynamic NPC/social/object/faction policy, supported source catalog and production auth/content issuers remain outside this bounded contract. Missing supplied admission refuses.",
+      "Canonical acceptance/persistence remains df-engine staging and sole df-session PostgreSQL commit; no provider/publication/rights grant or disclosure can be created by this pure crate.",
+      "No stream, timer, background task, network, provider, database handle or native cleanup loop is owned by these synchronous pure operations. Native effect/recovery/audio/browser integration remains explicitly unperformed."
+    ],
+    "preserved_children": "Done D01-D04 remain canonical prior contracts; implementation/wiring/feature child owners are neither duplicated nor automatically completed."
+  },
+  "governing_pins": [
+    {
+      "bytes": 20121,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/AGENTS.md",
+      "sha256": "55578ed92c477dfe3c306db38c6ad20390bfe8208ca998e6f3bf6f6bebbec182"
+    },
+    {
+      "bytes": 9448,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/coding-style.md",
+      "sha256": "2d8e327e4172643544bd80b591f38226c25b83940a10f1d9e18ada9044faeabb"
+    },
+    {
+      "bytes": 11517,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/interaction-engine.md",
+      "sha256": "1bad7c28609ac5e5a51a3ea0b3c1fae17ebeb6380dbdb8fce582085a8ede354f"
+    },
+    {
+      "bytes": 11747,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/runtime-directors.md",
+      "sha256": "ed8944f316d912498107ee550431e560795ba8114cb63a181b6aadeca70b48ca"
+    },
+    {
+      "bytes": 14004,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/subsystem-architecture.md",
+      "sha256": "cf549f4f046f76713c881228d82c6a7111d8ccc84db208cb9d9db67bb192d9f6"
+    },
+    {
+      "bytes": 35522,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/planning/subsystem-interfaces.md",
+      "sha256": "f26e1dca42e878f8a816c9f9aa37463cb8f061224598214ceee62632a161907a"
+    },
+    {
+      "bytes": 13664,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0001-sqlite-agent-workflow.md",
+      "sha256": "acfe32a8d5e846aa4d3b2981529533b9f53cdcc11088424128e60c20b722adc8"
+    },
+    {
+      "bytes": 8670,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0004-development-reliability.md",
+      "sha256": "8f03d02d478086fd1f50d7aa10e8e7e766e3b15ae02f7f96efa43757c98a4dae"
+    },
+    {
+      "bytes": 6534,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/ADR/0005-frontier-output-evaluation.md",
+      "sha256": "25ab35a57ee8516a272b1ff3d04bba4def91319255d89158c9be55283ca6c35c"
+    }
+  ],
+  "ownership": {
+    "cancellation": "dropping a proposed result never cancels an accepted obligation or committed game decision; explicit DebtAction::Cancel needs source authorization",
+    "graph": "existing normal/wasm closure df-interaction -> df-knowledge/df-model/df-types; no new edge",
+    "no_owned_streams_or_runtime_handles": true,
+    "privacy": "raw private proposals/secret IDs never substitute for listener-safe context; explicit selected secret never widens claim/evidence/policy audience; approved deceit/false belief is attributed rather than truth",
+    "recovery": "same immutable source/basis reprojects same candidates; stale run/epoch/window/source refuses; PostgreSQL atomic commit and restart remain native owner/unperformed",
+    "request_lifetime": "borrowed immutable checkpoint/source views; owned bounded candidates can be dropped without side effects",
+    "time": "explicit checkpoint logical time only; no wall clock/dice/provider/DB reads"
+  },
+  "producer_contracts": [
+    {
+      "input": "immutable Checkpoint + ReactionRequest + bounded source-admitted ReactionPolicy",
+      "module": "df_interaction::reactions",
+      "operation": "ReactionPolicy::new; react",
+      "owner": "df-interaction source policy; df-engine selects private proposed replacement; df-session commits canonical accepted checkpoint",
+      "result": "Result<ReactionOutcome,ReactionError>; Proposed(Box<ReactionProposal>) or NoReaction"
+    },
+    {
+      "input": "RelationshipOwner + current directional RelationshipView + exact one-axis RelationshipChange",
+      "module": "df_interaction::relationships",
+      "operation": "propose_relationship_change",
+      "owner": "canonical model/pin/provenance supplied by caller; no numeric scores or mechanical bonuses",
+      "result": "owned RelationshipProposal or typed RelationshipRefusal"
+    },
+    {
+      "input": "canonical borrowed obligation, explicit authorization/action/provenance and logical ticks after caller timebase validation",
+      "module": "df_interaction::debts",
+      "operation": "propose_debt_transition; ObligationView",
+      "owner": "df-engine FulfillmentSourceOwner binds actual accepted cause/action; df-session sole commit",
+      "result": "DebtTransitionOutcome proposed owned candidate or typed refusal"
+    },
+    {
+      "input": "canonical conversation/current literal speaker/exact recipient/topic/logical PermissionWindow/explicit SecretDisclosure plus both source owners",
+      "module": "df_interaction::conversation",
+      "operation": "admit_conversation; project_conversation; ConversationPermission",
+      "owner": "df-model owns canonical records; source owners admit policy and current rights; no reveal grant",
+      "result": "private ConversationPlan/ConversationContext or typed ConversationError"
+    },
+    {
+      "input": "bounded source-admitted canonical attributed claims/slots with current basis/pins/versions/observer",
+      "module": "df_interaction::speech",
+      "operation": "admit_speech; project_expression_context; SpeechActPlan",
+      "owner": "Knowledge filters actual claim/evidence/SecretPolicy audiences; AI adapter only expresses selected claims",
+      "result": "immutable SpeechActPlan and listener-safe ExpressionContext; typed SpeechError"
+    }
+  ],
+  "source_consumer_pins": [
+    {
+      "bytes": 241,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-interaction/Cargo.toml",
+      "sha256": "eac68c79fb9492db21621cea06daa83c87ef416162831b401a7989c2fbee2df1"
+    },
+    {
+      "bytes": 95,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-interaction/src/lib.rs",
+      "sha256": "32d4d1f0d050415bdd9131c29c0e8e25f8a50cd4c4f3e71762d46efaa1baed1e"
+    },
+    {
+      "bytes": 15245,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-interaction/src/reactions.rs",
+      "sha256": "30b9aa5ddb8320b2126fbf405c2319c3b492bdec0a38c6c9e843bb6803ee3911"
+    },
+    {
+      "bytes": 7008,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-interaction/src/relationships.rs",
+      "sha256": "d399fd5077bbe3c9b444a2d5cc9a4562acb260f2c763e72a3cee9361f3b03ca0"
+    },
+    {
+      "bytes": 6163,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-interaction/src/debts.rs",
+      "sha256": "bb90e9a737a360fa013499bd7449c879b60c31db4ad8541da0b6251c071d8e86"
+    },
+    {
+      "bytes": 14248,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-interaction/src/conversation.rs",
+      "sha256": "7cc3f994fa5f30ddaf97dcb6be92ae805d7040e139819913680d2bae3b9a46c8"
+    },
+    {
+      "bytes": 13941,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-interaction/src/speech.rs",
+      "sha256": "7506dc56d1b69eb35bf59c87a596a19245c12121373cf76267e42e69087c4feb"
+    },
+    {
+      "bytes": 11733,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-knowledge/src/perception.rs",
+      "sha256": "42b3cac8112284c8c92df91c0bebbd3d63c874b10aabe2a579ab7b554b1265a7"
+    },
+    {
+      "bytes": 110629,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-model/src/checkpoint.rs",
+      "sha256": "b4a9c244d0f44ef1aa4fa1eb01a5518b253c08c80e93f612a8042e5bd92340cf"
+    },
+    {
+      "bytes": 22933,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-engine/src/relationship_staging.rs",
+      "sha256": "ee977141b15a7c68022c92484802020d4949cd5a34204cba426d7ed7854c8e24"
+    },
+    {
+      "bytes": 17828,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-engine/src/obligation_fulfillment.rs",
+      "sha256": "7325e9dc80dc7f0cb37385c2f4e04e183d899066c2c7dfd09c29a1e4cc9252c3"
+    },
+    {
+      "bytes": 11108,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-ai/src/expression.rs",
+      "sha256": "a784ccc58e861c0822af70a3080c3fc35dc694cb8778b917fb1204d58d3715cf"
+    },
+    {
+      "bytes": 1806,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-engine/Cargo.toml",
+      "sha256": "6d28624ac4600f48446eb9d8567f696481dc182ad3f326e3ee0c35a10370db13"
+    },
+    {
+      "bytes": 303,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-ai/Cargo.toml",
+      "sha256": "32e43d18ed9fb63568e65d3194e58a64a8e689237e273ddae01e8aaa4654cb82"
+    },
+    {
+      "bytes": 103,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-types/Cargo.toml",
+      "sha256": "adeea17f31b369f16b22ffe2029fa33e6f74379d0688da9359ae738a34402dad"
+    },
+    {
+      "bytes": 155,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-model/Cargo.toml",
+      "sha256": "d61095b751293a9714cbbc2f7ab112304cbfd745a64119df591a5bb35c95997b"
+    },
+    {
+      "bytes": 195,
+      "path": "/Users/earlcameron/Desktop/dungeonflux/crates/df-knowledge/Cargo.toml",
+      "sha256": "c4e52b81f91c7690a5a5118dbc7caef1e98c09ffe1b0c4c624fcc683eeeb4582"
+    }
+  ],
+  "task_id": "C-df-interaction-BOUNDARY",
+  "unperformed_production_boundaries": [
+    "Planned InteractionEngine::react/plan, InteractionProposal and TopicGraph names have no canonical concrete types; do not add aliases or claim those future types implemented. Current production free functions and typed results are the contract under review.",
+    "Complete dynamic NPC/social/object/faction policy, supported source catalog and production auth/content issuers remain outside this bounded contract. Missing supplied admission refuses.",
+    "Canonical acceptance/persistence remains df-engine staging and sole df-session PostgreSQL commit; no provider/publication/rights grant or disclosure can be created by this pure crate.",
+    "No stream, timer, background task, network, provider, database handle or native cleanup loop is owned by these synchronous pure operations. Native effect/recovery/audio/browser integration remains explicitly unperformed."
+  ],
+  "unresolved_planned_names": {
+    "InteractionEngine::react/plan": "UNRESOLVED planned facade; current operations are explicit module free functions",
+    "InteractionProposal": "UNRESOLVED umbrella shared model; current distinct typed proposals remain canonical",
+    "RulingRequest/Response": "UNRESOLVED source-guided native orchestration; typed source refusal/NeedsRuling remain visible",
+    "TopicGraph": "UNRESOLVED authoring/model; current canonical ConversationState.topic and admitted topic-bound scope do not invent a graph"
+  },
+  "whole_original_acceptance": [
+    "NpcState, Relationship, ConversationState, TopicGraph, SecretPolicy, Obligation, InteractionProposal; Pure contract authority: Motivated NPC/object/faction reactions. Immutable current basis -> bounded staged proposals; exact operations/errors/time/order/replay contracts in planning/runtime-directors.md; persistent shapes df-model, policies df-content, sole mutation df-session after Postgres commit.",
+    "No new graph edge/cycle/server transitively in WASM; typed failure and owned cleanup fixtures specified.",
+    "Apply governing service normal/failure/rights/privacy/recovery criteria from planning/interaction-engine.md."
+  ],
+  "whole_original_objective": "Freeze candidate InteractionEngine::react/plan; InteractionProposal model, ownership, request/result/error/stream shapes and exact consumer hooks without implementation."
+}
