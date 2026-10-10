@@ -5,6 +5,7 @@ use df_model::checkpoint::{
     Basis, Checkpoint, CheckpointError, CheckpointPins, ContentReference, EntityId,
     ReferenceInventory,
 };
+use std::mem::size_of;
 
 pub struct AffordanceQuery<'a> {
     pub basis: Basis,
@@ -39,6 +40,9 @@ pub enum AffordanceLookupError {
 /// whose actual source handler and current conditions have been admitted. Every supplied record
 /// is checked before any output is returned. Entity definitions stay opaque; no geometry, entity
 /// kind, resource cost, physics or success is inferred. Empty matches require an explicit ruling.
+/// A returned source locator identifies the candidate's admitted clause; it is not a rule result.
+/// Intent revalidates exact target identity and the rules consumer selects that same registered
+/// clause under current complete pins. Neither catalog membership nor this lookup grants rights.
 pub fn lookup_affordances<'a>(
     current: &'a Checkpoint,
     query: AffordanceQuery<'_>,
@@ -77,16 +81,10 @@ pub fn lookup_affordances<'a>(
     {
         return Err(AffordanceLookupError::UnknownAction);
     }
-    let matches = Vec::new();
-    let mut result = AffordanceSet {
-        basis: current.basis(),
-        pins: current.pins(),
-        actor: query.actor,
-        action: query.action.clone(),
-        matches,
-    };
-    let mut bytes = result
-        .retained_bytes()
+    // Admit the complete output and every supplied row before cloning any owned candidate.
+    let mut bytes = size_of::<AffordanceSet<'_>>()
+        .checked_add(query.action.package.as_str().len())
+        .and_then(|bytes| bytes.checked_add(query.action.entry.as_str().len()))
         .ok_or(AffordanceLookupError::Capacity)?;
     if bytes > limits.output_bytes {
         return Err(AffordanceLookupError::Capacity);
@@ -158,8 +156,8 @@ pub fn lookup_affordances<'a>(
         }
         count += 1;
     }
-    result
-        .matches
+    let mut matches = Vec::new();
+    matches
         .try_reserve_exact(count)
         .map_err(|_| AffordanceLookupError::AllocationCapacity)?;
     for (index, record) in source_admitted.iter().enumerate() {
@@ -171,11 +169,15 @@ pub fn lookup_affordances<'a>(
                     && previous.target == record.target
             })
         {
-            result.matches.push(record.clone());
+            matches.push(record.clone());
         }
     }
-    result
-        .matches
-        .sort_unstable_by_key(|entry| entry.target.as_ref().map(|target| *target.id.as_bytes()));
-    Ok(result)
+    matches.sort_unstable_by_key(|entry| entry.target.as_ref().map(|target| *target.id.as_bytes()));
+    Ok(AffordanceSet {
+        basis: current.basis(),
+        pins: current.pins(),
+        actor: query.actor,
+        action: query.action.clone(),
+        matches,
+    })
 }
