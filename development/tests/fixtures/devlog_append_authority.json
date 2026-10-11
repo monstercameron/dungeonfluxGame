@@ -1,0 +1,54 @@
+{
+  "acceptance": [
+    "worker append only",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "alternatives": [
+    "Editing or deleting an existing observation loses provenance and is rejected by the current SQLite triggers.",
+    "Entry-supplied identity mixes content with context and is rejected by the current CLI.",
+    "A new Rust wrapper/runner or Markdown-only policy would duplicate or fail to exercise the current boundary."
+  ],
+  "anti_forgery_claim": false,
+  "authority": "local planning-phase role contract",
+  "cases": {
+    "correction_is_a_new_linked_row": "New stable correction ID with related_entry_id appends and keeps original immutable bytes.",
+    "entry_cannot_supply_identity_role_task_attempt_or_timestamp": "Each of agent_id, role, task_id, attempt_id, created_at in entry is refused before insertion; original rows unchanged.",
+    "invalid_kind_bounds_stable_id_and_dangling_correction_refuse": "Actual CLI/schema refuse invalid kind, overlong summary, padded ID, missing related row and preserve queue state.",
+    "late_known_superseded_attempt_remains_historical": "Real tool accepts original assigned worker historical append to abandoned attempt; task active newer generation and all queue rows remain unchanged. No submission authorization granted.",
+    "local_context_file_is_not_trusted_runner_security": "JSON fixture explicitly retains trusted execution context/role binding and OS SQLite access enforcement as future implementation gates; no forged-context rejection claimed.",
+    "same_id_retry_is_idempotent_and_changed_retry_cannot_rewrite": "Exact repeated entry returns existing with one original row; differing immutable observation is refused, preserving original timestamp and payload.",
+    "unassigned_actor_and_mismatched_or_unknown_attempt_are_refused": "Assigned context linked to another actor/task/missing attempt is rejected without append or queue change.",
+    "unlinked_observation_uses_context_identity": "Coordinator-supplied worker context without task/attempt appends null links as permitted by ADR0003; no invented active lease required.",
+    "worker_appends_observation_with_context_owned_provenance": "Real devlog.py inserts exact worker/task/attempt identity and UTC timestamp into actual-schema fixture; queue four tables unchanged.",
+    "worker_cannot_update_or_delete_own_or_other_entries": "Actual schema triggers reject direct UPDATE/DELETE of own and other seeded observations. SQL trigger checks do not imply OS access control."
+  },
+  "checks": {
+    "live_workflow_database": "Forbidden for behavioral fixtures.",
+    "native_rust_wasm_browser": "Unperformed and not applicable; no application/Rust/Cargo source changes.",
+    "python_ast": "Required before Source submission.",
+    "running_acceptance": "Independent real CLI/schema suite required; author does not execute behavior."
+  },
+  "decision": "Use the existing development/devlog.py append-only command and existing SQLite triggers. Worker observation payload cannot set context identity or update/delete retained rows; corrections append a new linked row. The local command never changes authoritative queue rows.",
+  "historical_observations": "Known assigned superseded/abandoned attempts may still append history; this never admits a stale Source submission or grants queue mutation.",
+  "integration_hook": "Executable Development suite invokes the actual devlog CLI with explicit isolated --database; it does not replace the future df-workflow runner.",
+  "limits": {
+    "combined_owned_rss_cap_mib": 128,
+    "parent_guard_max_seconds": 60,
+    "per_cli_stdout_stderr_bytes": 16384,
+    "per_cli_timeout_seconds": 3,
+    "suite_deadline_seconds": 45
+  },
+  "objective": "Define devlog provenance authority; expected: worker append only.",
+  "production_trusted_runner_implemented": false,
+  "schema_version": 1,
+  "source_owner": "development/devlog.py and development/schema.sql, read-only in this Design qualification",
+  "task_id": "B-G09-D04",
+  "unresolved": [
+    "Trusted runner must supply non-forgeable agent/role/task/attempt identity and enforce filesystem/SQLite permissions. A user-provided JSON context and a local SQLite file do not provide that access control.",
+    "df-workflow trusted scheduling/coordinator runtime is absent from the current Rust workspace; this Design witness does not implement or qualify it."
+  ],
+  "verification": [
+    "Freeze the cited source decision and a bounded contract example; compare worker append only. Retain decision, alternatives and unresolved facts.",
+    "Exact executable commands: TBD at G01 and scoped prerequisite resolution; this planned procedure is not a claim that Rust/browser/provider checks ran."
+  ]
+}
