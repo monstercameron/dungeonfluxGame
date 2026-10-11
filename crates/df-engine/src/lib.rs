@@ -1,3 +1,4 @@
+pub mod belief_staging;
 pub mod character_reference;
 pub mod combat_staging;
 pub mod command_entry;
