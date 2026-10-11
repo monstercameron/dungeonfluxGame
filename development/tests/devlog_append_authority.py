@@ -268,7 +268,9 @@ def main():
     if not args.scratch.is_absolute() or args.scratch.is_symlink():
         parser.error("--scratch must be an absolute, fresh owned artifact directory")
     scratch = args.scratch.resolve()
-    allowed_parents = (ROOT / "artifacts", ROOT.parents[2] / "artifacts")
+    allowed_parents = [ROOT / "artifacts"]
+    if ROOT.parent.name == "worktrees" and ROOT.parent.parent.name == "artifacts":
+        allowed_parents.append(ROOT.parents[2] / "artifacts")
     if not any(scratch.is_relative_to(parent) for parent in allowed_parents):
         parser.error("--scratch must stay in project-owned artifacts")
     scratch.mkdir(mode=0o700)
