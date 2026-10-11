@@ -2,6 +2,8 @@
 #[cfg(target_arch = "wasm32")]
 mod browser;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod build_set;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod fixture;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod gameplay;
