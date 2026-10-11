@@ -316,7 +316,7 @@ async fn scribe_registered_route_sends_exact_multipart_and_preserves_verbatim_fi
     let SttEventKind::Final(out) = final_event.kind else {
         panic!("no final transcript")
     };
-    assert_eq!(out.locale().as_str(), "en-US");
+    assert_eq!(out.locale(), &b.semantic_basis.semantic.locale);
     assert_eq!(out.detected_language(), "eng");
     assert_eq!(out.text(), format!("{SENTINEL} exact  whitespace"));
     assert_eq!(out.words()[1].kind, TranscriptWordKind::Spacing);
@@ -388,7 +388,7 @@ async fn flash_preserves_caller_text_voice_encoded_profile_and_terminal_events()
     };
     assert_eq!(sequence, 0);
     assert_eq!(audio.bytes(), AUDIO);
-    assert_eq!(audio.locale().as_str(), "en-GB");
+    assert_eq!(audio.locale(), &b.semantic_basis.semantic.locale);
     assert_eq!(audio.voice(), b.semantic_basis.semantic.voice);
     assert_eq!(
         audio.requested_format(),
@@ -611,7 +611,7 @@ async fn absent_metadata_silent_audio_and_detected_language_remain_distinct() {
         let SttEventKind::Final(out) = event.kind else {
             panic!("final")
         };
-        assert_eq!(out.locale().as_str(), "en-US");
+        assert_eq!(out.locale(), &b.semantic_basis.semantic.locale);
         if case == 0 {
             assert!(out.text().is_empty());
             assert!(out.words().is_empty());
