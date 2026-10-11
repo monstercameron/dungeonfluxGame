@@ -510,9 +510,9 @@ fn withdrawal_duplicate_operation_duplicate_claim_and_missing_producer_refuse() 
     command.operation = setup.current.state().decisions[0].operation;
     assert_eq!(
         setup.registered(&owner, Some(&setup.update), &setup.current, &duplicate_op),
-        Err(CommandRejection::Invocation(InvocationError::Handler(
-            BeliefStagingError::AlreadyAccepted
-        )))
+        Err(CommandRejection::Invocation(
+            InvocationError::AlreadyAccepted
+        ))
     );
 
     let mut with_claim = setup.current.state().clone();
