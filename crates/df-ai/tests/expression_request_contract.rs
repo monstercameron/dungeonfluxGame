@@ -1,4 +1,5 @@
 use df_ai::expression::*;
+use df_interaction::conversation::*;
 use df_interaction::speech::*;
 use df_model::checkpoint::*;
 use df_provider_api::{
@@ -9,6 +10,7 @@ use df_types::{
     BuildIdentity, LocaleTag, MemberId, OperationId, RecoveryEpoch, RevisionLabel, RunId,
     SessionId, SessionRevision, Usage, UsageUnit,
 };
+use std::cell::Cell;
 use std::time::Duration;
 fn label(value: &str) -> RevisionLabel {
     RevisionLabel::new(Some(value)).unwrap()
@@ -472,6 +474,121 @@ fn request_work() -> RequestUsage {
         Duration::from_millis(20),
         Usage::new(10, UsageUnit::Token),
     )
+}
+
+struct ConversationOwner {
+    speech_allowed: Cell<bool>,
+    conversation_allowed: Cell<bool>,
+}
+
+impl SpeechSourceOwner for ConversationOwner {
+    fn validate(
+        &self,
+        current: Basis,
+        admitted: &CheckpointPins,
+        version: &SpeechVersions,
+        proposal: &SpeechProposal,
+    ) -> Result<(), SpeechSourceError> {
+        SpeechSourceOwner::validate(
+            &RegisteredSource {
+                access: self.speech_allowed.get(),
+                deceit: false,
+            },
+            current,
+            admitted,
+            version,
+            proposal,
+        )
+    }
+}
+
+impl ConversationSourceOwner for ConversationOwner {
+    fn validate(
+        &self,
+        current: Basis,
+        admitted: &CheckpointPins,
+        conversation: &ConversationState,
+        permission: &ConversationPermission,
+        claims: &[RecordId],
+    ) -> Result<(), ConversationSourceError> {
+        if !self.conversation_allowed.get() {
+            return Err(ConversationSourceError::AccessDenied);
+        }
+        if current != basis()
+            || admitted != &pins()
+            || conversation.id != claim_id(50)
+            || permission.policy != content()
+            || permission.topic != conversation.topic
+            || permission.speaker != entity(4)
+            || permission.recipient != ObserverScope::Shared
+            || claims != [claim_id(30)]
+        {
+            return Err(ConversationSourceError::Unsupported);
+        }
+        Ok(())
+    }
+}
+
+fn conversation_state(hidden: &str) -> GameState {
+    let mut current = speech_state(hidden);
+    current.conversations.push(ConversationState {
+        id: claim_id(50),
+        participants: vec![entity(4)],
+        topic: content(),
+        accepted_facts: vec![],
+    });
+    current
+}
+
+fn conversation_observation<'a>(
+    current: &'a Checkpoint,
+    version: &'a SpeechVersions,
+    source: &'a ConversationOwner,
+) -> ConversationObservation<'a> {
+    ConversationObservation {
+        speech: observation(current, version, Some(source), ObserverScope::Shared),
+        source_owner: Some(source),
+        limits: ConversationLimits {
+            maximum_participants: 2,
+            maximum_accepted_facts: 2,
+            maximum_disclosures: 0,
+            maximum_comparisons: 100,
+            maximum_window_ticks: 30,
+        },
+    }
+}
+
+fn conversation_permission() -> ConversationPermission {
+    ConversationPermission {
+        policy: content(),
+        conversation: claim_id(50),
+        topic: content(),
+        speaker: entity(4),
+        recipient: ObserverScope::Shared,
+        window: PermissionWindow {
+            opens_at: LogicalTime {
+                ticks: 110,
+                ticks_per_second: 10,
+            },
+            expires_at: LogicalTime {
+                ticks: 130,
+                ticks_per_second: 10,
+            },
+        },
+        disclosures: vec![],
+    }
+}
+
+fn conversation_proposal() -> SpeechProposal {
+    SpeechProposal {
+        source: content(),
+        claims: vec![PlannedClaim {
+            claim: claim_id(30),
+            intent: SpeechIntent::Claim,
+            uncertainty: DeclaredUncertainty::NoneDeclared,
+            slots: slots(),
+        }],
+    }
 }
 fn prepared<'a>(
     c: &'a Checkpoint,
@@ -985,4 +1102,157 @@ fn projection_text_budget_is_distinct_from_complete_checked_request_byte_bound()
         ),
         Err(ExpressionRequestError::Capacity)
     ));
+}
+
+#[test]
+fn conversation_request_uses_only_current_listener_projection_in_hidden_secret_pair() {
+    let first = checkpoint(conversation_state("SECRET-A-HOST-REASONING")).unwrap();
+    let second = checkpoint(conversation_state("SECRET-B-HOST-REASONING")).unwrap();
+    let version = versions();
+    let source = ConversationOwner {
+        speech_allowed: Cell::new(true),
+        conversation_allowed: Cell::new(true),
+    };
+    let mut payloads = Vec::new();
+    for current in [&first, &second] {
+        let observed = conversation_observation(current, &version, &source);
+        let plan = admit_conversation(
+            conversation_permission(),
+            conversation_proposal(),
+            &observed,
+        )
+        .unwrap();
+        let binding = project_conversation(&plan, &observed)
+            .unwrap()
+            .with_expression(request_binding);
+        let prepared = prepare_conversation_expression_request(
+            &plan,
+            &observed,
+            request_binding_from(&binding),
+            request_work(),
+            request_limits(),
+            request_owner(&binding),
+        )
+        .unwrap();
+        prepared
+            .validate_current(&observed, request_owner(&binding))
+            .unwrap();
+        assert_eq!(prepared.metadata().permitted_claims, 1);
+        assert!(!has(prepared.request().payload(), b"SECRET-"));
+        let qualified = qualify_conversation_expression(
+            &prepared,
+            &observed,
+            request_owner(&binding),
+            SpeechEnvelope {
+                clauses: vec![ExpressionClause::Grounded(GroundedClause {
+                    claim_id: claim_id(30),
+                    holder: entity(4),
+                    subject: entity(4),
+                    intent: SpeechIntent::Claim,
+                    uncertainty: DeclaredUncertainty::NoneDeclared,
+                    text: "Ada has 13 coins.".to_owned(),
+                    slots: vec![
+                        GroundedValue {
+                            kind: SlotKind::Name,
+                            value: "Ada".to_owned(),
+                        },
+                        GroundedValue {
+                            kind: SlotKind::Outcome,
+                            value: "has".to_owned(),
+                        },
+                        GroundedValue {
+                            kind: SlotKind::Number,
+                            value: "13".to_owned(),
+                        },
+                    ],
+                })],
+            },
+            qualification_limits(),
+        )
+        .unwrap();
+        assert_eq!(qualified.clauses().len(), 1);
+        payloads.push(prepared.request().payload().to_vec());
+    }
+    assert_eq!(payloads[0], payloads[1]);
+}
+
+#[test]
+fn conversation_permission_revocation_refuses_egress_and_qualified_output() {
+    let current = checkpoint(conversation_state("SECRET-HOST-ONLY")).unwrap();
+    let version = versions();
+    let source = ConversationOwner {
+        speech_allowed: Cell::new(true),
+        conversation_allowed: Cell::new(true),
+    };
+    let observed = conversation_observation(&current, &version, &source);
+    let plan = admit_conversation(
+        conversation_permission(),
+        conversation_proposal(),
+        &observed,
+    )
+    .unwrap();
+    let binding = project_conversation(&plan, &observed)
+        .unwrap()
+        .with_expression(request_binding);
+    source.conversation_allowed.set(false);
+    assert!(admit_speech(conversation_proposal(), &observed.speech).is_ok());
+    assert!(matches!(
+        prepare_conversation_expression_request(
+            &plan,
+            &observed,
+            request_binding_from(&binding),
+            request_work(),
+            request_limits(),
+            request_owner(&binding),
+        ),
+        Err(ConversationExpressionError::Conversation(
+            ConversationError::Source(ConversationSourceError::AccessDenied)
+        ))
+    ));
+    source.conversation_allowed.set(true);
+    let prepared = prepare_conversation_expression_request(
+        &plan,
+        &observed,
+        request_binding_from(&binding),
+        request_work(),
+        request_limits(),
+        request_owner(&binding),
+    )
+    .unwrap();
+    source.conversation_allowed.set(false);
+    assert_eq!(
+        prepared.validate_current(&observed, request_owner(&binding)),
+        Err(ConversationExpressionError::Conversation(
+            ConversationError::Source(ConversationSourceError::AccessDenied)
+        ))
+    );
+    assert!(matches!(
+        qualify_conversation_expression(
+            &prepared,
+            &observed,
+            request_owner(&binding),
+            SpeechEnvelope { clauses: vec![] },
+            qualification_limits(),
+        ),
+        Err(ConversationQualificationError::Current(
+            ConversationExpressionError::Conversation(ConversationError::Source(
+                ConversationSourceError::AccessDenied
+            ))
+        ))
+    ));
+
+    source.conversation_allowed.set(true);
+    let mut changed = conversation_state("SECRET-HOST-ONLY");
+    changed.conversations[0].topic = ContentReference {
+        package: label("fixture-package-1"),
+        entry: label("changed-topic-1"),
+    };
+    let changed = checkpoint(changed).unwrap();
+    let changed_observation = conversation_observation(&changed, &version, &source);
+    assert_eq!(
+        prepared.validate_current(&changed_observation, request_owner(&binding)),
+        Err(ConversationExpressionError::Conversation(
+            ConversationError::TopicChanged
+        ))
+    );
 }

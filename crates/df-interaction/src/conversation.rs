@@ -372,6 +372,15 @@ impl fmt::Debug for ConversationContext<'_> {
 }
 
 impl<'a> ConversationContext<'a> {
+    /// Borrow the already permitted projection while retaining its conversation
+    /// permission capability for later revalidation.
+    pub fn with_expression<R>(
+        &self,
+        use_expression: impl FnOnce(&ExpressionContext<'a>) -> R,
+    ) -> R {
+        use_expression(&self.expression)
+    }
+
     pub fn claims(&self) -> &[ExpressionClaim<'a>] {
         self.expression.claims()
     }
