@@ -28,7 +28,6 @@ use std::{
 };
 use tokio::sync::Semaphore;
 use tonic::{Code, Request, Response, Status, Streaming, metadata::MetadataMap};
-use tower_http::services::ServeDir;
 
 type ResponseStream = Pin<Box<dyn Stream<Item = Result<Sample, Status>> + Send>>;
 #[derive(Default)]
@@ -856,18 +855,34 @@ async fn malicious(
 const HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DungeonFlux S00 transport laboratory</title><style>body{margin:0;background:#10141c;color:#e6eaf3;font:17px system-ui,sans-serif}main{max-width:880px;margin:64px auto;padding:0 24px}h1{font-size:38px;line-height:1.1}p{color:#b7c3d4;line-height:1.5}button{background:#88dfb5;color:#10141c;border:0;border-radius:8px;font:600 17px system-ui;padding:14px 22px;cursor:pointer}button:disabled{opacity:.5}pre{white-space:pre-wrap;padding:20px;background:#1a2331;line-height:1.7;border-radius:10px}.tag{color:#88dfb5;letter-spacing:2px;font-size:13px}a{color:#88dfb5}</style></head><body><main><div class="tag">DUNGEONFLUX / EXPERIMENTAL S00</div><h1>Rust transport laboratory</h1><p>Generated protobuf calls travel as native HTTP/2 gRPC bytes over one binary WebSocket. The browser driver and this fixture interface are Rust compiled to single-threaded WebAssembly.</p><p>This starts the execution foundation. Gameplay, production authentication, durable telemetry and physical device qualification remain pending.</p><button id="run" disabled>Loading Rust/WASM…</button><button id="qualify" disabled>Loading qualification…</button><button id="callback-capacity" disabled>Loading callback observation…</button><button id="connection-credit" disabled>Loading connection-credit observation…</button><button id="close-reconnect" disabled>Loading close/reconnect observation…</button><pre id="close-reconnect-report" role="status" aria-live="polite">Close/reconnect observation has not run.</pre><pre id="connection-credit-report" role="status" aria-live="polite">Connection-credit stall observation has not run.</pre><pre id="callback-capacity-report" role="status" aria-live="polite">Callback capacity observation has not run.</pre><pre id="qualification" role="status" aria-live="polite">Desktop pressure qualification has not run.</pre><pre id="results" role="status" aria-live="polite">Loading generated WebAssembly bindings…</pre><p><a href="/fixture-health">Native fixture diagnostics</a></p><p id="build"></p></main><script type="module">import init from '/pkg/df_tools.js';await init();</script></body></html>"#;
 
 /// Start only a synthetic loopback preview. The caller owns process and output directory.
-pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn serve(
+    build: Arc<crate::build_set::ReadyBuild>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let preview_configuration = crate::preview::PreviewConfiguration::from_environment()?;
-    let web_root = std::env::args()
-        .nth(1)
-        .ok_or("generated web directory argument required")?;
-    let port: u16 = std::env::args()
-        .nth(2)
-        .unwrap_or_else(|| "43180".to_owned())
-        .parse()?;
-    if port == 0 {
-        return Err("explicit nonzero preview port required".into());
+    let port = build.port;
+    let web_root = build.web_root();
+    let set_id = build.set_id();
+    let mut metadata = format!("<meta name=\"df-build-set\" content=\"{set_id}\">");
+    for revision in [
+        df_types::BuildRevision::Source,
+        df_types::BuildRevision::Native,
+        df_types::BuildRevision::Wasm,
+        df_types::BuildRevision::Configuration,
+        df_types::BuildRevision::Content,
+    ] {
+        // RevisionLabel contains only bounded ASCII letters/digits and . _ - : /.
+        metadata.push_str(&format!(
+            "<meta name=\"df-build-{revision:?}\" content=\"{}\">",
+            build.identity().revision(revision).as_str()
+        ));
     }
+    let html = HTML
+        .replace("</head>", &format!("{metadata}</head>"))
+        .replace(
+            "'/pkg/df_tools.js'",
+            &format!("'/build-sets/{set_id}/pkg/df_tools.js'"),
+        );
+    let asset_build = Arc::clone(&build);
     let telemetry = Arc::new(FixtureTelemetry::default());
     let statistics = Arc::new(Statistics::default());
     let (sender, incoming) =
@@ -900,7 +915,13 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         origin: format!("http://127.0.0.1:{port}").into(),
     };
     let router = Router::new()
-        .route("/", get(|| async { Html(HTML) }))
+        .route(
+            "/",
+            get(move || {
+                let html = html.clone();
+                async move { Html(html) }
+            }),
+        )
         .route("/tunnel", get(websocket))
         .route("/byte-shape/{mode}/{id}", get(byte_shape))
         .route("/byte-shape-report/{id}", get(shape_report))
@@ -913,20 +934,53 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         )
         .layer(axum::extract::DefaultBodyLimit::max(64 * 1024))
         .route("/malicious/{kind}", get(malicious))
-        .nest_service("/pkg", ServeDir::new(&web_root))
+        .route(
+            "/build-sets/{id}/pkg/{*path}",
+            get(move |Path((id, path)): Path<(String, String)>| {
+                let build = Arc::clone(&asset_build);
+                async move {
+                    match build.asset(&id, &path) {
+                        Some(bytes) => {
+                            let mime = if path.ends_with(".js") {
+                                "text/javascript"
+                            } else if path.ends_with(".wasm") {
+                                "application/wasm"
+                            } else if path.ends_with(".txt") || path.ends_with(".ts") {
+                                "text/plain"
+                            } else if path.ends_with(".png") {
+                                "image/png"
+                            } else if path.ends_with(".webp") {
+                                "image/webp"
+                            } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
+                                "image/jpeg"
+                            } else {
+                                "application/octet-stream"
+                            };
+                            (
+                                [("content-type", mime), ("cache-control", "no-store")],
+                                bytes,
+                            )
+                                .into_response()
+                        }
+                        None => axum::http::StatusCode::NOT_FOUND.into_response(),
+                    }
+                }
+            }),
+        )
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
     let registration = match preview_configuration {
         Some(configuration) => Some(
             configuration
-                .register(web_root.into(), listener.local_addr()?)
+                .register(web_root, listener.local_addr()?)
                 .await?,
         ),
         None => None,
     };
     println!(
-        "DungeonFlux S00 fixture ready at http://127.0.0.1:{port} · build {}",
-        crate::BUILD_ID
+        "DungeonFlux S00 fixture ready at http://127.0.0.1:{port} · build {} · set {}",
+        crate::BUILD_ID,
+        set_id
     );
     // Leaving this scope drops both serving futures and the owned listener before
     // the capability is consumed. Errors also take the explicit release path.
