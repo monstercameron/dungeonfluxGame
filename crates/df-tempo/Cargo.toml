@@ -37,3 +37,7 @@ path = "tests/impulse.rs"
 [[test]]
 name = "audience_safe_profile_contract"
 path = "tests/audience_safe_profile_contract.rs"
+
+[[test]]
+name = "recovery_policy"
+path = "tests/recovery_policy.rs"
