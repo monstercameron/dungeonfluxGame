@@ -2,9 +2,13 @@
 //! This module neither sends work nor grants source, spend, reveal or publication authority.
 use std::fmt;
 
+use df_interaction::conversation::{
+    ConversationContext, ConversationError, ConversationObservation, ConversationPlan,
+    project_conversation,
+};
 use df_interaction::speech::{
-    DeclaredUncertainty, ExpressionBasis, ExpressionContext, ExpressionMetadata, SlotKind,
-    SpeechError, SpeechIntent, SpeechObservation,
+    DeclaredUncertainty, ExpressionBasis, ExpressionClaim, ExpressionContext, ExpressionMetadata,
+    SlotKind, SpeechError, SpeechIntent, SpeechObservation,
 };
 use df_model::checkpoint::{ContentReference, EntityId, RecordId};
 use df_provider_api::{
@@ -19,6 +23,50 @@ pub enum ExpressionRequestError {
     Capacity,
     Allocation,
     Request(RequestError),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum ConversationExpressionError {
+    Conversation(ConversationError),
+    Request(ExpressionRequestError),
+}
+
+/// A checked request whose conversation permission remains bound for egress and output.
+pub struct PreparedConversationExpression<'a> {
+    conversation: ConversationContext<'a>,
+    request: CheckedRequest<ExpressionBasis>,
+}
+
+impl fmt::Debug for PreparedConversationExpression<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PreparedConversationExpression")
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'a> PreparedConversationExpression<'a> {
+    pub fn request(&self) -> &CheckedRequest<ExpressionBasis> {
+        &self.request
+    }
+
+    pub fn metadata(&self) -> ExpressionMetadata<'_> {
+        self.conversation.metadata()
+    }
+
+    /// Recheck conversation permission before egress and again before output use.
+    pub fn validate_current(
+        &self,
+        current: &ConversationObservation<'_>,
+        owner: RequestOwnerState<'_, ExpressionBasis>,
+    ) -> Result<(), ConversationExpressionError> {
+        self.conversation
+            .validate_current(current)
+            .map_err(ConversationExpressionError::Conversation)?;
+        self.request.validate_current(owner).map_err(|error| {
+            ConversationExpressionError::Request(ExpressionRequestError::Request(error))
+        })
+    }
 }
 
 /// Holds only the actual checked request and the source of its public expression bytes.
@@ -160,6 +208,18 @@ pub fn prepare_expression_request<'a>(
     limits: RequestLimits,
     owner: RequestOwnerState<'_, ExpressionBasis>,
 ) -> Result<PreparedExpression<'a>, ExpressionRequestError> {
+    let request = checked_expression_request(&context, current, binding, usage, limits, owner)?;
+    Ok(PreparedExpression { context, request })
+}
+
+fn checked_expression_request(
+    context: &ExpressionContext<'_>,
+    current: &SpeechObservation<'_>,
+    binding: RequestBinding<ExpressionBasis>,
+    usage: RequestUsage,
+    limits: RequestLimits,
+    owner: RequestOwnerState<'_, ExpressionBasis>,
+) -> Result<CheckedRequest<ExpressionBasis>, ExpressionRequestError> {
     context
         .validate_current(current)
         .map_err(ExpressionRequestError::Speech)?;
@@ -171,10 +231,32 @@ pub fn prepare_expression_request<'a>(
     {
         return Err(ExpressionRequestError::Binding);
     }
-    let payload = encode_context(&context, limits.max_bytes())?;
+    let payload = encode_context(context, limits.max_bytes())?;
     let request = CheckedRequest::new(binding, &payload, usage, limits, owner)
         .map_err(ExpressionRequestError::Request)?;
-    Ok(PreparedExpression { context, request })
+    Ok(request)
+}
+
+/// Consume the actual current conversation projection; no raw prompt enters this boundary.
+pub fn prepare_conversation_expression_request<'a>(
+    plan: &'a ConversationPlan,
+    current: &ConversationObservation<'a>,
+    binding: RequestBinding<ExpressionBasis>,
+    usage: RequestUsage,
+    limits: RequestLimits,
+    owner: RequestOwnerState<'_, ExpressionBasis>,
+) -> Result<PreparedConversationExpression<'a>, ConversationExpressionError> {
+    let conversation =
+        project_conversation(plan, current).map_err(ConversationExpressionError::Conversation)?;
+    let request = conversation
+        .with_expression(|expression| {
+            checked_expression_request(expression, &current.speech, binding, usage, limits, owner)
+        })
+        .map_err(ConversationExpressionError::Request)?;
+    Ok(PreparedConversationExpression {
+        conversation,
+        request,
+    })
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -240,6 +322,12 @@ pub enum QualificationError {
     Allocation,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum ConversationQualificationError {
+    Current(ConversationExpressionError),
+    Expression(QualificationError),
+}
+
 /// Source-exact grounded output only. This does not commit a reveal or publish captions/TTS.
 pub struct QualifiedExpression {
     clauses: Vec<GroundedClause>,
@@ -275,10 +363,18 @@ pub fn qualify_expression(
     prepared
         .validate_current(current, owner)
         .map_err(QualificationError::Current)?;
+    qualify_claims(prepared.context.claims(), envelope, limits)
+}
+
+fn qualify_claims(
+    claims: &[ExpressionClaim<'_>],
+    envelope: SpeechEnvelope,
+    limits: QualificationLimits,
+) -> Result<QualifiedExpression, QualificationError> {
     if envelope.clauses.len() > limits.maximum_clauses {
         return Err(QualificationError::Capacity);
     }
-    if envelope.clauses.len() != prepared.context.claims().len() {
+    if envelope.clauses.len() != claims.len() {
         return Err(QualificationError::ClauseCount);
     }
     let mut bytes = limits.maximum_output_bytes;
@@ -287,7 +383,7 @@ pub fn qualify_expression(
     qualified
         .try_reserve_exact(envelope.clauses.len())
         .map_err(|_| QualificationError::Allocation)?;
-    for (candidate, permitted) in envelope.clauses.into_iter().zip(prepared.context.claims()) {
+    for (candidate, permitted) in envelope.clauses.into_iter().zip(claims) {
         let clause = match candidate {
             ExpressionClause::Grounded(clause) => clause,
             ExpressionClause::Flavor(flavor) => {
@@ -320,4 +416,21 @@ pub fn qualify_expression(
         qualified.push(clause);
     }
     Ok(QualifiedExpression { clauses: qualified })
+}
+
+/// Refuse the whole response if conversation permission changed since request preparation.
+pub fn qualify_conversation_expression(
+    prepared: &PreparedConversationExpression<'_>,
+    current: &ConversationObservation<'_>,
+    owner: RequestOwnerState<'_, ExpressionBasis>,
+    envelope: SpeechEnvelope,
+    limits: QualificationLimits,
+) -> Result<QualifiedExpression, ConversationQualificationError> {
+    prepared
+        .validate_current(current, owner)
+        .map_err(ConversationQualificationError::Current)?;
+    prepared
+        .conversation
+        .with_expression(|expression| qualify_claims(expression.claims(), envelope, limits))
+        .map_err(ConversationQualificationError::Expression)
 }
