@@ -1681,3 +1681,322 @@ fn retained_mode_failure_preserves_unknown_dispatch_and_never_restarts() {
         Err(ReferenceSheetError::InvalidTransition)
     ));
 }
+
+#[test]
+fn character_reference_identity_two_later_scenes_reuse_same_immutable_sheet() {
+    let (ready, _, _, _) = ready();
+    let (first_scene, first_key) = scene(&ready);
+    let mut state = first_scene.state().clone();
+    let mut later_moment = state.continuity.moments.last().unwrap().clone();
+    later_moment.id = record(78);
+    later_moment.identity_revision = label("scene-canal-bridge-v2");
+    state.continuity.moments.push(later_moment);
+    let current = make(first_scene.basis(), state, &[asset()]).unwrap();
+    let before = current.clone();
+    let mut later_key = first_key.clone();
+    later_key.moment = record(78);
+    later_key.identity = label("scene-canal-bridge-v2");
+    later_key.parameters = label("rain-and-bridge-v4");
+
+    for original in [&first_key, &later_key] {
+        let prepared = scene_key(&current, original).unwrap();
+        let mut expected = original.clone();
+        expected.references.push(asset());
+        assert_eq!(prepared, expected);
+        assert_eq!(scene_key(&current, &prepared).unwrap(), prepared);
+        assert!(original.references.is_empty());
+    }
+    assert_ne!(first_key.moment, later_key.moment);
+    assert_ne!(first_key.identity, later_key.identity);
+    assert_eq!(current, before);
+    assert_eq!(current.state().intents, ready.state().intents);
+    assert_eq!(
+        current.state().continuity.asset_jobs,
+        ready.state().continuity.asset_jobs
+    );
+}
+
+#[test]
+fn character_reference_identity_new_revision_refuses_retired_sheet_without_deleting_history() {
+    let (ready, _, _, _) = ready();
+    let history = ready.state().continuity.canonical_packs.clone();
+    let mut state = ready.state().clone();
+    state.entities.first_mut().unwrap().identity_revision = label("appearance-v2");
+    let mut revised = published_pack();
+    revised.revision = label("new-identity-pack-v3");
+    revised.digest = ContentDigest([92; 32]);
+    revised.identities.first_mut().unwrap().revision = label("appearance-v2");
+    revised
+        .identities
+        .first_mut()
+        .unwrap()
+        .character_appearance
+        .as_mut()
+        .unwrap()
+        .features = "Silver curls and a healed brow scar".into();
+    state.continuity.canonical_packs.push(revised);
+    let revised = make(ready.basis(), state, &[asset()]).unwrap();
+    let (current, key) = scene(&revised);
+    let before = current.clone();
+
+    assert_eq!(
+        scene_key(&current, &key),
+        Err(ReferenceSheetError::IdentityChanged)
+    );
+    assert_eq!(
+        character_reference_for_scene(
+            &current,
+            fixture::entity(4),
+            &label("appearance-v2"),
+            &label("cloak-v1"),
+            &label("lantern-style-v1"),
+            &key,
+            bounds(),
+        ),
+        Err(ReferenceSheetError::OutputUnavailable)
+    );
+    assert!(
+        current
+            .state()
+            .continuity
+            .canonical_packs
+            .starts_with(&history)
+    );
+    assert_eq!(
+        current.state().continuity.asset_jobs,
+        ready.state().continuity.asset_jobs
+    );
+    assert_eq!(
+        current.state().continuity.asset_jobs[0].published,
+        Some(asset())
+    );
+    assert_eq!(current, before);
+}
+
+#[test]
+fn character_reference_identity_conflicting_cosmetics_under_same_revision_are_refused() {
+    let (ready, _, _, _) = ready();
+    let mut state = ready.state().clone();
+    let mut conflicting = published_pack();
+    conflicting.revision = label("conflicting-appearance-pack-v3");
+    conflicting.digest = ContentDigest([93; 32]);
+    conflicting
+        .identities
+        .first_mut()
+        .unwrap()
+        .character_appearance
+        .as_mut()
+        .unwrap()
+        .outfit = "A red coat with silver buttons".into();
+    state.continuity.canonical_packs.push(conflicting);
+    let restored = make(ready.basis(), state, &[asset()]).unwrap();
+    let (current, key) = scene(&restored);
+    let before = current.clone();
+
+    assert_eq!(
+        scene_key(&current, &key),
+        Err(ReferenceSheetError::IdentityChanged)
+    );
+    assert!(matches!(
+        reference_sheet_specification(&current, job_id(), bounds()),
+        Err(ReferenceSheetError::IdentityChanged)
+    ));
+    assert_eq!(current, before);
+    assert_eq!(current.state().intents, ready.state().intents);
+}
+
+#[test]
+fn character_reference_identity_outfit_mismatch_cannot_reuse_ready_sheet() {
+    let (ready, _, _, _) = ready();
+    let (current, key) = scene(&ready);
+    let before = current.clone();
+
+    assert_eq!(scene_key(&current, &key).unwrap().references, vec![asset()]);
+    assert_eq!(
+        character_reference_for_scene(
+            &current,
+            fixture::entity(4),
+            &label("fixture-entity-1"),
+            &label("retired-outfit-v0"),
+            &label("lantern-style-v1"),
+            &key,
+            bounds(),
+        ),
+        Err(ReferenceSheetError::IdentityChanged)
+    );
+    assert_eq!(current, before);
+}
+
+#[test]
+fn character_reference_identity_style_change_needs_matching_ready_binding() {
+    let (ready, _, _, _) = ready();
+    let history = ready.state().continuity.canonical_packs.clone();
+    let mut state = ready.state().clone();
+    let mut winter = published_pack();
+    winter.revision = label("winter-appearance-pack-v3");
+    winter.digest = ContentDigest([94; 32]);
+    winter.bible.revision = label("winter-style-v2");
+    winter.bible.style = "Cool blue winter light".into();
+    state.continuity.canonical_packs.push(winter);
+    let restored = make(ready.basis(), state, &[asset()]).unwrap();
+    let (current, original) = scene(&restored);
+    let before = current.clone();
+    let mut new_style = original.clone();
+    new_style.style = label("winter-style-v2");
+
+    assert_eq!(
+        character_reference_for_scene(
+            &current,
+            fixture::entity(4),
+            &label("fixture-entity-1"),
+            &label("cloak-v1"),
+            &label("winter-style-v2"),
+            &new_style,
+            bounds(),
+        ),
+        Err(ReferenceSheetError::OutputUnavailable)
+    );
+    assert_eq!(
+        scene_key(&current, &original).unwrap().references,
+        vec![asset()]
+    );
+    assert!(
+        current
+            .state()
+            .continuity
+            .canonical_packs
+            .starts_with(&history)
+    );
+    assert_eq!(current, before);
+}
+
+#[test]
+fn character_reference_identity_other_member_or_broader_audience_cannot_receive_sheet() {
+    let (ready, _, _, _) = ready();
+    let (current, original) = scene(&ready);
+    for audience in [
+        AudienceScope::Members(vec![fixture::member(99)]),
+        AudienceScope::Shared,
+    ] {
+        let mut state = current.state().clone();
+        state.members.push(MembershipLink {
+            member: fixture::member(99),
+            character: None,
+        });
+        state.continuity.moments.last_mut().unwrap().audience = audience.clone();
+        let restored = make(current.basis(), state, &[asset()]).unwrap();
+        let before = restored.clone();
+        let mut key = original.clone();
+        key.audience = audience;
+
+        assert_eq!(
+            scene_key(&restored, &key),
+            Err(ReferenceSheetError::AudienceUnavailable)
+        );
+        assert_eq!(restored, before);
+        assert_eq!(restored.state().intents, ready.state().intents);
+        assert_eq!(
+            restored.state().continuity.asset_jobs,
+            ready.state().continuity.asset_jobs
+        );
+    }
+}
+
+#[test]
+fn character_reference_identity_stale_completion_cannot_publish_for_new_revision() {
+    let (queued, plan) = queue();
+    let running = started(&queued, &plan);
+    let mut state = running.state().clone();
+    state.entities.first_mut().unwrap().identity_revision = label("appearance-v2");
+    let mut revised = initial_pack();
+    revised.revision = label("new-queued-identity-pack-v2");
+    revised.digest = ContentDigest([95; 32]);
+    revised.identities.first_mut().unwrap().revision = label("appearance-v2");
+    state.continuity.canonical_packs.push(revised);
+    let restored = make(running.basis(), state, &[]).unwrap();
+    let before = restored.clone();
+    let completion = completed(
+        &plan,
+        JobOutcome::Media {
+            asset: asset(),
+            demand: plan.demand.id,
+        },
+    );
+    let obsolete_pack = published_pack();
+
+    assert_eq!(
+        event(
+            &restored,
+            ReferenceSheetEvent::Completed {
+                completion: &completion,
+                canonical_pack: Some(&obsolete_pack),
+            },
+            &[asset()],
+        ),
+        Err(ReferenceSheetError::IdentityChanged)
+    );
+    assert_eq!(restored, before);
+    assert!(
+        restored
+            .state()
+            .continuity
+            .canonical_packs
+            .starts_with(&running.state().continuity.canonical_packs)
+    );
+    assert_eq!(restored.state().intents, running.state().intents);
+    assert_eq!(
+        restored.state().continuity.asset_jobs,
+        running.state().continuity.asset_jobs
+    );
+    assert_eq!(restored.state().continuity.asset_jobs[0].published, None);
+}
+
+#[test]
+fn character_reference_identity_failed_pending_and_duplicate_scene_requests_do_not_requeue() {
+    let (queued, plan) = queue();
+    let running = started(&queued, &plan);
+    let failure = completed(&plan, JobOutcome::Failed(NativeFailure::Unavailable));
+    let failed = event(
+        &running,
+        ReferenceSheetEvent::Completed {
+            completion: &failure,
+            canonical_pack: None,
+        },
+        &[],
+    )
+    .unwrap();
+
+    for checkpoint in [&queued, &running, &failed] {
+        let (current, key) = scene(checkpoint);
+        let before = current.clone();
+        assert_eq!(
+            scene_key(&current, &key),
+            Err(ReferenceSheetError::OutputUnavailable)
+        );
+        assert_eq!(
+            scene_key(&current, &key),
+            Err(ReferenceSheetError::OutputUnavailable)
+        );
+        assert_eq!(current, before);
+        assert_eq!(current.state().intents, checkpoint.state().intents);
+        assert_eq!(
+            current.state().continuity.asset_jobs,
+            checkpoint.state().continuity.asset_jobs
+        );
+    }
+    assert_eq!(
+        failed.state().continuity.asset_jobs[0].dispatch,
+        DurableStatus::SentUnknown
+    );
+    assert_eq!(failed.state().intents[0].status, DurableStatus::SentUnknown);
+    let (ready, _, _, _) = ready();
+    let (current, key) = scene(&ready);
+    let before = current.clone();
+    let first = scene_key(&current, &key).unwrap();
+    assert_eq!(first.references, vec![asset()]);
+    for _ in 0..3 {
+        assert_eq!(scene_key(&current, &first).unwrap(), first);
+    }
+    assert_eq!(current, before);
+    assert_eq!(current.state().intents, ready.state().intents);
+}
