@@ -146,7 +146,13 @@ fn state() -> GameState {
 }
 fn checkpoint(state: GameState) -> Result<Checkpoint, CheckpointError> {
     let rules = vec![rule()];
-    let content_entries = vec![content()];
+    let content_entries = vec![
+        content(),
+        ContentReference {
+            package: label("fixture-package-1"),
+            entry: label("changed-topic-1"),
+        },
+    ];
     Checkpoint::new(
         CHECKPOINT_SCHEMA,
         basis(),
