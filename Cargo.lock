@@ -332,7 +332,9 @@ dependencies = [
 name = "df-display"
 version = "0.1.0"
 dependencies = [
+ "df-auth",
  "df-client",
+ "df-model",
  "df-protocol",
  "df-types",
  "df-ui",

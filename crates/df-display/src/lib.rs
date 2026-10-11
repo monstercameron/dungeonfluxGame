@@ -26,3 +26,8 @@ mod join;
 pub use join::{DisplayJoinConnection, DisplayJoinInput};
 #[cfg(target_arch = "wasm32")]
 pub use join::{DisplayJoinError, DisplayJoinScreen};
+
+#[cfg(not(target_arch = "wasm32"))]
+mod pairing;
+#[cfg(not(target_arch = "wasm32"))]
+pub use pairing::{DisplayPairingError, DisplayPairingMode, publish_paired_display};
