@@ -10,6 +10,10 @@ df-protocol = { path = "../df-protocol" }
 df-types = { path = "../df-types" }
 df-ui = { path = "../df-ui" }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+df-auth = { path = "../df-auth" }
+df-model = { path = "../df-model" }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = ["Window", "Document", "Element", "Node", "HtmlElement", "HtmlFieldSetElement", "HtmlButtonElement", "Event", "EventTarget", "HtmlImageElement"] }
