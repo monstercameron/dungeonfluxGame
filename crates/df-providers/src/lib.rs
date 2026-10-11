@@ -8,6 +8,25 @@ mod output_fetch;
 mod reconciliation;
 mod registry;
 
+#[cfg(not(target_arch = "wasm32"))]
+mod native_http;
+#[cfg(not(target_arch = "wasm32"))]
+mod text_response;
+#[cfg(not(target_arch = "wasm32"))]
+mod text_schema;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use native_http::{NativeHttpLimits, NativeHttpRefusal};
+#[cfg(not(target_arch = "wasm32"))]
+pub use registry::registered_text_provider;
+#[cfg(not(target_arch = "wasm32"))]
+pub use text_response::{
+    NativeTextProvider, PreparedTextResponse, TextProviderConfig, TextResponseContract,
+    TextResponseError, TextResponseObservation, TextTokenUsage, ValidatedTextOutput,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use text_schema::{TextOutputSchema, TextSchemaError, TextSchemaLimits};
+
 pub use df_provider_api::ProviderFailureClass;
 pub use http_contract::{
     ElevenLabsAudioObservation, FalQueueObservation, FalSubmitObservation, HttpMethod, HttpRequest,

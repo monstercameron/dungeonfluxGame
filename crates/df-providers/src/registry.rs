@@ -7,6 +7,23 @@ const OBSERVED_ON: &str = "2026-10-10";
 pub enum CandidateRouteId {
     ElevenFlashV25Tts,
     FalFluxSchnellDisposableImage,
+    OpenAiResponsesText,
+}
+
+/// Constructs the actual native Responses adapter from explicit caller configuration.
+/// This factory neither qualifies account rights nor admits spend. The historical
+/// dated pricing registry remains separate from this configured transport route.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn registered_text_provider(
+    route: CandidateRouteId,
+    config: crate::TextProviderConfig,
+    credential: &str,
+    limits: crate::NativeHttpLimits,
+) -> Result<crate::NativeTextProvider, crate::TextResponseError> {
+    if route != CandidateRouteId::OpenAiResponsesText {
+        return Err(crate::TextResponseError::UnregisteredRoute);
+    }
+    crate::NativeTextProvider::new(config, credential, limits)
 }
 
 /// Capability covered by one selected route.

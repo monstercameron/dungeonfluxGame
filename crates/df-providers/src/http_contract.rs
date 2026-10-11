@@ -44,6 +44,24 @@ pub struct HttpRequest {
 }
 
 impl HttpRequest {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn headers(&self) -> &[(&'static str, String)] {
+        &self.headers
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn responses(endpoint: &str, credential: &str, body: Vec<u8>) -> Self {
+        Self {
+            method: HttpMethod::Post,
+            url: endpoint.to_owned(),
+            headers: vec![
+                ("Authorization", format!("Bearer {credential}")),
+                ("Content-Type", "application/json".to_owned()),
+            ],
+            body,
+        }
+    }
+
     pub const fn method(&self) -> HttpMethod {
         self.method
     }

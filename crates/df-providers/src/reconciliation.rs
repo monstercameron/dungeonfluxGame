@@ -107,6 +107,10 @@ impl ReconciliationCapability {
 
 /// Read-only supplier evidence presented for the stored provider attempt.
 pub enum ReconciliationInput<'a> {
+    /// Complete schema-qualified native Responses observation for this exact
+    /// operation and supplier response. Token counters are not billing proof.
+    #[cfg(not(target_arch = "wasm32"))]
+    OpenAiResponse(&'a crate::TextResponseObservation),
     /// Submit, status, or result response was lost, absent, partial, cancelled, or unusable.
     UnknownSupplierOutcome,
     /// A native attempt owner classified a terminal failure. HTTP status and
@@ -127,7 +131,9 @@ pub enum ReconciliationInput<'a> {
 /// Describes lookup and submission idempotency separately for one route.
 pub const fn reconciliation_capability(route: CandidateRouteId) -> ReconciliationCapability {
     let lookup = match route {
-        CandidateRouteId::ElevenFlashV25Tts => ReconciliationLookup::ResponseMetadataOnly,
+        CandidateRouteId::ElevenFlashV25Tts | CandidateRouteId::OpenAiResponsesText => {
+            ReconciliationLookup::ResponseMetadataOnly
+        }
         CandidateRouteId::FalFluxSchnellDisposableImage => ReconciliationLookup::CapturedRequestId,
     };
     ReconciliationCapability {
@@ -156,6 +162,18 @@ pub fn reconcile_provider_attempt<Semantic: Eq, Receipt, Refusal, Failure>(
     policy: ProviderRetryPolicy,
 ) -> Result<ProviderOutcomeDecision, ProviderOutcomeError> {
     let result = match supplier {
+        #[cfg(not(target_arch = "wasm32"))]
+        ReconciliationInput::OpenAiResponse(response)
+            if attempt_identity.route == CandidateRouteId::OpenAiResponsesText
+                && attempt_identity.operation == response.identity.operation
+                && response.identity == request.binding().identity
+                && attempt_identity.supplier_request_id.as_ref()
+                    == Some(&response.provider_request_id) =>
+        {
+            ProviderResultClass::Complete
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        ReconciliationInput::OpenAiResponse(_) => ProviderResultClass::Incomplete,
         ReconciliationInput::UnknownSupplierOutcome => ProviderResultClass::Incomplete,
         ReconciliationInput::ClassifiedFailure(failure) => ProviderResultClass::Failed(failure),
         ReconciliationInput::ElevenLabsStream(audio)
