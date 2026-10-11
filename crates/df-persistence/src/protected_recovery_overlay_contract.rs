@@ -755,4 +755,247 @@ mod tests {
             include_str!("../tests/protected_recovery_overlay_contract.json")
         );
     }
+
+    #[test]
+    fn rpo_recovery_epoch_loss_disclosure_contract() {
+        let old = snapshot();
+        let restored = assess_restore(old, qualified(&[])).unwrap();
+        assert_eq!(
+            restored.lost_game_range,
+            Some(LostGameRange {
+                from: revision(7, 11),
+                through: revision(7, 12),
+            })
+        );
+        assert_eq!(restored.candidate_epoch, epoch(8));
+
+        fn disclosed(plan: &OverlayPlan<'_>) -> String {
+            match plan.lost_game_range {
+                Some(range) => format!(
+                    "loss:{}:{}..{}:{};candidate:{}:0",
+                    range.from.epoch().get(),
+                    range.from.sequence(),
+                    range.through.epoch().get(),
+                    range.through.sequence(),
+                    plan.candidate_epoch.get()
+                ),
+                None => format!(
+                    "no_acknowledged_loss;candidate:{}:0",
+                    plan.candidate_epoch.get()
+                ),
+            }
+        }
+
+        let mut witness = vec![
+            ("OriginalAcceptance1", "game loss disclosed".to_owned()),
+            (
+                "OriginalAcceptance2",
+                "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit.".to_owned(),
+            ),
+            (
+                "decision",
+                "qualified restore uses a strictly newer recovery epoch, exact lost game-revision range, retired old namespaces and lookup-only retained receipts".to_owned(),
+            ),
+            (
+                "rejected_alternatives",
+                "sequence-only ordering, old-Pg absence as unsent proof, guessed no-loss and retrying Unknown are rejected".to_owned(),
+            ),
+            (
+                "unresolved",
+                "protected backing authentication, atomic epoch CAS, mounted restore projection and measured RPO300seconds/RTO3600seconds remain unperformed; fixtures issue no epoch or public snapshot".to_owned(),
+            ),
+            ("exact_lost_acknowledged_range", disclosed(&restored)),
+        ];
+
+        let complete = OlderSnapshot {
+            latest_acknowledged_revision: old.revision,
+            ..old
+        };
+        let no_loss = assess_restore(complete, qualified(&[])).unwrap();
+        assert_eq!(no_loss.lost_game_range, None);
+        let ordinary_next = old.revision.next_sequence().unwrap();
+        assert_eq!(ordinary_next, revision(7, 11));
+        assert_eq!(ordinary_next.epoch(), old.revision.epoch());
+        witness.push(("no_acknowledged_game_loss", disclosed(&no_loss)));
+
+        let maximum_ack = OlderSnapshot {
+            latest_acknowledged_revision: revision(7, u64::MAX),
+            ..old
+        };
+        let maximum_loss = assess_restore(maximum_ack, qualified(&[])).unwrap();
+        assert_eq!(
+            maximum_loss.lost_game_range,
+            Some(LostGameRange {
+                from: revision(7, 11),
+                through: revision(7, u64::MAX),
+            })
+        );
+        let candidate_revision = SessionRevision::new(maximum_loss.candidate_epoch, 0);
+        assert!(candidate_revision > maximum_ack.latest_acknowledged_revision);
+        witness.push((
+            "new_epoch_orders_above_maximum_old_sequence",
+            disclosed(&maximum_loss),
+        ));
+
+        for acknowledged in [revision(7, 9), revision(6, 12), revision(8, 12)] {
+            let inconsistent = OlderSnapshot {
+                latest_acknowledged_revision: acknowledged,
+                ..old
+            };
+            assert_eq!(
+                assess_restore(inconsistent, qualified(&[])),
+                Err(Closed::InvalidRange)
+            );
+        }
+        witness.push((
+            "reversed_or_cross_epoch_acknowledgement_refuses",
+            "closed:InvalidRange".to_owned(),
+        ));
+
+        for (observation, expected) in [
+            (HeadObservation::MissingJournal, Closed::MissingJournal),
+            (HeadObservation::MissingHead, Closed::MissingHead),
+            (HeadObservation::MissingKey, Closed::MissingKey),
+            (HeadObservation::Unqualified, Closed::Unqualified),
+            (HeadObservation::Incomplete, Closed::Incomplete),
+        ] {
+            assert_eq!(assess_restore(old, observation), Err(expected));
+        }
+        witness.push((
+            "missing_or_unverified_latest_head_closes",
+            "closed:MissingJournal,MissingHead,MissingKey,Unqualified,Incomplete".to_owned(),
+        ));
+
+        assert!(
+            restored
+                .actions
+                .contains(&OverlayAction::RetireNamespace { epoch: epoch(7) })
+        );
+        assert_eq!(
+            retry_disposition(&restored, epoch(7), true),
+            RetryDisposition::RetainedLookupOnly
+        );
+        assert_eq!(
+            retry_disposition(&restored, epoch(7), false),
+            RetryDisposition::ExpiredOrIndeterminate
+        );
+        assert_eq!(
+            retry_disposition(&restored, epoch(8), false),
+            RetryDisposition::CurrentNamespaceCandidate
+        );
+        witness.push((
+            "old_revision_namespaces_are_lookup_only",
+            "retired:7;retained:lookup_only;missing:expired_or_indeterminate;new:candidate_only"
+                .to_owned(),
+        ));
+
+        for retained_receipt in [false, true] {
+            assert_eq!(
+                retry_disposition(&restored, epoch(9), retained_receipt),
+                RetryDisposition::ExpiredOrIndeterminate
+            );
+        }
+        witness.push((
+            "future_namespace_never_authorized_by_retained_receipt",
+            "expired_or_indeterminate".to_owned(),
+        ));
+
+        let protected_entries = [
+            JournalEntry {
+                sequence: 1,
+                kind: IrreversibleKind::Suppress {
+                    identity: "subject-A",
+                    kind: Suppression::Deletion,
+                },
+            },
+            send(2, operation(1), SendKnowledge::Unknown),
+        ];
+        let protected = assess_restore(old, qualified(&protected_entries)).unwrap();
+        assert_eq!(protected.lost_game_range, restored.lost_game_range);
+        assert_eq!(protected.held_liability, Some(money(900)));
+        assert_eq!(
+            protected.actions,
+            vec![
+                OverlayAction::Suppress {
+                    identity: "subject-A",
+                    kind: Suppression::Deletion,
+                },
+                OverlayAction::HoldSend {
+                    intent: operation(1),
+                    maximum: money(900),
+                },
+                OverlayAction::RetireNamespace { epoch: epoch(7) },
+            ]
+        );
+        witness.push((
+            "unknown_send_and_suppression_survive_game_rollback",
+            format!(
+                "{};suppression_first;unknown_held:900",
+                disclosed(&protected)
+            ),
+        ));
+
+        let maximum_epoch = OlderSnapshot {
+            revision: revision(u64::MAX, 0),
+            latest_acknowledged_revision: revision(u64::MAX, 0),
+            ..old
+        };
+        let exhausted = HeadObservation::QualifiedFixture(QualifiedFixture {
+            epoch: epoch(u64::MAX),
+            published_head: 0,
+            off_host_watermark: 0,
+            journal_head: 0,
+            entries: &[],
+        });
+        assert_eq!(
+            assess_restore(maximum_epoch, exhausted),
+            Err(Closed::EpochExhausted)
+        );
+        let complete_maximum_sequence = OlderSnapshot {
+            revision: revision(7, u64::MAX),
+            latest_acknowledged_revision: revision(7, u64::MAX),
+            ..old
+        };
+        assert_eq!(
+            complete_maximum_sequence.revision.next_sequence(),
+            Err(df_types::RevisionError::SequenceOverflow)
+        );
+        let next_epoch = assess_restore(complete_maximum_sequence, qualified(&[])).unwrap();
+        assert_eq!(next_epoch.candidate_epoch, epoch(8));
+        assert_eq!(next_epoch.lost_game_range, None);
+        witness.push((
+            "exhausted_epoch_and_sequence_boundary_refuse",
+            "epoch:EpochExhausted;sequence:SequenceOverflow;complete:max_sequence_no_loss"
+                .to_owned(),
+        ));
+
+        for (published_head, off_host_watermark, journal_head) in [(1, 0, 1), (0, 1, 0), (1, 1, 0)]
+        {
+            let conflicting = HeadObservation::QualifiedFixture(QualifiedFixture {
+                epoch: epoch(7),
+                published_head,
+                off_host_watermark,
+                journal_head,
+                entries: &[],
+            });
+            assert_eq!(assess_restore(old, conflicting), Err(Closed::HeadConflict));
+        }
+        witness.push((
+            "regressed_or_forked_head_never_reopens",
+            "closed:HeadConflict;epoch_CAS:unperformed".to_owned(),
+        ));
+
+        let actual = format!(
+            "[\n{}\n]\n",
+            witness
+                .iter()
+                .map(|(name, result)| format!("  {{\"case\":\"{name}\",\"result\":\"{result}\"}}"))
+                .collect::<Vec<_>>()
+                .join(",\n")
+        );
+        assert_eq!(
+            actual,
+            include_str!("../tests/recovery_epoch_loss_disclosure_contract.json")
+        );
+    }
 }
