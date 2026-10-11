@@ -1,0 +1,17 @@
+[
+  {"case":"OriginalAcceptance1","result":"game loss disclosed"},
+  {"case":"OriginalAcceptance2","result":"The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."},
+  {"case":"decision","result":"qualified restore uses a strictly newer recovery epoch, exact lost game-revision range, retired old namespaces and lookup-only retained receipts"},
+  {"case":"rejected_alternatives","result":"sequence-only ordering, old-Pg absence as unsent proof, guessed no-loss and retrying Unknown are rejected"},
+  {"case":"unresolved","result":"protected backing authentication, atomic epoch CAS, mounted restore projection and measured RPO300seconds/RTO3600seconds remain unperformed; fixtures issue no epoch or public snapshot"},
+  {"case":"exact_lost_acknowledged_range","result":"loss:7:11..7:12;candidate:8:0"},
+  {"case":"no_acknowledged_game_loss","result":"no_acknowledged_loss;candidate:8:0"},
+  {"case":"new_epoch_orders_above_maximum_old_sequence","result":"loss:7:11..7:18446744073709551615;candidate:8:0"},
+  {"case":"reversed_or_cross_epoch_acknowledgement_refuses","result":"closed:InvalidRange"},
+  {"case":"missing_or_unverified_latest_head_closes","result":"closed:MissingJournal,MissingHead,MissingKey,Unqualified,Incomplete"},
+  {"case":"old_revision_namespaces_are_lookup_only","result":"retired:7;retained:lookup_only;missing:expired_or_indeterminate;new:candidate_only"},
+  {"case":"future_namespace_never_authorized_by_retained_receipt","result":"expired_or_indeterminate"},
+  {"case":"unknown_send_and_suppression_survive_game_rollback","result":"loss:7:11..7:12;candidate:8:0;suppression_first;unknown_held:900"},
+  {"case":"exhausted_epoch_and_sequence_boundary_refuse","result":"epoch:EpochExhausted;sequence:SequenceOverflow;complete:max_sequence_no_loss"},
+  {"case":"regressed_or_forked_head_never_reopens","result":"closed:HeadConflict;epoch_CAS:unperformed"}
+]
