@@ -1,0 +1,77 @@
+{
+  "task_id": "B-F37-D01",
+  "attempt_id": "B-F37-D01-a1",
+  "Original_objective": "Specify compound-step continuation; expected: source validation each step.",
+  "Original_ordered_acceptance": [
+    "source validation each step",
+    "The named outcome has actual source/build-bound evidence; unsupported, pending, failed and unperformed checks remain explicit."
+  ],
+  "Original_ordered_verification": [
+    "Freeze the cited source decision and a bounded contract example; compare source validation each step. Retain decision, alternatives and unresolved facts.",
+    "Exact executable commands: TBD at G01 and scoped prerequisite resolution; this planned procedure is not a claim that Rust/browser/provider checks ran."
+  ],
+  "source_base": "52aaf9106c8361946b9c1ea5f96594e8c6143a16",
+  "boundary": "Existing borrowed compound-head source validation with explicit native per-head submissions; no persisted plan/automatic continuation",
+  "behavior_cases": [
+    {
+      "expectation": "Actual OwnedInput/bounded_inbox/DurableOwner test consumer calls canonical stage_plan_head/validate_plan_steps/semantic/pending/registered/preconditioned handler for each independently accepted head. Fresh current basis/source/pins, exact decision/draw prefix, original unapproved tail; supplied synthetic outcomes qualify wiring only.",
+      "name": "separately_accepted_heads_revalidate_fresh_source_and_checkpoint"
+    },
+    {
+      "expectation": "After first receipt select an unregistered current second-head selector. Typed InvocationError::Dispatch before inner handler; no second commit/publication, exact committed prefix and first receipt/ledger retained.",
+      "name": "missing_later_selector_refuses_before_handler_and_preserves_committed_prefix"
+    },
+    {
+      "expectation": "Fresh source registry lacks exact second pending source; source membership/dispatch refusal before inner handler. No substitute rule/source or production catalog approval.",
+      "name": "source_membership_removed_at_next_head_cannot_execute"
+    },
+    {
+      "expectation": "Current rule/content/build pins differ from captured admission; exact canonical CheckpointError/Plan/Candidate refusal. No later handler, exact committed prefix retained.",
+      "name": "changed_native_source_pins_refuse_before_later_handler"
+    },
+    {
+      "expectation": "Fresh native ResumeFence stale generation or cancel-before-admission refuses second head; no resource/draw/receipt additions, committed first head never rolled back.",
+      "name": "stale_owner_generation_and_cancellation_stop_only_uncommitted_tail"
+    },
+    {
+      "expectation": "Changed current source-declared resource/pending dependencies after first acceptance yield typed stale precondition/window refusal on next head.",
+      "name": "changed_resources_or_response_window_revalidate_at_each_head"
+    },
+    {
+      "expectation": "Choice/Reaction/Roll supported boundaries retain original command and explicit ActualDraw slice. Missing/foreign/value/window draws refuse without inner handler. No hidden randomness/outcome manufacture.",
+      "name": "native_roll_draws_are_bound_to_exact_current_head"
+    },
+    {
+      "expectation": "BeforeCommit known rollback preserves exact checkpoint/facts/draws/resources/ledger/publication. Explicit same-head/same-operation resubmission later may succeed once; no automatic retry or tail continuation.",
+      "name": "known_failed_commit_leaves_no_prefix_or_tail_publication"
+    },
+    {
+      "expectation": "Indeterminate first commit gives LookupRequired; no tail engine/handler. Exact scoped retry returns committed receipt and validated reload; next head requires explicit fresh admission, never head replay.",
+      "name": "lost_ack_fences_tail_until_exact_authorized_lookup_and_reload"
+    },
+    {
+      "expectation": "NotRecorded cannot clear uncertainty; changed operation/input/principal preserves conflict/unauthorized classifications. No other head executes around uncertain key.",
+      "name": "unknown_not_recorded_and_changed_lookup_identity_never_replay"
+    },
+    {
+      "expectation": "Empty/count/bytes/comparisons/duplicate operation/foreign scope/member/unsupported general action refuse. Original borrowed tail future legality is never inferred.",
+      "name": "whole_list_bounds_and_unapproved_tail_are_preserved"
+    }
+  ],
+  "bounds": {
+    "maximum_steps": 4,
+    "maximum_total_input_bytes": 1048576,
+    "maximum_comparisons": 256,
+    "maximum_checkpoint_bytes": 1048576,
+    "maximum_precondition_dependencies": 8,
+    "maximum_fixture_json_bytes": 16384
+  },
+  "missing_canonical_owner_contracts": [
+    "Persistent canonical ActionPlan/PlanStep identities and durable progress/status schema",
+    "Continuation lifetime/deadline/partial-outcome policy owner",
+    "Authenticated native automatic continuation producer/confirmation policy; tests explicitly submit heads",
+    "Production catalog source-mechanical outcome qualification; synthetic registered fixture outcomes grant no D&D mechanics/rights"
+  ],
+  "synthetic_fixture_caveat": "Controlled canonical source registration/checkpoint outcomes verify admission wiring and durable-owner outcomes. This fixture is neither D&D mechanics qualification nor production catalog/authorization/rights/PG evidence.",
+  "author_runtime": "UNPERFORMED_INDEPENDENT_REVIEW_REQUIRED"
+}
